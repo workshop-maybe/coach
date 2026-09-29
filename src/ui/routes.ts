@@ -6,9 +6,15 @@ import type { Slug } from "../domain/types";
 /** The parts of a credential that open as one-beat edits (R4). */
 export type CredentialPart = "name" | "targets" | "task" | "rubric" | "look";
 
+/** What a test already has picked, carried through a detour to create the missing side (AE2). */
+export interface TestPick {
+  profileSlug?: Slug;
+  credentialKey?: string;
+}
+
 export type DeckRoute =
-  | { view: "deck"; deck: "credential" }
-  | { view: "deck"; deck: "agent" }
+  | { view: "deck"; deck: "credential"; returnTo?: TestPick }
+  | { view: "deck"; deck: "agent"; returnTo?: TestPick }
   | {
       view: "deck";
       deck: "test";

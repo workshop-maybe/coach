@@ -4,6 +4,7 @@
 
 import { useMemo, useState } from "react";
 import { CollectionsView } from "./CollectionsView";
+import { CredentialDeck } from "./CredentialDeck";
 import { exportAll, exportMessage } from "./exportAll";
 import { pickExportFolder } from "./exportFolder";
 import { Home } from "./Home";
@@ -11,8 +12,10 @@ import { LoadErrors, LoadWarnings } from "./LoadErrors";
 import { Lockup } from "./Lockup";
 import { MatrixView } from "./MatrixView";
 import { NavContext, useNav } from "./nav";
+import { PlayerCard } from "./PlayerCard";
 import { ProfilesView } from "./ProfilesView";
 import type { DeckRoute, ItemRoute, Route } from "./routes";
+import { TestDeck } from "./TestDeck";
 import { describeError, useFolder } from "./useFolderState";
 
 export type { Route } from "./routes";
@@ -82,7 +85,9 @@ export function AppShell({ onChangeFolder, initialRoute = { view: "home" } }: Ap
             <p className="muted">{loading ? "Loading…" : "The folder could not be loaded."}</p>
           ) : route.view === "home" ? (
             <Home />
-          ) : route.view === "deck" || route.view === "item" ? (
+          ) : route.view === "deck" ? (
+            <DeckView key={JSON.stringify(route)} route={route} />
+          ) : route.view === "item" ? (
             <RoutePlaceholder route={route} />
           ) : route.view === "collections" ? (
             <CollectionsView />
@@ -97,8 +102,21 @@ export function AppShell({ onChangeFolder, initialRoute = { view: "home" } }: Ap
   );
 }
 
-// TODO(U3-U7): the credential deck (U3), player card (U4), test deck (U5), badge (U6)
-// and agent (U7) replace this placeholder. It exists so home's rows and doors have
+/** A deck in progress. Keyed by route, so opening another deck starts it fresh. */
+function DeckView({ route }: { route: DeckRoute }) {
+  switch (route.deck) {
+    case "credential":
+      return <CredentialDeck returnTo={route.returnTo} />;
+    case "agent":
+      return <PlayerCard returnTo={route.returnTo} />;
+    case "test":
+      return <TestDeck profileSlug={route.profileSlug} credentialKey={route.credentialKey} resume={route.resume} />;
+    default:
+      return <RoutePlaceholder route={route} />;
+  }
+}
+
+// TODO(U6-U7): the edit decks and badge (U6) and agent (U7) replace this placeholder. It exists so home's rows and doors have
 // somewhere to go while those units are built.
 function RoutePlaceholder({ route }: { route: DeckRoute | ItemRoute }) {
   const { navigate } = useNav();

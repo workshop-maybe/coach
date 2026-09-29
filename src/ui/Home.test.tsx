@@ -142,7 +142,7 @@ describe("Home", () => {
     expect(first.textContent).toContain("Paste Opus agent's reply");
     expect(first.textContent).toContain("Write docs");
     await userEvent.click(first);
-    expect(await openedRoute()).toEqual({ view: "deck", deck: "test", profileSlug: "opus", credentialKey: "eng/docs", resume: true });
+    expect(await screen.findByRole("heading", { name: "What came back" })).toBeTruthy();
   });
 
   it("Covers AE5. An edited task keeps the badge on the agent and suggests a re-test", async () => {
@@ -156,7 +156,8 @@ describe("Home", () => {
     const agents = screen.getByRole("region", { name: "Agents" });
     expect(await within(agents).findByRole("img", { name: "Badge for Code review" })).toBeTruthy();
     await userEvent.click(row);
-    expect(await openedRoute()).toEqual({ view: "deck", deck: "test", profileSlug: "opus", credentialKey: "eng/review" });
+    expect(await screen.findByRole("heading", { name: "Hand it over" })).toBeTruthy();
+    expect(screen.getByRole("list", { name: "Answered" }).textContent).toContain("Opus agent");
   });
 
   it("a credential missing its task is half-made, listed once, and opens that part", async () => {
@@ -173,13 +174,14 @@ describe("Home", () => {
     const [row] = await rows();
     expect(row.textContent).toContain("Test Codex agent");
     await userEvent.click(row);
-    expect(await openedRoute()).toEqual({ view: "deck", deck: "test", profileSlug: "codex" });
+    expect(await screen.findByRole("heading", { name: "Which badge" })).toBeTruthy();
   });
 
   it("an unheld badge opens who takes it with the credential picked", async () => {
     renderApp(storageWith({ credentials: [review] }));
     await userEvent.click((await rows())[0]);
-    expect(await openedRoute()).toEqual({ view: "deck", deck: "test", credentialKey: "eng/review" });
+    expect(await screen.findByRole("heading", { name: "Who takes it" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Create an agent" })).toBeTruthy();
   });
 
   it("shows the top three with a quiet More", async () => {
@@ -193,12 +195,12 @@ describe("Home", () => {
   it("the doors, an agent and a badge each open their place, and the deck closes home", async () => {
     renderApp(storageWith({ credentials: [review], profiles: [opus] }));
     await userEvent.click(await screen.findByRole("button", { name: "Create a credential" }));
-    expect(await openedRoute()).toEqual({ view: "deck", deck: "credential" });
-    await userEvent.click(screen.getByRole("button", { name: "Home" }));
+    expect(await screen.findByRole("heading", { name: "What is it called" })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
 
     await userEvent.click(await screen.findByRole("button", { name: "Create an agent" }));
-    expect(await openedRoute()).toEqual({ view: "deck", deck: "agent" });
-    await userEvent.click(screen.getByRole("button", { name: "Home" }));
+    expect(await screen.findByRole("region", { name: "Create an agent" })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
 
     const agents = await screen.findByRole("region", { name: "Agents" });
     await userEvent.click(within(agents).getByRole("button", { name: /^Opus agent/ }));

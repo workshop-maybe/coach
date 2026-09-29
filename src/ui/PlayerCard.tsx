@@ -1,0 +1,270 @@
+// Create an agent (U4, R13, KTD4): one card, chosen like a player. A drawn person stands
+// over three dials (harness, model, effort) and one button makes the agent, named for its
+// setup. Dials are buttons, never selects: each is a radio group to assistive tech, with
+// arrow keys and previous/next controls moving through its values. "Other" turns a dial
+// into one line to type on the same card. An agent with results is locked (KTD10) and
+// offers a new agent like it instead.
+
+import { useRef, useState } from "react";
+import type { KeyboardEvent } from "react";
+import { loadFolder, profilePath } from "../domain/folder";
+import { createProfile, duplicateProfileDraft, isSetupLocked, updateProfile } from "../domain/operations";
+import type { AgentProfile, AgentSetup, FolderState, Slug } from "../domain/types";
+import { Deck } from "./Deck";
+import { useNav } from "./nav";
+import { Person } from "./Person";
+import type { TestPick } from "./routes";
+import { useFolder } from "./useFolderState";
+
+export const OTHER = "Other";
+
+export const HARNESSES: { value: string; label: string; models: string[] }[] = [
+  { value: "claude-code", label: "Claude Code", models: ["opus", "sonnet", "haiku"] },
+  { value: "codex", label: "Codex", models: ["gpt-5-codex", "gpt-5"] },
+  { value: "cursor", label: "Cursor", models: ["auto", "claude-sonnet", "gpt-5"] },
+];
+
+export const EFFORTS = ["low", "medium", "high", "max"];
+
+const FIRST: AgentSetup = { harness: "claude-code", model: "opus", effort: "high" };
+
+function harnessLabel(value: string): string {
+  return HARNESSES.find((h) => h.value === value)?.label ?? value;
+}
+
+function modelsFor(harness: string): string[] {
+  return HARNESSES.find((h) => h.value === harness)?.models ?? [];
+}
+
+/** "<harness>, <model>, <effort>", or with a number when another agent has that name (KTD4). */
+export function setupName(setup: AgentSetup, taken: Iterable<string>, self?: string): string {
+  const parts = [harnessLabel(setup.harness.trim()), setup.model.trim(), setup.effort.trim()].filter(Boolean);
+  const base = parts.join(", ") || "New agent";
+  const names = new Set([...taken].filter((n) => n !== self).map((n) => n.toLowerCase()));
+  if (!names.has(base.toLowerCase())) return base;
+  for (let i = 2; ; i++) if (!names.has(`${base} ${i}`.toLowerCase())) return `${base} ${i}`;
+}
+
+/** A setup value as a dial position: a listed value, or Other with its typed text. */
+interface DialValue {
+  choice: string;
+  other: string;
+}
+
+function toDial(value: string, options: string[]): DialValue {
+  return options.includes(value) ? { choice: value, other: "" } : { choice: OTHER, other: value };
+}
+
+const fromDial = (d: DialValue) => (d.choice === OTHER ? d.other.trim() : d.choice);
+
+interface Dials {
+  harness: DialValue;
+  model: DialValue;
+  effort: DialValue;
+}
+
+function dialsFor(setup: AgentSetup): Dials {
+  return {
+    harness: toDial(setup.harness, HARNESSES.map((h) => h.value)),
+    model: toDial(setup.model, modelsFor(setup.harness)),
+    effort: toDial(setup.effort, EFFORTS),
+  };
+}
+
+export interface PlayerCardProps {
+  /** An existing agent to show. Left out, the card makes a new one. */
+  profileSlug?: Slug;
+  /** A test waiting on this agent, to return to once it is made (AE2). */
+  returnTo?: TestPick;
+}
+
+type Mode = { kind: "create"; draft: Omit<AgentProfile, "slug"> | null } | { kind: "edit"; slug: Slug };
+
+export function PlayerCard(props: PlayerCardProps) {
+  // The dials start from what is on disk, so the card waits for the folder.
+  const { state } = useFolder();
+  return state ? <Player {...props} /> : null;
+}
+
+function Player({ profileSlug, returnTo }: PlayerCardProps) {
+  const { storage, state, apply } = useFolder();
+  const { navigate } = useNav();
+  const [mode, setMode] = useState<Mode>(profileSlug ? { kind: "edit", slug: profileSlug } : { kind: "create", draft: null });
+  const stored = mode.kind === "edit" ? state?.profiles.find((p) => p.slug === mode.slug) : undefined;
+  const start = mode.kind === "create" ? (mode.draft ?? FIRST) : (stored ?? FIRST);
+  const [dials, setDials] = useState<Dials>(() => dialsFor(start));
+  const locked = mode.kind === "edit" && !!state && isSetupLocked(state, mode.slug);
+  const [hop, setHop] = useState(0);
+
+  const setup: AgentSetup = { harness: fromDial(dials.harness), model: fromDial(dials.model), effort: fromDial(dials.effort) };
+  const taken = state?.profiles.map((p) => p.name) ?? [];
+  const name = mode.kind === "edit" && stored ? stored.name : setupName(setup, taken);
+  const complete = setup.harness !== "" && setup.model !== "" && setup.effort !== "";
+
+  const models = [...modelsFor(dials.harness.choice), OTHER];
+  const harnessOptions = [...HARNESSES.map((h) => h.value), OTHER];
+  const effortOptions = EFFORTS.includes(start.effort) || start.effort === "" ? EFFORTS : [...EFFORTS, start.effort];
+
+  function turn(next: Dials) {
+    setDials(next);
+    setHop((h) => h + 1);
+  }
+
+  function setHarness(d: DialValue) {
+    if (d.choice === dials.harness.choice) return turn({ ...dials, harness: d });
+    const first = modelsFor(d.choice)[0];
+    turn({ ...dials, harness: d, model: first ? { choice: first, other: "" } : { choice: OTHER, other: "" } });
+  }
+
+  async function finish({ keepMine }: { keepMine: boolean }) {
+    if (!state) return;
+    if (locked && stored) {
+      const draft = duplicateProfileDraft(state, stored.slug);
+      setMode({ kind: "create", draft });
+      setDials(dialsFor(draft));
+      return;
+    }
+    if (mode.kind === "edit" && stored) {
+      const current: FolderState = keepMine ? await loadFolder(storage) : state;
+      const path = profilePath(stored.slug);
+      apply(await updateProfile(storage, current, { ...stored, ...setup }, current.raw[path] ?? null));
+      navigate({ view: "home" });
+      return;
+    }
+    const draft = mode.kind === "create" ? mode.draft : null;
+    const made = await createProfile(storage, state, {
+      name,
+      ...setup,
+      repo: draft?.repo ?? "",
+      notes: draft?.notes ?? "",
+      params: { ...(draft?.params ?? {}) },
+    });
+    apply(made.state);
+    if (returnTo?.credentialKey) navigate({ view: "deck", deck: "test", profileSlug: made.slug, credentialKey: returnTo.credentialKey });
+    else navigate({ view: "home" });
+  }
+
+  const forward = locked ? "Make a new agent like this" : mode.kind === "edit" ? "Keep this setup" : "Make the agent";
+
+  return (
+    <Deck
+      key={mode.kind === "edit" ? `edit:${mode.slug}` : "create"}
+      label={mode.kind === "edit" ? "An agent" : "Create an agent"}
+      onClose={() => navigate({ view: "home" })}
+      onFinish={finish}
+      beats={[
+        {
+          id: "player",
+          title: name,
+          forward,
+          valid: locked || complete,
+          body: (
+            <div className={`player${locked ? " player-locked" : ""}`}>
+              <div className="player-stage" aria-hidden="true">
+                <span className="player-figure" key={hop}>
+                  <Person solid />
+                </span>
+              </div>
+              <div className="dials">
+                <Dial
+                  label="Harness"
+                  options={harnessOptions}
+                  show={harnessLabel}
+                  value={dials.harness}
+                  disabled={locked}
+                  onChange={setHarness}
+                />
+                <Dial label="Model" options={models} value={dials.model} disabled={locked} onChange={(model) => turn({ ...dials, model })} />
+                <Dial label="Effort" options={effortOptions} value={dials.effort} disabled={locked} onChange={(effort) => turn({ ...dials, effort })} />
+              </div>
+            </div>
+          ),
+        },
+      ]}
+    />
+  );
+}
+
+interface DialProps {
+  label: string;
+  options: string[];
+  value: DialValue;
+  disabled?: boolean;
+  show?(value: string): string;
+  onChange(value: DialValue): void;
+}
+
+/** One dial: its value between previous and next, a radio group to assistive tech. */
+export function Dial({ label, options, value, disabled = false, show = (v) => v, onChange }: DialProps) {
+  const index = Math.max(0, options.indexOf(value.choice));
+  const group = useRef<HTMLDivElement>(null);
+  const line = useRef<HTMLInputElement>(null);
+  const isOther = value.choice === OTHER;
+
+  function step(by: number, focus: boolean) {
+    if (disabled) return;
+    const next = options[(index + by + options.length) % options.length];
+    onChange({ choice: next, other: next === OTHER ? value.other : "" });
+    if (!focus) return;
+    // Focus follows the value, onto its radio or onto the line Other opens.
+    requestAnimationFrame(() => {
+      if (next === OTHER) line.current?.focus();
+      else group.current?.querySelector<HTMLElement>('[aria-checked="true"]')?.focus();
+    });
+  }
+
+  function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    const inLine = e.target instanceof HTMLInputElement;
+    const back = e.key === "ArrowUp" || (!inLine && e.key === "ArrowLeft");
+    const on = e.key === "ArrowDown" || (!inLine && e.key === "ArrowRight");
+    if (!back && !on) return;
+    e.preventDefault();
+    step(on ? 1 : -1, true);
+  }
+
+  return (
+    <div className="dial">
+      <span className="dial-label" aria-hidden="true">
+        {label}
+      </span>
+      <div className="dial-row">
+        <button type="button" className="dial-step" aria-label={`Previous ${label.toLowerCase()}`} tabIndex={-1} disabled={disabled} onClick={() => step(-1, false)}>
+          ‹
+        </button>
+        <div className="dial-window" role="radiogroup" aria-label={label} aria-disabled={disabled || undefined} ref={group} onKeyDown={onKeyDown}>
+          {options.map((o, i) => {
+            const checked = i === index;
+            return (
+              <span
+                key={o}
+                role="radio"
+                aria-checked={checked}
+                aria-disabled={disabled || undefined}
+                tabIndex={checked && !isOther ? 0 : -1}
+                className={checked && !isOther ? "dial-value" : "dial-option"}
+                onClick={() => !disabled && onChange({ choice: o, other: "" })}
+              >
+                {show(o)}
+              </span>
+            );
+          })}
+          {isOther && (
+            <input
+              ref={line}
+              className="dial-line"
+              aria-label={`${label}, other`}
+              placeholder={label}
+              value={value.other}
+              disabled={disabled}
+              autoComplete="off"
+              onChange={(e) => onChange({ choice: OTHER, other: e.target.value })}
+            />
+          )}
+        </div>
+        <button type="button" className="dial-step" aria-label={`Next ${label.toLowerCase()}`} tabIndex={-1} disabled={disabled} onClick={() => step(1, false)}>
+          ›
+        </button>
+      </div>
+    </div>
+  );
+}
