@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useNav } from "./AppShell";
 import { PageHeader } from "./PageHeader";
+import { Person } from "./Person";
 import { BLANK_PROFILE, NewProfileEditor, ProfileEditor, type ProfileFields } from "./ProfileEditor";
 import { useFolder } from "./useFolderState";
 
@@ -20,6 +21,7 @@ export function ProfilesView() {
       <PageHeader
         kicker="Your agents"
         title="Agents"
+        lead={<>Each agent setup you run: <strong>harness, model, effort</strong> and the repo it opens in.</>}
         actions={
           <button type="button" onClick={() => openDraft(BLANK_PROFILE)}>
             New agent
@@ -41,7 +43,10 @@ export function ProfilesView() {
                   navigate({ view: "agents", profileSlug: p.slug });
                 }}
               >
-                <span className="item-name">{p.name}</span>
+                <span className="item-name">
+                  <Person solid={!draft && p.slug === selected} />
+                  {p.name}
+                </span>
                 <span className="muted">{[p.harness, p.model, p.effort].map((s) => s || "not set").join(" · ")}</span>
               </button>
             </li>

@@ -1,60 +1,71 @@
 /*
- * Andamio Desktop tokens. The app's own names, resolved onto the shared
- * `--sys-*` values in tokens.css (synced from landing-page-and-blog, never
- * edited here). Brand canon: landing-page-and-blog/docs/design-system/andamio-brand-guide.md (v1.1).
+ * Andamio Desktop tokens: the andamio-coach world (product-video-kit,
+ * worlds/cardano with the lesson films' palette), resolved onto the shared
+ * `--sys-*` values in tokens.css where the two agree. tokens.css is a synced
+ * copy of landing-page-and-blog and is never edited here.
  *
- * Accent rules for this app:
- *   orange  the one primary action on a view. Nothing else.
- *   blue    links and the active navigation item. Never a fill.
- *   coral   the badge preview plate. Never type.
- * Feedback uses the state palette below, never an accent.
+ * The world's four rules, as they apply to this app:
+ *   1. People carry the feeling; records carry the facts. Agents are people,
+ *      named in the sans. Credentials, results and prompts are records: square
+ *      cards with a header bar, speaking in the mono.
+ *   2. One idea a view. A kicker and a headline at the top, one piece under it.
+ *   3. Ink on paper, one colour for what matters now. `data` blue lights the
+ *      value being read or the row a view is about. Never a fill for a piece.
+ *      `good` green marks a check that passes. Orange stays in the logo.
+ *   4. Nothing faint that you're meant to read. Quieter words are ink-muted;
+ *      ink-ghost is only for spent or empty things.
+ *
+ * Drawn light only.
  */
 
 :root {
-  /* Ink ramp (guide section 3.1). */
+  /* Palette. Paper is warm; surface is white, so what sits on the paper lifts without a heavy shadow. */
+  --paper: #f6f5f1;
+  --surface: var(--sys-paper);
   --ink: var(--sys-ink);
+  --on-ink: var(--sys-on-ink);
   --ink-muted: rgb(var(--sys-ink-rgb) / 0.6);
   --ink-faint: rgb(var(--sys-ink-rgb) / 0.45);
   --ink-ghost: rgb(var(--sys-ink-rgb) / 0.3);
-  --ink-tint: rgb(var(--sys-ink-rgb) / 0.05);
+  --rule: var(--sys-ink);
   --cell: rgb(var(--sys-ink-rgb) / 0.15);
-  --paper: var(--sys-paper);
-  --plate: color-mix(in srgb, var(--sys-paper) 95%, var(--sys-ink));
-  --on-ink: var(--sys-on-ink);
-  --orange: var(--sys-orange);
-  --blue: var(--sys-blue);
-  --coral-tint: var(--sys-coral-tint);
-  --card-shadow: var(--sys-card-shadow);
+  --grid: rgb(var(--sys-ink-rgb) / 0.05);
+  --data: var(--sys-blue);
+  --data-wash: color-mix(in srgb, var(--sys-blue) 7%, var(--surface));
+  --good: #008149;
+  --shadow: var(--sys-card-shadow);
 
-  /* State palette (guide section 3.1). Coexists with the accents, never replaces them. */
+  /* State palette, for feedback only. */
   --error: #ec2929;
-  --success: #008149;
   --warning: #ed990e;
   --info: #0f74c5;
   --on-state: #ffffff;
-  --error-wash: color-mix(in srgb, var(--error) 8%, var(--sys-paper));
-  --warning-wash: color-mix(in srgb, var(--warning) 10%, var(--sys-paper));
-  --info-wash: color-mix(in srgb, var(--info) 7%, var(--sys-paper));
+  --error-wash: color-mix(in srgb, var(--error) 7%, var(--surface));
+  --warning-wash: color-mix(in srgb, var(--warning) 9%, var(--surface));
+  --info-wash: color-mix(in srgb, var(--info) 6%, var(--surface));
 
-  /* The app's working names, used throughout App.css. */
+  /* Working names used throughout App.css. */
   --bg: var(--paper);
-  --sidebar: var(--plate);
   --text: var(--ink);
   --muted: var(--ink-muted);
   --border: var(--cell);
-  --focus-ring: inset 0 0 0 1.5px var(--blue);
+  --focus-ring: inset 0 0 0 1.5px var(--data);
 
-  /* Type (guide section 4). Fonts are bundled, never fetched. */
+  /* Type. Inter for headlines, prose and people; Fragment Mono for records. Both bundled, never fetched. */
   --font-sans: "Inter Variable", "Inter", system-ui, -apple-system, sans-serif;
-  --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  --label-base: 11px;
-  --label-action: 12px;
-  --label-tracking: 0.1em;
-  --heading-tracking: -0.045em;
-  --subhead-tracking: -0.02em;
+  --font-mono: "Fragment Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --label: 11.5px;
+  --label-tracking: 0.06em;
+  --value-tracking: 0.02em;
+  --display-tracking: -0.045em;
+  --heading-tracking: -0.02em;
   --ui-tracking: -0.01em;
 
-  /* Spacing steps (guide section 5.1). */
+  /* Pieces. */
+  --rule-width: 1.5px;
+  --header-bar: 38px;
+
+  /* Spacing steps (4px base). */
   --space-xs: 4px;
   --space-sm: 8px;
   --space-md: 12px;

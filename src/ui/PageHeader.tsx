@@ -1,5 +1,6 @@
-// The header every top-level view opens with: a kicker led by a small ink square,
-// the page heading, an optional lead line and the view's actions.
+// The header every top-level view opens with, as a scene opens in the andamio-coach
+// world: a kicker led by an ink square and followed by a rule, the headline, the
+// view's actions beside it, and one line of prose under it.
 
 import type { ReactNode } from "react";
 
@@ -13,15 +14,15 @@ export interface PageHeaderProps {
 export function PageHeader({ kicker, title, lead, actions }: PageHeaderProps) {
   return (
     <header className="page-header">
-      <div>
-        <p className="kicker">
-          <span className="kicker-mark" aria-hidden="true" />
-          {kicker}
-        </p>
+      <p className="kicker">
+        <span className="kicker-mark" aria-hidden="true" />
+        {kicker}
+      </p>
+      <div className="page-header-row">
         <h1>{title}</h1>
-        {lead && <p className="page-header-lead">{lead}</p>}
+        {actions && <div className="page-header-actions">{actions}</div>}
       </div>
-      {actions && <div className="page-header-actions">{actions}</div>}
+      {lead && <p className="page-header-lead">{lead}</p>}
     </header>
   );
 }

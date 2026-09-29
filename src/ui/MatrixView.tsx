@@ -9,6 +9,8 @@ import { useNav } from "./AppShell";
 import { AssessmentForm } from "./AssessmentForm";
 import { CellHistory } from "./CellHistory";
 import { PageHeader } from "./PageHeader";
+import { Person } from "./Person";
+import { Stat } from "./Stat";
 import { resultLabel } from "./format";
 import { describeError, useFolder } from "./useFolderState";
 
@@ -40,6 +42,7 @@ export function MatrixView() {
   if (!state || !matrix) return <p className="muted">Loading…</p>;
 
   const hasCredentials = matrix.columns.some((g) => g.credentials.length > 0);
+  const credentialCount = matrix.columns.reduce((n, g) => n + g.credentials.length, 0);
   const openKey = route.view === "matrix" ? route.cellKey : undefined;
   const openCell = openKey ? matrix.cells.get(openKey) : undefined;
   const openProfile = openCell && matrix.rows.find((p) => p.slug === openCell.profileSlug);
@@ -51,6 +54,7 @@ export function MatrixView() {
       <PageHeader
         kicker="Agents × credentials"
         title="Matrix"
+        lead={<>Which of your agents can <strong>actually meet your acceptance criteria</strong> for each credential?</>}
         actions={
           matrix.rows.length > 0 &&
           hasCredentials && (
@@ -77,6 +81,9 @@ export function MatrixView() {
         </div>
       ) : (
         <>
+          <Stat value={credentialCount - matrix.unmetByAnyone.size} of={credentialCount}>
+            credentials at least one of your agents has met.
+          </Stat>
           {recording && (
             <AssessmentForm onDone={() => setRecording(false)} onCancel={() => setRecording(false)} />
           )}
@@ -111,7 +118,12 @@ export function MatrixView() {
               <tbody>
                 {matrix.rows.map((p) => (
                   <tr key={p.slug}>
-                    <th scope="row">{p.name}</th>
+                    <th scope="row">
+                      <span className="item-name">
+                        <Person />
+                        {p.name}
+                      </span>
+                    </th>
                     {matrix.columns.map((g) => (
                       <Fragment key={g.collection.slug}>
                         {g.credentials.map((c) => {

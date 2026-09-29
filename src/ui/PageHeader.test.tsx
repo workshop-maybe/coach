@@ -2,6 +2,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { PageHeader } from "./PageHeader";
+import { Stat } from "./Stat";
 import { SaveBar, type DraftWithBase } from "./useDraftWithBase";
 
 afterEach(cleanup);
@@ -27,6 +28,15 @@ describe("PageHeader", () => {
     const { container } = render(<PageHeader kicker="Your agents" title="Agents" />);
     expect(container.querySelector(".page-header-lead")).toBeNull();
     expect(container.querySelector(".page-header-actions")).toBeNull();
+  });
+});
+
+describe("Stat", () => {
+  it("fills its bar to the share, and never past full", () => {
+    const { container, rerender } = render(<Stat value={1} of={4}>met</Stat>);
+    expect((container.querySelector(".stat-fill") as HTMLElement).style.width).toBe("25%");
+    rerender(<Stat value={0} of={0}>met</Stat>);
+    expect((container.querySelector(".stat-fill") as HTMLElement).style.width).toBe("0%");
   });
 });
 

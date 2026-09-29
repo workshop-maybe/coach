@@ -67,7 +67,11 @@ function CollectionList() {
 
   return (
     <section className="stack">
-      <PageHeader kicker="Your credentials" title="Collections" />
+      <PageHeader
+        kicker="Your credentials"
+        title="Collections"
+        lead={<>A credential is <strong>a promise you can check.</strong> Group them into collections.</>}
+      />
       {collections.length === 0 ? (
         <p className="muted">No collections yet. A collection groups related credentials. Create one to start writing credentials.</p>
       ) : (

@@ -199,6 +199,13 @@ describe("MatrixView", () => {
     expect(within(met).queryByText("No agent meets this yet")).toBeNull();
   });
 
+  it("counts the credentials at least one agent has met", async () => {
+    renderApp(await fixture());
+    await cell("Opus agent", "Code review");
+    const stat = screen.getByRole("figure", { name: "1 of 2" });
+    expect(within(stat).getByText("credentials at least one of your agents has met.")).toBeTruthy();
+  });
+
   it("Record result above the matrix opens the form with both fields selectable", async () => {
     renderApp(await fixture());
     await cell("Opus agent", "Code review");

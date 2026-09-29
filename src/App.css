@@ -1,4 +1,4 @@
-/* Andamio Desktop. Values come from src/theme (tokens.css, app-tokens.css). */
+/* Andamio Desktop, drawn in the andamio-coach world. Values come from src/theme (tokens.css, app-tokens.css). */
 
 :root {
   font-family: var(--font-sans);
@@ -20,31 +20,88 @@ body {
   color: var(--text);
 }
 
+/* ---------------------------------------------------------------------------
+   Type. Inter for headlines, prose and people; the mono for records. */
+
 h1,
 h2,
 h3 {
   font-weight: 600;
-  line-height: 1.2;
-  letter-spacing: var(--subhead-tracking);
+  line-height: 1.15;
+  letter-spacing: var(--heading-tracking);
   margin: 0 0 var(--space-md);
 }
 
 h1 {
-  font-size: 1.75rem;
-  letter-spacing: var(--heading-tracking);
+  font-size: 2.1rem;
+  letter-spacing: var(--display-tracking);
 }
 
 h2 {
   font-size: 1.15rem;
 }
 
+h3 {
+  font-size: 1rem;
+}
+
 code,
 kbd,
 pre {
   font-family: var(--font-mono);
-  font-size: 0.9em;
+  font-size: 0.92em;
   letter-spacing: 0;
 }
+
+.muted {
+  color: var(--ink-muted);
+}
+
+/* A record's label: mono, small, tracked. Sentence case. */
+.label,
+.field > span:first-child,
+.field > label,
+.field legend,
+.facts dt {
+  font-family: var(--font-mono);
+  font-size: var(--label);
+  font-weight: 400;
+  letter-spacing: var(--label-tracking);
+  color: var(--ink-muted);
+}
+
+/* The square every header leads with. */
+.kicker-mark {
+  display: inline-block;
+  flex: none;
+  width: 8px;
+  height: 8px;
+  background: var(--ink);
+}
+
+/* A kicker heads a view: sentence case, semibold, led by a square, then a rule. */
+.kicker {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: var(--ui-tracking);
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.kicker::after {
+  content: "";
+  flex: 1;
+  height: var(--rule-width);
+  background: var(--rule);
+}
+
+/* ---------------------------------------------------------------------------
+   Controls. The view's main action is the ink block; others are ink outlines on
+   the surface. Blue is data and links, never a fill. */
 
 button,
 input,
@@ -55,14 +112,11 @@ textarea {
   color: inherit;
 }
 
-/* Buttons (guide section 7). Default is outline. One .primary (orange) per view;
-   .ink for other strong actions; .ghost and .link for quiet ones. Blue is never a fill. */
-
 button {
   padding: 6px 14px;
-  border: 1px solid var(--ink);
+  border: var(--rule-width) solid var(--ink);
   border-radius: 0;
-  background: transparent;
+  background: var(--surface);
   color: var(--ink);
   font-weight: 600;
   font-size: 13px;
@@ -71,28 +125,30 @@ button {
 }
 
 button:hover:not(:disabled) {
-  opacity: 0.9;
+  opacity: 0.85;
 }
 
-button.primary {
-  background: var(--orange);
-  border-color: var(--orange);
-  color: var(--on-state);
-}
-
+button.primary,
 button.ink {
   background: var(--ink);
   border-color: var(--ink);
   color: var(--on-ink);
 }
 
-button.ghost {
-  border-color: transparent;
+/* The main action leads with the world's square, in paper on ink. */
+button.primary::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 9px;
+  vertical-align: 1px;
+  background: var(--on-ink);
 }
 
-button.ghost:hover:not(:disabled) {
-  background: var(--ink-tint);
-  opacity: 1;
+button.ghost {
+  border-color: transparent;
+  background: transparent;
 }
 
 button.danger {
@@ -111,25 +167,31 @@ button.danger:disabled {
   cursor: default;
 }
 
+button.primary:disabled::before {
+  background: var(--ink-ghost);
+}
+
 button.link {
   border: none;
   background: none;
   padding: 0;
-  color: var(--blue);
+  color: var(--data);
   font-weight: 500;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
-/* Text input contract: square, cell hairline, blue inset focus. */
-
 input,
 select,
 textarea {
-  padding: 6px 10px;
+  padding: 7px 10px;
   border: 1px solid var(--cell);
   border-radius: 0;
-  background: var(--paper);
+  background: var(--surface);
+}
+
+textarea {
+  line-height: 1.45;
 }
 
 ::placeholder {
@@ -142,7 +204,7 @@ textarea {
 }
 
 button:focus-visible {
-  outline: 1.5px solid var(--blue);
+  outline: 1.5px solid var(--data);
   outline-offset: 2px;
   box-shadow: none;
 }
@@ -153,55 +215,22 @@ input[type="checkbox"] {
   height: 14px;
   padding: 0;
   margin: 0;
-  border: 1px solid var(--ink);
-  background: var(--paper);
+  border: var(--rule-width) solid var(--ink);
+  background: var(--surface);
   cursor: pointer;
 }
 
 input[type="checkbox"]:checked {
   background: var(--ink);
-  box-shadow: inset 0 0 0 3px var(--paper);
+  box-shadow: inset 0 0 0 3px var(--surface);
 }
 
-/* Label scale (guide section 4): mono, 11px or 12px at 0.1em, sentence case. */
-
-.label {
-  font-family: var(--font-mono);
-  font-size: var(--label-base);
-  font-weight: 500;
-  letter-spacing: var(--label-tracking);
-  color: var(--ink-muted);
-}
-
-/* Kicker (guide section 4): 13px Inter 600, sentence case, led by a 2x2 ink square. */
-
-.kicker {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: var(--ui-tracking);
-  color: var(--ink-muted);
-}
-
-.kicker-mark {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  background: var(--ink);
-}
-
-.muted {
-  color: var(--muted);
-}
-
-/* Folder gate */
+/* ---------------------------------------------------------------------------
+   First run. */
 
 .gate {
-  max-width: 32rem;
-  margin: 18vh auto 0;
+  max-width: 34rem;
+  margin: 16vh auto 0;
   padding: 0 var(--space-lg);
 }
 
@@ -210,17 +239,24 @@ input[type="checkbox"]:checked {
   margin-bottom: var(--space-3xl);
 }
 
+.gate h1 {
+  font-size: 2.6rem;
+  line-height: 1;
+}
+
 .gate p {
-  color: var(--muted);
-  margin: 0 0 1.5rem;
+  color: var(--ink-muted);
+  font-size: 15px;
+  margin: 0 0 var(--space-lg);
 }
 
 .gate .gate-error {
   color: var(--text);
-  margin-top: 1rem;
+  margin-top: var(--space-base);
 }
 
-/* Shell */
+/* ---------------------------------------------------------------------------
+   Shell: the paper, a sidebar of places, and the folder in a mono header. */
 
 .shell {
   display: flex;
@@ -230,11 +266,8 @@ input[type="checkbox"]:checked {
 .sidebar {
   flex: 0 0 13rem;
   padding: var(--space-lg) var(--space-md);
-  background: var(--sidebar);
   border-right: 1px solid var(--cell);
 }
-
-/* Brand lockup (guide section 2): mark + logotype, ~22px tall, clearspace kept. */
 
 .brand {
   display: flex;
@@ -255,10 +288,10 @@ input[type="checkbox"]:checked {
 
 .brand-product {
   font-family: var(--font-mono);
-  font-size: var(--label-base);
-  font-weight: 500;
+  font-size: var(--label);
+  font-weight: 400;
   letter-spacing: var(--label-tracking);
-  color: var(--ink-faint);
+  color: var(--ink-muted);
 }
 
 .sidebar ul {
@@ -267,32 +300,31 @@ input[type="checkbox"]:checked {
   padding: 0;
 }
 
-/* Navigation: ink at rest, blue when active (blue = wayfinding). */
-
+/* Places read like a server's channels: mono, and the one open is lit in data blue. */
 .nav-item {
   display: block;
   width: 100%;
   text-align: left;
   border: none;
-  border-left: 2px solid transparent;
   background: none;
-  padding: var(--space-sm) var(--space-md);
+  padding: var(--space-sm);
   margin-bottom: 2px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 400;
+  letter-spacing: var(--label-tracking);
   color: var(--ink-muted);
-  font-size: 14px;
-  font-weight: 500;
 }
 
 .nav-item:hover:not(:disabled) {
-  background: var(--ink-tint);
+  background: var(--grid);
   color: var(--ink);
   opacity: 1;
 }
 
 .nav-item[aria-current="page"] {
-  border-left-color: var(--blue);
-  color: var(--blue);
-  font-weight: 600;
+  background: color-mix(in srgb, var(--data) 12%, transparent);
+  color: var(--data);
 }
 
 .main {
@@ -311,50 +343,62 @@ input[type="checkbox"]:checked {
 }
 
 .folder-path {
-  font-family: var(--font-mono);
-  letter-spacing: 0;
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--ink-faint);
-  font-size: var(--label-action);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: var(--value-tracking);
+  color: var(--ink-muted);
 }
 
 .topbar-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--space-sm);
 }
 
 .content {
-  padding: var(--space-xl);
-  max-width: 60rem;
+  padding: var(--space-xl) var(--space-xl) var(--space-3xl);
+  max-width: 62rem;
 }
 
-/* PageHeader: kicker, heading, lead, actions. */
+/* ---------------------------------------------------------------------------
+   PageHeader: kicker, headline, one line of prose, the view's actions. */
 
 .page-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  margin-bottom: var(--space-xl);
+}
+
+.page-header-row {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
   gap: var(--space-base);
-  margin-bottom: var(--space-lg);
-  padding-bottom: var(--space-base);
-  border-bottom: 1px solid var(--cell);
-}
-
-.stack > .page-header {
-  margin-bottom: 0;
 }
 
 .page-header h1 {
   margin: var(--space-sm) 0 0;
+  line-height: 1;
 }
 
 .page-header-lead {
-  margin: var(--space-sm) 0 0;
+  margin: 0;
+  max-width: 40rem;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.4;
   color: var(--ink-muted);
+  text-wrap: pretty;
+}
+
+.page-header-lead strong {
+  font-weight: 500;
+  color: var(--ink);
 }
 
 .page-header-actions {
@@ -363,7 +407,52 @@ input[type="checkbox"]:checked {
   gap: var(--space-sm);
 }
 
-/* Banners */
+.stack > .page-header {
+  margin-bottom: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   Stat: a figure, a bar filled to its share, and what it means. */
+
+.stat {
+  margin: 0 0 var(--space-xl);
+  max-width: 34rem;
+}
+
+.stat-value {
+  font-size: 4.5rem;
+  font-weight: 600;
+  letter-spacing: var(--display-tracking);
+  line-height: 0.92;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-of {
+  color: var(--ink-muted);
+}
+
+.stat-bar {
+  position: relative;
+  height: 10px;
+  margin-top: var(--space-base);
+  border: var(--rule-width) solid var(--ink);
+}
+
+.stat-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--ink);
+}
+
+.stat-meaning {
+  margin: var(--space-md) 0 0;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+/* ---------------------------------------------------------------------------
+   Banners: feedback on the surface, its state in the edge. */
 
 .banner {
   margin: var(--space-base) var(--space-xl) 0;
@@ -390,7 +479,7 @@ input[type="checkbox"]:checked {
 }
 
 .banner-title {
-  margin: 0 0 0.4rem;
+  margin: 0 0 var(--space-xs);
 }
 
 .banner ul {
@@ -399,78 +488,129 @@ input[type="checkbox"]:checked {
 }
 
 .banner-detail {
-  margin-left: 0.5rem;
-  color: var(--muted);
+  margin-left: var(--space-sm);
+  color: var(--ink-muted);
 }
 
-/* U9 */
+/* ---------------------------------------------------------------------------
+   Views. A stack of pieces; a section inside one is headed by a kicker. */
 
 .stack {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--space-base);
 }
 
 .stack > h2 {
-  margin: 0.75rem 0 0;
-  font-size: 1.1rem;
-}
-
-.editor-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+  gap: var(--space-md);
+  margin: var(--space-lg) 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: var(--ui-tracking);
+  color: var(--ink-muted);
 }
 
-.editor-head h2 {
-  margin: 0;
+.stack > h2::before {
+  content: "";
+  flex: none;
+  width: 8px;
+  height: 8px;
+  background: var(--ink);
+}
+
+.stack > h2::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--cell);
 }
 
 .back {
   align-self: flex-start;
 }
 
+/* Records: square cards on the surface, a rule for an edge. */
+
+.editor,
+.panel,
+.item-list,
+table.matrix,
+.badge-preview {
+  background: var(--surface);
+  border: var(--rule-width) solid var(--rule);
+  box-shadow: var(--shadow);
+}
+
+.editor {
+  padding: 0 var(--space-lg) var(--space-lg);
+}
+
+.editor > h2:first-child,
+.editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-base);
+  margin: 0 calc(-1 * var(--space-lg)) var(--space-base);
+  padding: var(--space-lg) var(--space-lg) var(--space-base);
+  border-bottom: 1px solid var(--cell);
+  font-size: 1.6rem;
+  letter-spacing: var(--display-tracking);
+  line-height: 1;
+}
+
+.editor-head h2 {
+  margin: 0;
+  font-size: 1.6rem;
+  letter-spacing: var(--display-tracking);
+  line-height: 1;
+}
+
 .editor form {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  margin-top: 1rem;
+  gap: var(--space-base);
+}
+
+.editor > .muted {
+  margin-top: 0;
 }
 
 .stack > form {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--space-base);
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 6px;
   margin: 0;
 }
 
 fieldset.field {
-  border: 1px solid var(--border);
-  padding: 0.75rem 1rem 1rem;
-  gap: 0.6rem;
+  border: 1px solid var(--cell);
+  padding: var(--space-md) var(--space-base) var(--space-base);
+  gap: 10px;
 }
 
 fieldset.field > button {
   align-self: flex-start;
 }
 
-.field > span:first-child,
-.field > label,
 .field legend {
-  font-size: 13px;
-  font-weight: 600;
+  padding: 0 6px;
 }
 
 .field :is(input, select, textarea) {
+  font-family: var(--font-sans);
   font-size: 14px;
   font-weight: 400;
+  letter-spacing: var(--ui-tracking);
+  color: var(--ink);
 }
 
 .field-hint {
@@ -480,8 +620,8 @@ fieldset.field > button {
 }
 
 .setup.locked input[readonly] {
-  background: var(--bg);
-  color: var(--muted);
+  background: var(--grid);
+  color: var(--ink-muted);
 }
 
 .rows {
@@ -490,13 +630,13 @@ fieldset.field > button {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 6px;
 }
 
 .row {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 6px;
 }
 
 .row input {
@@ -504,42 +644,87 @@ fieldset.field > button {
   min-width: 0;
 }
 
+/* A list of records is one card, a row per record over a hairline. */
+
 .item-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+}
+
+.item-list > li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.item-list > li + li {
+  border-top: 1px solid var(--cell);
+}
+
+.item-list > li > :is(img, .badge-placeholder) {
+  margin-left: var(--space-md);
+}
+
+.item-list > li > button:not(.item) {
+  margin-right: var(--space-sm);
 }
 
 .item {
   flex: 1;
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  text-align: left;
-}
-
-.item {
-  border-color: var(--cell);
-  font-weight: 400;
-  font-size: 14px;
+  gap: var(--space-base);
+  min-height: 52px;
   padding: var(--space-md) var(--space-base);
+  border: none;
+  background: transparent;
+  text-align: left;
+  font-size: 15px;
+  font-weight: 400;
 }
 
 .item:hover:not(:disabled) {
-  border-color: var(--ink);
+  background: var(--grid);
   opacity: 1;
 }
 
 .item[aria-current="true"] {
-  border-color: var(--ink);
-  box-shadow: inset 2px 0 0 var(--blue);
+  background: var(--data-wash);
+  color: var(--data);
 }
 
 .item-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
   font-weight: 600;
+  letter-spacing: var(--heading-tracking);
+}
+
+.item > .muted {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: var(--value-tracking);
+  color: var(--ink-muted);
+}
+
+.item[aria-current="true"] > .muted {
+  color: var(--data);
+}
+
+.item.muted {
+  color: var(--ink-muted);
+}
+
+/* A person, drawn: head and shoulders. Agents are people. */
+.person {
+  flex: none;
+  width: 18px;
+  height: 20px;
 }
 
 .inline-form {
@@ -554,17 +739,20 @@ fieldset.field > button {
 .form-actions {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-md);
+  padding-top: var(--space-xs);
 }
 
 .unsaved {
-  color: var(--muted);
-  font-style: italic;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: var(--value-tracking);
+  color: var(--data);
 }
 
 .form-error {
   margin: 0;
-  padding: 0.5rem 0.75rem;
+  padding: var(--space-sm) var(--space-md);
   border: 1px solid var(--cell);
   border-left: 3px solid var(--error);
   background: var(--error-wash);
@@ -574,9 +762,9 @@ fieldset.field > button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  margin-top: 1rem;
-  padding: 0.6rem 0.9rem;
+  gap: var(--space-base);
+  margin-top: var(--space-base);
+  padding: 10px 14px;
   border: 1px solid var(--cell);
   border-left: 3px solid var(--info);
   background: var(--info-wash);
@@ -584,85 +772,107 @@ fieldset.field > button {
 
 .conflict-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--space-sm);
 }
 
-/* U10 */
+/* ---------------------------------------------------------------------------
+   Panels: prompts, a result being recorded, a cell's history, an export.
+   Each is a record card whose title sits in its header bar. */
 
-:is(.prompt-panel, .assessment-form, .cell-history, .export-dialog) {
+.panel {
   margin: var(--space-lg) 0;
-  padding: var(--space-lg);
-  background: var(--paper);
-  border: 1px solid var(--ink);
-  box-shadow: var(--card-shadow);
+  padding: 0 var(--space-lg) var(--space-lg);
 }
 
-:is(.prompt-panel, .cell-history, .export-dialog) > .panel-head {
+.panel > .panel-head,
+.panel > h2:first-child {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 1rem;
+  align-items: center;
+  gap: var(--space-md);
+  min-height: var(--header-bar);
+  margin: 0 calc(-1 * var(--space-lg)) var(--space-base);
+  padding: 0 var(--space-sm) 0 var(--space-lg);
+  border-bottom: 1px solid var(--cell);
 }
 
-:is(.prompt-panel, .assessment-form, .export-dialog) .field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  margin: 0 0 0.9rem;
+.panel > .panel-head h2 {
+  margin: 0;
+}
+
+.panel > h2:first-child,
+.panel > .panel-head h2 {
+  font-family: var(--font-mono);
+  font-size: var(--label);
+  font-weight: 400;
+  letter-spacing: var(--label-tracking);
+  color: var(--ink-muted);
+}
+
+.panel > h2:first-child::before,
+.panel > .panel-head h2::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: var(--space-md);
+  background: var(--ink);
+}
+
+.panel > .panel-head button {
+  margin-left: auto;
+  padding: 3px 10px;
+  font-size: 12px;
+}
+
+.panel .field {
+  margin: 0 0 14px;
 }
 
 .prompt-panel .field-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: var(--space-base);
 }
 
 .prompt-panel .field-row .field {
   flex: 1 1 14rem;
 }
 
-:is(.prompt-panel, .assessment-form, .export-dialog) textarea,
-:is(.prompt-panel, .assessment-form) select {
+.panel textarea,
+.panel select {
   width: 100%;
-  padding: 0.45rem 0.55rem;
-  background: var(--bg);
-  border: 1px solid var(--border);
 }
 
 .prompt-panel .prompt-text,
 .cell-history .handback {
   font-family: var(--font-mono);
-  font-size: 0.85rem;
+  font-size: 12.5px;
+  letter-spacing: 0;
+  line-height: 1.55;
 }
 
-:is(.prompt-panel, .assessment-form, .cell-history, .export-dialog) .actions {
+.panel .actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
-  margin: 0.5rem 0;
+  gap: var(--space-sm);
+  margin: var(--space-sm) 0;
 }
 
 .prompt-panel .copy-status {
-  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--good);
 }
 
 .prompt-panel .blocked-note {
-  padding: 0.6rem 0.8rem;
-  background: var(--info-wash);
+  padding: 10px 12px;
   border: 1px solid var(--cell);
   border-left: 3px solid var(--warning);
+  background: var(--warning-wash);
 }
 
-:is(.prompt-panel, .assessment-form, .export-dialog) .form-error {
-  padding: 0.5rem 0.75rem;
-  background: var(--error-wash);
-  border: 1px solid var(--cell);
-  border-left: 3px solid var(--error);
-}
-
-/* Segmented control (guide section 7): square, cell dividers, selected = ink tint + ink. */
-
+/* Segmented control: square, cell dividers, the chosen one in ink. */
 .assessment-form .result-choice {
   display: inline-flex;
   flex-direction: row;
@@ -674,15 +884,19 @@ fieldset.field > button {
 
 .assessment-form .result-choice legend {
   margin-bottom: var(--space-sm);
+  padding: 0;
 }
 
 .assessment-form .result-choice label {
   position: relative;
   padding: 6px 16px;
   border: 1px solid var(--cell);
+  background: var(--surface);
   color: var(--ink-muted);
+  font-family: var(--font-sans);
   font-size: 13px;
   font-weight: 600;
+  letter-spacing: var(--ui-tracking);
   cursor: pointer;
 }
 
@@ -691,9 +905,9 @@ fieldset.field > button {
 }
 
 .assessment-form .result-choice label:has(input:checked) {
-  background: var(--ink-tint);
-  color: var(--ink);
+  background: var(--ink);
   border-color: var(--ink);
+  color: var(--on-ink);
   z-index: 1;
 }
 
@@ -707,38 +921,53 @@ fieldset.field > button {
   pointer-events: none;
 }
 
-:is(.assessment-form, .cell-history) .facts {
+/* Facts are a record's rows: a key and its value over a hairline. */
+.facts {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 2rem;
-  margin: 0 0 0.9rem;
+  flex-direction: column;
+  margin: 0 0 var(--space-base);
+  border: 1px solid var(--cell);
 }
 
-:is(.assessment-form, .cell-history) .facts dt {
-  font-family: var(--font-mono);
-  font-size: var(--label-base);
-  letter-spacing: var(--label-tracking);
-  color: var(--ink-faint);
+.facts > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-base);
+  padding: 9px var(--space-md);
 }
 
-:is(.assessment-form, .cell-history) .facts dd {
+.facts > div + div {
+  border-top: 1px solid var(--cell);
+}
+
+.facts dd {
   margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  letter-spacing: var(--value-tracking);
+  text-align: right;
 }
 
 .export-dialog .checkbox {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin: 0.5rem 0;
+  gap: var(--space-sm);
+  margin: var(--space-sm) 0;
 }
+
+/* ---------------------------------------------------------------------------
+   Matrix: agents down the side, credentials across, each cell a result. */
 
 .matrix-view .empty-state {
   padding: var(--space-lg);
-  border: 1px dashed var(--cell);
+  border: 1px dashed var(--ink-ghost);
+  background: var(--surface);
 }
 
 .matrix-scroll {
   overflow-x: auto;
+  padding: 2px 8px 12px 2px;
 }
 
 table.matrix {
@@ -748,18 +977,28 @@ table.matrix {
 
 table.matrix th,
 table.matrix td {
-  padding: 0.4rem 0.5rem;
-  border-bottom: 1px solid var(--border);
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--cell);
   text-align: left;
-  vertical-align: top;
+  vertical-align: middle;
+}
+
+table.matrix thead tr:last-child > * {
+  border-bottom-color: var(--rule);
 }
 
 table.matrix th[scope="colgroup"] {
   font-family: var(--font-mono);
-  font-size: var(--label-base);
-  font-weight: 500;
+  font-size: var(--label);
+  font-weight: 400;
   letter-spacing: var(--label-tracking);
-  color: var(--ink-faint);
+  color: var(--ink-muted);
+}
+
+table.matrix th[scope="col"],
+table.matrix th[scope="row"] {
+  font-weight: 600;
+  letter-spacing: var(--heading-tracking);
 }
 
 table.matrix th[scope="row"] {
@@ -767,67 +1006,75 @@ table.matrix th[scope="row"] {
 }
 
 table.matrix .credential-unmet {
-  background: var(--ink-tint);
-}
-
-table.matrix th.credential-unmet span:first-child {
-  font-style: italic;
+  background: var(--grid);
 }
 
 table.matrix .unmet-note {
   display: block;
-  font-size: 0.8rem;
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 11px;
   font-weight: 400;
-  color: var(--muted);
+  letter-spacing: var(--value-tracking);
+  color: var(--ink-muted);
 }
 
 table.matrix button.cell {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 0.15rem;
+  gap: 2px;
   width: 100%;
-  padding: 0.35rem 0.5rem;
-  background: var(--paper);
-  border: 1px solid var(--cell);
+  padding: 6px 8px;
+  background: transparent;
+  border: 1px solid transparent;
   color: var(--ink);
-  font-size: 13px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
   font-weight: 400;
+  letter-spacing: var(--value-tracking);
   cursor: pointer;
   text-align: left;
 }
 
 table.matrix button.cell:hover {
-  border-color: var(--ink);
+  border-color: var(--cell);
   opacity: 1;
 }
 
 table.matrix button.cell[aria-current="true"] {
-  border-color: var(--blue);
-  box-shadow: var(--focus-ring);
+  background: var(--data-wash);
+  border-color: var(--data);
+  color: var(--data);
 }
 
-table.matrix .cell-met .cell-status {
+table.matrix .cell-status {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-weight: 600;
+  gap: 7px;
 }
 
 table.matrix .cell-met .cell-status::before {
   content: "";
   width: 8px;
   height: 8px;
-  background: var(--success);
+  background: var(--good);
+}
+
+table.matrix .cell-not_met .cell-status::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border: 1px solid var(--ink);
 }
 
 table.matrix .cell-untested .cell-status {
-  color: var(--muted);
+  color: var(--ink-muted);
 }
 
 table.matrix .flag {
-  font-size: 0.75rem;
-  color: var(--muted);
+  font-size: 11px;
+  color: var(--ink-muted);
 }
 
 table.matrix .flag::before {
@@ -835,15 +1082,15 @@ table.matrix .flag::before {
 }
 
 .cell-history .flag-reasons {
-  margin: 0.5rem 0;
-  padding: 0.5rem 0.75rem;
-  background: var(--info-wash);
+  margin: var(--space-sm) 0;
+  padding: 10px 12px;
   border: 1px solid var(--cell);
   border-left: 3px solid var(--warning);
+  background: var(--warning-wash);
 }
 
 .cell-history .flag-reasons ul {
-  margin: 0 0 0.5rem;
+  margin: 0 0 var(--space-sm);
   padding-left: 1.2rem;
 }
 
@@ -853,30 +1100,43 @@ table.matrix .flag::before {
 }
 
 .cell-history .history li {
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--space-md);
 }
 
 .cell-history .history-head,
 .cell-history .history-note {
-  margin: 0 0 0.25rem;
+  margin: 0 0 var(--space-xs);
 }
 
 .cell-history .handback {
   white-space: pre-wrap;
-  margin: 0.4rem 0 0;
-  padding: 0.5rem;
-  background: var(--bg);
+  margin: 6px 0 0;
+  padding: 10px 12px;
+  background: var(--grid);
+  border: 1px solid var(--cell);
 }
 
-/* Earned badges */
+/* ---------------------------------------------------------------------------
+   Badges. */
+
 .earned-badges {
-  margin-top: 1.5rem;
+  margin-top: var(--space-lg);
+  padding-top: var(--space-base);
+  border-top: 1px solid var(--cell);
+}
+
+.earned-badges h3 {
+  font-family: var(--font-mono);
+  font-size: var(--label);
+  font-weight: 400;
+  letter-spacing: var(--label-tracking);
+  color: var(--ink-muted);
 }
 
 .badge-earned-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: var(--space-base);
   list-style: none;
   margin: 0;
   padding: 0;
@@ -886,26 +1146,30 @@ table.matrix .flag::before {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.15rem;
+  gap: 2px;
   width: 8rem;
   text-align: center;
-  font-size: 0.85rem;
+  font-size: 13px;
 }
 
 .badge-earned-name {
   font-weight: 600;
 }
 
+.badge-earned-collection {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: var(--value-tracking);
+}
+
 .badge-earned-reason {
-  font-size: 0.8rem;
+  font-size: 12px;
 }
 
 .badge-earned.stale img,
 .badge-earned.stale .badge-placeholder {
   opacity: 0.45;
 }
-
-/* Badges */
 
 .badge-section {
   margin-top: var(--space-lg);
@@ -916,7 +1180,7 @@ table.matrix .flag::before {
 .badge-layout {
   display: flex;
   flex-wrap: wrap;
-  gap: 1.5rem;
+  gap: var(--space-lg);
   align-items: flex-start;
 }
 
@@ -925,8 +1189,6 @@ table.matrix .flag::before {
   min-width: 0;
 }
 
-/* Badge preview as a credential specimen: square rule hairline on a coral plate. */
-
 .badge-preview {
   display: flex;
   flex-direction: column;
@@ -934,8 +1196,6 @@ table.matrix .flag::before {
   gap: var(--space-sm);
   max-width: 232px;
   padding: var(--space-base);
-  border: 1px solid var(--ink);
-  background: var(--coral-tint);
 }
 
 .badge-placeholder {
@@ -951,57 +1211,58 @@ img.badge-thumb,
 }
 
 .badge-controls fieldset {
-  border: 1px solid var(--border);
-  padding: 0.5rem 0.75rem 0.75rem;
+  border: 1px solid var(--cell);
+  padding: var(--space-sm) var(--space-md) var(--space-md);
 }
 
 .badge-inherit {
-  margin: 0 0 0.5rem;
+  margin: 0 0 var(--space-sm);
 }
 
 .badge-swatches {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: var(--space-md);
   align-items: flex-end;
 }
 
 .badge-swatch {
   display: flex;
-  gap: 0.4rem;
+  gap: 6px;
   align-items: flex-end;
 }
 
 .badge-swatch label {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 3px;
 }
 
 .badge-swatch input[type="color"] {
   width: 2.5rem;
   height: 2rem;
   padding: 0;
-  border: 1px solid var(--border);
+  border: 1px solid var(--cell);
   background: none;
 }
 
 .badge-hex {
   width: 6.5rem;
   font-family: var(--font-mono);
+  letter-spacing: var(--value-tracking);
 }
 
 .badge-art-name {
-  margin: 0 0 0.5rem;
+  margin: 0 0 var(--space-sm);
   overflow-wrap: anywhere;
 }
 
 .badge-note {
-  margin: 0.5rem 0;
-  padding: 0.4rem 0.6rem;
-  background: var(--info-wash);
+  margin: var(--space-sm) 0;
+  padding: 6px 10px;
   border: 1px solid var(--cell);
   border-left: 3px solid var(--warning);
+  background: var(--warning-wash);
 }
 
 .visually-hidden {

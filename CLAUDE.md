@@ -31,11 +31,13 @@ The question the app answers: **which of my agents can actually meet my acceptan
 
 ## Design
 
-- **Canon.** The Andamio brand guide v1.1 in `landing-page-and-blog/docs/design-system/andamio-brand-guide.md`. That repo is read-only from here.
-- **Tokens.** `src/theme/tokens.css` and `src/theme/tokens.shared.ts` are synced copies. Never edit them except the provenance line. To resync, copy both from `landing-page-and-blog/src/ui/system/` and update that line. App tokens go in `src/theme/app-tokens.css`.
-- **Accents.** One orange (`button.primary`) per view. Blue for links and the active nav item only, never a fill. Feedback uses the state palette.
+- **World.** The app is drawn in the andamio-coach world from product-video-kit (`worlds/cardano`, with the lesson films' palette). Its four rules are at the top of `src/theme/app-tokens.css`. Where it differs from the Andamio brand guide v1.1 (`landing-page-and-blog/docs/design-system/andamio-brand-guide.md`), the world wins.
+- **Light only.** Warm paper, white surfaces for records, ink rules.
+- **Records vs people.** Credentials, results and prompts are square record cards with a header bar, speaking in Fragment Mono. Agents are people: a drawn person, named in Inter.
+- **Color.** Ink on paper. Data blue lights the value or row a view is about and links, never a fill for a piece. Good green marks a pass. Orange stays in the logo. The view's main action is the ink block (`button.primary`), one per view.
+- **Tokens.** `src/theme/tokens.css` and `src/theme/tokens.shared.ts` are synced copies of `landing-page-and-blog/src/ui/system/`. Never edit them except the provenance line. App values go in `src/theme/app-tokens.css`.
 - **Geometry.** Square. `src/theme/brand.test.ts` fails on color literals or rounded corners in component CSS.
-- **Fonts.** Inter and JetBrains Mono are bundled from `@fontsource-variable`, never fetched.
+- **Fonts.** Inter and Fragment Mono are bundled from `@fontsource`, never fetched.
 
 ## Commands
 
