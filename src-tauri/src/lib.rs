@@ -92,6 +92,50 @@ async fn list_files(state: State<'_, AppState>, root: String, dir: String) -> Re
     files::list_files_in(&state.root(&root)?, &dir)
 }
 
+/// Reads at most one byte past the image limit, so an oversized pick is
+/// refused by `validate_image` without loading the whole file.
+fn read_picked_image(path: &std::path::Path) -> Result<Vec<u8>, String> {
+    use std::io::Read;
+    let file = std::fs::File::open(path).map_err(|e| format!("Cannot read {}: {e}", path.display()))?;
+    let mut bytes = Vec::new();
+    file.take(files::MAX_IMAGE_BYTES as u64 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|e| format!("Cannot read {}: {e}", path.display()))?;
+    Ok(bytes)
+}
+
+/// Shows an image picker and copies the chosen JPEG or PNG into the data
+/// folder under a content-addressed name. Returns the folder-relative path,
+/// or None when the user cancels. The picked file is read once and never
+/// becomes an approved root.
+#[tauri::command]
+async fn import_badge_art(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    collection_slug: String,
+    credential_slug: Option<String>,
+) -> Result<Option<String>, String> {
+    let root = state.root("data")?;
+    let picked = app
+        .dialog()
+        .file()
+        .add_filter("Images", &["jpg", "jpeg", "png"])
+        .blocking_pick_file();
+    let Some(picked) = picked else {
+        return Ok(None);
+    };
+    let source = picked.into_path().map_err(|e| e.to_string())?;
+    let bytes = read_picked_image(&source)?;
+    let rel = files::art_dest_name(&collection_slug, credential_slug.as_deref(), &bytes)?;
+    files::copy_bytes_into_root(&root, &rel, &bytes)?;
+    Ok(Some(rel))
+}
+
+#[tauri::command]
+async fn read_data_uri(state: State<'_, AppState>, root: String, path: String) -> Result<Option<String>, String> {
+    files::read_data_uri_in(&state.root(&root)?, &path)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -115,7 +159,9 @@ pub fn run() {
             pick_export_folder,
             read_text,
             write_text,
-            list_files
+            list_files,
+            import_badge_art,
+            read_data_uri
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

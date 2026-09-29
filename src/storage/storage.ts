@@ -11,6 +11,14 @@ export interface Storage {
   writeText(root: RootKind, path: string, contents: string): Promise<void>;
   /** Lists every file under `dir` (recursively), as root-relative paths. Missing dir lists nothing. */
   listFiles(root: RootKind, dir: string): Promise<string[]>;
+  /** Returns a JPEG or PNG inside the root as a base64 data URI, or null when it does not exist. */
+  readDataUri(root: RootKind, path: string): Promise<string | null>;
+  /**
+   * Opens an image picker and copies the chosen JPEG or PNG (1 MiB max) into the data folder
+   * under a content-addressed name (KTD4). Returns the folder-relative path, or null on cancel.
+   * With a credential slug the file is named for that credential's override.
+   */
+  importBadgeArt(collectionSlug: string, credentialSlug: string | null): Promise<string | null>;
 }
 
 /** Thrown when a save finds the file changed since it was opened (KTD6). */

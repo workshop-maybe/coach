@@ -15,4 +15,12 @@ export class TauriStorage implements Storage {
   listFiles(root: RootKind, dir: string): Promise<string[]> {
     return invoke<string[]>("list_files", { root, dir });
   }
+
+  readDataUri(root: RootKind, path: string): Promise<string | null> {
+    return invoke<string | null>("read_data_uri", { root, path });
+  }
+
+  importBadgeArt(collectionSlug: string, credentialSlug: string | null): Promise<string | null> {
+    return invoke<string | null>("import_badge_art", { collectionSlug, credentialSlug });
+  }
 }
