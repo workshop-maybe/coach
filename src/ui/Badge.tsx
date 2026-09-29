@@ -19,7 +19,15 @@ export interface BadgeProps {
   onArtMissing?(missing: boolean): void;
 }
 
-export function Badge({ collection, credential, size, className, onArtMissing }: BadgeProps) {
+/**
+ * The badge's SVG as a data URI, or null until the async fingerprints and art resolve.
+ * Shared by the badge image and the cartridge's label window (KTD3).
+ */
+export function useBadgeSrc(
+  collection: Collection,
+  credential: Pick<Credential, "slug" | "name">,
+  onArtMissing?: (missing: boolean) => void,
+): string | null {
   const { storage, artGeneration } = useFolder();
   const [svg, setSvg] = useState<string | null>(null);
   const deps = JSON.stringify([collection.slug, collection.name, collection.badge ?? null, collection.badgeOverrides?.[credential.slug] ?? null, credential.slug, credential.name]);
@@ -42,7 +50,11 @@ export function Badge({ collection, credential, size, className, onArtMissing }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storage, deps, artGeneration]);
 
-  const src = useMemo(() => (svg ? badgeDataUri(svg) : null), [svg]);
+  return useMemo(() => (svg ? badgeDataUri(svg) : null), [svg]);
+}
+
+export function Badge({ collection, credential, size, className, onArtMissing }: BadgeProps) {
+  const src = useBadgeSrc(collection, credential, onArtMissing);
   const label = `Badge for ${credential.name}`;
   if (!src) return <span className={`badge-placeholder ${className ?? ""}`} style={{ width: size, height: size }} role="img" aria-label={label} aria-busy="true" />;
   return <img className={className} src={src} width={size} height={size} alt={label} />;

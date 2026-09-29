@@ -15,25 +15,14 @@ import { useNav } from "./nav";
 import { Person } from "./Person";
 import type { TestPick } from "./routes";
 import { useFolder } from "./useFolderState";
+import { EFFORTS, HARNESSES, OTHER, modelsFor } from "./dialLists";
 
-export const OTHER = "Other";
-
-export const HARNESSES: { value: string; label: string; models: string[] }[] = [
-  { value: "claude-code", label: "Claude Code", models: ["opus", "sonnet", "haiku"] },
-  { value: "codex", label: "Codex", models: ["gpt-5-codex", "gpt-5"] },
-  { value: "cursor", label: "Cursor", models: ["auto", "claude-sonnet", "gpt-5"] },
-];
-
-export const EFFORTS = ["low", "medium", "high", "max"];
+export { EFFORTS, HARNESSES, OTHER } from "./dialLists";
 
 const FIRST: AgentSetup = { harness: "claude-code", model: "opus", effort: "high" };
 
 function harnessLabel(value: string): string {
   return HARNESSES.find((h) => h.value === value)?.label ?? value;
-}
-
-function modelsFor(harness: string): string[] {
-  return HARNESSES.find((h) => h.value === harness)?.models ?? [];
 }
 
 /** "<harness>, <model>, <effort>", or with a number when another agent has that name (KTD4). */

@@ -1278,3 +1278,70 @@ button:focus-visible {
   width: 14px;
   height: 16px;
 }
+
+/* The cast (src/cast): agents are machines, credentials are cartridges, drawn in a
+   hand-inked line. Strokes are currentColor; the only fills are paper-white insides
+   and lit keys, whose badge colors are SVG attributes. */
+.ink-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+.cast {
+  display: block;
+  color: var(--ink);
+  overflow: visible;
+}
+
+.cast-paper {
+  fill: var(--surface);
+}
+
+.cast-glass {
+  fill: var(--paper);
+}
+
+.cast-screen-text {
+  font-family: var(--font-mono);
+  letter-spacing: 0;
+}
+
+.cast-outline {
+  color: var(--ink-faint);
+}
+
+.cast-encoder-live {
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .cast-dot {
+    animation: cast-dot-out 960ms ease-in-out infinite both;
+  }
+
+  .cast-cursor {
+    animation: cast-blink 1060ms steps(1, end) infinite;
+  }
+}
+
+@keyframes cast-dot-out {
+  0% {
+    opacity: 0.15;
+    transform: translateX(-3px);
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.15;
+    transform: translateX(3px);
+  }
+}
+
+@keyframes cast-blink {
+  50% {
+    opacity: 0;
+  }
+}

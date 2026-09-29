@@ -3,6 +3,7 @@
 // notice and the notice banner, then home, a deck in progress, or one item open.
 
 import { useMemo, useState } from "react";
+import { InkDefs } from "../cast/InkDefs";
 import { AgentDetail } from "./AgentDetail";
 import { BadgeDetail } from "./BadgeDetail";
 import { CredentialDeck } from "./CredentialDeck";
@@ -51,6 +52,7 @@ export function AppShell({ onChangeFolder, initialRoute = { view: "home" } }: Ap
   return (
     <NavContext.Provider value={nav}>
       <div className="shell">
+        <InkDefs />
         <header className="topbar">
           <button type="button" className="brand" aria-label="Andamio Desktop, go home" onClick={() => navigate({ view: "home" })}>
             <Lockup />
