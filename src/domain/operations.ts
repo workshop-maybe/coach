@@ -3,6 +3,7 @@
 // folder layer's saves (which refuse outdated base texts, KTD6) and returns the
 // folder freshly reloaded, so `raw` always matches what is on disk.
 
+import type { BadgeSettings } from "../badge/settings";
 import { ChangedOnDiskError, type Storage } from "../storage/storage";
 import {
   collectionPath,
@@ -107,6 +108,68 @@ export async function reorderCredentials(
   }
   await saveCollection(storage, { ...stored, order: [...orderedSlugs] }, baseText);
   return loadFolder(storage);
+}
+
+// ---------------------------------------------------------------------------
+// Badges (KTD3, KTD4). Both setters spread the stored collection, so a badge save
+// never changes the name, description, order or codes.
+
+/** Sets the collection's badge settings, or clears them with `undefined`. */
+export async function updateCollectionBadge(
+  storage: Storage,
+  state: FolderState,
+  collectionSlug: Slug,
+  badge: BadgeSettings | undefined,
+  baseText: string | null,
+): Promise<FolderState> {
+  const stored = findCollection(state, collectionSlug);
+  // Dropping badgeRaw means a malformed stored value is replaced or cleared too.
+  const { badge: _badge, badgeRaw: _raw, ...rest } = stored;
+  const next: Collection = badge === undefined ? rest : { ...rest, badge };
+  await saveCollection(storage, next, baseText);
+  return loadFolder(storage);
+}
+
+/** Sets one credential's badge override, or removes it with `null`. Other entries stay as they are. */
+export async function setCredentialBadgeOverride(
+  storage: Storage,
+  state: FolderState,
+  collectionSlug: Slug,
+  credentialSlug: Slug,
+  override: BadgeSettings | null,
+  baseText: string | null,
+): Promise<FolderState> {
+  const stored = findCollection(state, collectionSlug);
+  if (override !== null) findCredential(state, collectionSlug, credentialSlug);
+
+  const next: Collection = { ...stored };
+  // A malformed entry for this credential is replaced or removed along with it.
+  if (stored.badgeOverrideEntriesRaw !== undefined) {
+    const { [credentialSlug]: _dropped, ...otherRaw } = stored.badgeOverrideEntriesRaw;
+    if (Object.keys(otherRaw).length > 0) next.badgeOverrideEntriesRaw = otherRaw;
+    else delete next.badgeOverrideEntriesRaw;
+  }
+  if (override !== null) {
+    next.badgeOverrides = { ...(stored.badgeOverrides ?? {}), [credentialSlug]: override };
+  } else if (stored.badgeOverrides !== undefined) {
+    const { [credentialSlug]: _removed, ...others } = stored.badgeOverrides;
+    next.badgeOverrides = others;
+  }
+  await saveCollection(storage, next, baseText);
+  return loadFolder(storage);
+}
+
+/**
+ * Copies a picked image into the collection's badge folder and returns its
+ * folder-relative path, or null when the picker was cancelled. It never writes
+ * collection.json: the path is a draft value until the badge Save (KTD4).
+ */
+export async function importBadgeArt(
+  storage: Storage,
+  collectionSlug: Slug,
+  credentialSlug: Slug | null,
+): Promise<string | null> {
+  return storage.importBadgeArt(collectionSlug, credentialSlug);
 }
 
 // ---------------------------------------------------------------------------
