@@ -13,6 +13,9 @@ export default defineConfig(() => ({
   test: {
     environment: "node",
     include: ["src/**/*.test.{ts,tsx}"],
+    // Vitest stubs CSS imports as empty strings, even with `?raw`. The badge renderer
+    // embeds its font CSS as a raw string, so let that one file through.
+    css: { include: [/src\/badge\/fonts\.css/] },
   },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`

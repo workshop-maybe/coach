@@ -1,0 +1,16 @@
+Andamio Desktop
+
+This product includes software adapted from credential-badges
+(https://github.com/Andamio-Platform/credential-badges), licensed under the
+Apache License, Version 2.0. The badge renderer (src/badge/render.ts) and the
+badge palettes (src/badge/palettes.ts) are TypeScript ports of
+generator/gen.py and generator/colors.py from that project. Changes: the OB3
+metadata blocks and the ASCII title sanitizer were left out, and the plate
+labels were renamed for collections and credentials.
+
+src/badge/fonts.css is copied from credential-badges generator/fonts.css. It
+embeds subsets of these fonts, each licensed under the SIL Open Font License,
+Version 1.1 (https://openfontlicense.org):
+
+- Archivo, Copyright The Archivo Project Authors
+- Spline Sans Mono, Copyright The Spline Sans Mono Project Authors
