@@ -1,3 +1,4 @@
+/// <reference types="node" />
 // Brand guard: component styles take colors from the token layer and keep square
 // corners. src/theme holds the tokens themselves; src/badge draws badge art,
 // which follows credential-badges rather than the app's brand.
