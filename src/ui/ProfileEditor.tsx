@@ -2,10 +2,12 @@
 // effort are read-only (KTD10), and a different setup starts as an unsaved duplicate.
 // New and duplicated profiles are written only when the user saves.
 
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { profilePath } from "../domain/folder";
 import { createProfile, duplicateProfileDraft, isSetupLocked, updateProfile } from "../domain/operations";
-import type { AgentProfile, FolderState } from "../domain/types";
+import { FLAG_REASONS, buildMatrix, cellKey, type Cell, type Matrix } from "../domain/matrix";
+import { credentialKey, type AgentProfile, type Collection, type Credential, type FolderState } from "../domain/types";
+import { Badge } from "./Badge";
 import { EditorStatus, SaveBar, useDraftWithBase } from "./useDraftWithBase";
 import { describeError, useFolder } from "./useFolderState";
 
@@ -106,6 +108,65 @@ function ProfileFieldset({ draft, onChange, locked }: FieldsProps) {
 
 // ---------------------------------------------------------------------------
 
+interface Earned {
+  collection: Collection;
+  credential: Credential;
+  cell: Cell;
+}
+
+/** Badges for every credential this agent has met. A flagged met still counts (R14). */
+function EarnedBadges({ state, profileSlug }: { state: FolderState; profileSlug: string }) {
+  const { setNotice } = useFolder();
+  const [matrix, setMatrix] = useState<Matrix | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    buildMatrix(state).then(
+      (m) => live && setMatrix(m),
+      (e) => live && setNotice(describeError(e)),
+    );
+    return () => {
+      live = false;
+    };
+  }, [state, setNotice]);
+
+  const earned: Earned[] = [];
+  for (const group of matrix?.columns ?? []) {
+    for (const credential of group.credentials) {
+      const cell = matrix!.cells.get(cellKey(profileSlug, credentialKey(credential)));
+      if (cell?.status === "met") earned.push({ collection: group.collection, credential, cell });
+    }
+  }
+
+  return (
+    <section className="earned-badges" aria-label="Earned badges">
+      <h3>Earned badges</h3>
+      {!matrix ? (
+        <p className="muted">Loading…</p>
+      ) : earned.length === 0 ? (
+        <p className="muted">No badges yet. Record a met result for this agent to earn one.</p>
+      ) : (
+        <ul className="badge-earned-list">
+          {earned.map(({ collection, credential, cell }) => (
+            <li key={credentialKey(credential)} className={cell.flags.length > 0 ? "badge-earned stale" : "badge-earned"}>
+              <Badge collection={collection} credential={credential} size={96} />
+              <span className="badge-earned-name">{credential.name}</span>
+              <span className="badge-earned-collection muted">{collection.name}</span>
+              {cell.flags.map((f) => (
+                <span key={f} className="badge-earned-reason">
+                  {FLAG_REASONS[f]}
+                </span>
+              ))}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
 export interface ProfileEditorProps {
   profileSlug: string;
   /** Opens an unsaved duplicate draft. Nothing is written until it is saved. */
@@ -156,6 +217,7 @@ export function ProfileEditor({ profileSlug, onDuplicate }: ProfileEditorProps) 
           )}
         </SaveBar>
       </form>
+      <EarnedBadges state={state} profileSlug={profileSlug} />
     </section>
   );
 }

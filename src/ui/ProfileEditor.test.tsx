@@ -19,6 +19,7 @@ import {
 } from "../domain/folder";
 import { serializeCredentialMd } from "../domain/credential-md";
 import type { AgentProfile, Assessment } from "../domain/types";
+import { assignmentVersion } from "../domain/hash";
 
 afterEach(cleanup);
 
@@ -218,5 +219,68 @@ describe("ProfileEditor", () => {
     await user.click(screen.getByRole("button", { name: "Save" }));
     await screen.findByText("Saved.");
     expect(JSON.parse(storage.file(profilePath("codex"))!).model).toBe("gpt-next");
+  });
+});
+
+describe("Earned badges", () => {
+  const task = "Review it.";
+  const rubric = "Finds the bug.";
+
+  async function earnedFixture(results: Record<string, { result: Assessment["result"]; current: boolean }>): Promise<MemoryStorage> {
+    const files: Record<string, string> = {
+      [MARKER_PATH]: serializeMarker(),
+      [collectionPath("eng")]: serializeCollection({ slug: "eng", name: "Engineering", description: "", order: ["a", "b"], codes: { a: 1, b: 2 } }),
+      [profilePath("claude")]: serializeProfile(claude),
+    };
+    for (const [slug, name] of [["a", "Alpha skill"], ["b", "Beta skill"]]) {
+      files[credentialPath("eng", slug)] = serializeCredentialMd({
+        slug, collectionSlug: "eng", name, learningTargets: ["I can."], task, rubric, extraSections: [],
+      });
+      const r = results[slug];
+      if (!r) continue;
+      const a: Assessment = {
+        ...assessment,
+        credentialSlug: slug,
+        result: r.result,
+        assignmentVersion: r.current ? await assignmentVersion(task, rubric) : "0123456789ab",
+      };
+      files[assessmentPath("claude", "eng", slug, a.fileStem)] = serializeAssessment(a);
+    }
+    return new MemoryStorage(files);
+  }
+
+  it("Covers AE4. A met and a flagged met both show, and the flagged one is dimmed with its reason", async () => {
+    renderApp(await earnedFixture({ a: { result: "met", current: true }, b: { result: "met", current: false } }), { view: "agents", profileSlug: "claude" });
+    const section = await screen.findByRole("region", { name: "Earned badges" });
+    const items = await within(section).findAllByRole("listitem");
+    expect(items).toHaveLength(2);
+    const [a, b] = items;
+    expect(within(a).getByText("Alpha skill")).toBeTruthy();
+    expect(within(a).getByText("Engineering")).toBeTruthy();
+    expect(a.className).not.toContain("stale");
+    expect(within(a).queryByText(/earlier version/)).toBeNull();
+    expect(b.className).toContain("stale");
+    expect(within(b).getByText("Tested against an earlier version of the assignment")).toBeTruthy();
+    expect((within(a).getByRole("img") as HTMLElement).getAttribute("width")).toBe("96");
+  });
+
+  it("shows nothing for not met or untested credentials", async () => {
+    renderApp(await earnedFixture({ a: { result: "not_met", current: true } }), { view: "agents", profileSlug: "claude" });
+    const section = await screen.findByRole("region", { name: "Earned badges" });
+    expect(within(section).queryAllByRole("listitem")).toHaveLength(0);
+    expect(within(section).queryByText("Alpha skill")).toBeNull();
+    expect(within(section).queryByText("Beta skill")).toBeNull();
+  });
+
+  it("with no met results, shows a quiet empty state", async () => {
+    renderApp(await earnedFixture({}), { view: "agents", profileSlug: "claude" });
+    expect(await screen.findByText("No badges yet. Record a met result for this agent to earn one.")).toBeTruthy();
+  });
+
+  it("is not shown on an unsaved new profile", async () => {
+    renderApp(await earnedFixture({}), { view: "agents" });
+    await userEvent.setup().click(await screen.findByRole("button", { name: "New agent" }));
+    await screen.findByRole("region", { name: "New agent" });
+    expect(screen.queryByRole("region", { name: "Earned badges" })).toBeNull();
   });
 });
