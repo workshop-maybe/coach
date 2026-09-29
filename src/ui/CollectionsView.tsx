@@ -1,13 +1,23 @@
 // Collections and their credentials (R1, F1): create and rename collections, add and
 // reorder credentials, open a credential's editor, and export a collection.
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import type { BadgeSettings } from "../badge/settings";
 import { collectionPath } from "../domain/folder";
-import { createCollection, createCredential, reorderCredentials, updateCollection } from "../domain/operations";
+import {
+  createCollection,
+  createCredential,
+  importBadgeArt,
+  reorderCredentials,
+  updateCollection,
+  updateCollectionBadge,
+} from "../domain/operations";
 import { credentialKey, type Collection, type FolderState } from "../domain/types";
 import { useNav } from "./AppShell";
+import { Badge } from "./Badge";
+import { BadgeControls, cleanSettings, isEmptySettings, useRingHues } from "./BadgeControls";
 import { CredentialEditor } from "./CredentialEditor";
-import { EditorStatus, SaveBar, useDraftWithBase } from "./useDraftWithBase";
+import { EditorStatus, SaveBar, useDraftWithBase, type DraftWithBase } from "./useDraftWithBase";
 import { ExportDialog } from "./ExportDialog";
 import { describeError, useFolder } from "./useFolderState";
 
@@ -102,17 +112,37 @@ function CollectionDetail({ slug }: { slug: string }) {
     const c = find(s);
     return c && { name: c.name, description: c.description };
   });
+  // The badge panel keeps a second draft on the same file, with its own Save and Revert.
+  const b = useDraftWithBase<{ settings: BadgeSettings }>(path, (s) => {
+    const c = find(s);
+    return c && { settings: c.badge ?? {} };
+  });
   const [newName, setNewName] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
   const [showExport, setShowExport] = useState(false);
+  const [artMissing, setArtMissing] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const [artError, setArtError] = useState<string | null>(null);
 
   const collection = find(state);
+  const badgeSettings = b.draft?.settings ?? null;
+  const firstCredential = collection?.order
+    .map((credSlug) => state?.credentials.find((c) => c.collectionSlug === slug && c.slug === credSlug))
+    .find((c) => c !== undefined);
+  const sample = firstCredential ? { slug: firstCredential.slug, name: firstCredential.name } : SAMPLE_CREDENTIAL;
+  // The preview shows the collection's own settings, so the sample credential's override is left out.
+  const previewCollection = useMemo<Collection | null>(() => {
+    if (!collection || !badgeSettings) return null;
+    const { [sample.slug]: _own, ...others } = collection.badgeOverrides ?? {};
+    return { ...collection, badge: badgeSettings, badgeOverrides: others };
+  }, [collection, badgeSettings, sample.slug]);
+  const ringHues = useRingHues(previewCollection, sample.slug);
   const allCollections = (
     <button type="button" className="link back" onClick={() => navigate({ view: "collections" })}>
       All collections
     </button>
   );
-  if (!state || !collection || d.draft === null) {
+  if (!state || !collection || d.draft === null || badgeSettings === null || previewCollection === null) {
     return (
       <section className="stack">
         {allCollections}
@@ -124,11 +154,26 @@ function CollectionDetail({ slug }: { slug: string }) {
   const credentials = state.credentials.filter((c) => c.collectionSlug === slug);
   const nameOf = (credSlug: string) => credentials.find((c) => c.slug === credSlug)?.name;
 
-  // The app wrote only the order. A name edit in progress may save on top of it, but only
-  // when the file matched the editor's base before that write. Otherwise an outside edit
-  // is pending, and rebasing would hide it and let the next save overwrite it (KTD6).
-  const rebaseIfUnchanged = (before: string | null, next: FolderState) => {
-    if (before === d.base) d.rebase(next);
+  // Every app write to collection.json touches only its own fields. Another draft on the
+  // file may save on top of it, but only when the file matched that draft's base before
+  // the write. Otherwise an outside edit is pending, and rebasing would hide it and let
+  // the next save overwrite it (KTD6).
+  const rebaseIfUnchanged = (before: string | null, next: FolderState, writer?: DraftWithBase<unknown>) => {
+    for (const other of [d, b] as DraftWithBase<unknown>[]) {
+      if (other !== writer && before === other.base) other.rebase(next);
+    }
+  };
+
+  /** Runs a draft's save and rebases the other drafts on this screen. */
+  const saveAndRebase = async <T,>(draft: DraftWithBase<T>, run: (dr: T, base: string | null, s: FolderState) => Promise<FolderState>) => {
+    let before: string | null = null;
+    let after: FolderState | null = null;
+    const ok = await draft.save(async (dr, base, s) => {
+      before = s.raw[path] ?? null;
+      after = await run(dr, base, s);
+      return after;
+    });
+    if (ok && after) rebaseIfUnchanged(before, after, draft as DraftWithBase<unknown>);
   };
 
   const move = async (i: number, by: -1 | 1) => {
@@ -167,12 +212,36 @@ function CollectionDetail({ slug }: { slug: string }) {
       d.setError("Give the collection a name before saving.");
       return;
     }
-    void d.save(async (dr, base, s) => {
+    void saveAndRebase(d, async (dr, base, s) => {
       const stored = find(s);
       if (!stored) throw new Error("This collection is not in the folder.");
       return updateCollection(storage, s, { ...stored, name: dr.name.trim(), description: dr.description }, base);
     });
   };
+
+  const onSaveBadge = (e: React.FormEvent) => {
+    e.preventDefault();
+    void saveAndRebase(b, (dr, base, s) => {
+      const clean = cleanSettings(dr.settings);
+      return updateCollectionBadge(storage, s, slug, isEmptySettings(clean) ? undefined : clean, base);
+    });
+  };
+
+  const onPickArt = async () => {
+    setPicking(true);
+    setArtError(null);
+    try {
+      // Copies the file only. The setting is written by Save.
+      const art = await importBadgeArt(storage, slug, null);
+      if (art !== null) b.edit({ settings: { ...badgeSettings, art } });
+    } catch (err) {
+      setArtError(describeError(err));
+    } finally {
+      setPicking(false);
+    }
+  };
+
+  const overriders = b.dirty ? credentialsOverriding(collection, badgeSettings, nameOf) : [];
 
   return (
     <section className="stack">
@@ -195,6 +264,11 @@ function CollectionDetail({ slug }: { slug: string }) {
             const label = name ?? credSlug;
             return (
               <li key={credSlug} className="row">
+                {name !== undefined ? (
+                  <Badge collection={collection} credential={{ slug: credSlug, name }} size={64} className="badge-thumb" />
+                ) : (
+                  <span className="badge-placeholder badge-thumb" style={{ width: 64, height: 64 }} aria-hidden="true" />
+                )}
                 {name !== undefined ? (
                   <button
                     type="button"
@@ -250,6 +324,64 @@ function CollectionDetail({ slug }: { slug: string }) {
         </label>
         <SaveBar d={d} label="Save collection" />
       </form>
+
+      <section className="badge-section" aria-label="Badge">
+        <h2>Badge</h2>
+        <p className="muted">These settings apply to every credential in the collection. A credential can set its own in its editor.</p>
+        <EditorStatus d={b} />
+        <div className="badge-layout">
+          <div className="badge-preview">
+            <Badge collection={previewCollection} credential={sample} size={200} onArtMissing={setArtMissing} />
+          </div>
+          <form onSubmit={onSaveBadge}>
+            <BadgeControls
+              mode="collection"
+              collectionSettings={badgeSettings}
+              value={badgeSettings}
+              onChange={(next) => b.edit({ settings: next })}
+              ringHues={ringHues}
+              titleDefaults={{ main: "Credential name", eyebrow: collection.name }}
+              onPickArt={() => void onPickArt()}
+              pickingArt={picking}
+              artError={artError}
+              artMissing={artMissing}
+            />
+            {overriders.length > 0 && (
+              <p className="badge-note">
+                {overriders.length === 1 ? "This credential sets its own value for what you changed, and keeps it: " : "These credentials set their own value for what you changed, and keep it: "}
+                {overriders.join(", ")}.
+              </p>
+            )}
+            <SaveBar d={b} label="Save badge settings">
+              <button type="button" onClick={b.revert} disabled={!b.dirty}>
+                Revert badge settings
+              </button>
+            </SaveBar>
+          </form>
+        </div>
+      </section>
     </section>
   );
+}
+
+const SAMPLE_CREDENTIAL = { slug: "sample", name: "Sample credential" };
+
+/** Names of credentials whose overrides set a field the collection draft changes. */
+function credentialsOverriding(collection: Collection, draft: BadgeSettings, nameOf: (slug: string) => string | undefined): string[] {
+  const saved = collection.badge ?? {};
+  const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+  const colors = !same(saved.palette, draft.palette) || !same(saved.colors, draft.colors);
+  const art = !same(saved.art, draft.art);
+  const main = !same(saved.title?.main, draft.title?.main);
+  const eyebrow = !same(saved.title?.eyebrow, draft.title?.eyebrow);
+  return collection.order.flatMap((credSlug) => {
+    const o = collection.badgeOverrides?.[credSlug];
+    if (!o) return [];
+    const touches =
+      (colors && (o.palette !== undefined || o.colors !== undefined)) ||
+      (art && o.art !== undefined) ||
+      (main && !!o.title?.main) ||
+      (eyebrow && !!o.title?.eyebrow);
+    return touches ? [nameOf(credSlug) ?? credSlug] : [];
+  });
 }

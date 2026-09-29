@@ -21,6 +21,8 @@ export interface DraftWithBase<T> {
   /** Discards the draft and re-seeds it from the folder as it is now. */
   reloadFromDisk(): Promise<void>;
   keepEditing(): void;
+  /** Discards the draft and re-seeds it from the folder state already loaded. */
+  revert(): void;
   /** Runs a save against the base. On success applies the new state and takes its text as the base. */
   save(run: (draft: T, base: string | null, state: FolderState) => Promise<FolderState>): Promise<boolean>;
   /** Takes a file text this app just wrote as the new base, keeping the draft. */
@@ -86,6 +88,9 @@ export function useDraftWithBase<T>(path: string, seed: (state: FolderState) => 
     keepEditing() {
       setKeptOver(current);
       setRefused(false);
+    },
+    revert() {
+      if (state) reseed(state);
     },
     async save(run) {
       if (draft === null || state === null) return false;
