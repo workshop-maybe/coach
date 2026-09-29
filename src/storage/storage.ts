@@ -14,7 +14,7 @@ export interface Storage {
   /** Returns a JPEG or PNG inside the root as a base64 data URI, or null when it does not exist. */
   readDataUri(root: RootKind, path: string): Promise<string | null>;
   /**
-   * Opens an image picker and copies the chosen JPEG or PNG (1 MiB max) into the data folder
+   * Opens an image picker and copies the chosen JPEG or PNG (3 MiB max) into the data folder
    * under a content-addressed name (KTD4). Returns the folder-relative path, or null on cancel.
    * With a credential slug the file is named for that credential's override.
    */

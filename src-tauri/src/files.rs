@@ -230,13 +230,13 @@ pub fn list_files_in(root: &Path, dir: &str) -> Result<Vec<String>, String> {
     Ok(out)
 }
 
-/// Largest plate-art image accepted, in bytes (1 MiB, inclusive).
-pub const MAX_IMAGE_BYTES: usize = 1_048_576;
+/// Largest plate-art image accepted, in bytes (3 MiB, inclusive).
+pub const MAX_IMAGE_BYTES: usize = 3 * 1024 * 1024;
 
 const PNG_SIGNATURE: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
 const JPEG_MAGIC: [u8; 3] = [0xFF, 0xD8, 0xFF];
 
-/// Checks that `bytes` is a JPEG or PNG no larger than 1 MiB, by magic bytes
+/// Checks that `bytes` is a JPEG or PNG no larger than 3 MiB, by magic bytes
 /// rather than by file name. Returns the extension to store it under.
 pub fn validate_image(bytes: &[u8]) -> Result<&'static str, String> {
     let ext = if bytes.starts_with(&JPEG_MAGIC) {
@@ -248,7 +248,7 @@ pub fn validate_image(bytes: &[u8]) -> Result<&'static str, String> {
     };
     if bytes.len() > MAX_IMAGE_BYTES {
         return Err(format!(
-            "That image is {} bytes. Badge art must be 1 MiB ({MAX_IMAGE_BYTES} bytes) or smaller.",
+            "That image is {} bytes. Badge art must be 3 MiB ({MAX_IMAGE_BYTES} bytes) or smaller.",
             bytes.len()
         ));
     }
@@ -301,7 +301,7 @@ pub fn read_data_uri_in(root: &Path, rel: &str) -> Result<Option<String>, String
     // Refuse an oversized file before reading it all (validate_image checks again).
     match std::fs::metadata(&path) {
         Ok(m) if m.len() > MAX_IMAGE_BYTES as u64 => {
-            return Err(format!("\"{rel}\": the image is larger than 1 MiB"));
+            return Err(format!("\"{rel}\": the image is larger than 3 MiB"));
         }
         _ => {}
     }
@@ -583,7 +583,7 @@ mod tests {
     fn validate_image_size_limit_is_one_mib_inclusive() {
         assert_eq!(validate_image(&png(MAX_IMAGE_BYTES)).unwrap(), "png");
         let err = validate_image(&png(MAX_IMAGE_BYTES + 1)).unwrap_err();
-        assert!(err.contains("1 MiB"), "got: {err}");
+        assert!(err.contains("3 MiB"), "got: {err}");
         assert!(validate_image(&jpeg(MAX_IMAGE_BYTES + 1)).is_err());
     }
 
@@ -730,7 +730,7 @@ mod tests {
         let (_d, root) = root();
         fs::write(root.join("big.png"), png(MAX_IMAGE_BYTES + 1)).unwrap();
         let err = read_data_uri_in(&root, "big.png").unwrap_err();
-        assert!(err.contains("larger than 1 MiB"), "got: {err}");
+        assert!(err.contains("larger than 3 MiB"), "got: {err}");
         fs::write(root.join("ok.png"), png(MAX_IMAGE_BYTES)).unwrap();
         assert!(read_data_uri_in(&root, "ok.png").unwrap().is_some());
     }
