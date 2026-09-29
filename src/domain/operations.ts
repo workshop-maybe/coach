@@ -154,7 +154,6 @@ export async function createCredential(
 
 export async function updateCredential(
   storage: Storage,
-  _state: FolderState,
   credential: Credential,
   baseText: string | null,
 ): Promise<FolderState> {

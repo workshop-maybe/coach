@@ -6,7 +6,7 @@ import { useId, useState } from "react";
 import { profilePath } from "../domain/folder";
 import { createProfile, duplicateProfileDraft, isSetupLocked, updateProfile } from "../domain/operations";
 import type { AgentProfile, FolderState } from "../domain/types";
-import { EditorStatus, SaveBar, useDraftWithBase } from "./CredentialEditor";
+import { EditorStatus, SaveBar, useDraftWithBase } from "./useDraftWithBase";
 import { describeError, useFolder } from "./useFolderState";
 
 export type ProfileFields = Omit<AgentProfile, "slug">;

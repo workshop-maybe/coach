@@ -90,3 +90,9 @@ export function credentialKey(c: { collectionSlug: Slug; slug: Slug } | { collec
   const slug = "slug" in c ? c.slug : c.credentialSlug;
   return `${c.collectionSlug}/${slug}`;
 }
+
+/** Inverse of credentialKey: splits `collection/slug` at the first slash. */
+export function parseCredentialKey(key: string): { collectionSlug: Slug; slug: Slug } {
+  const i = key.indexOf("/");
+  return { collectionSlug: key.slice(0, i), slug: key.slice(i + 1) };
+}

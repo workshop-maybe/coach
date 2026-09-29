@@ -7,8 +7,9 @@ import { FLAG_REASONS, buildMatrix, cellKey, type CellFlag, type Matrix } from "
 import { credentialKey as keyOf } from "../domain/types";
 import { useNav } from "./AppShell";
 import { AssessmentForm } from "./AssessmentForm";
-import { CellHistory, resultLabel } from "./CellHistory";
-import { useFolder } from "./useFolderState";
+import { CellHistory } from "./CellHistory";
+import { resultLabel } from "./format";
+import { describeError, useFolder } from "./useFolderState";
 
 const FLAG_MARKS: Record<CellFlag, string> = {
   earlier_version: "Earlier version",
@@ -28,7 +29,7 @@ export function MatrixView() {
     let live = true;
     buildMatrix(state).then(
       (m) => live && setMatrix(m),
-      (e) => live && setNotice(e instanceof Error ? e.message : String(e)),
+      (e) => live && setNotice(describeError(e)),
     );
     return () => {
       live = false;

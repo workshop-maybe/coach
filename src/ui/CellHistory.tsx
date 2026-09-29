@@ -4,8 +4,9 @@
 
 import { useState } from "react";
 import { FLAG_REASONS, type Cell } from "../domain/matrix";
-import type { AgentProfile, AgentSetup, Credential } from "../domain/types";
+import type { AgentProfile, Credential } from "../domain/types";
 import { AssessmentForm } from "./AssessmentForm";
+import { resultLabel, setupLine } from "./format";
 import { PromptPanel } from "./PromptPanel";
 
 export interface CellHistoryProps {
@@ -13,15 +14,6 @@ export interface CellHistoryProps {
   profile: AgentProfile;
   credential: Credential;
   onClose(): void;
-}
-
-export function setupLine(setup: AgentSetup): string {
-  const parts = [setup.harness, setup.model, setup.effort].map((s) => (s.trim() === "" ? "(none)" : s));
-  return parts.join(" · ");
-}
-
-export function resultLabel(result: "met" | "not_met" | "untested"): string {
-  return result === "met" ? "Met" : result === "not_met" ? "Not met" : "Untested";
 }
 
 function formatDate(iso: string): string {

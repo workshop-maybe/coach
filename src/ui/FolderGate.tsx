@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { describeError } from "./useFolderState";
 
 export interface FolderGateProps {
   /** The remembered data folder, or null. Defaults to the `get_data_folder` command. */
@@ -29,7 +30,7 @@ export function FolderGate({ getFolder = defaultGetFolder, pickFolder = defaultP
       (folder) => live && setGate(folder ? { status: "ready", folder } : { status: "none" }),
       (e) => {
         if (!live) return;
-        setError(e instanceof Error ? e.message : String(e));
+        setError(describeError(e));
         setGate({ status: "none" });
       },
     );
@@ -47,7 +48,7 @@ export function FolderGate({ getFolder = defaultGetFolder, pickFolder = defaultP
         setGate({ status: "ready", folder });
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(describeError(e));
     }
   }
 

@@ -30,20 +30,23 @@ fn pick_folder(app: &AppHandle) -> Result<Option<PathBuf>, String> {
     }
 }
 
+/// Shows a folder picker and approves the choice as the given root.
+fn pick_and_approve(app: &AppHandle, state: &AppState, kind: RootKind) -> Result<Option<String>, String> {
+    let Some(folder) = pick_folder(app)? else {
+        return Ok(None);
+    };
+    let canon = state.roots.lock().map_err(|e| e.to_string())?.set(kind, &folder)?;
+    Ok(Some(canon.to_string_lossy().into_owned()))
+}
+
 #[tauri::command]
 async fn pick_data_folder(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Option<String>, String> {
-    let Some(folder) = pick_folder(&app)? else {
+    let Some(path) = pick_and_approve(&app, &state, RootKind::Data)? else {
         return Ok(None);
     };
-    let canon = state
-        .roots
-        .lock()
-        .map_err(|e| e.to_string())?
-        .set(RootKind::Data, &folder)?;
-    let path = canon.to_string_lossy().into_owned();
     let mut s = settings::load(&state.settings_path);
     s.data_folder = Some(path.clone());
     settings::save(&state.settings_path, &s)?;
@@ -64,24 +67,18 @@ async fn pick_export_folder(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Option<String>, String> {
-    let Some(folder) = pick_folder(&app)? else {
-        return Ok(None);
-    };
-    let canon = state
-        .roots
-        .lock()
-        .map_err(|e| e.to_string())?
-        .set(RootKind::Export, &folder)?;
-    Ok(Some(canon.to_string_lossy().into_owned()))
+    pick_and_approve(&app, &state, RootKind::Export)
 }
 
+// The file commands are async so their disk I/O runs off the main thread.
+
 #[tauri::command]
-fn read_text(state: State<'_, AppState>, root: String, path: String) -> Result<Option<String>, String> {
+async fn read_text(state: State<'_, AppState>, root: String, path: String) -> Result<Option<String>, String> {
     files::read_text_in(&state.root(&root)?, &path)
 }
 
 #[tauri::command]
-fn write_text(
+async fn write_text(
     state: State<'_, AppState>,
     root: String,
     path: String,
@@ -91,7 +88,7 @@ fn write_text(
 }
 
 #[tauri::command]
-fn list_files(state: State<'_, AppState>, root: String, dir: String) -> Result<Vec<String>, String> {
+async fn list_files(state: State<'_, AppState>, root: String, dir: String) -> Result<Vec<String>, String> {
     files::list_files_in(&state.root(&root)?, &dir)
 }
 

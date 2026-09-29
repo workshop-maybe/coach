@@ -39,7 +39,6 @@ async function setup(): Promise<{ storage: MemoryStorage; state: FolderState }> 
   const credential = state.credentials[0];
   state = await updateCredential(
     storage,
-    state,
     { ...credential, learningTargets: ["I can parse flags"], task: "Build a CLI.", rubric: "Flags parse." },
     state.raw[credentialPath(col.slug, credential.slug)],
   );
@@ -145,7 +144,7 @@ describe("collections and credentials", () => {
     storage.seed({ [path]: `${base}\nHand edit.\n` });
     const writes = storage.writes.length;
     const files = storage.files();
-    await expect(updateCredential(storage, state, { ...state.credentials[0], name: "Renamed" }, base)).rejects.toBeInstanceOf(
+    await expect(updateCredential(storage, { ...state.credentials[0], name: "Renamed" }, base)).rejects.toBeInstanceOf(
       ChangedOnDiskError,
     );
     expect(storage.writes.length).toBe(writes);
@@ -276,7 +275,7 @@ describe("recording assessments", () => {
   it("stamps the edited assignment version after the credential changes", async () => {
     const { storage, state } = await setup();
     const path = credentialPath("go-basics", "write-a-cli");
-    const edited = await updateCredential(storage, state, { ...state.credentials[0], rubric: "Flags parse and help prints." }, state.raw[path]);
+    const edited = await updateCredential(storage, { ...state.credentials[0], rubric: "Flags parse and help prints." }, state.raw[path]);
     const next = await recordAssessment(storage, edited, { ...input, result: "met" });
     expect(next.assessments[0].assignmentVersion).toBe(await assignmentVersion("Build a CLI.", "Flags parse and help prints."));
   });
