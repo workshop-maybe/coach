@@ -312,6 +312,53 @@ button:focus-visible {
   margin: var(--space-2xl) auto 0;
 }
 
+/* A card that holds a rich-text editor takes the window: full width, the card as tall
+   as the view allows, and the editor filling the card and scrolling inside itself. */
+.content:has(.deck .rich) {
+  max-width: none;
+  padding-bottom: var(--space-xl);
+}
+
+.deck:has(.rich) {
+  display: flex;
+  flex-direction: column;
+  max-width: none;
+  height: calc(100vh - 11rem);
+  min-height: 24rem;
+}
+
+.deck:has(.rich) .deck-card {
+  flex: 1;
+  min-height: 0;
+}
+
+.deck:has(.rich) .deck-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: var(--space-sm);
+}
+
+.deck-body .rich {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.deck-body .rich > :not(.rich-bar):not(.rich-link):not(.rich-menu) {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.deck-body .rich-input {
+  flex: 1;
+}
+
 .deck-close {
   position: absolute;
   top: calc(-1 * var(--space-2xl));
@@ -602,46 +649,66 @@ button:focus-visible {
   display: flex;
 }
 
+/* Tools are drawn keys (src/cast/ToolKey.tsx): no button chrome, the sketch is the button. */
 .rich-menu button,
 .rich-bar button {
-  min-width: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
   height: 30px;
-  padding: 0 8px;
+  padding: 0;
   border: none;
   border-radius: 0;
-  background: var(--surface);
+  background: none;
   color: var(--ink);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 400;
-  letter-spacing: 0;
 }
 
-.rich-menu button + button,
-.rich-bar button + button {
-  border-left: 1px solid var(--cell);
+.rich-menu [role="toolbar"],
+.rich-bar {
+  gap: 2px;
+  padding: 4px 6px;
 }
 
-.rich-menu button[aria-label="Bold"],
-.rich-bar button[aria-label="Bold"] {
-  font-weight: 700;
+.tool-key {
+  display: block;
+  overflow: visible;
 }
 
-.rich-menu button[aria-label="Italic"],
-.rich-bar button[aria-label="Italic"] {
-  font-style: italic;
+.tool-key-edge,
+.tool-key-icon {
+  fill: none;
+  stroke: var(--ink);
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
-.rich-menu button[aria-pressed="true"],
-.rich-bar button[aria-pressed="true"] {
-  background: var(--ink);
-  color: var(--on-ink);
+.tool-key-edge {
+  stroke-width: 1.4;
+}
+
+.tool-key-fill {
+  fill: var(--ink);
+}
+
+.tool-key-on .tool-key-icon {
+  stroke: var(--on-ink);
 }
 
 .rich-menu button:hover:not([aria-pressed="true"]),
 .rich-bar button:hover:not([aria-pressed="true"]) {
   opacity: 1;
-  background: var(--grid);
+}
+
+.rich-menu button:hover:not([aria-pressed="true"]) .tool-key-edge,
+.rich-bar button:hover:not([aria-pressed="true"]) .tool-key-edge {
+  stroke-width: 2.2;
+}
+
+.rich-menu button:focus-visible,
+.rich-bar button:focus-visible {
+  outline: 1.5px solid var(--data);
+  outline-offset: 1px;
 }
 
 .rich-menu .rich-link,

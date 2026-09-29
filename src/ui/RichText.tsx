@@ -12,6 +12,7 @@ import { Markdown } from "@tiptap/markdown";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { Placeholder } from "@tiptap/extensions";
 import { Node as PMNode, Slice } from "@tiptap/pm/model";
+import { ToolKey, type ToolName } from "../cast/ToolKey";
 
 export interface RichTextProps {
   /** The text as Markdown. */
@@ -171,7 +172,7 @@ function Toolbar({ editor, full = false, label }: { editor: Editor; full?: boole
     }
   }
 
-  const tool = (name: string, glyph: string, on: boolean, run: () => void) => (
+  const tool = (name: string, key: ToolName, on: boolean, run: () => void) => (
     <button
       type="button"
       aria-label={name}
@@ -180,7 +181,7 @@ function Toolbar({ editor, full = false, label }: { editor: Editor; full?: boole
       onMouseDown={(e) => e.preventDefault()}
       onClick={run}
     >
-      {glyph}
+      <ToolKey tool={key} on={on} />
     </button>
   );
 
@@ -201,17 +202,17 @@ function Toolbar({ editor, full = false, label }: { editor: Editor; full?: boole
 
   return (
     <div role="toolbar" aria-label={label} className={full ? "rich-bar" : undefined}>
-      {tool("Bold", "B", active.bold, () => editor.chain().focus().toggleBold().run())}
-      {tool("Italic", "I", active.italic, () => editor.chain().focus().toggleItalic().run())}
-      {tool("Code", "<>", active.code, () => editor.chain().focus().toggleCode().run())}
-      {tool("Link", "↗", active.link, startLink)}
+      {tool("Bold", "bold", active.bold, () => editor.chain().focus().toggleBold().run())}
+      {tool("Italic", "italic", active.italic, () => editor.chain().focus().toggleItalic().run())}
+      {tool("Code", "code", active.code, () => editor.chain().focus().toggleCode().run())}
+      {tool("Link", "link", active.link, startLink)}
       {full && <span className="rich-gap" aria-hidden="true" />}
-      {tool("Heading", "H", active.heading, () => editor.chain().focus().toggleHeading({ level: 2 }).run())}
-      {tool("Bullet list", "•", active.bullets, () => editor.chain().focus().toggleBulletList().run())}
-      {full && tool("Numbered list", "1.", active.numbers, () => editor.chain().focus().toggleOrderedList().run())}
-      {full && tool("Checklist", "☐", active.tasks, () => editor.chain().focus().toggleTaskList().run())}
-      {full && tool("Quote", "❝", active.quote, () => editor.chain().focus().toggleBlockquote().run())}
-      {full && tool("Code block", "{ }", active.codeBlock, () => editor.chain().focus().toggleCodeBlock().run())}
+      {tool("Heading", "heading", active.heading, () => editor.chain().focus().toggleHeading({ level: 2 }).run())}
+      {tool("Bullet list", "bullets", active.bullets, () => editor.chain().focus().toggleBulletList().run())}
+      {full && tool("Numbered list", "numbers", active.numbers, () => editor.chain().focus().toggleOrderedList().run())}
+      {full && tool("Checklist", "tasks", active.tasks, () => editor.chain().focus().toggleTaskList().run())}
+      {full && tool("Quote", "quote", active.quote, () => editor.chain().focus().toggleBlockquote().run())}
+      {full && tool("Code block", "codeBlock", active.codeBlock, () => editor.chain().focus().toggleCodeBlock().run())}
     </div>
   );
 }
