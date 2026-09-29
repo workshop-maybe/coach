@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AppShell, type Route } from "./AppShell";
 import { FolderProvider } from "./useFolderState";
@@ -185,6 +185,28 @@ describe("CollectionsView", () => {
 
     const items = within(screen.getByRole("list", { name: "Credentials" })).getAllByRole("listitem");
     expect(items.map((li) => within(li).getAllByRole("button")[0].textContent)).toEqual(["Code review", "Docs", "Testing"]);
+  });
+
+  it("a reorder does not hide an outside edit: the next save of a dirty name is still refused", async () => {
+    const storage = fixture();
+    renderApp(storage, { view: "collections", collectionSlug: "eng" });
+    const user = userEvent.setup();
+    const name = await screen.findByLabelText("Collection name");
+    await user.clear(name);
+    await user.type(name, "Engineering team");
+    storage.seed({ [collectionPath("eng")]: serializeCollection({ ...collection, name: "Hand edited" }) });
+    fireEvent.focus(window);
+    await screen.findByText("Changed on disk: reload or keep editing");
+    await user.click(screen.getByRole("button", { name: "Move Docs up" }));
+    await screen.findByRole("button", { name: "Move Docs down" });
+    await user.click(screen.getByRole("button", { name: "Save collection" }));
+    await waitFor(async () => {
+      const state = await loadFolder(storage);
+      expect(state.collections[0].order).toEqual(["review", "docs", "testing"]);
+    });
+    const state = await loadFolder(storage);
+    expect(state.collections[0].name).toBe("Hand edited");
+    expect(screen.getByText("Changed on disk: reload or keep editing")).toBeTruthy();
   });
 
   it("with no collections, says how to start, and creating one opens it", async () => {

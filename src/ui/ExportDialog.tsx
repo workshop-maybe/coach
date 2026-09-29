@@ -5,6 +5,7 @@
 import { useId, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { buildExport, writeExport } from "../domain/export";
+import { collectionPath, loadFolder, parseCollection, saveCollection } from "../domain/folder";
 import { describeError, useFolder } from "./useFolderState";
 
 export interface ExportDialogProps {
@@ -15,7 +16,7 @@ export interface ExportDialogProps {
 type Outcome = { kind: "idle" } | { kind: "done"; message: string } | { kind: "error"; message: string };
 
 export function ExportDialog({ collectionSlug, onClose }: ExportDialogProps) {
-  const { state, storage } = useFolder();
+  const { state, storage, apply } = useFolder();
   const id = useId();
   const [includeRubric, setIncludeRubric] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -30,7 +31,22 @@ export function ExportDialog({ collectionSlug, onClose }: ExportDialogProps) {
     try {
       const folder = await invoke<string | null>("pick_export_folder");
       if (!folder) return;
-      const files = buildExport(collection, state.credentials, { includeRubric });
+      // Codes for credentials added by hand exist only in memory until saved. Save them
+      // first so the exported module codes match the folder and stay stable (KTD7).
+      const path = collectionPath(collection.slug);
+      if (state.errors.some((e) => e.path === path)) {
+        throw new Error(`${path} could not be read. Fix it before exporting.`);
+      }
+      const base = state.raw[path] ?? null;
+      const onDisk = base === null ? null : parseCollection(base, collection.slug);
+      let current = state;
+      if (!onDisk || collection.order.some((s) => !(s in onDisk.codes))) {
+        await saveCollection(storage, collection, base);
+        current = await loadFolder(storage);
+        apply(current);
+      }
+      const saved = current.collections.find((c) => c.slug === collection.slug) ?? collection;
+      const files = buildExport(saved, current.credentials, { includeRubric });
       await writeExport(storage, files);
       const count = files.size;
       setOutcome({ kind: "done", message: `Exported ${count} ${count === 1 ? "file" : "files"} to ${folder}` });

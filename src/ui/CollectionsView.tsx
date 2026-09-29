@@ -4,9 +4,10 @@
 import { useState } from "react";
 import { collectionPath } from "../domain/folder";
 import { createCollection, createCredential, reorderCredentials, updateCollection } from "../domain/operations";
-import { credentialKey, type Collection } from "../domain/types";
+import { credentialKey, type Collection, type FolderState } from "../domain/types";
 import { useNav } from "./AppShell";
-import { CredentialEditor, EditorStatus, SaveBar, useDraftWithBase } from "./CredentialEditor";
+import { CredentialEditor } from "./CredentialEditor";
+import { EditorStatus, SaveBar, useDraftWithBase } from "./useDraftWithBase";
 import { ExportDialog } from "./ExportDialog";
 import { describeError, useFolder } from "./useFolderState";
 
@@ -123,15 +124,22 @@ function CollectionDetail({ slug }: { slug: string }) {
   const credentials = state.credentials.filter((c) => c.collectionSlug === slug);
   const nameOf = (credSlug: string) => credentials.find((c) => c.slug === credSlug)?.name;
 
+  // The app wrote only the order. A name edit in progress may save on top of it, but only
+  // when the file matched the editor's base before that write. Otherwise an outside edit
+  // is pending, and rebasing would hide it and let the next save overwrite it (KTD6).
+  const rebaseIfUnchanged = (before: string | null, next: FolderState) => {
+    if (before === d.base) d.rebase(next);
+  };
+
   const move = async (i: number, by: -1 | 1) => {
     const order = [...collection.order];
     [order[i], order[i + by]] = [order[i + by], order[i]];
     setActionError(null);
     try {
-      const next = await reorderCredentials(storage, state, slug, order, state.raw[path] ?? null);
+      const before = state.raw[path] ?? null;
+      const next = await reorderCredentials(storage, state, slug, order, before);
       apply(next);
-      // The app wrote only the order. A name edit in progress saves on top of it.
-      d.rebase(next);
+      rebaseIfUnchanged(before, next);
     } catch (err) {
       setActionError(describeError(err));
     }
@@ -142,9 +150,10 @@ function CollectionDetail({ slug }: { slug: string }) {
     if (newName.trim() === "") return;
     setActionError(null);
     try {
+      const before = state.raw[path] ?? null;
       const result = await createCredential(storage, state, slug, newName);
       apply(result.state);
-      d.rebase(result.state);
+      rebaseIfUnchanged(before, result.state);
       setNewName("");
       navigate({ view: "collections", collectionSlug: slug, credentialKey: result.key });
     } catch (err) {

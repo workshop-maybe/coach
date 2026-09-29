@@ -197,6 +197,20 @@ describe("ExportDialog", () => {
     expect(storage.writes.every((w) => w.root === "export")).toBe(true);
   });
 
+  it("saves missing module codes before exporting, so exported codes match the folder", async () => {
+    vi.mocked(invoke).mockResolvedValue("/exports");
+    const storage = fixture();
+    const raw = JSON.parse(storage.file(collectionPath("eng"))!);
+    delete raw.codes.blank;
+    storage.seed({ [collectionPath("eng")]: JSON.stringify(raw) });
+    renderDialog(storage);
+    await userEvent.click(await screen.findByRole("button", { name: "Choose folder and export" }));
+    await screen.findByText(/Exported/);
+    const saved = JSON.parse(storage.file(collectionPath("eng"))!);
+    expect(saved.codes).toEqual({ review: 1, blank: 2 });
+    expect(Object.keys(storage.files("export")).sort()).toContain("eng/2/outline.md");
+  });
+
   it("includes the rubric when the user chooses to", async () => {
     vi.mocked(invoke).mockResolvedValue("/exports");
     const storage = fixture();

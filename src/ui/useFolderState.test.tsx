@@ -126,6 +126,76 @@ describe("FolderProvider", () => {
     expect(screen.getByText("names: Renamed")).toBeTruthy();
   });
 
+  it("a reload with nothing changed on disk keeps the same state object", async () => {
+    const storage = fixture();
+    const seen: unknown[] = [];
+    let reload: () => Promise<void> = async () => {};
+    function Grab() {
+      const f = useFolder();
+      reload = f.reload;
+      if (f.state && seen[seen.length - 1] !== f.state) seen.push(f.state);
+      return null;
+    }
+    render(
+      <FolderProvider storage={storage} folder="/data">
+        <Grab />
+      </FolderProvider>,
+    );
+    await waitFor(() => expect(seen.length).toBe(1));
+    await act(() => reload());
+    expect(seen.length).toBe(1);
+    storage.seed({ [path]: serializeCredentialMd({ ...cred, name: "Renamed" }) });
+    await act(() => reload());
+    expect(seen.length).toBe(2);
+  });
+
+  it("a reload still in flight when apply() runs never overwrites the applied state", async () => {
+    const storage = fixture();
+    let release: () => void = () => {};
+    let gated = false;
+    let released = false;
+    let reached = false;
+    const slow = Object.create(storage) as MemoryStorage;
+    // The gated reload reads the credential before the save lands, then stalls.
+    slow.readText = async (root, p) => {
+      const text = await storage.readText(root, p);
+      if (gated && p === path) {
+        reached = true;
+        await new Promise<void>((r) => (release = () => { released = true; r(); }));
+      }
+      return text;
+    };
+    let ctx: ReturnType<typeof useFolder> | null = null;
+    function Grab() {
+      ctx = useFolder();
+      return <p>names: {ctx.state?.credentials.map((c) => c.name).join(",")}</p>;
+    }
+    render(
+      <FolderProvider storage={slow} folder="/data">
+        <Grab />
+      </FolderProvider>,
+    );
+    await screen.findByText("names: Review");
+    const before = ctx!.state!;
+    gated = true;
+    fireEvent.focus(window);
+    await waitFor(() => expect(reached).toBe(true));
+    // Stands in for a save: new text on disk for that file, and the state the save returned.
+    const savedText = serializeCredentialMd({ ...cred, name: "Applied" });
+    storage.seed({ [path]: savedText });
+    const applied = { ...before, credentials: [{ ...before.credentials[0], name: "Applied" }], raw: { ...before.raw, [path]: savedText } };
+    act(() => ctx!.apply(applied));
+    await screen.findByText("names: Applied");
+    gated = false;
+    expect(released).toBe(false);
+    await act(async () => release());
+    expect(released).toBe(true);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(screen.getByText("names: Applied")).toBeTruthy();
+  });
+
   it("apply() swaps state and setNotice shows a notice", async () => {
     const storage = fixture();
     function Applier() {

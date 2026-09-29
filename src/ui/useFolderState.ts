@@ -32,6 +32,14 @@ export function describeError(e: unknown): string {
   return String(e);
 }
 
+/** True when two loads saw the same files with the same text and the same errors. */
+function sameFolder(a: FolderState, b: FolderState): boolean {
+  const aKeys = Object.keys(a.raw);
+  if (aKeys.length !== Object.keys(b.raw).length) return false;
+  if (aKeys.some((k) => a.raw[k] !== b.raw[k])) return false;
+  return JSON.stringify(a.errors) === JSON.stringify(b.errors);
+}
+
 const FolderContext = createContext<FolderContextValue | null>(null);
 
 export interface FolderProviderProps {
@@ -52,7 +60,9 @@ export function FolderProvider({ storage, folder, children }: FolderProviderProp
     setLoading(true);
     try {
       const next = await loadFolder(storage);
-      if (ticket === latest.current) setState(next);
+      // Keep the same state object when nothing on disk changed, so a focus reload
+      // does not re-render the app or recompute the matrix.
+      if (ticket === latest.current) setState((prev) => (prev && sameFolder(prev, next) ? prev : next));
     } catch (e) {
       if (ticket === latest.current) setNotice(describeError(e));
     } finally {
@@ -70,7 +80,11 @@ export function FolderProvider({ storage, folder, children }: FolderProviderProp
     };
   }, [reload]);
 
-  const apply = useCallback((next: FolderState) => setState(next), []);
+  const apply = useCallback((next: FolderState) => {
+    latest.current++; // A reload that started before this save must not replace its result.
+    setState(next);
+    setLoading(false);
+  }, []);
 
   const value = useMemo<FolderContextValue>(
     () => ({ folder, storage, state, loading, reload, apply, notice, setNotice }),
