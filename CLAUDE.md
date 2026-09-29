@@ -29,6 +29,14 @@ The question the app answers: **which of my agents can actually meet my acceptan
 - **React + TypeScript + Vite** UI (`src/`).
 - Identifier `io.andamio.desktop`.
 
+## Design
+
+- **Canon.** The Andamio brand guide v1.1 in `landing-page-and-blog/docs/design-system/andamio-brand-guide.md`. That repo is read-only from here.
+- **Tokens.** `src/theme/tokens.css` and `src/theme/tokens.shared.ts` are synced copies. Never edit them except the provenance line. To resync, copy both from `landing-page-and-blog/src/ui/system/` and update that line. App tokens go in `src/theme/app-tokens.css`.
+- **Accents.** One orange (`button.primary`) per view. Blue for links and the active nav item only, never a fill. Feedback uses the state palette.
+- **Geometry.** Square. `src/theme/brand.test.ts` fails on color literals or rounded corners in component CSS.
+- **Fonts.** Inter and JetBrains Mono are bundled from `@fontsource-variable`, never fetched.
+
 ## Commands
 
 ```bash
