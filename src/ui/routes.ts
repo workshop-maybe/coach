@@ -1,5 +1,4 @@
-// Where the app is (KTD1): home, a deck in progress, or one item open. The legacy
-// views stay routable until U8 retires them, but nothing on home leads to them.
+// Where the app is (KTD1): home, a deck in progress, or one item open.
 
 import type { Slug } from "../domain/types";
 
@@ -17,7 +16,7 @@ export interface TestPick {
 
 export type DeckRoute =
   | { view: "deck"; deck: "credential"; returnTo?: TestPick }
-  | { view: "deck"; deck: "agent"; returnTo?: TestPick }
+  | { view: "deck"; deck: "agent"; returnTo?: TestPick; likeSlug?: Slug }
   | {
       view: "deck";
       deck: "test";
@@ -31,10 +30,4 @@ export type DeckRoute =
 
 export type ItemRoute = { view: "item"; item: "badge"; credentialKey: string } | { view: "item"; item: "agent"; profileSlug: Slug };
 
-/** The retired views, kept routable until U8 deletes them. */
-export type LegacyRoute =
-  | { view: "collections"; collectionSlug?: string; credentialKey?: string }
-  | { view: "agents"; profileSlug?: string }
-  | { view: "matrix"; cellKey?: string };
-
-export type Route = { view: "home" } | DeckRoute | ItemRoute | LegacyRoute;
+export type Route = { view: "home" } | DeckRoute | ItemRoute;

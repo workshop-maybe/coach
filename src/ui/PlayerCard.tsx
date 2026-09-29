@@ -76,6 +76,8 @@ export interface PlayerCardProps {
   profileSlug?: Slug;
   /** A test waiting on this agent, to return to once it is made (AE2). */
   returnTo?: TestPick;
+  /** A locked agent this new one starts from. Once made, the new agent opens. */
+  likeSlug?: Slug;
 }
 
 type Mode = { kind: "create"; draft: Omit<AgentProfile, "slug"> | null } | { kind: "edit"; slug: Slug };
@@ -86,10 +88,14 @@ export function PlayerCard(props: PlayerCardProps) {
   return state ? <Player {...props} /> : null;
 }
 
-function Player({ profileSlug, returnTo }: PlayerCardProps) {
+function Player({ profileSlug, returnTo, likeSlug }: PlayerCardProps) {
   const { storage, state, apply } = useFolder();
   const { navigate } = useNav();
-  const [mode, setMode] = useState<Mode>(profileSlug ? { kind: "edit", slug: profileSlug } : { kind: "create", draft: null });
+  const [mode] = useState<Mode>(() =>
+    profileSlug
+      ? { kind: "edit", slug: profileSlug }
+      : { kind: "create", draft: state && likeSlug && state.profiles.some((p) => p.slug === likeSlug) ? duplicateProfileDraft(state, likeSlug) : null },
+  );
   const stored = mode.kind === "edit" ? state?.profiles.find((p) => p.slug === mode.slug) : undefined;
   const start = mode.kind === "create" ? (mode.draft ?? FIRST) : (stored ?? FIRST);
   const [dials, setDials] = useState<Dials>(() => dialsFor(start));
@@ -118,17 +124,13 @@ function Player({ profileSlug, returnTo }: PlayerCardProps) {
 
   async function finish({ keepMine }: { keepMine: boolean }) {
     if (!state) return;
-    if (locked && stored) {
-      const draft = duplicateProfileDraft(state, stored.slug);
-      setMode({ kind: "create", draft });
-      setDials(dialsFor(draft));
-      return;
-    }
+    // A new agent like a locked one is its own flow, so the route says so (not the opened agent).
+    if (locked && stored) return navigate({ view: "deck", deck: "agent", likeSlug: stored.slug });
     if (mode.kind === "edit" && stored) {
       const current: FolderState = keepMine ? await loadFolder(storage) : state;
       const path = profilePath(stored.slug);
       apply(await updateProfile(storage, current, { ...stored, ...setup }, current.raw[path] ?? null));
-      navigate({ view: "home" });
+      navigate({ view: "item", item: "agent", profileSlug: stored.slug });
       return;
     }
     const draft = mode.kind === "create" ? mode.draft : null;
@@ -141,6 +143,7 @@ function Player({ profileSlug, returnTo }: PlayerCardProps) {
     });
     apply(made.state);
     if (returnTo?.credentialKey) navigate({ view: "deck", deck: "test", profileSlug: made.slug, credentialKey: returnTo.credentialKey });
+    else if (likeSlug) navigate({ view: "item", item: "agent", profileSlug: made.slug });
     else navigate({ view: "home" });
   }
 
@@ -150,7 +153,7 @@ function Player({ profileSlug, returnTo }: PlayerCardProps) {
     <Deck
       key={mode.kind === "edit" ? `edit:${mode.slug}` : "create"}
       label={mode.kind === "edit" ? "An agent" : "Create an agent"}
-      onClose={() => navigate({ view: "home" })}
+      onClose={() => navigate(likeSlug ? { view: "item", item: "agent", profileSlug: likeSlug } : { view: "home" })}
       onFinish={finish}
       beats={[
         {

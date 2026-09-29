@@ -50,7 +50,7 @@ function newer(a: Assessment, b: Assessment): boolean {
 }
 
 /** Drops empty parts so an empty setting is stored as absent. */
-export function cleanSettings(s: BadgeSettings): BadgeSettings {
+function cleanSettings(s: BadgeSettings): BadgeSettings {
   const out: BadgeSettings = {};
   if (s.palette !== undefined) out.palette = s.palette;
   if (s.colors !== undefined) out.colors = { ...s.colors };

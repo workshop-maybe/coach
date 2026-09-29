@@ -43,6 +43,44 @@ describe("AgentDetail", () => {
     expect(within(screen.getByRole("radiogroup", { name: "Harness" })).getByRole("radio", { checked: true }).getAttribute("aria-disabled")).toBe("true");
   });
 
+  it("Keep this setup saves the dials and returns to the agent", async () => {
+    const storage = storageWith({ profiles: [opus] });
+    renderApp(storage, agent);
+    await screen.findByRole("heading", { name: "Opus agent", level: 2 });
+    await userEvent.click(screen.getByRole("button", { name: "Next effort" }));
+    await userEvent.click(screen.getByRole("button", { name: "Keep this setup" }));
+    await waitFor(async () => expect((await saved(storage)).effort).toBe("max"));
+    expect(await screen.findByRole("list", { name: "Parts" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Opus agent", level: 2 })).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "What needs you" })).toBeNull();
+  });
+
+  it("a new agent like a locked one is its own flow, and closing it returns to the original", async () => {
+    const storage = storageWith({ credentials: [review], profiles: [opus], assessments: [await result(opus, review)] });
+    renderApp(storage, agent);
+    await userEvent.click(await screen.findByRole("button", { name: "Make a new agent like this" }));
+    expect(await screen.findByRole("button", { name: "Make the agent" })).toBeTruthy();
+    // The original agent's parts and badges are not shown beside the new agent's card.
+    expect(screen.queryByRole("list", { name: "Parts" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Badges" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(await screen.findByRole("heading", { name: "Opus agent", level: 2 })).toBeTruthy();
+    expect((await loadFolder(storage)).profiles).toHaveLength(1);
+  });
+
+  it("making the new agent opens it, with its own parts", async () => {
+    const storage = storageWith({ credentials: [review], profiles: [{ ...opus, repo: "~/code/app" }], assessments: [await result(opus, review)] });
+    renderApp(storage, agent);
+    await userEvent.click(await screen.findByRole("button", { name: "Make a new agent like this" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Next effort" }));
+    await userEvent.click(screen.getByRole("button", { name: "Make the agent" }));
+    expect(await screen.findByRole("heading", { name: "Claude Code, opus, max", level: 2 })).toBeTruthy();
+    const parts = screen.getByRole("list", { name: "Parts" });
+    expect(within(parts).getByRole("button", { name: /^Name/ }).textContent).toContain("Claude Code, opus, max");
+    expect(within(parts).getByRole("button", { name: /^Repo/ }).textContent).toContain("~/code/app");
+    expect(within(screen.getByRole("region", { name: "Badges" })).queryByRole("button", { name: /Code review/ })).toBeNull();
+  });
+
   it("renaming saves through updateProfile and returns to the agent", async () => {
     const storage = storageWith({ credentials: [review], profiles: [opus], assessments: [await result(opus, review)] });
     renderApp(storage, agent);
@@ -113,6 +151,13 @@ describe("AgentDetail", () => {
     expect(stale.textContent).toContain(FLAG_REASONS.setup_mismatch);
     await userEvent.click(fresh);
     expect(await screen.findByRole("heading", { name: "Code review", level: 2 })).toBeTruthy();
+  });
+
+  it("a not met result earns no badge", async () => {
+    renderApp(storageWith({ credentials: [review], profiles: [opus], assessments: [await result(opus, review, { result: "not_met" })] }), agent);
+    const badges = await screen.findByRole("region", { name: "Badges" });
+    expect(await within(badges).findByRole("button", { name: "Test it" })).toBeTruthy();
+    expect(within(badges).queryByRole("button", { name: /Code review/ })).toBeNull();
   });
 
   it("an agent with no badges offers to test it", async () => {

@@ -8,7 +8,7 @@ A simple, beautiful little desktop app for building credentials and offering the
 - **Acceptance criteria.** Each credential has assignments that a person or an agent can complete and that the user can review.
 - **Agent profiles.** Named agent setups the user runs locally: harness, model, effort level, the repo it opens in, and free-form parameters.
 - **Prompts and handoff notes.** The app writes prompts the user copies into the agent of their choice: test prompts ("this is a test, do it and I'll review your results"), "check my acceptance criteria", "review this assignment", "suggest assignments for these learning targets". Handoff notes give an agent the full context to help refine an assignment.
-- **Assessments.** The user records whether an agent met a credential's acceptance criteria, with evidence, and sees an agent × credential matrix.
+- **Assessments.** The user records whether an agent met a credential's acceptance criteria, with evidence. Home shows the badges each agent holds and who holds each badge.
 - **Export.** Markdown and JSON.
 - **Beyond your computer.** When no local agent meets a credential, the app shows a quiet path toward finding people who hold it. No upsell screens.
 
@@ -38,6 +38,15 @@ The question the app answers: **which of my agents can actually meet my acceptan
 - **Tokens.** `src/theme/tokens.css` and `src/theme/tokens.shared.ts` are synced copies of `landing-page-and-blog/src/ui/system/`. Never edit them except the provenance line. App values go in `src/theme/app-tokens.css`.
 - **Geometry.** Square. `src/theme/brand.test.ts` fails on color literals or rounded corners in component CSS.
 - **Fonts.** Inter and Fragment Mono are bundled from `@fontsource`, never fetched.
+
+### Interaction rules
+
+- **Home is the only room.** Home shows what needs you, your agents, your badges and the two doors (Create an agent, Create a credential). Everything else is a deck in progress or one item open (a badge or an agent), and each one returns home. No sidebar, no other views.
+- **Decks, not forms.** Every flow is a list of beats handed to `src/ui/Deck.tsx`. No screen shows a set of labeled fields to fill and submit. Editing an existing badge or agent opens one part at a time as a one-beat deck.
+- **One thing per card.** Each card asks one thing and offers one forward action named for what happens next ("Make the badge", "Copy"). Back is quiet.
+- **No eyebrows.** Nothing sits above a heading as a kicker or label.
+- **No heading periods.** Headings never end in a period.
+- **Minimal copy.** Say only what the step needs. One short line beats two.
 
 ## Commands
 

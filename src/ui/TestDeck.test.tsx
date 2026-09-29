@@ -137,6 +137,21 @@ describe("TestDeck", () => {
     expect(await screen.findByRole("heading", { name: "Hand it over" })).toBeTruthy();
   });
 
+  it("a badge with no task yet cannot be copied", async () => {
+    renderApp(storageWith({ credentials: [{ ...review, task: "" }], profiles: [opus] }), { view: "deck", deck: "test", profileSlug: "opus", credentialKey: "eng/review" });
+    expect(await screen.findByText("This badge has no task yet")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Copy" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("a failed copy says so, stays on the card and leaves nothing waiting", async () => {
+    vi.mocked(writeText).mockRejectedValue(new Error("Clipboard unavailable"));
+    renderApp(storageWith({ credentials: [review], profiles: [opus] }), { view: "deck", deck: "test", profileSlug: "opus", credentialKey: "eng/review" });
+    await userEvent.click(await screen.findByRole("button", { name: "Copy" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("Clipboard unavailable");
+    expect(screen.getByRole("heading", { name: "Hand it over" })).toBeTruthy();
+    expect(readPending(FOLDER)).toEqual([]);
+  });
+
   it("dismissing a waiting test removes it and goes home", async () => {
     addPending(FOLDER, {
       profileSlug: "opus",

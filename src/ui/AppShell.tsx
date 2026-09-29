@@ -5,7 +5,6 @@
 import { useMemo, useState } from "react";
 import { AgentDetail } from "./AgentDetail";
 import { BadgeDetail } from "./BadgeDetail";
-import { CollectionsView } from "./CollectionsView";
 import { CredentialDeck } from "./CredentialDeck";
 import { EditAgentDeck, EditCredentialDeck } from "./EditDecks";
 import { exportAll, exportMessage } from "./exportAll";
@@ -13,10 +12,8 @@ import { pickExportFolder } from "./exportFolder";
 import { Home } from "./Home";
 import { LoadErrors, LoadWarnings } from "./LoadErrors";
 import { Lockup } from "./Lockup";
-import { MatrixView } from "./MatrixView";
 import { NavContext } from "./nav";
 import { PlayerCard } from "./PlayerCard";
-import { ProfilesView } from "./ProfilesView";
 import type { DeckRoute, ItemRoute, Route } from "./routes";
 import { TestDeck } from "./TestDeck";
 import { describeError, useFolder } from "./useFolderState";
@@ -90,14 +87,8 @@ export function AppShell({ onChangeFolder, initialRoute = { view: "home" } }: Ap
             <Home />
           ) : route.view === "deck" ? (
             <DeckView key={JSON.stringify(route)} route={route} />
-          ) : route.view === "item" ? (
-            <ItemView key={JSON.stringify(route)} route={route} />
-          ) : route.view === "collections" ? (
-            <CollectionsView />
-          ) : route.view === "agents" ? (
-            <ProfilesView />
           ) : (
-            <MatrixView />
+            <ItemView key={JSON.stringify(route)} route={route} />
           )}
         </main>
       </div>
@@ -111,7 +102,7 @@ function DeckView({ route }: { route: DeckRoute }) {
     case "credential":
       return <CredentialDeck returnTo={route.returnTo} />;
     case "agent":
-      return <PlayerCard returnTo={route.returnTo} />;
+      return <PlayerCard returnTo={route.returnTo} likeSlug={route.likeSlug} />;
     case "test":
       return <TestDeck profileSlug={route.profileSlug} credentialKey={route.credentialKey} resume={route.resume} />;
     case "edit-credential":

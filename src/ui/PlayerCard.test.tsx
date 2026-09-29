@@ -1,13 +1,10 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { loadFolder } from "../domain/folder";
-import { NavContext } from "./nav";
-import { PlayerCard, setupName } from "./PlayerCard";
-import { FOLDER, opus, renderApp, result, review, storageWith } from "./testFolder";
-import { FolderProvider } from "./useFolderState";
-import type { MemoryStorage } from "../storage/memory";
+import { setupName } from "./PlayerCard";
+import { opus, renderApp, result, review, storageWith } from "./testFolder";
 
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ writeText: vi.fn() }));
 
@@ -17,18 +14,6 @@ afterEach(cleanup);
 const heading = () => screen.getByRole("heading", { level: 2 }).textContent;
 const dial = (name: string) => screen.getByRole("radiogroup", { name });
 const checked = (name: string) => within(dial(name)).getByRole("radio", { checked: true });
-
-function renderCard(storage: MemoryStorage, profileSlug?: string) {
-  const navigate = vi.fn();
-  render(
-    <FolderProvider storage={storage} folder={FOLDER}>
-      <NavContext.Provider value={{ route: { view: "deck", deck: "agent" }, navigate }}>
-        <PlayerCard profileSlug={profileSlug} />
-      </NavContext.Provider>
-    </FolderProvider>,
-  );
-  return navigate;
-}
 
 describe("setupName", () => {
   it("names an agent for its setup, with a number when that name is taken", () => {
@@ -106,7 +91,7 @@ describe("PlayerCard", () => {
   it("an agent with results is locked and offers a new agent like it", async () => {
     const withRepo = { ...opus, effort: "medium", repo: "~/code/app", params: { temp: "0" } };
     const storage = storageWith({ credentials: [review], profiles: [withRepo], assessments: [await result(withRepo, review)] });
-    const navigate = renderCard(storage, "opus");
+    renderApp(storage, { view: "item", item: "agent", profileSlug: "opus" });
     expect(await screen.findByRole("heading", { name: "Opus agent" })).toBeTruthy();
     expect(dial("Harness").getAttribute("aria-disabled")).toBe("true");
     expect(checked("Effort").textContent).toBe("medium");
@@ -117,7 +102,9 @@ describe("PlayerCard", () => {
     expect(dial("Harness").getAttribute("aria-disabled")).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "Next effort" }));
     await userEvent.click(screen.getByRole("button", { name: "Make the agent" }));
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ view: "home" }));
+    // The new agent opens, not the one it was made from.
+    expect(await screen.findByRole("heading", { name: "Claude Code, opus, high", level: 2 })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Keep this setup" })).toBeTruthy();
     const state = await loadFolder(storage);
     expect(state.profiles.find((p) => p.slug !== "opus")).toMatchObject({ name: "Claude Code, opus, high", effort: "high", repo: "~/code/app", params: { temp: "0" } });
     expect(state.profiles.find((p) => p.slug === "opus")).toMatchObject({ effort: "medium" });
