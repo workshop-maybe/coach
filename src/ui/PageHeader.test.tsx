@@ -8,24 +8,21 @@ import { SaveBar, type DraftWithBase } from "./useDraftWithBase";
 afterEach(cleanup);
 
 describe("PageHeader", () => {
-  it("renders the kicker, the title as the page heading, the lead and actions", () => {
-    render(
-      <PageHeader kicker="Your agents" title="Agents" lead="Every agent setup you run." actions={<button type="button">New agent</button>} />,
-    );
+  it("renders the title as the page heading, the lead and actions", () => {
+    render(<PageHeader title="Agents" lead="Every agent setup you run." actions={<button type="button">New agent</button>} />);
     expect(screen.getByRole("heading", { level: 1, name: "Agents" })).toBeTruthy();
-    expect(screen.getByText("Your agents")).toBeTruthy();
     expect(screen.getByText("Every agent setup you run.")).toBeTruthy();
     expect(screen.getByRole("button", { name: "New agent" })).toBeTruthy();
   });
 
-  it("hides the kicker's square from assistive tech", () => {
-    const { container } = render(<PageHeader kicker="Your agents" title="Agents" />);
-    const mark = container.querySelector(".kicker-mark");
-    expect(mark?.getAttribute("aria-hidden")).toBe("true");
+  it("renders no kicker above the heading (R3)", () => {
+    const { container } = render(<PageHeader title="Agents" />);
+    expect(container.querySelector(".kicker")).toBeNull();
+    expect(container.querySelector(".page-header")?.firstElementChild?.className).toBe("page-header-row");
   });
 
   it("leaves out the lead and actions when none are given", () => {
-    const { container } = render(<PageHeader kicker="Your agents" title="Agents" />);
+    const { container } = render(<PageHeader title="Agents" />);
     expect(container.querySelector(".page-header-lead")).toBeNull();
     expect(container.querySelector(".page-header-actions")).toBeNull();
   });

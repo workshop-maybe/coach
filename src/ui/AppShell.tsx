@@ -1,115 +1,118 @@
-// The app frame: side navigation, the current folder with Change and Reload, the
-// load-error banner, the badge-warning notice and the notice banner.
+// The app frame (KTD1). Home is the only room: a top bar with the folder and its three
+// single actions (Change folder, Reload, Export), the load-error banner, the badge-warning
+// notice and the notice banner, then home, a deck in progress, or one item open.
 
-import { createContext, useContext, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { CollectionsView } from "./CollectionsView";
+import { exportAll, exportMessage } from "./exportAll";
+import { pickExportFolder } from "./exportFolder";
+import { Home } from "./Home";
 import { LoadErrors, LoadWarnings } from "./LoadErrors";
 import { Lockup } from "./Lockup";
 import { MatrixView } from "./MatrixView";
+import { NavContext, useNav } from "./nav";
 import { ProfilesView } from "./ProfilesView";
-import { useFolder } from "./useFolderState";
+import type { DeckRoute, ItemRoute, Route } from "./routes";
+import { describeError, useFolder } from "./useFolderState";
 
-export type Route =
-  | { view: "collections"; collectionSlug?: string; credentialKey?: string }
-  | { view: "agents"; profileSlug?: string }
-  | { view: "matrix"; cellKey?: string };
-
-export interface NavContextValue {
-  route: Route;
-  navigate(route: Route): void;
-}
-
-const NavContext = createContext<NavContextValue | null>(null);
-
-export function useNav(): NavContextValue {
-  const value = useContext(NavContext);
-  if (!value) throw new Error("useNav must be used inside an AppShell");
-  return value;
-}
-
-const NAV_ITEMS: { view: Route["view"]; label: string }[] = [
-  { view: "collections", label: "Collections" },
-  { view: "agents", label: "Agents" },
-  { view: "matrix", label: "Matrix" },
-];
+export type { Route } from "./routes";
+export { useNav } from "./nav";
 
 export interface AppShellProps {
   onChangeFolder: () => void;
   initialRoute?: Route;
 }
 
-export function AppShell({ onChangeFolder, initialRoute = { view: "collections" } }: AppShellProps) {
-  const { folder, state, loading, reload, notice, setNotice } = useFolder();
+export function AppShell({ onChangeFolder, initialRoute = { view: "home" } }: AppShellProps) {
+  const { folder, storage, state, loading, reload, apply, notice, setNotice } = useFolder();
   const [route, navigate] = useState<Route>(initialRoute);
+  const [exporting, setExporting] = useState(false);
   const nav = useMemo(() => ({ route, navigate }), [route]);
+
+  async function runExport() {
+    if (!state) return;
+    setExporting(true);
+    try {
+      const to = await pickExportFolder();
+      if (!to) return;
+      const result = await exportAll(storage, state);
+      if (result.state !== state) apply(result.state);
+      setNotice(exportMessage(result, to));
+    } catch (e) {
+      setNotice(`Export failed: ${describeError(e)}`);
+    } finally {
+      setExporting(false);
+    }
+  }
 
   return (
     <NavContext.Provider value={nav}>
       <div className="shell">
-        <aside className="sidebar">
-          <button
-            type="button"
-            className="brand"
-            aria-label="Andamio Desktop, go to Collections"
-            onClick={() => navigate({ view: "collections" })}
-          >
+        <header className="topbar">
+          <button type="button" className="brand" aria-label="Andamio Desktop, go home" onClick={() => navigate({ view: "home" })}>
             <Lockup />
-            <span className="brand-product">Desktop</span>
           </button>
-          <nav aria-label="Main">
-            <ul>
-              {NAV_ITEMS.map((item) => (
-                <li key={item.view}>
-                  <button
-                    type="button"
-                    className="nav-item"
-                    aria-current={route.view === item.view ? "page" : undefined}
-                    onClick={() => navigate({ view: item.view })}
-                  >
-                    {item.label}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </nav>
-        </aside>
-        <div className="main">
-          <header className="topbar">
-            <span className="folder-path" title={folder}>
-              {folder}
-            </span>
-            <div className="topbar-actions">
-              <button type="button" onClick={onChangeFolder}>
-                Change folder
-              </button>
-              <button type="button" onClick={() => void reload()} disabled={loading}>
-                Reload
-              </button>
-            </div>
-          </header>
-          {notice && (
-            <div className="banner banner-notice" role="status">
-              <span>{notice}</span>
-              <button type="button" className="link" onClick={() => setNotice(null)}>
-                Dismiss
-              </button>
-            </div>
+          <span className="folder-path" title={folder}>
+            {folder}
+          </span>
+          <div className="topbar-actions">
+            <button type="button" onClick={onChangeFolder}>
+              Change folder
+            </button>
+            <button type="button" onClick={() => void reload()} disabled={loading}>
+              Reload
+            </button>
+            <button type="button" onClick={() => void runExport()} disabled={exporting || !state || state.credentials.length === 0}>
+              Export
+            </button>
+          </div>
+        </header>
+        {notice && (
+          <div className="banner banner-notice" role="status">
+            <span>{notice}</span>
+            <button type="button" className="link" onClick={() => setNotice(null)}>
+              Dismiss
+            </button>
+          </div>
+        )}
+        <LoadErrors errors={state?.errors ?? []} />
+        <LoadWarnings warnings={state?.warnings ?? []} />
+        <main className="content">
+          {state === null ? (
+            <p className="muted">{loading ? "Loading…" : "The folder could not be loaded."}</p>
+          ) : route.view === "home" ? (
+            <Home />
+          ) : route.view === "deck" || route.view === "item" ? (
+            <RoutePlaceholder route={route} />
+          ) : route.view === "collections" ? (
+            <CollectionsView />
+          ) : route.view === "agents" ? (
+            <ProfilesView />
+          ) : (
+            <MatrixView />
           )}
-          <LoadErrors errors={state?.errors ?? []} />
-          <LoadWarnings warnings={state?.warnings ?? []} />
-          <main className="content">
-            {state === null ? (
-              <p className="muted">{loading ? "Loading…" : "The folder could not be loaded."}</p>
-            ) : route.view === "collections" ? (
-              <CollectionsView />
-            ) : route.view === "agents" ? (
-              <ProfilesView />
-            ) : (
-              <MatrixView />
-            )}
-          </main>
-        </div>
+        </main>
       </div>
     </NavContext.Provider>
+  );
+}
+
+// TODO(U3-U7): the credential deck (U3), player card (U4), test deck (U5), badge (U6)
+// and agent (U7) replace this placeholder. It exists so home's rows and doors have
+// somewhere to go while those units are built.
+function RoutePlaceholder({ route }: { route: DeckRoute | ItemRoute }) {
+  const { navigate } = useNav();
+  return (
+    <section className="deck" data-testid="route-placeholder" data-route={JSON.stringify(route)} aria-label="Not built yet">
+      <div className="deck-card">
+        <h2>Not built yet</h2>
+        <p className="muted">{route.view === "deck" ? `The ${route.deck} deck` : `This ${route.item}`} arrives in a later step</p>
+        <div className="deck-actions">
+          <button type="button" className="ghost" onClick={() => navigate({ view: "home" })}>
+            Home
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }

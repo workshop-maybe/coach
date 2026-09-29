@@ -19,7 +19,6 @@ export function ProfilesView() {
   return (
     <div className="stack">
       <PageHeader
-        kicker="Your agents"
         title="Agents"
         lead={<>Each agent setup you run: <strong>harness, model, effort</strong> and the repo it opens in.</>}
         actions={

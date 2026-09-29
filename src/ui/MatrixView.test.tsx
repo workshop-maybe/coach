@@ -222,7 +222,7 @@ describe("MatrixView", () => {
     renderApp(new MemoryStorage(files));
     expect(await screen.findByText(/No agent profiles yet/)).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Go to Agents" }));
-    expect(screen.getByRole("button", { name: "Agents" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("heading", { level: 1, name: "Agents" })).toBeTruthy();
   });
 
   it("with no credentials, the empty state links to Collections", async () => {
@@ -231,6 +231,6 @@ describe("MatrixView", () => {
     );
     expect(await screen.findByText(/No credentials yet/)).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Go to Collections" }));
-    expect(screen.getByRole("button", { name: "Collections" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("heading", { level: 1, name: "Collections" })).toBeTruthy();
   });
 });

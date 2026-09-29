@@ -54,10 +54,9 @@ describe("LoadErrors", () => {
     );
     const banner = await screen.findByRole("alert");
     expect(within(banner).getByText("agents/broken.json")).toBeTruthy();
-    expect(screen.getByRole("navigation")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Collections" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Agents" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Matrix" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: /^OK agent/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Create a credential" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Export" })).toBeTruthy();
     expect(screen.getByText("/data")).toBeTruthy();
     expect(storage.file(profilePath("broken"))).toBe(broken);
   });
@@ -78,7 +77,7 @@ describe("LoadErrors", () => {
     expect(within(notice).getByText(path)).toBeTruthy();
     expect(within(notice).getByText(/badge/i, { selector: ".banner-detail" })).toBeTruthy();
     expect(screen.queryByRole("alert")).toBeNull();
-    expect(await screen.findByText("Engineering")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Create a credential" })).toBeTruthy();
   });
 
   it("LoadWarnings renders nothing without warnings", () => {

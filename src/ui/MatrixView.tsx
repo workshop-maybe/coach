@@ -52,7 +52,6 @@ export function MatrixView() {
   return (
     <div className="matrix-view">
       <PageHeader
-        kicker="Agents × credentials"
         title="Matrix"
         lead={<>Which of your agents can <strong>actually meet your acceptance criteria</strong> for each credential?</>}
         actions={

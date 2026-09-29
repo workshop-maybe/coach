@@ -244,7 +244,7 @@ describe("CollectionsView", () => {
 
   it("Export opens the export dialog", async () => {
     renderApp(fixture(), { view: "collections", collectionSlug: "eng" });
-    await userEvent.click(await screen.findByRole("button", { name: "Export" }));
+    await userEvent.click(await within(screen.getByRole("main")).findByRole("button", { name: "Export" }));
     expect(screen.getByText("export eng")).toBeTruthy();
   });
 });

@@ -70,35 +70,6 @@ pre {
   color: var(--ink-muted);
 }
 
-/* The square every header leads with. */
-.kicker-mark {
-  display: inline-block;
-  flex: none;
-  width: 8px;
-  height: 8px;
-  background: var(--ink);
-}
-
-/* A kicker heads a view: sentence case, semibold, led by a square, then a rule. */
-.kicker {
-  display: flex;
-  align-items: center;
-  gap: var(--space-md);
-  margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: var(--ui-tracking);
-  color: var(--ink-muted);
-  white-space: nowrap;
-}
-
-.kicker::after {
-  content: "";
-  flex: 1;
-  height: var(--rule-width);
-  background: var(--rule);
-}
-
 /* ---------------------------------------------------------------------------
    Controls. The view's main action is the ink block; others are ink outlines on
    the surface. Blue is data and links, never a fill. */
@@ -256,25 +227,18 @@ input[type="checkbox"]:checked {
 }
 
 /* ---------------------------------------------------------------------------
-   Shell: the paper, a sidebar of places, and the folder in a mono header. */
+   Shell: the paper, and the folder in a mono header with its three actions. */
 
 .shell {
   display: flex;
+  flex-direction: column;
   min-height: 100vh;
 }
 
-.sidebar {
-  flex: 0 0 13rem;
-  padding: var(--space-lg) var(--space-md);
-  border-right: 1px solid var(--cell);
-}
-
 .brand {
+  flex: none;
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-lg);
-  margin: 0 0 var(--space-xl);
+  align-items: center;
   padding: var(--space-xs);
   border: none;
   background: none;
@@ -284,54 +248,6 @@ input[type="checkbox"]:checked {
   display: block;
   height: 22px;
   width: auto;
-}
-
-.brand-product {
-  font-family: var(--font-mono);
-  font-size: var(--label);
-  font-weight: 400;
-  letter-spacing: var(--label-tracking);
-  color: var(--ink-muted);
-}
-
-.sidebar ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-/* Places read like a server's channels: mono, and the one open is lit in data blue. */
-.nav-item {
-  display: block;
-  width: 100%;
-  text-align: left;
-  border: none;
-  background: none;
-  padding: var(--space-sm);
-  margin-bottom: 2px;
-  font-family: var(--font-mono);
-  font-size: 12.5px;
-  font-weight: 400;
-  letter-spacing: var(--label-tracking);
-  color: var(--ink-muted);
-}
-
-.nav-item:hover:not(:disabled) {
-  background: var(--grid);
-  color: var(--ink);
-  opacity: 1;
-}
-
-.nav-item[aria-current="page"] {
-  background: color-mix(in srgb, var(--data) 12%, transparent);
-  color: var(--data);
-}
-
-.main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
 }
 
 .topbar {
@@ -360,12 +276,14 @@ input[type="checkbox"]:checked {
 }
 
 .content {
-  padding: var(--space-xl) var(--space-xl) var(--space-3xl);
+  width: 100%;
   max-width: 62rem;
+  margin: 0 auto;
+  padding: var(--space-xl) var(--space-xl) var(--space-3xl);
 }
 
 /* ---------------------------------------------------------------------------
-   PageHeader: kicker, headline, one line of prose, the view's actions. */
+   PageHeader: the headline alone, one line of prose, the view's actions. */
 
 .page-header {
   display: flex;
@@ -382,7 +300,7 @@ input[type="checkbox"]:checked {
 }
 
 .page-header h1 {
-  margin: var(--space-sm) 0 0;
+  margin: 0;
   line-height: 1;
 }
 
@@ -493,7 +411,7 @@ input[type="checkbox"]:checked {
 }
 
 /* ---------------------------------------------------------------------------
-   Views. A stack of pieces; a section inside one is headed by a kicker. */
+   Views. A stack of pieces; a section inside one is headed by a square and a rule. */
 
 .stack {
   display: flex;
@@ -1272,4 +1190,354 @@ img.badge-thumb,
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------------
+   Deck: one card at a time on a still paper (KTD2). Answers already given settle
+   above the card as plain mono text; the card is a white record with an ink rule. */
+
+.deck {
+  position: relative;
+  max-width: 36rem;
+  margin: var(--space-2xl) auto 0;
+}
+
+.deck-close {
+  position: absolute;
+  top: calc(-1 * var(--space-2xl));
+  right: 0;
+  padding: 2px 10px;
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 1;
+  color: var(--ink-muted);
+}
+
+.deck-settled {
+  list-style: none;
+  margin: 0 0 var(--space-md);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.deck-settled li {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  letter-spacing: var(--value-tracking);
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
+}
+
+.deck-settled li::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: var(--space-sm);
+  vertical-align: 1px;
+  background: var(--good);
+}
+
+.deck-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-base);
+  padding: var(--space-xl) var(--space-xl) var(--space-lg);
+  background: var(--surface);
+  border: var(--rule-width) solid var(--rule);
+  box-shadow: var(--shadow);
+}
+
+.deck-card h2 {
+  margin: 0;
+  font-size: 1.6rem;
+  letter-spacing: var(--display-tracking);
+}
+
+.deck-card h2:focus-visible {
+  box-shadow: none;
+  outline: none;
+}
+
+.deck-body :is(input, textarea) {
+  width: 100%;
+  font-size: 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--cell);
+}
+
+.deck-body textarea {
+  min-height: 8rem;
+  resize: vertical;
+}
+
+.deck-error {
+  margin: 0;
+  padding: var(--space-sm) var(--space-md);
+  border-left: 3px solid var(--error);
+  background: var(--error-wash);
+}
+
+.deck-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding-top: var(--space-sm);
+}
+
+.deck-actions > :only-child {
+  margin-left: auto;
+}
+
+.deck-back {
+  color: var(--ink-muted);
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .deck-card {
+    animation: deck-card-in 220ms ease-out;
+  }
+
+  .deck-settled li:last-child {
+    animation: deck-settle 220ms ease-out;
+  }
+}
+
+@keyframes deck-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+@keyframes deck-settle {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Home: what needs you, the agents and badges on their shelves, and two doors. */
+
+.home {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xl);
+  min-height: calc(100vh - 12rem);
+}
+
+.home-section h2 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  margin: 0 0 var(--space-md);
+  font-size: 1.15rem;
+}
+
+.home-section h2::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--cell);
+}
+
+/* What needs you: one record card, a row per thing, each one tap. */
+.needs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--surface);
+  border: var(--rule-width) solid var(--rule);
+  box-shadow: var(--shadow);
+}
+
+.needs > li + li {
+  border-top: 1px solid var(--cell);
+}
+
+.need {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--space-md);
+  width: 100%;
+  min-height: 52px;
+  padding: var(--space-sm) var(--space-base);
+  border: none;
+  background: transparent;
+  text-align: left;
+  font-size: 15px;
+}
+
+.need:hover:not(:disabled) {
+  background: var(--data-wash);
+  opacity: 1;
+}
+
+.need-title {
+  font-weight: 600;
+  letter-spacing: var(--heading-tracking);
+}
+
+.need-detail {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: var(--value-tracking);
+  color: var(--ink-muted);
+}
+
+.need-reply .need-title {
+  color: var(--data);
+}
+
+.more {
+  margin-top: var(--space-sm);
+  color: var(--ink-muted);
+  font-size: 13px;
+}
+
+/* Shelves scroll sideways so home stays one screen. */
+.shelf {
+  list-style: none;
+  display: flex;
+  gap: var(--space-base);
+  margin: 0;
+  padding: var(--space-xs) var(--space-xs) var(--space-md);
+  overflow-x: auto;
+}
+
+.shelf > li {
+  flex: none;
+}
+
+.agent-card,
+.badge-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  width: 10rem;
+  min-height: 100%;
+  padding: var(--space-base) var(--space-md);
+  background: var(--surface);
+  border: var(--rule-width) solid var(--rule);
+  box-shadow: var(--shadow);
+  text-align: center;
+  font-weight: 400;
+}
+
+.agent-card .person {
+  width: 36px;
+  height: 40px;
+  margin-bottom: var(--space-xs);
+}
+
+.agent-card-name,
+.badge-card-name {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: var(--heading-tracking);
+}
+
+.agent-card-setup {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: var(--value-tracking);
+  color: var(--ink-muted);
+}
+
+.agent-card-badges,
+.holders {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 3px;
+  margin-top: var(--space-xs);
+}
+
+.holder {
+  display: inline-flex;
+  color: var(--good);
+}
+
+.holder .person {
+  width: 13px;
+  height: 15px;
+}
+
+.holders-none {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: var(--value-tracking);
+  color: var(--ink-muted);
+}
+
+/* The two doors stay in view at the foot of home. */
+.doors {
+  position: sticky;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-base);
+  margin-top: auto;
+  padding: var(--space-base) 0;
+  background: var(--bg);
+}
+
+.door {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  min-height: 5.5rem;
+  background: var(--surface);
+  border: var(--rule-width) solid var(--rule);
+  box-shadow: var(--shadow);
+  font-size: 16px;
+  letter-spacing: var(--heading-tracking);
+}
+
+.door .person {
+  width: 22px;
+  height: 25px;
+}
+
+.door-disc {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: var(--rule-width) solid var(--ink);
+  box-shadow: inset 0 0 0 4px var(--surface), inset 0 0 0 12px var(--ink);
+}
+
+/* A little lift under the pointer, where motion is welcome. */
+@media (prefers-reduced-motion: no-preference) {
+  .door,
+  .agent-card,
+  .badge-card {
+    transition: transform 140ms ease, box-shadow 140ms ease;
+  }
+
+  .door:hover:not(:disabled),
+  .agent-card:hover:not(:disabled),
+  .badge-card:hover:not(:disabled) {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+@media (max-width: 36rem) {
+  .content {
+    padding: var(--space-lg) var(--space-base) var(--space-2xl);
+  }
+
+  .doors {
+    grid-template-columns: 1fr;
+  }
 }

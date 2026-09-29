@@ -68,7 +68,6 @@ function CollectionList() {
   return (
     <section className="stack">
       <PageHeader
-        kicker="Your credentials"
         title="Collections"
         lead={<>A credential is <strong>a promise you can check.</strong> Group them into collections.</>}
       />
@@ -252,7 +251,6 @@ function CollectionDetail({ slug }: { slug: string }) {
     <section className="stack">
       {allCollections}
       <PageHeader
-        kicker="Collection"
         title={collection.name}
         actions={
           <button type="button" onClick={() => setShowExport(true)}>
