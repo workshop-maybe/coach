@@ -323,7 +323,7 @@ button:focus-visible {
   display: flex;
   flex-direction: column;
   max-width: none;
-  height: calc(100vh - 11rem);
+  height: calc(100vh - 12rem);
   min-height: 24rem;
 }
 
@@ -1737,4 +1737,27 @@ button:focus-visible {
   50% {
     opacity: 0;
   }
+}
+
+/* ---------------------------------------------------------------------------
+   Every card's edge is drawn by hand: the solid border stays for layout but goes
+   clear, and a sketched frame (src/assets/sketch-frame.svg, its strokes running past
+   the corners) is laid over it as a mask filled with the rule ink. */
+
+:is(.deck-card, .needs, .agent-card, .badge-card, .door, .part, .detail-holder, .detail-history, .earned, .rich-menu) {
+  border-color: transparent;
+}
+
+:is(.deck-card, .needs, .agent-card, .badge-card, .door, .part, .detail-holder, .detail-history, .earned) {
+  position: relative;
+}
+
+:is(.deck-card, .needs, .agent-card, .badge-card, .door, .part, .detail-holder, .detail-history, .earned, .rich-menu)::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  pointer-events: none;
+  background: var(--rule);
+  -webkit-mask-box-image: url("./assets/sketch-frame.svg") 16 / 16px round;
+  mask-border: url("./assets/sketch-frame.svg") 16 / 16px round;
 }

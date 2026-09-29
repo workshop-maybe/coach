@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="black" stroke-width="1.6" stroke-linecap="round">
+  <!-- A card's edge as a sketch draws it: strokes that lean a little and run past each corner.
+       Used as a border mask (16px slice), so the middle 16px of each side tiles seamlessly. -->
+  <path d="M1.5 5.2C8 4.4 12 5.3 16 4.75C20 4.3 28 5.2 32 4.75C36 4.3 42 5.4 46.5 4.4"/>
+  <path d="M43.4 1.5C43.8 8 42.9 12 43.25 16C43.7 20 42.8 28 43.25 32C43.6 37 42.9 42 43.6 46.6"/>
+  <path d="M46.6 43.6C40 43.9 36 42.9 32 43.25C28 43.7 20 42.8 16 43.25C12 43.6 6 42.9 1.4 43.8"/>
+  <path d="M4.4 46.5C4.9 40 4.2 36 4.75 32C5.2 28 4.3 20 4.75 16C5.1 12 4.3 6 5 1.6"/>
+</svg>
