@@ -9,14 +9,13 @@ import type { KeyboardEvent } from "react";
 import { PALETTES } from "../badge/palettes";
 import type { BadgeSettings, BadgeTitle } from "../badge/settings";
 import { collectionPath, credentialPath, loadFolder, profilePath } from "../domain/folder";
-import { newestFirst } from "../domain/matrix";
+import { cellKey, type Matrix } from "../domain/matrix";
 import { importBadgeArt, setCredentialBadgeOverride, updateCredential, updateProfile } from "../domain/operations";
 import { checkCriteriaPrompt, refineHandoffNote, reviewAssignmentPrompt } from "../domain/prompts";
 import {
   credentialKey,
   parseCredentialKey,
   type AgentProfile,
-  type Assessment,
   type Collection,
   type Credential,
   type FolderState,
@@ -29,19 +28,14 @@ import { useNav } from "./nav";
 import type { AgentPart, CredentialPart } from "./routes";
 import { CopyHelper, Missing, fileName, paletteName } from "./shared";
 import { describeError, useFolder } from "./useFolderState";
+import { useMatrix } from "./useMatrix";
 
 // ---------------------------------------------------------------------------
 // Shared pieces
 
-/** Agents whose latest result for a credential is met: its holders (R7). A flagged met still holds. */
-export function holdersOf(state: FolderState, key: string): AgentProfile[] {
-  const latest = new Map<Slug, Assessment>();
-  for (const a of state.assessments) {
-    if (credentialKey(a) !== key) continue;
-    const prev = latest.get(a.profileSlug);
-    if (!prev || newestFirst(a, prev) < 0) latest.set(a.profileSlug, a);
-  }
-  return state.profiles.filter((p) => latest.get(p.slug)?.result === "met");
+/** Agents whose matrix cell for a credential is met: its holders (R7). A flagged met still holds. */
+export function holdersOf(matrix: Matrix, profiles: AgentProfile[], key: string): AgentProfile[] {
+  return profiles.filter((p) => matrix.cells.get(cellKey(p.slug, key))?.status === "met");
 }
 
 /** Drops empty parts so an empty setting is stored as absent. */
@@ -123,20 +117,24 @@ export interface EditCredentialDeckProps {
 export function EditCredentialDeck(props: EditCredentialDeckProps) {
   const { state } = useFolder();
   const { navigate } = useNav();
+  // The card waits for the matrix too, so its holders are known before the task can change.
+  const matrix = useMatrix(state);
   if (!state) return null;
   const credential = state.credentials.find((c) => credentialKey(c) === props.credentialKey);
   const collection = state.collections.find((c) => c.slug === credential?.collectionSlug);
   if (!credential || !collection) return <Missing onHome={() => navigate({ view: "home" })} />;
-  return <EditCredential {...props} credential={credential} collection={collection} state={state} />;
+  if (!matrix) return null;
+  return <EditCredential {...props} credential={credential} collection={collection} state={state} matrix={matrix} />;
 }
 
 interface Opened {
   credential: Credential;
   collection: Collection;
   state: FolderState;
+  matrix: Matrix;
 }
 
-function EditCredential({ credentialKey: key, part, credential: atOpen, collection: collectionAtOpen, state: stateAtOpen }: EditCredentialDeckProps & Opened) {
+function EditCredential({ credentialKey: key, part, credential: atOpen, collection: collectionAtOpen, state: stateAtOpen, matrix: matrixAtOpen }: EditCredentialDeckProps & Opened) {
   const { storage, state, apply, reload } = useFolder();
   const { navigate } = useNav();
   const { collectionSlug, slug } = parseCredentialKey(key);
@@ -148,7 +146,7 @@ function EditCredential({ credentialKey: key, part, credential: atOpen, collecti
     collection: collectionAtOpen,
     credBase: stateAtOpen.raw[credPath] ?? null,
     colBase: stateAtOpen.raw[colPath] ?? null,
-    holders: holdersOf(stateAtOpen, key),
+    holders: holdersOf(matrixAtOpen, stateAtOpen.profiles, key),
   }));
   const c = opened.credential;
 
@@ -165,9 +163,11 @@ function EditCredential({ credentialKey: key, part, credential: atOpen, collecti
   const allTargets = line.trim() ? [...targets, line.trim()] : targets;
 
   async function saveCredential(patch: Partial<Credential>, keepMine: boolean) {
+    // Keep mine lays only this part over the file as it is now, so other changes on disk stay.
     const current = keepMine ? await loadFolder(storage) : state;
     const base = keepMine ? (current?.raw[credPath] ?? null) : opened.credBase;
-    apply(await updateCredential(storage, { ...c, ...patch }, base));
+    const onDisk = keepMine ? current?.credentials.find((x) => credentialKey(x) === key) : undefined;
+    apply(await updateCredential(storage, { ...(onDisk ?? c), ...patch }, base));
   }
 
   async function finish({ keepMine }: { keepMine: boolean }) {
@@ -438,7 +438,9 @@ function EditAgent({ profileSlug, part, profile: atOpen, state: stateAtOpen }: E
     const current = keepMine ? await loadFolder(storage) : state;
     if (!current) return;
     const base = keepMine ? (current.raw[path] ?? null) : opened.base;
-    apply(await updateProfile(storage, current, { ...p, ...patch() }, base));
+    // Keep mine lays only this part over the file as it is now, so other changes on disk stay.
+    const onDisk = keepMine ? current.profiles.find((x) => x.slug === profileSlug) : undefined;
+    apply(await updateProfile(storage, current, { ...(onDisk ?? p), ...patch() }, base));
     agentHome();
   }
 

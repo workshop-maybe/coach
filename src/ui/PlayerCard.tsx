@@ -52,11 +52,16 @@ interface Dials {
   effort: DialValue;
 }
 
+/** The effort dial's values: the listed efforts, plus a custom one the agent started with. */
+function effortsWith(effort: string): string[] {
+  return EFFORTS.includes(effort) || effort === "" ? EFFORTS : [...EFFORTS, effort];
+}
+
 function dialsFor(setup: AgentSetup): Dials {
   return {
     harness: toDial(setup.harness, HARNESSES.map((h) => h.value)),
     model: toDial(setup.model, modelsFor(setup.harness)),
-    effort: toDial(setup.effort, EFFORTS),
+    effort: toDial(setup.effort, effortsWith(setup.effort)),
   };
 }
 
@@ -101,7 +106,7 @@ function Player({ profileSlug, returnTo, likeSlug, keys, onKey }: PlayerCardProp
 
   const models = [...modelsFor(dials.harness.choice), OTHER];
   const harnessOptions = [...HARNESSES.map((h) => h.value), OTHER];
-  const effortOptions = EFFORTS.includes(start.effort) || start.effort === "" ? EFFORTS : [...EFFORTS, start.effort];
+  const effortOptions = effortsWith(start.effort);
 
   function setHarness(d: DialValue) {
     if (d.choice === dials.harness.choice) return setDials({ ...dials, harness: d });
@@ -128,7 +133,9 @@ function Player({ profileSlug, returnTo, likeSlug, keys, onKey }: PlayerCardProp
     if (mode.kind === "edit" && stored) {
       const current: FolderState = keepMine ? await loadFolder(storage) : state;
       const path = profilePath(stored.slug);
-      apply(await updateProfile(storage, current, { ...stored, ...setup }, current.raw[path] ?? null));
+      // Keep mine lays only the setup over the file as it is now, so other changes on disk stay.
+      const onDisk = keepMine ? current.profiles.find((p) => p.slug === stored.slug) : undefined;
+      apply(await updateProfile(storage, current, { ...(onDisk ?? stored), ...setup }, current.raw[path] ?? null));
       navigate({ view: "item", item: "agent", profileSlug: stored.slug });
       return;
     }

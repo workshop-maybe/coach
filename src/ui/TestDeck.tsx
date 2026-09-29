@@ -21,7 +21,7 @@ import { Deck, type Beat } from "./Deck";
 import { useNav } from "./nav";
 import { usePendingTests, type PendingTest } from "./pendingTests";
 import { focusOnMount } from "./shared";
-import { useFolder } from "./useFolderState";
+import { describeError, useFolder } from "./useFolderState";
 import { useMatrix } from "./useMatrix";
 
 /** How long the landing plays before home returns. */
@@ -61,6 +61,8 @@ export function TestDeck(props: TestDeckProps) {
   const [version, setVersion] = useState<string | null>(null);
   // The machine's screen through Copy: dots out, then the cursor waits.
   const [sending, setSending] = useState(false);
+  // A failed Copy again, shown on the card as the deck shows its own errors.
+  const [copyError, setCopyError] = useState<string | null>(null);
   const matrix = useMatrix(state);
 
   const profile = state?.profiles.find((p) => p.slug === profileSlug);
@@ -129,6 +131,15 @@ export function TestDeck(props: TestDeckProps) {
     remove(profile.slug, credentialKey(credential));
     apply(next);
     setOutcome({ kind: result.current === "met" ? "met" : "not-yet" });
+  }
+
+  async function copyAgain() {
+    setCopyError(null);
+    try {
+      await copy();
+    } catch (e) {
+      setCopyError(describeError(e));
+    }
   }
 
   function tryAnother() {
@@ -308,10 +319,15 @@ export function TestDeck(props: TestDeckProps) {
         {replyMachine}
         <p className="muted">{stale} since you copied it</p>
         <div>
-          <button type="button" className="primary" onClick={() => void copy()}>
+          <button type="button" className="primary" onClick={() => void copyAgain()}>
             Copy again
           </button>
         </div>
+        {copyError && (
+          <p className="deck-error" role="alert">
+            {copyError}
+          </p>
+        )}
         <DismissLink onDismiss={() => dismiss()} />
       </>
     ) : (

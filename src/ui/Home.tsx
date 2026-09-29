@@ -48,7 +48,9 @@ export function Home() {
     };
   }, [matrix, state]);
 
-  const empty = !shelf || (shelf.credentials.length === 0 && shelf.profiles.size === 0);
+  // Empty is read from the folder, not the matrix, so a full folder never flashes the empty
+  // layout while its matrix builds; until then the full layout shows only its doors.
+  const empty = !!state && state.credentials.length === 0 && state.profiles.length === 0;
 
   const items = useMemo(() => (state && matrix ? needsYou(state, matrix, pending) : []), [state, matrix, pending]);
 

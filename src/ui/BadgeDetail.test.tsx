@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { credentialPath, loadFolder } from "../domain/folder";
 import { serializeCredentialMd } from "../domain/credential-md";
+import { buildMatrix } from "../domain/matrix";
 import { checkCriteriaPrompt, refineHandoffNote, reviewAssignmentPrompt } from "../domain/prompts";
 import type { MemoryStorage } from "../storage/memory";
 import { holdersOf, parseParam } from "./EditDecks";
@@ -106,6 +107,19 @@ describe("BadgeDetail", () => {
     await userEvent.click(screen.getByRole("button", { name: "Keep mine" }));
     await screen.findByRole("list", { name: "Parts" });
     expect((await saved(storage)).task).toBe("Mine.");
+  });
+
+  it("Keep mine writes only the edited part over what is on disk now", async () => {
+    const storage = storageWith({ credentials: [review] });
+    renderApp(storage, { view: "deck", deck: "edit-credential", credentialKey: "eng/review", part: "task" });
+    const box = await screen.findByRole("textbox", { name: "Task" });
+    storage.seed({ [credentialPath("eng", "review")]: serializeCredentialMd({ ...review, name: "Their name", rubric: "Their rubric." }) });
+    await userEvent.clear(box);
+    await userEvent.type(box, "Mine.");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Keep mine" }));
+    await screen.findByRole("list", { name: "Parts" });
+    expect(await saved(storage)).toMatchObject({ task: "Mine.", name: "Their name", rubric: "Their rubric." });
   });
 
   it("Use theirs leaves the file on disk as it is", async () => {
@@ -210,15 +224,20 @@ describe("BadgeDetail", () => {
 });
 
 describe("edit helpers", () => {
-  it("holdersOf reads each agent's latest result", async () => {
+  it("holdersOf reads each agent's latest result from the matrix, a flagged met still holding", async () => {
     const state = await loadFolder(
       storageWith({
         credentials: [review],
-        profiles: [opus],
-        assessments: [await result(opus, review), await result(opus, review, { fileStem: "20260902T090000Z", recordedAt: "2026-09-02T09:00:00.000Z", result: "not_met" })],
+        profiles: [opus, codex],
+        assessments: [
+          await result(opus, review),
+          await result(opus, review, { fileStem: "20260902T090000Z", recordedAt: "2026-09-02T09:00:00.000Z", result: "not_met" }),
+          await result(codex, review, { assignmentVersion: "an-older-version" }),
+        ],
       }),
     );
-    expect(holdersOf(state, "eng/review")).toEqual([]);
+    const matrix = await buildMatrix(state);
+    expect(holdersOf(matrix, state.profiles, "eng/review").map((p) => p.slug)).toEqual(["codex"]);
   });
 
   it("parseParam splits a line at the first equals sign", () => {

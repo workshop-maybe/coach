@@ -98,6 +98,22 @@ describe("Home", () => {
     expect((screen.getByRole("button", { name: "Export" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it("a populated folder never shows the empty layout while its matrix builds", async () => {
+    let sawEmpty = false;
+    const hasEmpty = (n: Node) => n instanceof Element && (n.classList.contains("home-empty") || n.querySelector(".home-empty") !== null);
+    const observer = new MutationObserver((records) => {
+      for (const r of records) {
+        if (hasEmpty(r.target) || [...r.addedNodes].some(hasEmpty)) sawEmpty = true;
+      }
+    });
+    observer.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["class"] });
+    renderApp(storageWith({ credentials: [review], profiles: [opus] }));
+    await screen.findByRole("region", { name: "Agents" });
+    await new Promise((r) => setTimeout(r, 0));
+    observer.disconnect();
+    expect(sawEmpty).toBe(false);
+  });
+
   it("Covers AE1. With one credential its badge shows, and What needs you lists it as nobody holds it", async () => {
     renderApp(storageWith({ credentials: [review] }));
     const badges = await screen.findByRole("region", { name: "Badges" });

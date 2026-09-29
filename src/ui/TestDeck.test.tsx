@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { loadFolder } from "../domain/folder";
@@ -220,6 +220,36 @@ describe("TestDeck", () => {
     await userEvent.click(screen.getByRole("button", { name: "Dismiss this test" }));
     expect(await screen.findByRole("button", { name: "Create a credential" })).toBeTruthy();
     expect(readPending(FOLDER)).toEqual([]);
+  });
+
+  it("a second Copy while the clipboard is still writing moves on once", async () => {
+    const writes: (() => void)[] = [];
+    vi.mocked(writeText).mockImplementation(() => new Promise<void>((r) => writes.push(r)));
+    const done = () => writes.forEach((r) => r());
+    renderApp(storageWith({ credentials: [review], profiles: [opus] }), fromBadge);
+    await userEvent.click(await screen.findByRole("button", { name: "Opus agent" }));
+    const copyButton = await screen.findByRole("button", { name: "Copy" });
+    fireEvent.click(copyButton);
+    fireEvent.click(copyButton);
+    await act(async () => done());
+    expect(await screen.findByRole("heading", { name: "What came back" })).toBeTruthy();
+    expect(writeText).toHaveBeenCalledTimes(1);
+    await act(async () => {});
+    expect(screen.queryByRole("heading", { name: "Did it meet it" })).toBeNull();
+  });
+
+  it("Copy again shows a clipboard failure", async () => {
+    addPending(FOLDER, {
+      profileSlug: "opus",
+      credentialKey: "eng/review",
+      copiedAt: "2026-09-29T10:00:00.000Z",
+      assignmentVersion: "an-older-version",
+      setup: { harness: "claude-code", model: "opus", effort: "high" },
+    });
+    vi.mocked(writeText).mockRejectedValue(new Error("Clipboard is busy"));
+    renderApp(storageWith({ credentials: [review], profiles: [opus] }), { ...fromBadge, profileSlug: "opus", resume: true });
+    await userEvent.click(await screen.findByRole("button", { name: "Copy again" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("Clipboard is busy");
   });
 
   it("a waiting test whose task changed offers Copy again instead of recording", async () => {

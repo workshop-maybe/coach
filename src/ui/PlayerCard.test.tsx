@@ -97,6 +97,12 @@ describe("PlayerCard", () => {
     expect(make.disabled).toBe(false);
   });
 
+  it("an agent with a custom effort opens with that effort checked", async () => {
+    renderApp(storageWith({ profiles: [{ ...opus, effort: "ultra" }] }), { view: "item", item: "agent", profileSlug: "opus" });
+    await screen.findByRole("button", { name: "Keep this setup" });
+    expect(checked("Effort").textContent).toBe("ultra");
+  });
+
   it("a taken name gets a number", async () => {
     renderApp(storageWith({ profiles: [{ ...opus, name: "Claude Code, opus, high" }] }), { view: "deck", deck: "agent" });
     expect(await screen.findByRole("heading", { name: "Claude Code, opus, high 2" })).toBeTruthy();

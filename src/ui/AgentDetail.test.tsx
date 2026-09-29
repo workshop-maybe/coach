@@ -136,6 +136,30 @@ describe("AgentDetail", () => {
     expect((await saved(storage)).notes).toBe("Mine");
   });
 
+  it("Keep mine on an agent part keeps the other fields as they are on disk", async () => {
+    const storage = storageWith({ profiles: [opus] });
+    renderApp(storage, { view: "deck", deck: "edit-agent", profileSlug: "opus", part: "notes" });
+    const box = await screen.findByRole("textbox", { name: "Notes" });
+    storage.seed({ [profilePath("opus")]: serializeProfile({ ...opus, repo: "~/theirs", notes: "Theirs" }) });
+    await userEvent.type(box, "Mine");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Keep mine" }));
+    await screen.findByRole("list", { name: "Parts" });
+    expect(await saved(storage)).toMatchObject({ notes: "Mine", repo: "~/theirs" });
+  });
+
+  it("Keep mine on the setup card keeps the other fields as they are on disk", async () => {
+    const storage = storageWith({ profiles: [opus] });
+    renderApp(storage, agent);
+    await screen.findByRole("button", { name: "Keep this setup" });
+    storage.seed({ [profilePath("opus")]: serializeProfile({ ...opus, notes: "Theirs", model: "sonnet" }) });
+    await userEvent.click(screen.getByRole("button", { name: "Next effort" }));
+    await userEvent.click(screen.getByRole("button", { name: "Keep this setup" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Keep mine" }));
+    await waitFor(async () => expect((await saved(storage)).effort).toBe("max"));
+    expect(await saved(storage)).toMatchObject({ notes: "Theirs", effort: "max" });
+  });
+
   it("shows earned badges, and a flagged one dimmed with the reason", async () => {
     const storage = storageWith({
       credentials: [review, docs],

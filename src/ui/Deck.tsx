@@ -75,19 +75,30 @@ export function Deck({ label, beats, startAt = 0, onClose, onFinish, onUseTheirs
     }
   }
 
+  // Set before the first await, so a second press while onForward runs does nothing.
+  const running = useRef(false);
+
   async function forward() {
-    if (busy || beat.valid === false) return;
+    if (running.current || busy || beat.valid === false) return;
+    running.current = true;
     setTrouble({ kind: "none" });
-    if (beat.onForward) {
-      try {
-        await beat.onForward();
-      } catch (e) {
-        setTrouble({ kind: "error", message: describeError(e) });
-        return;
+    try {
+      if (beat.onForward) {
+        setBusy(true);
+        try {
+          await beat.onForward();
+        } catch (e) {
+          setTrouble({ kind: "error", message: describeError(e) });
+          return;
+        } finally {
+          setBusy(false);
+        }
       }
+      if (last) await finish(false);
+      else setIndex((i) => i + 1);
+    } finally {
+      running.current = false;
     }
-    if (last) await finish(false);
-    else setIndex((i) => i + 1);
   }
 
   function back() {
