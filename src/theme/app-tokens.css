@@ -17,7 +17,6 @@
   --ink-faint: rgb(var(--sys-ink-rgb) / 0.45);
   --ink-ghost: rgb(var(--sys-ink-rgb) / 0.3);
   --ink-tint: rgb(var(--sys-ink-rgb) / 0.05);
-  --hairline: rgb(var(--sys-ink-rgb) / 0.1);
   --cell: rgb(var(--sys-ink-rgb) / 0.15);
   --paper: var(--sys-paper);
   --plate: color-mix(in srgb, var(--sys-paper) 95%, var(--sys-ink));
@@ -33,20 +32,16 @@
   --warning: #ed990e;
   --info: #0f74c5;
   --on-state: #ffffff;
-  --on-warning: #0a0a0a;
   --error-wash: color-mix(in srgb, var(--error) 8%, var(--sys-paper));
   --warning-wash: color-mix(in srgb, var(--warning) 10%, var(--sys-paper));
   --info-wash: color-mix(in srgb, var(--info) 7%, var(--sys-paper));
 
-  /* The app's working names, kept so component rules read the same as before. */
+  /* The app's working names, used throughout App.css. */
   --bg: var(--paper);
-  --surface: var(--paper);
   --sidebar: var(--plate);
   --text: var(--ink);
   --muted: var(--ink-muted);
   --border: var(--cell);
-  --accent: var(--blue);
-  --focus: var(--blue);
   --focus-ring: inset 0 0 0 1.5px var(--blue);
 
   /* Type (guide section 4). Fonts are bundled, never fetched. */

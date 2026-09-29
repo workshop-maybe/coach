@@ -1,14 +1,14 @@
-// The Andamio lockup (mark + logotype). Both variants render; CSS shows the one
-// that matches the `.dark` class, so the swap needs no JavaScript.
+// The Andamio lockup (mark + logotype). The <picture> source follows the same OS
+// setting as the `.dark` class, so only the matching variant is loaded.
 
 import lockupLight from "../assets/brand/lockup.png";
 import lockupDark from "../assets/brand/lockup-dark.png";
 
-export function Lockup({ className = "" }: { className?: string }) {
+export function Lockup({ className }: { className?: string }) {
   return (
-    <span className={className}>
-      <img className="lockup lockup-light" src={lockupLight} alt="Andamio" />
-      <img className="lockup lockup-dark" src={lockupDark} alt="" aria-hidden="true" />
-    </span>
+    <picture className={className}>
+      <source media="(prefers-color-scheme: dark)" srcSet={lockupDark} />
+      <img className="lockup" src={lockupLight} alt="Andamio" />
+    </picture>
   );
 }

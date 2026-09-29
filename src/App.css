@@ -253,15 +253,6 @@ input[type="checkbox"]:checked {
   width: auto;
 }
 
-.lockup-dark,
-.dark .lockup-light {
-  display: none;
-}
-
-.dark .lockup-dark {
-  display: block;
-}
-
 .brand-product {
   font-family: var(--font-mono);
   font-size: var(--label-base);
@@ -353,6 +344,10 @@ input[type="checkbox"]:checked {
   border-bottom: 1px solid var(--cell);
 }
 
+.stack > .page-header {
+  margin-bottom: 0;
+}
+
 .page-header h1 {
   margin: var(--space-sm) 0 0;
 }
@@ -428,7 +423,6 @@ input[type="checkbox"]:checked {
   gap: 1rem;
 }
 
-.editor-head h1,
 .editor-head h2 {
   margin: 0;
 }
@@ -1017,8 +1011,4 @@ img.badge-thumb,
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
-}
-
-.stack > .page-header {
-  margin-bottom: 0;
 }
