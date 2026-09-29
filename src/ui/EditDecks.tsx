@@ -9,6 +9,7 @@ import type { KeyboardEvent } from "react";
 import { PALETTES } from "../badge/palettes";
 import type { BadgeSettings, BadgeTitle } from "../badge/settings";
 import { collectionPath, credentialPath, loadFolder, profilePath } from "../domain/folder";
+import { newestFirst } from "../domain/matrix";
 import { importBadgeArt, setCredentialBadgeOverride, updateCredential, updateProfile } from "../domain/operations";
 import { checkCriteriaPrompt, refineHandoffNote, reviewAssignmentPrompt } from "../domain/prompts";
 import {
@@ -22,11 +23,11 @@ import {
   type Slug,
 } from "../domain/types";
 import { Badge } from "./Badge";
-import { CopyHelper, focusOnMount } from "./CredentialDeck";
 import { Deck, type Beat } from "./Deck";
 import { useNav } from "./nav";
 import { Person } from "./Person";
 import type { AgentPart, CredentialPart } from "./routes";
+import { CopyHelper, Missing, fileName, paletteName } from "./shared";
 import { describeError, useFolder } from "./useFolderState";
 
 // ---------------------------------------------------------------------------
@@ -38,15 +39,9 @@ export function holdersOf(state: FolderState, key: string): AgentProfile[] {
   for (const a of state.assessments) {
     if (credentialKey(a) !== key) continue;
     const prev = latest.get(a.profileSlug);
-    if (!prev || newer(a, prev)) latest.set(a.profileSlug, a);
+    if (!prev || newestFirst(a, prev) < 0) latest.set(a.profileSlug, a);
   }
   return state.profiles.filter((p) => latest.get(p.slug)?.result === "met");
-}
-
-function newer(a: Assessment, b: Assessment): boolean {
-  const ta = Date.parse(a.recordedAt);
-  const tb = Date.parse(b.recordedAt);
-  return ta !== tb ? ta > tb : a.fileStem > b.fileStem;
 }
 
 /** Drops empty parts so an empty setting is stored as absent. */
@@ -62,31 +57,6 @@ function cleanSettings(s: BadgeSettings): BadgeSettings {
     if (Object.keys(title).length > 0) out.title = title;
   }
   return out;
-}
-
-export function paletteName(slug: string | undefined | null): string {
-  return PALETTES.find((p) => p.slug === slug)?.name ?? "Default colors";
-}
-
-export const fileName = (path: string) => path.slice(path.lastIndexOf("/") + 1);
-
-/** The card for a badge or agent that is no longer in the folder. */
-export function Missing({ onHome }: { onHome(): void }) {
-  return (
-    <section className="deck" aria-label="Not found">
-      <div className="deck-card">
-        <h2 tabIndex={-1} ref={focusOnMount}>
-          Not in the folder
-        </h2>
-        <p className="muted">It may have been moved or deleted outside the app.</p>
-        <div className="deck-actions">
-          <button type="button" className="ghost" onClick={onHome}>
-            Home
-          </button>
-        </div>
-      </div>
-    </section>
-  );
 }
 
 /**

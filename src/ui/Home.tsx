@@ -2,23 +2,20 @@
 // the badges it earned), your badges (each showing who holds it), then the two doors.
 // An empty folder shows only the doors (R5-R8).
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { buildMatrix, cellKey, type CellFlag, type Matrix } from "../domain/matrix";
+import { cellKey } from "../domain/matrix";
 import { credentialKey, type AgentProfile, type Collection, type Credential } from "../domain/types";
 import { Badge } from "./Badge";
+import { FLAG_SHORT } from "./format";
 import { useNav } from "./nav";
 import { needsYou, type NeedsYouItem } from "./needsYou";
 import { usePendingTests } from "./pendingTests";
 import { Person } from "./Person";
 import { useFolder } from "./useFolderState";
+import { useMatrix } from "./useMatrix";
 
 const SHOWN = 3;
-
-const FLAG_SHORT: Record<CellFlag, string> = {
-  earlier_version: "task changed",
-  setup_mismatch: "setup changed",
-};
 
 interface Shelf {
   credentials: { credential: Credential; collection: Collection; key: string }[];
@@ -30,17 +27,8 @@ export function Home() {
   const { state, folder } = useFolder();
   const { navigate } = useNav();
   const { pending } = usePendingTests(folder);
-  const [matrix, setMatrix] = useState<Matrix | null>(null);
+  const matrix = useMatrix(state);
   const [all, setAll] = useState(false);
-
-  useEffect(() => {
-    if (!state) return;
-    let live = true;
-    void buildMatrix(state).then((m) => live && setMatrix(m));
-    return () => {
-      live = false;
-    };
-  }, [state]);
 
   const shelf = useMemo<Shelf | null>(() => {
     if (!matrix || !state) return null;

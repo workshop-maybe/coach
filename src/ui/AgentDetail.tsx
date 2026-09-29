@@ -5,11 +5,11 @@
 import { FLAG_REASONS, cellKey } from "../domain/matrix";
 import { credentialKey } from "../domain/types";
 import { Badge } from "./Badge";
-import { PartCard, useEscapeHome } from "./BadgeDetail";
-import { Missing } from "./EditDecks";
+import { firstLine } from "./format";
 import { useNav } from "./nav";
 import { PlayerCard } from "./PlayerCard";
 import type { AgentPart } from "./routes";
+import { Missing, PartCard, useEscape } from "./shared";
 import { useFolder } from "./useFolderState";
 import { useMatrix } from "./useMatrix";
 
@@ -17,7 +17,7 @@ export function AgentDetail({ profileSlug }: { profileSlug: string }) {
   const { state } = useFolder();
   const { navigate } = useNav();
   const matrix = useMatrix(state);
-  useEscapeHome();
+  useEscape(() => navigate({ view: "home" }));
 
   if (!state) return null;
   const profile = state.profiles.find((p) => p.slug === profileSlug);
@@ -39,7 +39,7 @@ export function AgentDetail({ profileSlug }: { profileSlug: string }) {
       <ul className="parts" aria-label="Parts">
         <PartCard name="Name" value={profile.name} onOpen={() => edit("name")} />
         <PartCard name="Repo" value={profile.repo || "None yet"} onOpen={() => edit("repo")} />
-        <PartCard name="Notes" value={profile.notes.trim().split("\n")[0] || "None yet"} onOpen={() => edit("notes")} />
+        <PartCard name="Notes" value={firstLine(profile.notes) || "None yet"} onOpen={() => edit("notes")} />
         <PartCard name="Parameters" value={params.length === 0 ? "None yet" : params.join(", ")} onOpen={() => edit("params")} />
       </ul>
 

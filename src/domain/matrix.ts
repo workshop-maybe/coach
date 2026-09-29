@@ -48,14 +48,14 @@ export function cellKey(profileSlug: Slug, credentialKey: string): string {
 }
 
 /** Newest first: recorded time descending, then file stem descending. */
-function newestFirst(a: Assessment, b: Assessment): number {
+export function newestFirst(a: Assessment, b: Assessment): number {
   const ta = Date.parse(a.recordedAt);
   const tb = Date.parse(b.recordedAt);
   if (ta !== tb) return tb - ta;
   return a.fileStem < b.fileStem ? 1 : a.fileStem > b.fileStem ? -1 : 0;
 }
 
-function sameSetup(a: AgentSetup, b: AgentSetup): boolean {
+export function sameSetup(a: AgentSetup, b: AgentSetup): boolean {
   return a.harness === b.harness && a.model === b.model && a.effort === b.effort;
 }
 

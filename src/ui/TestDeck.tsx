@@ -7,15 +7,16 @@
 import { useEffect, useRef, useState } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { assignmentVersion } from "../domain/hash";
+import { sameSetup } from "../domain/matrix";
 import { recordAssessment } from "../domain/operations";
 import { testPrompt } from "../domain/prompts";
-import { credentialKey, type AgentProfile, type AgentSetup, type AssessmentResult, type Credential, type Slug } from "../domain/types";
+import { credentialKey, type AgentProfile, type AssessmentResult, type Credential, type Slug } from "../domain/types";
 import { Badge } from "./Badge";
-import { focusOnMount } from "./CredentialDeck";
 import { Deck, type Beat } from "./Deck";
 import { useNav } from "./nav";
 import { usePendingTests, type PendingTest } from "./pendingTests";
 import { Person } from "./Person";
+import { focusOnMount } from "./shared";
 import { useFolder } from "./useFolderState";
 
 /** How long the landing plays before home returns. */
@@ -29,8 +30,6 @@ export interface TestDeckProps {
 }
 
 type Outcome = { kind: "open" } | { kind: "met" } | { kind: "not-yet" };
-
-const sameSetup = (a: AgentSetup, b: AgentSetup) => a.harness === b.harness && a.model === b.model && a.effort === b.effort;
 
 export function TestDeck(props: TestDeckProps) {
   const { storage, state, folder, apply } = useFolder();
@@ -62,16 +61,17 @@ export function TestDeck(props: TestDeckProps) {
     return () => {
       live = false;
     };
-  }, [credential?.task, credential?.rubric, credential]);
+  }, [credential?.task, credential?.rubric]);
 
   const home = () => navigate({ view: "home" });
+  const goHome = useRef(home);
+  goHome.current = home;
 
   // Met plays the landing, then home returns on its own.
   useEffect(() => {
     if (outcome.kind !== "met") return;
-    const t = window.setTimeout(home, LANDING_MS);
+    const t = window.setTimeout(() => goHome.current(), LANDING_MS);
     return () => window.clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [outcome.kind]);
 
   if (!state) return null;
@@ -83,7 +83,7 @@ export function TestDeck(props: TestDeckProps) {
       profileSlug: profile.slug,
       credentialKey: credentialKey(credential),
       copiedAt: new Date().toISOString(),
-      assignmentVersion: await assignmentVersion(credential.task, credential.rubric),
+      assignmentVersion: version ?? (await assignmentVersion(credential.task, credential.rubric)),
       setup: { harness: profile.harness, model: profile.model, effort: profile.effort },
     });
   }

@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
 import { ChangedOnDiskError } from "../storage/storage";
+import { useEscape } from "./shared";
 import { describeError } from "./useFolderState";
 
 export interface BeatContext {
@@ -60,15 +61,7 @@ export function Deck({ label, beats, startAt = 0, onClose, onFinish, onUseTheirs
   }, [index, conflict]);
 
   // Escape is the quiet way out from anywhere in the deck.
-  const close = useRef(onClose);
-  close.current = onClose;
-  useEffect(() => {
-    const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key === "Escape" && !e.defaultPrevented) close.current();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  useEscape(onClose);
 
   async function finish(keepMine: boolean) {
     setBusy(true);

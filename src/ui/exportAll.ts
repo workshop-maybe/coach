@@ -21,15 +21,10 @@ export interface ExportAllResult {
 }
 
 /**
- * Exports one collection. Throws when its file could not be read. Saves module codes that
+ * Exports one collection without the rubric. Throws when its file could not be read. Saves module codes that
  * exist only in memory first, and returns the folder as it is afterwards.
  */
-export async function exportCollection(
-  storage: Storage,
-  state: FolderState,
-  slug: string,
-  options: { includeRubric: boolean },
-): Promise<Omit<ExportAllResult, "skipped">> {
+async function exportCollection(storage: Storage, state: FolderState, slug: string): Promise<Omit<ExportAllResult, "skipped">> {
   const path = collectionPath(slug);
   if (state.errors.some((e) => e.path === path)) throw new Error(`${path} could not be read. Fix it before exporting.`);
   const collection = state.collections.find((c) => c.slug === slug);
@@ -47,7 +42,7 @@ export async function exportCollection(
   const credentials = saved.order.flatMap((s) => current.credentials.filter((c) => c.collectionSlug === slug && c.slug === s));
   const rendered = await Promise.all(credentials.map((c) => renderBadgeFor(storage, saved, c)));
   const badges = new Map(credentials.map((c, i) => [c.slug, rendered[i].svg] as const));
-  const built = buildExport(saved, current.credentials, { includeRubric: options.includeRubric, badges });
+  const built = buildExport(saved, current.credentials, { includeRubric: false, badges });
   await writeExport(storage, built);
   return { files: built.size, withoutArt: rendered.filter((r) => r.artMissing).length, state: current };
 }
@@ -64,7 +59,7 @@ export async function exportAll(storage: Storage, state: FolderState): Promise<E
       skipped.push(path);
       continue;
     }
-    const one = await exportCollection(storage, current, slug, { includeRubric: false });
+    const one = await exportCollection(storage, current, slug);
     current = one.state;
     files += one.files;
     withoutArt += one.withoutArt;

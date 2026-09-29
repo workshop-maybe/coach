@@ -2,59 +2,25 @@
 // one-beat edit deck), and its holders: the agents whose latest result met it. Opening a
 // holder shows every result it has for this badge, newest first.
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { resolveBadgeSettings } from "../badge/settings";
 import { FLAG_REASONS, cellKey, type Cell } from "../domain/matrix";
 import { credentialKey, type AgentProfile } from "../domain/types";
 import { Badge } from "./Badge";
-import { focusOnMount } from "./CredentialDeck";
-import { Missing, fileName, paletteName } from "./EditDecks";
-import { resultLabel } from "./format";
+import { FLAG_SHORT, firstLine, formatDate, resultLabel } from "./format";
 import { useNav } from "./nav";
 import { Person } from "./Person";
 import type { CredentialPart } from "./routes";
+import { Missing, PartCard, fileName, focusOnMount, paletteName, useEscape } from "./shared";
 import { useFolder } from "./useFolderState";
 import { useMatrix } from "./useMatrix";
-
-const FLAG_SHORT = { earlier_version: "task changed", setup_mismatch: "setup changed" } as const;
-
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-}
-
-const firstLine = (text: string) => text.trim().split("\n")[0] ?? "";
-
-/** Escape goes home from an opened item, as it does from a deck. */
-export function useEscapeHome() {
-  const { navigate } = useNav();
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !e.defaultPrevented) navigate({ view: "home" });
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [navigate]);
-}
-
-/** One part of a badge or an agent, as a small card that opens its edit. */
-export function PartCard({ name, value, onOpen }: { name: string; value: string; onOpen(): void }) {
-  return (
-    <li>
-      <button type="button" className="part" onClick={onOpen}>
-        <span className="part-name">{name}</span>
-        <span className="part-value">{value}</span>
-      </button>
-    </li>
-  );
-}
 
 export function BadgeDetail({ credentialKey: key }: { credentialKey: string }) {
   const { state } = useFolder();
   const { navigate } = useNav();
   const matrix = useMatrix(state);
   const [open, setOpen] = useState<string | null>(null);
-  useEscapeHome();
+  useEscape(() => navigate({ view: "home" }));
 
   if (!state) return null;
   const home = () => navigate({ view: "home" });

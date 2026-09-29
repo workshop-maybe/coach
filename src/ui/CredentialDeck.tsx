@@ -4,7 +4,6 @@
 // credential, it hands the new one straight back to that test (AE2).
 
 import { useRef, useState } from "react";
-import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { credentialPath, loadFolder } from "../domain/folder";
 import { createCollection, createCredential, updateCredential } from "../domain/operations";
 import { suggestAssignmentsPrompt } from "../domain/prompts";
@@ -13,7 +12,8 @@ import { Badge } from "./Badge";
 import { Deck, type Beat } from "./Deck";
 import { useNav } from "./nav";
 import type { TestPick } from "./routes";
-import { describeError, useFolder } from "./useFolderState";
+import { CopyHelper, focusOnMount } from "./shared";
+import { useFolder } from "./useFolderState";
 
 export const DEFAULT_COLLECTION_NAME = "My credentials";
 
@@ -120,29 +120,3 @@ export function CredentialDeck({ returnTo }: { returnTo?: TestPick }) {
 
   return <Deck label="Create a credential" beats={beats} onClose={() => navigate({ view: "home" })} onFinish={make} />;
 }
-
-/** A quiet helper that copies a prompt for the person to paste into any agent (R12). */
-export function CopyHelper({ label, text }: { label: string; text(): string }) {
-  const [status, setStatus] = useState<{ kind: "idle" } | { kind: "copied" } | { kind: "error"; message: string }>({ kind: "idle" });
-  async function copy() {
-    try {
-      await writeText(text());
-      setStatus({ kind: "copied" });
-    } catch (e) {
-      setStatus({ kind: "error", message: describeError(e) });
-    }
-  }
-  return (
-    <p className="helper">
-      <button type="button" className="link" onClick={() => void copy()}>
-        {label}
-      </button>
-      <span className="helper-status" role="status">
-        {status.kind === "copied" ? "Copied. Paste it into any agent" : status.kind === "error" ? status.message : ""}
-      </span>
-    </p>
-  );
-}
-
-/** A stable ref callback that focuses a card's heading once, when it appears. */
-export const focusOnMount = (el: HTMLElement | null) => el?.focus();
