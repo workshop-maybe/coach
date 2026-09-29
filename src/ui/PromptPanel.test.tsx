@@ -175,6 +175,17 @@ describe("ExportDialog", () => {
     );
   }
 
+  it("says when a badge was exported without its art", async () => {
+    vi.mocked(invoke).mockResolvedValue("/exports");
+    const storage = fixture();
+    const raw = JSON.parse(storage.file(collectionPath("eng"))!);
+    raw.badge = { art: "collections/eng/badge/art-deadbeef.png" };
+    storage.seed({ [collectionPath("eng")]: JSON.stringify(raw) });
+    renderDialog(storage);
+    await userEvent.click(await screen.findByRole("button", { name: "Choose folder and export" }));
+    expect(await screen.findByText(/2 badges were exported without art because the image could not be read/)).toBeTruthy();
+  });
+
   it("writes the export files to the export root with the rubric left out by default", async () => {
     vi.mocked(invoke).mockResolvedValue("/exports");
     const storage = fixture();

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { MemoryStorage } from "../storage/memory";
 import { PALETTES, lightInterior, withCustomRings } from "./palettes";
 import { badgeFingerprints, defaultPaletteIndex } from "./fingerprint";
-import { buildBadgeInput, tokensFor } from "./resolve";
+import { buildBadgeInput, clearArtCache, renderBadgeFor, tokensFor } from "./resolve";
 import type { Collection } from "../domain/types";
 
 const collection: Collection = { slug: "eng", name: "Engineering", description: "", order: ["review"], codes: { review: 1 } };
@@ -41,5 +41,52 @@ describe("buildBadgeInput", () => {
     const result = await buildBadgeInput(storage, missing, credential);
     expect(result.artMissing).toBe(true);
     expect(result.input.artDataUri).toBeUndefined();
+  });
+});
+
+describe("art cache", () => {
+  const path = "collections/eng/badge/art-00000000.png";
+  const withArt = { ...collection, badge: { art: path } };
+
+  function counting() {
+    const storage = new MemoryStorage({});
+    storage.seedImage(path, "data:image/png;base64,AAAA");
+    let reads = 0;
+    const read = storage.readDataUri.bind(storage);
+    storage.readDataUri = (root, p) => {
+      reads++;
+      return read(root, p);
+    };
+    return { storage, reads: () => reads };
+  }
+
+  it("reads shared art once across badges, and clearArtCache forces a re-read", async () => {
+    const { storage, reads } = counting();
+    await buildBadgeInput(storage, withArt, credential);
+    await buildBadgeInput(storage, withArt, { slug: "other", name: "Other" });
+    expect(reads()).toBe(1);
+    clearArtCache(storage);
+    await buildBadgeInput(storage, withArt, credential);
+    expect(reads()).toBe(2);
+  });
+
+  it("does not cache a missing file, so it is read again once it appears", async () => {
+    const storage = new MemoryStorage({});
+    const missing = { ...collection, badge: { art: "collections/eng/badge/later.png" } };
+    expect((await buildBadgeInput(storage, missing, credential)).artMissing).toBe(true);
+    storage.seedImage("collections/eng/badge/later.png", "data:image/png;base64,BBBB");
+    expect((await buildBadgeInput(storage, missing, credential)).input.artDataUri).toBe("data:image/png;base64,BBBB");
+  });
+
+  it("renderBadgeFor reads art fresh and reports art it could not read", async () => {
+    const { storage, reads } = counting();
+    await buildBadgeInput(storage, withArt, credential); // warms the cache
+    const before = reads();
+    const saved = await renderBadgeFor(storage, withArt, credential);
+    expect(reads()).toBe(before + 1);
+    expect(saved.artMissing).toBe(false);
+    expect(saved.svg).toContain("data:image/png;base64,AAAA");
+    const gone = await renderBadgeFor(storage, { ...collection, badge: { art: "collections/eng/badge/gone.png" } }, credential);
+    expect(gone.artMissing).toBe(true);
   });
 });

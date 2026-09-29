@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { FolderProvider } from "./useFolderState";
 import { Badge } from "./Badge";
 import { MemoryStorage } from "../storage/memory";
@@ -29,5 +29,22 @@ describe("Badge", () => {
     const svg = decodeURIComponent(img.getAttribute("src")!.slice(prefix.length));
     expect(svg.startsWith("<svg")).toBe(true);
     expect(svg).toContain("日本語");
+  });
+
+  it("re-reads art replaced in place when the folder reloads", async () => {
+    const path = "collections/eng/badge/art-00000000.png";
+    const storage = new MemoryStorage({ [MARKER_PATH]: '{ "format": 1 }\n' });
+    storage.seedImage(path, "data:image/png;base64,AAAA");
+    const withArt = { ...collection, badge: { art: path } };
+    render(
+      <FolderProvider storage={storage} folder="/data">
+        <Badge collection={withArt} credential={{ slug: "review", name: "Code review" }} size={64} />
+      </FolderProvider>,
+    );
+    const src = () => decodeURIComponent(screen.getByRole("img", { name: "Badge for Code review" }).getAttribute("src") ?? "");
+    await waitFor(() => expect(src()).toContain("AAAA"));
+    storage.seedImage(path, "data:image/png;base64,BBBB");
+    fireEvent.focus(window);
+    await waitFor(() => expect(src()).toContain("BBBB"));
   });
 });

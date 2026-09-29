@@ -100,7 +100,9 @@ export class MemoryStorage implements Storage {
 }
 
 function checkSlug(what: string, slug: string): void {
-  if (!/^[a-z0-9-]+$/.test(slug)) throw new Error(`The ${what} slug "${slug}" may contain only a-z, 0-9 and -.`);
+  // Mirrors the Rust check: one safe path segment, whatever its characters.
+  const unsafe = slug === "" || slug.startsWith(".") || /[/\\:]/.test(slug) || /[\u0000-\u001f\u007f]/.test(slug);
+  if (unsafe) throw new Error(`The ${what} name "${slug}" cannot be used in a file path.`);
 }
 
 /** 8 hex chars of FNV-1a. Stands in for the Rust side's SHA-256 prefix. */

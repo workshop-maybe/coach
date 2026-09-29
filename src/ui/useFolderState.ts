@@ -2,6 +2,7 @@
 // when the window regains focus or on demand, and only ever swaps `state`. Drafts live in
 // the editors' own component state, so a reload never resets them.
 
+import { clearArtCache } from "../badge/resolve";
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { loadFolder } from "../domain/folder";
@@ -21,6 +22,8 @@ export interface FolderContextValue {
   apply(next: FolderState): void;
   notice: string | null;
   setNotice(message: string | null): void;
+  /** Bumps on every reload, so badges re-read art a hand edit may have replaced. */
+  artGeneration: number;
 }
 
 export const CHANGED_ON_DISK_MESSAGE = "Changed on disk: reload or keep editing";
@@ -54,15 +57,24 @@ export function FolderProvider({ storage, folder, children }: FolderProviderProp
   const [notice, setNotice] = useState<string | null>(null);
   // Only the latest load may set state, so a slow earlier load never overwrites a newer one.
   const latest = useRef(0);
+  const [artGeneration, setArtGeneration] = useState(0);
 
   const reload = useCallback(async () => {
     const ticket = ++latest.current;
     setLoading(true);
     try {
       const next = await loadFolder(storage);
+      // A hand edit may have replaced an art file in place, which the text comparison
+      // below cannot see, so every reload drops cached art.
+      if (ticket === latest.current) {
+        clearArtCache(storage);
+        setArtGeneration((g) => g + 1);
+      }
       // Keep the same state object when nothing on disk changed, so a focus reload
       // does not re-render the app or recompute the matrix.
-      if (ticket === latest.current) setState((prev) => (prev && sameFolder(prev, next) ? prev : next));
+      if (ticket === latest.current) {
+        setState((prev) => (prev && sameFolder(prev, next) ? prev : next));
+      }
     } catch (e) {
       if (ticket === latest.current) setNotice(describeError(e));
     } finally {
@@ -87,8 +99,8 @@ export function FolderProvider({ storage, folder, children }: FolderProviderProp
   }, []);
 
   const value = useMemo<FolderContextValue>(
-    () => ({ folder, storage, state, loading, reload, apply, notice, setNotice }),
-    [folder, storage, state, loading, reload, apply, notice],
+    () => ({ folder, storage, state, loading, reload, apply, notice, setNotice, artGeneration }),
+    [folder, storage, state, loading, reload, apply, notice, artGeneration],
   );
 
   return createElement(FolderContext.Provider, { value }, children);

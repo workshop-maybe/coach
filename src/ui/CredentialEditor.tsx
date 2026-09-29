@@ -3,9 +3,8 @@
 // resets them (KTD6). Saves are explicit and refused when the file changed on disk.
 
 import { useId, useMemo, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { buildBadgeInput } from "../badge/resolve";
-import { renderBadgeSvg } from "../badge/render";
+import { pickExportFolder } from "./exportFolder";
+import { renderBadgeFor } from "../badge/resolve";
 import type { BadgeSettings } from "../badge/settings";
 import { collectionPath, credentialPath } from "../domain/folder";
 import { importBadgeArt, setCredentialBadgeOverride, updateCredential } from "../domain/operations";
@@ -212,13 +211,16 @@ function CredentialBadge({ collectionSlug, slug, name }: { collectionSlug: Slug;
     setExporting(true);
     setExportOutcome(null);
     try {
-      const folder = await invoke<string | null>("pick_export_folder");
+      const folder = await pickExportFolder();
       if (!folder) return;
       const saved = state.credentials.find((c) => c.collectionSlug === collectionSlug && c.slug === slug);
-      const { input } = await buildBadgeInput(storage, collection, { slug, name: saved?.name ?? name });
       const file = `${slug}.svg`;
-      await storage.writeText("export", file, renderBadgeSvg(input));
-      setExportOutcome({ error: false, message: `Saved ${file} to ${folder}` });
+      const { svg, artMissing } = await renderBadgeFor(storage, collection, { slug, name: saved?.name ?? name });
+      await storage.writeText("export", file, svg);
+      setExportOutcome({
+        error: false,
+        message: `Saved ${file} to ${folder}.${artMissing ? " The art could not be read, so the badge was saved without it." : ""}`,
+      });
     } catch (err) {
       setExportOutcome({ error: true, message: `Could not save the badge: ${describeError(err)}` });
     } finally {

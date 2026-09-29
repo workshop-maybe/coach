@@ -20,23 +20,27 @@ export interface BadgeProps {
 }
 
 export function Badge({ collection, credential, size, className, onArtMissing }: BadgeProps) {
-  const { storage } = useFolder();
+  const { storage, artGeneration } = useFolder();
   const [svg, setSvg] = useState<string | null>(null);
   const deps = JSON.stringify([collection.slug, collection.name, collection.badge ?? null, collection.badgeOverrides?.[credential.slug] ?? null, credential.slug, credential.name]);
 
   useEffect(() => {
     let live = true;
-    void buildBadgeInput(storage, collection, credential).then(({ input, artMissing }) => {
-      if (!live) return;
-      setSvg(renderBadgeSvg(input));
-      onArtMissing?.(artMissing);
-    });
+    buildBadgeInput(storage, collection, credential)
+      .then(({ input, artMissing }) => {
+        if (!live) return;
+        setSvg(renderBadgeSvg(input));
+        onArtMissing?.(artMissing);
+      })
+      .catch(() => {
+        // Leave the placeholder; a badge that cannot render must not break the screen.
+      });
     return () => {
       live = false;
     };
     // `deps` captures every input that changes the rendered badge.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storage, deps]);
+  }, [storage, deps, artGeneration]);
 
   const src = useMemo(() => (svg ? badgeDataUri(svg) : null), [svg]);
   const label = `Badge for ${credential.name}`;

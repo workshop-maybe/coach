@@ -255,10 +255,16 @@ pub fn validate_image(bytes: &[u8]) -> Result<&'static str, String> {
     Ok(ext)
 }
 
-/// A slug is safe as a single path segment: non-empty, `[a-z0-9-]` only.
+/// A slug must be one safe path segment. Hand-made folders can have any name, so
+/// this refuses only what could leave the segment: separators, `.`, `..`, a leading
+/// dot, and control characters.
 fn check_slug(what: &str, slug: &str) -> Result<(), String> {
-    if slug.is_empty() || !slug.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-') {
-        return Err(format!("The {what} slug \"{slug}\" may contain only a-z, 0-9 and -."));
+    let unsafe_segment = slug.is_empty()
+        || slug.starts_with('.')
+        || slug.contains(['/', '\\', ':'])
+        || slug.chars().any(char::is_control);
+    if unsafe_segment {
+        return Err(format!("The {what} name \"{slug}\" cannot be used in a file path."));
     }
     Ok(())
 }
@@ -292,6 +298,13 @@ pub fn read_data_uri_in(root: &Path, rel: &str) -> Result<Option<String>, String
     use base64::Engine;
 
     let path = resolve_in_root(root, rel)?;
+    // Refuse an oversized file before reading it all (validate_image checks again).
+    match std::fs::metadata(&path) {
+        Ok(m) if m.len() > MAX_IMAGE_BYTES as u64 => {
+            return Err(format!("\"{rel}\": the image is larger than 1 MiB"));
+        }
+        _ => {}
+    }
     let bytes = match std::fs::read(&path) {
         Ok(b) => b,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -595,8 +608,7 @@ mod tests {
 
     #[test]
     fn art_dest_name_known_sha256_prefix() {
-        // SHA-256("abc") = ba7816bf...; "abc" is not an image, so check via a
-        // PNG whose hash we compare against sha2 directly.
+        // The name carries the first 4 bytes of the image's SHA-256.
         use sha2::{Digest, Sha256};
         let bytes = png(10);
         let expect: String = Sha256::digest(&bytes)[..4].iter().map(|b| format!("{b:02x}")).collect();
@@ -609,9 +621,14 @@ mod tests {
     #[test]
     fn art_dest_name_rejects_unsafe_slugs_and_non_images() {
         let bytes = png(10);
-        for bad in ["", "..", "../x", "a/b", "/abs", "A", "a b", "a.b", "a\\b"] {
+        for bad in ["", ".", "..", "../x", "a/b", "/abs", ".hidden", "a\\b", "c:d", "a\nb"] {
             assert!(art_dest_name(bad, None, &bytes).is_err(), "collection {bad:?}");
             assert!(art_dest_name("ok", Some(bad), &bytes).is_err(), "credential {bad:?}");
+        }
+        // Hand-made folders can have any safe name.
+        for good in ["My_Collection", "A b", "a.b", "Révision"] {
+            assert!(art_dest_name(good, None, &bytes).is_ok(), "collection {good:?}");
+            assert!(art_dest_name("ok", Some(good), &bytes).is_ok(), "credential {good:?}");
         }
         assert!(art_dest_name("ok", None, b"text").is_err());
     }
@@ -706,6 +723,16 @@ mod tests {
             .decode(&b["data:image/png;base64,".len()..])
             .unwrap();
         assert_eq!(decoded, p);
+    }
+
+    #[test]
+    fn read_data_uri_in_refuses_an_oversized_file_before_reading_it() {
+        let (_d, root) = root();
+        fs::write(root.join("big.png"), png(MAX_IMAGE_BYTES + 1)).unwrap();
+        let err = read_data_uri_in(&root, "big.png").unwrap_err();
+        assert!(err.contains("larger than 1 MiB"), "got: {err}");
+        fs::write(root.join("ok.png"), png(MAX_IMAGE_BYTES)).unwrap();
+        assert!(read_data_uri_in(&root, "ok.png").unwrap().is_some());
     }
 
     #[test]

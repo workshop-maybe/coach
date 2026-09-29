@@ -3,9 +3,8 @@
 // approves it as the export root (KTD1).
 
 import { useId, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { buildBadgeInput } from "../badge/resolve";
-import { renderBadgeSvg } from "../badge/render";
+import { pickExportFolder } from "./exportFolder";
+import { renderBadgeFor } from "../badge/resolve";
 import { buildExport, writeExport } from "../domain/export";
 import { collectionPath, loadFolder, parseCollection, saveCollection } from "../domain/folder";
 import { describeError, useFolder } from "./useFolderState";
@@ -31,7 +30,7 @@ export function ExportDialog({ collectionSlug, onClose }: ExportDialogProps) {
     setBusy(true);
     setOutcome({ kind: "idle" });
     try {
-      const folder = await invoke<string | null>("pick_export_folder");
+      const folder = await pickExportFolder();
       if (!folder) return;
       // Codes for credentials added by hand exist only in memory until saved. Save them
       // first so the exported module codes match the folder and stay stable (KTD7).
@@ -48,17 +47,20 @@ export function ExportDialog({ collectionSlug, onClose }: ExportDialogProps) {
         apply(current);
       }
       const saved = current.collections.find((c) => c.slug === collection.slug) ?? collection;
-      const badges = new Map<string, string>();
-      for (const slug of saved.order) {
-        const credential = current.credentials.find((c) => c.collectionSlug === saved.slug && c.slug === slug);
-        if (!credential) continue;
-        const { input } = await buildBadgeInput(storage, saved, credential);
-        badges.set(slug, renderBadgeSvg(input));
-      }
+      const credentials = saved.order.flatMap((slug) =>
+        current.credentials.filter((c) => c.collectionSlug === saved.slug && c.slug === slug),
+      );
+      const rendered = await Promise.all(credentials.map((c) => renderBadgeFor(storage, saved, c)));
+      const badges = new Map(credentials.map((c, i) => [c.slug, rendered[i].svg] as const));
+      const withoutArt = rendered.filter((r) => r.artMissing).length;
       const files = buildExport(saved, current.credentials, { includeRubric, badges });
       await writeExport(storage, files);
       const count = files.size;
-      setOutcome({ kind: "done", message: `Exported ${count} ${count === 1 ? "file" : "files"} to ${folder}` });
+      const artNote =
+        withoutArt === 0
+          ? ""
+          : ` ${withoutArt} ${withoutArt === 1 ? "badge was" : "badges were"} exported without art because the image could not be read.`;
+      setOutcome({ kind: "done", message: `Exported ${count} ${count === 1 ? "file" : "files"} to ${folder}.${artNote}` });
     } catch (e) {
       setOutcome({ kind: "error", message: `Export failed: ${describeError(e)}` });
     } finally {
