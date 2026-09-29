@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useNav } from "./AppShell";
+import { PageHeader } from "./PageHeader";
 import { BLANK_PROFILE, NewProfileEditor, ProfileEditor, type ProfileFields } from "./ProfileEditor";
 import { useFolder } from "./useFolderState";
 
@@ -16,12 +17,15 @@ export function ProfilesView() {
 
   return (
     <div className="stack">
-      <div className="editor-head">
-        <h1>Agents</h1>
-        <button type="button" onClick={() => openDraft(BLANK_PROFILE)}>
-          New agent
-        </button>
-      </div>
+      <PageHeader
+        kicker="Your agents"
+        title="Agents"
+        actions={
+          <button type="button" onClick={() => openDraft(BLANK_PROFILE)}>
+            New agent
+          </button>
+        }
+      />
       {state.profiles.length === 0 ? (
         <p className="muted">No agents yet. Add each agent setup you run: its harness, model, effort and the repo it works in.</p>
       ) : (

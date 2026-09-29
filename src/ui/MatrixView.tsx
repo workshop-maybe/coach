@@ -8,6 +8,7 @@ import { credentialKey as keyOf } from "../domain/types";
 import { useNav } from "./AppShell";
 import { AssessmentForm } from "./AssessmentForm";
 import { CellHistory } from "./CellHistory";
+import { PageHeader } from "./PageHeader";
 import { resultLabel } from "./format";
 import { describeError, useFolder } from "./useFolderState";
 
@@ -47,14 +48,18 @@ export function MatrixView() {
 
   return (
     <div className="matrix-view">
-      <div className="view-head">
-        <h1>Matrix</h1>
-        {matrix.rows.length > 0 && hasCredentials && (
-          <button type="button" onClick={() => setRecording(true)}>
-            Record result
-          </button>
-        )}
-      </div>
+      <PageHeader
+        kicker="Agents × credentials"
+        title="Matrix"
+        actions={
+          matrix.rows.length > 0 &&
+          hasCredentials && (
+            <button type="button" onClick={() => setRecording(true)}>
+              Record result
+            </button>
+          )
+        }
+      />
 
       {matrix.rows.length === 0 ? (
         <div className="empty-state">

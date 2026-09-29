@@ -152,10 +152,18 @@ export function EditorStatus<T>({ d }: { d: DraftWithBase<T> }) {
   );
 }
 
-export function SaveBar<T>({ d, label = "Save", children }: { d: DraftWithBase<T>; label?: string; children?: ReactNode }) {
+export interface SaveBarProps<T> {
+  d: DraftWithBase<T>;
+  label?: string;
+  /** `ink` when the view already has its one orange primary action. */
+  variant?: "primary" | "ink";
+  children?: ReactNode;
+}
+
+export function SaveBar<T>({ d, label = "Save", variant = "primary", children }: SaveBarProps<T>) {
   return (
     <div className="form-actions">
-      <button type="submit" className="primary" disabled={d.saving}>
+      <button type="submit" className={variant} disabled={d.saving}>
         {label}
       </button>
       {d.dirty ? <span className="unsaved">Unsaved changes</span> : d.justSaved && <span className="muted" role="status">Saved.</span>}

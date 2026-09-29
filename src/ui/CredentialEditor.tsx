@@ -258,7 +258,7 @@ function CredentialBadge({ collectionSlug, slug, name }: { collectionSlug: Slug;
             artError={artError}
             artMissing={artMissing}
           />
-          <SaveBar d={b} label="Save badge">
+          <SaveBar d={b} label="Save badge" variant="ink">
             <button type="button" onClick={b.revert} disabled={!b.dirty}>
               Revert badge
             </button>

@@ -95,7 +95,7 @@ export function ExportDialog({ collectionSlug, onClose }: ExportDialogProps) {
             <label htmlFor={`${id}-rubric`}>Include rubric</label>
           </div>
           <div className="actions">
-            <button type="button" className="primary" onClick={() => void run()} disabled={busy}>
+            <button type="button" className="ink" onClick={() => void run()} disabled={busy}>
               Choose folder and export
             </button>
           </div>

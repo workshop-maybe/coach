@@ -19,6 +19,7 @@ import { BadgeControls, cleanSettings, isEmptySettings, useRingHues } from "./Ba
 import { CredentialEditor } from "./CredentialEditor";
 import { EditorStatus, SaveBar, useDraftWithBase, type DraftWithBase } from "./useDraftWithBase";
 import { ExportDialog } from "./ExportDialog";
+import { PageHeader } from "./PageHeader";
 import { describeError, useFolder } from "./useFolderState";
 
 export function CollectionsView() {
@@ -66,7 +67,7 @@ function CollectionList() {
 
   return (
     <section className="stack">
-      <h1>Collections</h1>
+      <PageHeader kicker="Your credentials" title="Collections" />
       {collections.length === 0 ? (
         <p className="muted">No collections yet. A collection groups related credentials. Create one to start writing credentials.</p>
       ) : (
@@ -246,12 +247,15 @@ function CollectionDetail({ slug }: { slug: string }) {
   return (
     <section className="stack">
       {allCollections}
-      <div className="editor-head">
-        <h1>{collection.name}</h1>
-        <button type="button" onClick={() => setShowExport(true)}>
-          Export
-        </button>
-      </div>
+      <PageHeader
+        kicker="Collection"
+        title={collection.name}
+        actions={
+          <button type="button" onClick={() => setShowExport(true)}>
+            Export
+          </button>
+        }
+      />
       {showExport && <ExportDialog collectionSlug={slug} onClose={() => setShowExport(false)} />}
 
       <h2>Credentials</h2>
@@ -352,7 +356,7 @@ function CollectionDetail({ slug }: { slug: string }) {
                 {overriders.join(", ")}.
               </p>
             )}
-            <SaveBar d={b} label="Save badge settings">
+            <SaveBar d={b} label="Save badge settings" variant="ink">
               <button type="button" onClick={b.revert} disabled={!b.dirty}>
                 Revert badge settings
               </button>

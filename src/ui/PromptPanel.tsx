@@ -137,7 +137,7 @@ export function PromptPanel({ credentialKey, initialJob = "test", profileSlug, o
                 />
               </div>
               <div className="actions">
-                <button type="button" className="primary" onClick={() => void onCopy()}>
+                <button type="button" className="ink" onClick={() => void onCopy()}>
                   Copy
                 </button>
                 <button type="button" onClick={() => generate(job, profile)}>

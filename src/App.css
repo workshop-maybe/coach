@@ -598,8 +598,7 @@ fieldset.field > button {
   box-shadow: var(--card-shadow);
 }
 
-:is(.prompt-panel, .cell-history, .export-dialog) > .panel-head,
-.matrix-view > .view-head {
+:is(.prompt-panel, .cell-history, .export-dialog) > .panel-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
