@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { Lockup } from "./Lockup";
 import { describeError } from "./useFolderState";
 
 export interface FolderGateProps {
@@ -58,6 +59,7 @@ export function FolderGate({ getFolder = defaultGetFolder, pickFolder = defaultP
 
   return (
     <main className="gate">
+      <Lockup className="lockup-wrap" />
       <h1>Andamio Desktop</h1>
       <p>Pick a folder for your credentials, agents and results. Everything is stored there as Markdown and JSON.</p>
       <button type="button" className="primary" onClick={() => void choose()}>

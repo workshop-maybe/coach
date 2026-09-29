@@ -205,7 +205,8 @@ input[type="checkbox"]:checked {
   padding: 0 var(--space-lg);
 }
 
-.gate .lockup {
+.gate .lockup-wrap {
+  display: block;
   margin-bottom: var(--space-3xl);
 }
 

@@ -4,6 +4,7 @@
 import { createContext, useContext, useMemo, useState } from "react";
 import { CollectionsView } from "./CollectionsView";
 import { LoadErrors, LoadWarnings } from "./LoadErrors";
+import { Lockup } from "./Lockup";
 import { MatrixView } from "./MatrixView";
 import { ProfilesView } from "./ProfilesView";
 import { useFolder } from "./useFolderState";
@@ -46,7 +47,15 @@ export function AppShell({ onChangeFolder, initialRoute = { view: "collections" 
     <NavContext.Provider value={nav}>
       <div className="shell">
         <aside className="sidebar">
-          <p className="brand">Andamio Desktop</p>
+          <button
+            type="button"
+            className="brand"
+            aria-label="Andamio Desktop, go to Collections"
+            onClick={() => navigate({ view: "collections" })}
+          >
+            <Lockup />
+            <span className="brand-product">Desktop</span>
+          </button>
           <nav aria-label="Main">
             <ul>
               {NAV_ITEMS.map((item) => (
