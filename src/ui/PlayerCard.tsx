@@ -13,14 +13,11 @@ import { createProfile, duplicateProfileDraft, isSetupLocked, updateProfile } fr
 import type { AgentProfile, AgentSetup, FolderState, Slug } from "../domain/types";
 import { Deck } from "./Deck";
 import { useNav } from "./nav";
-import { Machine } from "../cast/Machine";
 import type { EncoderDial, MachineKey } from "../cast/mappings";
 import { KeyedMachine } from "./KeyedMachine";
 import type { TestPick } from "./routes";
 import { useFolder } from "./useFolderState";
 import { EFFORTS, HARNESSES, OTHER, modelsFor } from "./dialLists";
-
-export { EFFORTS, HARNESSES, OTHER } from "./dialLists";
 
 const FIRST: AgentSetup = { harness: "claude-code", model: "opus", effort: "high" };
 
@@ -166,11 +163,7 @@ function Player({ profileSlug, returnTo, likeSlug, keys, onKey }: PlayerCardProp
           body: (
             <div className={`player${locked ? " player-locked" : ""}`}>
               <div className="player-stage">
-                {keys && onKey ? (
-                  <KeyedMachine setup={setup} keys={keys} onKey={onKey} onStep={locked ? undefined : stepDial} width={300} />
-                ) : (
-                  <Machine setup={setup} onStep={locked ? undefined : stepDial} width={300} />
-                )}
+                <KeyedMachine setup={setup} keys={keys} onKey={onKey} onStep={locked ? undefined : stepDial} width={300} />
               </div>
               <div className="dials">
                 <Dial

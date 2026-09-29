@@ -10,7 +10,7 @@ import { useBadgeSrc } from "../ui/Badge";
 import { CARTRIDGE_H, CARTRIDGE_W, CartridgeArt } from "./Cartridge";
 import { INK, INK_FINE, sketchRect } from "./InkDefs";
 import { useKeyColors } from "./keyColors";
-import { ENCODER_DIALS, KEYS_PER_PAGE, LISTED_ARC, encoderAngle, trigPages, type EncoderDial, type MachineKey, type ScreenState } from "./mappings";
+import { ENCODER_DIALS, KEYS_PER_PAGE, LISTED_ARC, SCREEN_LINES, encoderAngle, trigPages, type EncoderDial, type MachineKey, type ScreenState } from "./mappings";
 
 export interface MachineProps {
   setup: AgentSetup;
@@ -35,7 +35,7 @@ export interface MachineProps {
 }
 
 /** The full machine's drawing: case, screen, encoders, keys and slot, in viewBox units. */
-const FULL = {
+export const FULL = {
   w: 320,
   h: 186,
   headroom: 76,
@@ -49,9 +49,14 @@ const FULL = {
   encoders: [194, 238, 282].map((cx) => ({ cx, cy: 64 })),
   knob: 16,
   keys: { x: 22, y: 142, w: 14, h: 18, span: 276 },
+  /** A lit key's light: its inset and height. */
+  led: 3,
+  /** The sending screen's dots. */
+  dotR: 2.6,
 };
 
-const MINI = {
+/** The mini machine's drawing, in viewBox units. */
+export const MINI = {
   w: 200,
   h: 112,
   stroke: 1.8,
@@ -62,9 +67,28 @@ const MINI = {
   glass: { x: 21, y: 31, w: 90, h: 36 },
   text: { x: 25, y: 42, lh: 10, size: 7 },
   keys: { x: 16, y: 84, w: 8, h: 11, span: 168 },
+  led: 2,
+  dotR: 1.8,
 };
 
 type Geometry = typeof MINI;
+type KeyStrip = Geometry["keys"];
+
+/** The distance between neighboring keys on a strip. */
+function keyPitch(k: KeyStrip): number {
+  return (k.span - k.w) / (KEYS_PER_PAGE - 1);
+}
+
+/** The left edge of the key at `index` on a strip. */
+function keyX(k: KeyStrip, index: number): number {
+  return k.x + index * keyPitch(k);
+}
+
+/** A point `r` from (cx, cy), `deg` degrees clockwise from twelve o'clock. */
+function polar(cx: number, cy: number, r: number, deg: number): [number, number] {
+  const t = (deg * Math.PI) / 180;
+  return [cx + Math.sin(t) * r, cy - Math.cos(t) * r];
+}
 
 /**
  * Where the full machine's key at `index` sits, in fractions of the drawing (no headroom),
@@ -72,9 +96,8 @@ type Geometry = typeof MINI;
  */
 export function keyBox(index: number): { left: number; top: number; width: number; height: number } {
   const k = FULL.keys;
-  const pitch = (k.span - k.w) / (KEYS_PER_PAGE - 1);
   const lift = Math.round(k.h * 0.3);
-  return { left: (k.x + index * pitch) / FULL.w, top: (k.y - lift) / FULL.h, width: k.w / FULL.w, height: (k.h + lift) / FULL.h };
+  return { left: keyX(k, index) / FULL.w, top: (k.y - lift) / FULL.h, width: k.w / FULL.w, height: (k.h + lift) / FULL.h };
 }
 
 export function Machine({ setup, screen = { kind: "idle" }, keys = [], page = 0, mini = false, loaded = null, headroom = false, seated, onStep, width, className }: MachineProps) {
@@ -125,7 +148,6 @@ function Body({ g, mini }: { g: Geometry; mini: boolean }) {
   const c = g.case;
   const s = g.slot;
   const k = g.keys;
-  const pitch = (k.span - k.w) / (KEYS_PER_PAGE - 1);
   return (
     <>
       <rect x={c.x} y={c.y} width={c.w} height={c.h} className="cast-paper" stroke="none" />
@@ -169,7 +191,7 @@ function Body({ g, mini }: { g: Geometry; mini: boolean }) {
 
       {/* A tick over every fourth key, as the hardware groups its steps. */}
       <path
-        d={[0, 4, 8, 12].map((i) => `M${k.x + i * pitch + k.w / 2} ${k.y - (mini ? 4 : 6)}v${mini ? 1.5 : 2.5}`).join("")}
+        d={[0, 4, 8, 12].map((i) => `M${keyX(k, i) + k.w / 2} ${k.y - (mini ? 4 : 6)}v${mini ? 1.5 : 2.5}`).join("")}
         strokeWidth={g.detail}
       />
     </>
@@ -181,13 +203,21 @@ function sweepTicks(cx: number, cy: number): string {
   const r1 = FULL.knob + 3;
   const r2 = FULL.knob + 6;
   return [LISTED_ARC.from, 0, LISTED_ARC.to]
-    .map((deg) => {
-      const t = (deg * Math.PI) / 180;
-      const [sx, sy] = [Math.sin(t), -Math.cos(t)];
-      return `M${(cx + sx * r1).toFixed(2)} ${(cy + sy * r1).toFixed(2)}L${(cx + sx * r2).toFixed(2)} ${(cy + sy * r2).toFixed(2)}`;
-    })
+    .map((deg) => tick(cx, cy, r1, r2, deg))
     .join("");
 }
+
+/** A radial line from `r1` to `r2` at `deg`. */
+function tick(cx: number, cy: number, r1: number, r2: number, deg: number): string {
+  const [x1, y1] = polar(cx, cy, r1, deg);
+  const [x2, y2] = polar(cx, cy, r2, deg);
+  return `M${x1.toFixed(2)} ${y1.toFixed(2)}L${x2.toFixed(2)} ${y2.toFixed(2)}`;
+}
+
+/** Each encoder's knurl, computed once: 24 short ridges around the rim. */
+const KNURLS = new Map(
+  FULL.encoders.map(({ cx, cy }) => [`${cx},${cy}`, Array.from({ length: 24 }, (_, i) => tick(cx, cy, FULL.knob - 2.6, FULL.knob, (i / 24) * 360)).join("")]),
+);
 
 interface EncoderProps {
   dial: EncoderDial;
@@ -200,10 +230,7 @@ interface EncoderProps {
 /** One knurled encoder. The whole knob turns, so it carries its own wobble. */
 function Encoder({ dial, angle, cx, cy, onStep }: EncoderProps) {
   const r = FULL.knob;
-  const knurl = Array.from({ length: 24 }, (_, i) => {
-    const t = (i / 24) * Math.PI * 2;
-    return `M${(cx + Math.sin(t) * (r - 2.6)).toFixed(2)} ${(cy - Math.cos(t) * (r - 2.6)).toFixed(2)}L${(cx + Math.sin(t) * r).toFixed(2)} ${(cy - Math.cos(t) * r).toFixed(2)}`;
-  }).join("");
+  const knurl = KNURLS.get(`${cx},${cy}`);
   const click = onStep ? (e: MouseEvent) => onStep(dial, e.shiftKey || e.altKey ? -1 : 1) : undefined;
   return (
     <g className={`cast-encoder${onStep ? " cast-encoder-live" : ""}`} data-dial={dial} data-angle={angle.toFixed(2)} onClick={click}>
@@ -233,36 +260,35 @@ function PageIndicator({ count, at }: { count: number; at: number }) {
 function Key({ index, g, ink, lit, seated }: { index: number; g: Geometry; ink: string; lit?: MachineKey; seated: boolean }) {
   const colors = useKeyColors(lit?.collection ?? null, lit?.credentialSlug ?? "");
   const k = g.keys;
-  const pitch = (k.span - k.w) / (KEYS_PER_PAGE - 1);
-  const x = k.x + index * pitch;
+  const x = keyX(k, index);
   const raised = !!lit?.halfRaised;
   const lift = raised ? Math.round(k.h * 0.3) : 0;
   const state = !lit ? "off" : raised ? "raised" : "lit";
   const stroke = g.stroke * 0.8;
-  const led = isMini(g) ? 2 : 3;
+  const led = g.led;
   return (
-    <g className={`cast-key cast-key-${state}${seated ? " cast-key-seated" : ""}`} data-key={state} data-credential={lit?.id} filter={ink} stroke="currentColor" strokeLinejoin="round" strokeLinecap="round">
-      {raised && (
-        // The key's sides, showing between the raised cap and its seat.
-        <path d={`M${x} ${k.y + k.h - lift}V${k.y + k.h}H${x + k.w}V${k.y + k.h - lift}`} fill="none" strokeWidth={stroke * 0.8} />
-      )}
-      <rect
-        x={x}
-        y={k.y - lift}
-        width={k.w}
-        height={k.h}
-        className={lit ? undefined : "cast-paper"}
-        fill={lit ? (colors?.prim ?? "currentColor") : undefined}
-        strokeWidth={stroke}
-        data-fill={lit ? (colors?.prim ?? "ink") : undefined}
-      />
-      {lit && <rect x={x + led} y={k.y - lift + led} width={k.w - led * 2} height={led} fill={colors?.sec ?? "currentColor"} stroke="none" />}
+    // The outer group carries the seating motion (CSS), outside the filter, so the wobble
+    // is drawn once rather than on every frame of the motion.
+    <g className={seated ? "cast-key-seated" : undefined} data-key={state} data-credential={lit?.id}>
+      <g className={`cast-key cast-key-${state}`} filter={ink} stroke="currentColor" strokeLinejoin="round" strokeLinecap="round">
+        {raised && (
+          // The key's sides, showing between the raised cap and its seat.
+          <path d={`M${x} ${k.y + k.h - lift}V${k.y + k.h}H${x + k.w}V${k.y + k.h - lift}`} fill="none" strokeWidth={stroke * 0.8} />
+        )}
+        <rect
+          x={x}
+          y={k.y - lift}
+          width={k.w}
+          height={k.h}
+          className={lit ? undefined : "cast-paper"}
+          fill={lit ? (colors?.prim ?? "currentColor") : undefined}
+          strokeWidth={stroke}
+          data-fill={lit ? (colors?.prim ?? "ink") : undefined}
+        />
+        {lit && <rect x={x + led} y={k.y - lift + led} width={k.w - led * 2} height={led} fill={colors?.sec ?? "currentColor"} stroke="none" />}
+      </g>
     </g>
   );
-}
-
-function isMini(g: Geometry): boolean {
-  return g === MINI;
 }
 
 /** The screen's content. Outside every filter, so its motion never re-rasterizes the wobble. */
@@ -283,7 +309,7 @@ function Screen({ state, g }: { state: ScreenState; g: Geometry }) {
       return (
         <g className="cast-screen cast-screen-sending" fill="currentColor">
           {[0, 1, 2].map((i) => (
-            <circle key={i} className="cast-dot" style={{ animationDelay: `${i * 160}ms` }} cx={gl.x + gl.w * (0.36 + i * 0.14)} cy={midY} r={isMini(g) ? 1.8 : 2.6} />
+            <circle key={i} className="cast-dot" style={{ animationDelay: `${i * 160}ms` }} cx={gl.x + gl.w * (0.36 + i * 0.14)} cy={midY} r={g.dotR} />
           ))}
         </g>
       );
@@ -299,7 +325,7 @@ function Screen({ state, g }: { state: ScreenState; g: Geometry }) {
     case "reply":
       return (
         <g className="cast-screen cast-screen-reply" fill="currentColor">
-          {state.lines.slice(0, 3).map((line, i) => (
+          {state.lines.slice(0, SCREEN_LINES).map((line, i) => (
             <text key={i} x={x} y={y + i * lh} fontSize={size} className="cast-screen-text">
               {line}
             </text>

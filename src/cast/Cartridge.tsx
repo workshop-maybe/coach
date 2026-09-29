@@ -12,8 +12,8 @@ export const CARTRIDGE_W = 120;
 export const CARTRIDGE_H = 140;
 
 // The shell, chamfered at the top right, with a key notch in the left side.
-const SHELL = "M10 6H97L112 21V134H10V112H15V100H10Z";
-const WINDOW = { x: 19, y: 30, size: 82 };
+export const SHELL = "M10 6H97L112 21V134H10V112H15V100H10Z";
+export const WINDOW = { x: 19, y: 30, size: 82 };
 
 /** The cartridge as SVG content, for its own svg or for a machine's slot. `src` is the badge data URI. */
 export function CartridgeArt({ src, fine = false }: { src: string | null; fine?: boolean }) {

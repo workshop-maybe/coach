@@ -57,7 +57,6 @@ pre {
   color: var(--ink-muted);
 }
 
-
 /* ---------------------------------------------------------------------------
    Controls. The view's main action is the ink block; others are ink outlines on
    the surface. Blue is data and links, never a fill. */
@@ -580,7 +579,6 @@ button:focus-visible {
   color: var(--good);
 }
 
-
 .holders-none {
   font-family: var(--font-mono);
   font-size: 11px;
@@ -612,7 +610,6 @@ button:focus-visible {
   font-size: 16px;
   letter-spacing: var(--heading-tracking);
 }
-
 
 /* A little lift under the pointer, where motion is welcome. */
 @media (prefers-reduced-motion: no-preference) {
@@ -897,7 +894,6 @@ button:focus-visible {
   padding: var(--space-base) var(--space-sm);
   font-weight: 400;
 }
-
 
 .choice[aria-pressed="true"] {
   box-shadow: var(--focus-ring);

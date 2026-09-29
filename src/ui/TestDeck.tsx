@@ -16,7 +16,7 @@ import { credentialKey, type AgentProfile, type AssessmentResult, type Credentia
 import { Cartridge } from "../cast/Cartridge";
 import { Machine } from "../cast/Machine";
 import { Outline } from "../cast/Outline";
-import { KEYS_PER_PAGE, machineKeys, replyScreen, type ScreenState } from "../cast/mappings";
+import { machineKeys, replyScreen, trigPages, type ScreenState } from "../cast/mappings";
 import { Deck, type Beat } from "./Deck";
 import { useNav } from "./nav";
 import { usePendingTests, type PendingTest } from "./pendingTests";
@@ -143,8 +143,8 @@ export function TestDeck(props: TestDeckProps) {
   const collection = credential ? collectionOf(credential) : undefined;
   const keys = matrix && profile ? machineKeys(matrix, profile.slug) : [];
 
-  /** The agent's machine with this test's cartridge in its slot. */
-  const loadedMachine = (screen: ScreenState, className?: string, seated?: string) =>
+  /** The agent's machine with this test's cartridge in its slot, sliding in or ejecting. */
+  const loadedMachine = (screen: ScreenState, { phase, seated }: { phase?: "loading" | "ejecting"; seated?: string } = {}) =>
     profile && credential && collection ? (
       <div className="test-stage">
         <Machine
@@ -156,7 +156,7 @@ export function TestDeck(props: TestDeckProps) {
           loaded={{ collection, credential }}
           headroom
           width={280}
-          className={className}
+          className={phase && PHASE_CLASS[phase]}
         />
       </div>
     ) : null;
@@ -169,7 +169,7 @@ export function TestDeck(props: TestDeckProps) {
           <h2 tabIndex={-1} ref={focusOnMount}>
             {profile.name} holds it
           </h2>
-          {loadedMachine({ kind: "idle" }, "cast-ejecting", lit)}
+          {loadedMachine({ kind: "idle" }, { phase: "ejecting", seated: lit })}
           <div className="deck-actions">
             <button type="button" className="ghost" onClick={home}>
               Home
@@ -187,7 +187,7 @@ export function TestDeck(props: TestDeckProps) {
           <h2 tabIndex={-1} ref={focusOnMount}>
             Not yet
           </h2>
-          {loadedMachine({ kind: "idle" }, "cast-ejecting")}
+          {loadedMachine({ kind: "idle" }, { phase: "ejecting" })}
           <p className="muted">{profile.name} does not hold it</p>
           <div className="deck-actions">
             <button type="button" className="ghost" onClick={home}>
@@ -288,7 +288,7 @@ export function TestDeck(props: TestDeckProps) {
       <p className="muted">This badge has no task yet</p>
     ) : (
       <>
-        {loadedMachine({ kind: sending ? "sending" : "idle" }, "cast-loading")}
+        {loadedMachine({ kind: sending ? "sending" : "idle" }, { phase: "loading" })}
         <p className="muted">Copy the prompt, paste it into {profile?.name ?? "the agent"}, and bring back what it says</p>
       </>
     ),
@@ -372,10 +372,12 @@ export function TestDeck(props: TestDeckProps) {
   return <Deck key={round} label="Test an agent" beats={beats} startAt={startAt} onClose={home} onFinish={record} />;
 }
 
-/** The page of keys that holds `id`, so a key that just lit is in view. */
+/** The cartridge's motion for each phase of the test. */
+const PHASE_CLASS = { loading: "cast-loading", ejecting: "cast-ejecting" } as const;
+
+/** The page of keys that holds `id`, so a key that just lit is in view. The machine clamps the rest. */
 function pageOf(keys: readonly { id: string }[], id: string): number {
-  const at = keys.findIndex((k) => k.id === id);
-  return at < 0 ? 0 : Math.floor(at / KEYS_PER_PAGE);
+  return trigPages(keys).findIndex((page) => page.some((k) => k.id === id));
 }
 
 function staleReason(waiting: PendingTest | undefined, version: string | null, profile: AgentProfile | undefined): string | null {
