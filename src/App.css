@@ -1,46 +1,13 @@
-/* Plain, calm styling. A visual design pass comes later. */
+/* Andamio Desktop. Values come from src/theme (tokens.css, app-tokens.css). */
 
 :root {
-  --bg: #fafaf9;
-  --surface: #ffffff;
-  --sidebar: #f2f2f0;
-  --text: #1c1c1a;
-  --muted: #6b6b66;
-  --border: #deded9;
-  --accent: #2f5d8a;
-  --accent-text: #ffffff;
-  --error-bg: #fbeeec;
-  --error-border: #e2b4ad;
-  --notice-bg: #eef3f8;
-  --notice-border: #bfd0e2;
-  --focus: #3b7ac4;
-  --radius: 6px;
-
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Ubuntu, Cantarell, "Helvetica Neue", Arial,
-    sans-serif;
-  font-size: 15px;
+  font-family: var(--font-sans);
+  font-size: 14px;
   line-height: 1.5;
+  letter-spacing: var(--ui-tracking);
   color: var(--text);
   background-color: var(--bg);
   -webkit-font-smoothing: antialiased;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #1b1b1a;
-    --surface: #242423;
-    --sidebar: #202020;
-    --text: #ececea;
-    --muted: #9d9d97;
-    --border: #3a3a38;
-    --accent: #7eaedc;
-    --accent-text: #10202f;
-    --error-bg: #3a2522;
-    --error-border: #6e3f38;
-    --notice-bg: #1f2c39;
-    --notice-border: #35506b;
-    --focus: #8cbcf0;
-  }
 }
 
 * {

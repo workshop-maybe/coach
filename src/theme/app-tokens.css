@@ -1,0 +1,71 @@
+/*
+ * Andamio Desktop tokens. The app's own names, resolved onto the shared
+ * `--sys-*` values in tokens.css (synced from landing-page-and-blog, never
+ * edited here). Brand canon: landing-page-and-blog/docs/design-system/andamio-brand-guide.md (v1.1).
+ *
+ * Accent rules for this app:
+ *   orange  the one primary action on a view. Nothing else.
+ *   blue    links and the active navigation item. Never a fill.
+ *   coral   the badge preview plate. Never type.
+ * Feedback uses the state palette below, never an accent.
+ */
+
+:root {
+  /* Ink ramp (guide section 3.1). */
+  --ink: var(--sys-ink);
+  --ink-muted: rgb(var(--sys-ink-rgb) / 0.6);
+  --ink-faint: rgb(var(--sys-ink-rgb) / 0.45);
+  --ink-ghost: rgb(var(--sys-ink-rgb) / 0.3);
+  --ink-tint: rgb(var(--sys-ink-rgb) / 0.05);
+  --hairline: rgb(var(--sys-ink-rgb) / 0.1);
+  --cell: rgb(var(--sys-ink-rgb) / 0.15);
+  --paper: var(--sys-paper);
+  --plate: color-mix(in srgb, var(--sys-paper) 95%, var(--sys-ink));
+  --on-ink: var(--sys-on-ink);
+  --orange: var(--sys-orange);
+  --blue: var(--sys-blue);
+  --coral-tint: var(--sys-coral-tint);
+  --card-shadow: var(--sys-card-shadow);
+
+  /* State palette (guide section 3.1). Coexists with the accents, never replaces them. */
+  --error: #ec2929;
+  --success: #008149;
+  --warning: #ed990e;
+  --info: #0f74c5;
+  --on-state: #ffffff;
+  --on-warning: #0a0a0a;
+  --error-wash: color-mix(in srgb, var(--error) 8%, var(--sys-paper));
+  --warning-wash: color-mix(in srgb, var(--warning) 10%, var(--sys-paper));
+  --info-wash: color-mix(in srgb, var(--info) 7%, var(--sys-paper));
+
+  /* The app's working names, kept so component rules read the same as before. */
+  --bg: var(--paper);
+  --surface: var(--paper);
+  --sidebar: var(--plate);
+  --text: var(--ink);
+  --muted: var(--ink-muted);
+  --border: var(--cell);
+  --accent: var(--blue);
+  --focus: var(--blue);
+  --focus-ring: inset 0 0 0 1.5px var(--blue);
+
+  /* Type (guide section 4). Fonts are bundled, never fetched. */
+  --font-sans: "Inter Variable", "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --label-base: 11px;
+  --label-action: 12px;
+  --label-tracking: 0.1em;
+  --heading-tracking: -0.045em;
+  --subhead-tracking: -0.02em;
+  --ui-tracking: -0.01em;
+
+  /* Spacing steps (guide section 5.1). */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-base: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 40px;
+  --space-3xl: 48px;
+}

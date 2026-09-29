@@ -1,0 +1,98 @@
+/**
+ * Andamio Design Tokens — SHARED VALUES
+ * =================================================================
+ * ⟢ THIS FILE IS HALF OF THE COPYABLE UNIT. It pairs with `./tokens.shared.ts`:
+ *   that file holds the token NAMES, this one holds the VALUES behind them.
+ *   A second Andamio surface takes BOTH, wholesale. Taking only the TypeScript
+ *   gives you a design system that resolves to nothing.
+ *
+ *   Full consumer contract: `landing-page-and-blog/src/ui/system/SHARED-TOKENS.md`
+ *
+ *   Synced from: repo `landing-page-and-blog` · branch `main` · commit 093ad94b
+ *   A consumer updates that line on every sync. It is the one line a consumer
+ *   edits in either copied file.
+ *
+ * ⟢ WHY THIS IS A SEPARATE FILE. `tokens.shared.ts` holds `var(--sys-*)` names,
+ *   so it does NOT change when a brand value is refined. If the values lived
+ *   only in the app's own globals.css, a brand refinement would produce no diff
+ *   in anything a consumer syncs, and the two products would drift apart while
+ *   every sync looked clean. Putting the values in their own copyable file is
+ *   what makes a refinement travel.
+ *
+ * ⟢ WHAT A CONSUMER MAY CHANGE. The ink/paper neutrals are a surface decision —
+ *   retune them for your product. The ACCENTS ARE NOT: orange #FF6B35 and blue
+ *   #2F6BFF anchor to the logo and were locked 2026-06-28 by the brand guide
+ *   (docs/design-system/andamio-brand-guide.md) to resolve marketing↔app drift.
+ *   A surface that picks its own orange stops being the same company.
+ *
+ * ⟢ NO `@layer` WRAPPER, DELIBERATELY. Plain CSS with no Tailwind directives, so
+ *   a consumer on any styling system can drop it in. (It also has to be this
+ *   way: an imported file is processed as its own PostCSS entry, where a bare
+ *   `@layer base` has no `@tailwind base` in scope.) Unlayered custom properties
+ *   take precedence over layered ones, and nothing else in this app defines
+ *   `--sys-*`, so the resolved values are unchanged.
+ *
+ * ⟢ ALL THREE SITES ARE REQUIRED. `:root` alone gives you a system that does not
+ *   flip. The island is the selector PAIR `.sys-light, .dark .sys-light` — the
+ *   `.dark .sys-light` half is what lets it win under a dark root.
+ *
+ * The ink/paper neutrals are exposed BOTH as solids (--sys-ink) and as RGB
+ * channel triplets (--sys-ink-rgb) so the many `rgb(... / alpha)` derivations
+ * (muted/faint/ghost/watermark/cell/grid/hairline) invert from one source.
+ * `--sys-on-ink` is the contrast pair for ink-emphasis surfaces (ink button,
+ * emphasized API layer): white-on-ink in light, dark-on-ink in dark. The 3
+ * accents follow the same discipline as light — orange sparing, blue for
+ * wayfinding/data — just brightened for dark surfaces.
+ */
+
+:root {
+  --sys-paper: #ffffff;
+  --sys-paper-rgb: 255 255 255;
+  --sys-ink: #0a0a0a;
+  --sys-ink-rgb: 10 10 10;
+  --sys-on-ink: #ffffff;
+  --sys-on-ink-rgb: 255 255 255;
+  /* Solid full-bleed editorial rule. Strong by design. */
+  --sys-rule: #0a0a0a;
+  --sys-orange: #ff6b35;
+  --sys-blue: #2f6bff;
+  --sys-coral-tint: rgb(255 107 74 / 0.055);
+  /* Soft lift for floating cards (artifact plate, demo container). Black-based
+     so it stays a shadow (not a glow) in dark mode — deliberately NOT
+     overridden in .dark or the .sys-light island. */
+  --sys-card-shadow: 0 1px 2px rgb(0 0 0 / 0.06), 0 8px 24px rgb(0 0 0 / 0.10);
+}
+
+.dark {
+  /* Foundation dark paper #0F1419 (shared with the V2 --background). */
+  --sys-paper: #0f1419;
+  --sys-paper-rgb: 15 20 25;
+  --sys-ink: #ededed;
+  --sys-ink-rgb: 237 237 237;
+  --sys-on-ink: #0f1419;
+  --sys-on-ink-rgb: 15 20 25;
+  /* Softened rule: a full-strength white hairline edge-to-edge would glare;
+     this keeps the strong-divider character without blinding. */
+  --sys-rule: rgb(237 237 237 / 0.26);
+  --sys-orange: #ff7a52;
+  --sys-blue: #5b8bff;
+  --sys-coral-tint: rgb(255 122 82 / 0.1);
+}
+
+/* Forced-light island — re-pins the system palette to its light values for a
+   subtree, so a widget renders light inside a dark page. Used for the badge
+   builder, the design's "specimen under glass" (mirrors the old .demo-light).
+   Both `.sys-light` and `.dark .sys-light` so it wins under the dark root. */
+.sys-light,
+.dark .sys-light {
+  --sys-paper: #ffffff;
+  --sys-paper-rgb: 255 255 255;
+  --sys-ink: #0a0a0a;
+  --sys-ink-rgb: 10 10 10;
+  --sys-on-ink: #ffffff;
+  --sys-on-ink-rgb: 255 255 255;
+  --sys-rule: #0a0a0a;
+  --sys-orange: #ff6b35;
+  --sys-blue: #2f6bff;
+  --sys-coral-tint: rgb(255 107 74 / 0.055);
+}
