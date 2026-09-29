@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
-import { LoadErrors } from "./LoadErrors";
+import { LoadErrors, LoadWarnings } from "./LoadErrors";
 import { AppShell } from "./AppShell";
 import { FolderProvider } from "./useFolderState";
 import { MemoryStorage } from "../storage/memory";
-import { MARKER_PATH, profilePath, serializeProfile } from "../domain/folder";
+import { MARKER_PATH, collectionPath, profilePath, serializeProfile } from "../domain/folder";
 
 afterEach(cleanup);
 
@@ -60,5 +60,29 @@ describe("LoadErrors", () => {
     expect(screen.getByRole("button", { name: "Matrix" })).toBeTruthy();
     expect(screen.getByText("/data")).toBeTruthy();
     expect(storage.file(profilePath("broken"))).toBe(broken);
+  });
+
+  it("shows badge warnings as a non-blocking status notice, apart from the error banner", async () => {
+    const path = collectionPath("eng");
+    const storage = new MemoryStorage({
+      [MARKER_PATH]: '{ "format": 1 }\n',
+      [path]: '{ "name": "Engineering", "badge": "loud" }\n',
+    });
+    render(
+      <FolderProvider storage={storage} folder="/data">
+        <AppShell onChangeFolder={() => {}} />
+      </FolderProvider>,
+    );
+    const notice = await screen.findByRole("status");
+    expect(within(notice).getByText(/shown with defaults/)).toBeTruthy();
+    expect(within(notice).getByText(path)).toBeTruthy();
+    expect(within(notice).getByText(/badge/i, { selector: ".banner-detail" })).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(await screen.findByText("Engineering")).toBeTruthy();
+  });
+
+  it("LoadWarnings renders nothing without warnings", () => {
+    const { container } = render(<LoadWarnings warnings={[]} />);
+    expect(container.innerHTML).toBe("");
   });
 });

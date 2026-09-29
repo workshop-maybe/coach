@@ -246,6 +246,11 @@ textarea {
   border-color: var(--notice-border);
 }
 
+.banner-warning {
+  background: var(--notice-bg);
+  border-color: var(--notice-border);
+}
+
 .banner-title {
   margin: 0 0 0.4rem;
 }

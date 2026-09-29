@@ -1,9 +1,9 @@
 // The app frame: side navigation, the current folder with Change and Reload, the
-// load-error banner and the notice banner.
+// load-error banner, the badge-warning notice and the notice banner.
 
 import { createContext, useContext, useMemo, useState } from "react";
 import { CollectionsView } from "./CollectionsView";
-import { LoadErrors } from "./LoadErrors";
+import { LoadErrors, LoadWarnings } from "./LoadErrors";
 import { MatrixView } from "./MatrixView";
 import { ProfilesView } from "./ProfilesView";
 import { useFolder } from "./useFolderState";
@@ -87,6 +87,7 @@ export function AppShell({ onChangeFolder, initialRoute = { view: "collections" 
             </div>
           )}
           <LoadErrors errors={state?.errors ?? []} />
+          <LoadWarnings warnings={state?.warnings ?? []} />
           <main className="content">
             {state === null ? (
               <p className="muted">{loading ? "Loading…" : "The folder could not be loaded."}</p>

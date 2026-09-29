@@ -1,6 +1,8 @@
 // Domain types for Andamio Desktop. Every entity's id is its filename slug (KTD3):
 // set once at creation and never changed, so renaming never breaks references.
 
+import type { BadgeSettings } from "../badge/settings";
+
 export type Slug = string;
 
 /** A named group of credentials. Exports as an Andamio course. */
@@ -12,6 +14,16 @@ export interface Collection {
   order: Slug[];
   /** Stable Andamio module code per credential slug (KTD7). Never reused. */
   codes: Record<Slug, number>;
+  /** Badge settings for every credential in the collection (KTD3). */
+  badge?: BadgeSettings;
+  /** Per-credential badge overrides, keyed by credential slug (KTD3). */
+  badgeOverrides?: Record<Slug, BadgeSettings>;
+  /** A malformed `badge` value, written back unchanged on every save. */
+  badgeRaw?: unknown;
+  /** A `badgeOverrides` value that is not an object, written back unchanged. */
+  badgeOverridesRaw?: unknown;
+  /** Malformed `badgeOverrides` entries by slug, written back unchanged. */
+  badgeOverrideEntriesRaw?: Record<Slug, unknown>;
 }
 
 /** An extra H2 section kept verbatim so hand edits survive a save (KTD4). */
@@ -81,6 +93,8 @@ export interface FolderState {
   profiles: AgentProfile[];
   assessments: Assessment[];
   errors: LoadError[];
+  /** Readable files with settings that fall back to defaults (KTD3). Never gate anything. */
+  warnings: LoadError[];
   /** Raw text each entity was read from, keyed by folder-relative path (KTD6). */
   raw: Record<string, string>;
 }

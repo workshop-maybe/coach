@@ -3,6 +3,7 @@
 // that refuse to overwrite a file changed since it was opened.
 
 import YAML from "yaml";
+import { parseBadgeSettings, type BadgeSettings } from "../badge/settings";
 import { ChangedOnDiskError, type Storage } from "../storage/storage";
 import { parseCredentialMd, serializeCredentialMd } from "./credential-md";
 import type {
@@ -90,7 +91,12 @@ function stringRecord(obj: Json, key: string): Record<string, string> {
 // ---------------------------------------------------------------------------
 // Collection JSON
 
-export function parseCollection(text: string, slug: Slug): Collection {
+/**
+ * Parses collection.json. Badge settings are tolerant (KTD3): a malformed `badge`
+ * value or `badgeOverrides` entry is kept raw for the next save and reported as a
+ * warning, never an error.
+ */
+export function parseCollectionWithWarnings(text: string, slug: Slug): { collection: Collection; warnings: string[] } {
   const obj = parseObject(text);
   const order = obj.order ?? [];
   if (!Array.isArray(order) || order.some((s) => typeof s !== "string")) {
@@ -105,18 +111,74 @@ export function parseCollection(text: string, slug: Slug): Collection {
   ) {
     throw new Error('Field "codes" must map credential slugs to positive integers.');
   }
-  return {
+  const collection: Collection = {
     slug,
     name: requiredString(obj, "name"),
     description: optionalString(obj, "description"),
     order: [...(order as string[])],
     codes: { ...(codes as Record<string, number>) },
   };
+  const warnings: string[] = [];
+
+  if (obj.badge !== undefined) {
+    const parsed = parseBadgeSettings(obj.badge);
+    if ("settings" in parsed) {
+      collection.badge = parsed.settings;
+    } else {
+      collection.badgeRaw = obj.badge;
+      warnings.push(`Field "badge": ${parsed.message}`);
+    }
+  }
+
+  const overrides = obj.badgeOverrides;
+  if (overrides !== undefined) {
+    if (typeof overrides !== "object" || overrides === null || Array.isArray(overrides)) {
+      collection.badgeOverridesRaw = overrides;
+      warnings.push('Field "badgeOverrides" must map credential slugs to badge settings.');
+    } else {
+      const typed: Record<Slug, BadgeSettings> = {};
+      const raw: Record<Slug, unknown> = {};
+      for (const [key, value] of Object.entries(overrides)) {
+        const parsed = parseBadgeSettings(value);
+        if ("settings" in parsed) {
+          typed[key] = parsed.settings;
+        } else {
+          raw[key] = value;
+          warnings.push(`Field "badgeOverrides.${key}": ${parsed.message}`);
+        }
+      }
+      collection.badgeOverrides = typed;
+      if (Object.keys(raw).length > 0) collection.badgeOverrideEntriesRaw = raw;
+    }
+  }
+
+  return { collection, warnings };
+}
+
+export function parseCollection(text: string, slug: Slug): Collection {
+  return parseCollectionWithWarnings(text, slug).collection;
 }
 
 export function serializeCollection(collection: Collection): string {
   const { name, description, order, codes } = collection;
-  return `${JSON.stringify({ name, description, order, codes }, null, 2)}\n`;
+  const out: Json = { name, description, order, codes };
+
+  // A malformed value was never replaced by a typed one, so it goes back as it came.
+  const badge = collection.badge !== undefined ? collection.badge : collection.badgeRaw;
+  if (badge !== undefined) out.badge = badge;
+
+  if (collection.badgeOverrides === undefined && collection.badgeOverridesRaw !== undefined) {
+    out.badgeOverrides = collection.badgeOverridesRaw;
+  } else {
+    // Typed entries first, then malformed entries no typed value has replaced.
+    const entries: Json = { ...(collection.badgeOverrides ?? {}) };
+    for (const [key, value] of Object.entries(collection.badgeOverrideEntriesRaw ?? {})) {
+      if (!(key in entries)) entries[key] = value;
+    }
+    if (Object.keys(entries).length > 0) out.badgeOverrides = entries;
+  }
+
+  return `${JSON.stringify(out, null, 2)}\n`;
 }
 
 // ---------------------------------------------------------------------------
@@ -273,7 +335,15 @@ function message(err: unknown): string {
 
 /** Reads the whole folder. Unreadable files land in `errors` and are never written. */
 export async function loadFolder(storage: Storage): Promise<FolderState> {
-  const state: FolderState = { collections: [], credentials: [], profiles: [], assessments: [], errors: [], raw: {} };
+  const state: FolderState = {
+    collections: [],
+    credentials: [],
+    profiles: [],
+    assessments: [],
+    errors: [],
+    warnings: [],
+    raw: {},
+  };
   const errors: LoadError[] = state.errors;
 
   const marker = await storage.readText("data", MARKER_PATH);
@@ -319,7 +389,13 @@ export async function loadFolder(storage: Storage): Promise<FolderState> {
   const collections: Collection[] = [];
   for (const slug of collectionSlugs) {
     const path = collectionFiles.get(slug);
-    const parsed = path ? await load(path, (t) => parseCollection(t, slug)) : null;
+    const parsed = path
+      ? await load(path, (t) => {
+          const { collection, warnings } = parseCollectionWithWarnings(t, slug);
+          for (const message of warnings) state.warnings.push({ path, message });
+          return collection;
+        })
+      : null;
     // A missing or unreadable collection.json still lets its credentials load.
     collections.push(parsed ?? { slug, name: slug, description: "", order: [], codes: {} });
   }

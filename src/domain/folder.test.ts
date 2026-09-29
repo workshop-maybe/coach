@@ -22,6 +22,9 @@ import {
   serializeCollection,
   serializeProfile,
 } from "./folder";
+import { buildExport } from "./export";
+import { reorderCredentials } from "./operations";
+import { resolveBadgeSettings } from "../badge/settings";
 import type { AgentProfile, Assessment, Collection, Credential } from "./types";
 
 function cred(slug: string, name: string, collectionSlug = "eng"): Credential {
@@ -360,5 +363,147 @@ describe("saving", () => {
     expect(state.profiles).toEqual([profile]);
     expect(state.assessments).toEqual([assessment]);
     await expect(saveAssessment(storage, assessment)).rejects.toBeInstanceOf(ChangedOnDiskError);
+  });
+});
+
+describe("badge settings in collection.json", () => {
+  const badged: Collection = {
+    ...collection,
+    order: ["review", "testing"],
+    codes: { review: 1, testing: 2 },
+    badge: {
+      palette: "pine-gold",
+      colors: { ring: "#112233", innerRing: "#445566" },
+      art: "collections/eng/badge/art-1234abcd.png",
+      title: { eyebrow: "ENG" },
+    },
+    badgeOverrides: { testing: { palette: "teal-ice", art: null, title: { main: "Tester" } } },
+  };
+
+  function badgedFolder(text: string): MemoryStorage {
+    return new MemoryStorage({
+      [MARKER_PATH]: '{ "format": 1 }\n',
+      [collectionPath("eng")]: text,
+      [credentialPath("eng", "review")]: serializeCredentialMd(cred("review", "Review")),
+      [credentialPath("eng", "testing")]: serializeCredentialMd(cred("testing", "Testing")),
+    });
+  }
+
+  it("a collection.json without badge fields loads and serializes exactly as before", async () => {
+    const text = '{\n  "name": "Engineering",\n  "description": "Core skills.",\n  "order": [\n    "review"\n  ],\n  "codes": {\n    "review": 1\n  }\n}\n';
+    expect(serializeCollection(collection)).toBe(text);
+    const parsed = parseCollection(text, "eng");
+    expect(Object.keys(parsed).sort()).toEqual(["codes", "description", "name", "order", "slug"]);
+    expect(serializeCollection(parsed)).toBe(text);
+    const state = await loadFolder(fixture());
+    expect(state.warnings).toEqual([]);
+    expect(state.errors).toEqual([]);
+  });
+
+  it("the badge fields survive a save and reload round trip", async () => {
+    const text = serializeCollection(badged);
+    expect(JSON.parse(text)).toMatchObject({ badge: badged.badge, badgeOverrides: badged.badgeOverrides });
+    expect(parseCollection(text, "eng")).toEqual(badged);
+
+    const storage = badgedFolder(text);
+    const state = await loadFolder(storage);
+    expect(state.warnings).toEqual([]);
+    expect(state.collections[0]).toEqual(badged);
+    await saveCollection(storage, state.collections[0], state.raw[collectionPath("eng")]);
+    expect(storage.file(collectionPath("eng"))).toBe(text);
+  });
+
+  it("a malformed badge is a warning, renders with defaults, survives a reorder save byte for byte, and export still runs", async () => {
+    const text = [
+      "{",
+      '  "name": "Engineering",',
+      '  "description": "Core skills.",',
+      '  "order": [',
+      '    "review",',
+      '    "testing"',
+      "  ],",
+      '  "codes": {',
+      '    "review": 1,',
+      '    "testing": 2',
+      "  },",
+      '  "badge": {',
+      '    "palette": 7,',
+      '    "colors": "loud"',
+      "  }",
+      "}",
+      "",
+    ].join("\n");
+    const storage = badgedFolder(text);
+    const state = await loadFolder(storage);
+    expect(state.errors).toEqual([]);
+    expect(state.warnings).toEqual([{ path: collectionPath("eng"), message: expect.stringMatching(/badge/) }]);
+    expect(state.collections[0].badge).toBeUndefined();
+    expect(resolveBadgeSettings(state.collections[0], "review")).toEqual({ palette: null, colors: null, art: null, title: {} });
+
+    const next = await reorderCredentials(storage, state, "eng", ["testing", "review"], state.raw[collectionPath("eng")]);
+    const expected = text.replace('    "review",\n    "testing"\n', '    "testing",\n    "review"\n');
+    expect(storage.file(collectionPath("eng"))).toBe(expected);
+    expect(next.warnings).toHaveLength(1);
+    expect(next.errors).toEqual([]);
+
+    const files = buildExport(next.collections[0], next.credentials, { includeRubric: false });
+    expect(files.size).toBeGreaterThan(0);
+  });
+
+  it("keeps a whole malformed badgeOverrides value and malformed entries raw, with a warning each", async () => {
+    const whole = { name: "Engineering", description: "", order: [], codes: {}, badgeOverrides: ["nope"] };
+    const wholeText = `${JSON.stringify(whole, null, 2)}\n`;
+    const parsedWhole = parseCollection(wholeText, "eng");
+    expect(parsedWhole.badgeOverrides).toBeUndefined();
+    expect(serializeCollection(parsedWhole)).toBe(wholeText);
+
+    const entries = {
+      name: "Engineering",
+      description: "",
+      order: ["review", "testing"],
+      codes: { review: 1, testing: 2 },
+      badgeOverrides: { review: { palette: "teal-ice" }, testing: { title: "bad" } },
+    };
+    const entriesText = `${JSON.stringify(entries, null, 2)}\n`;
+    const storage = badgedFolder(entriesText);
+    const state = await loadFolder(storage);
+    expect(state.errors).toEqual([]);
+    expect(state.warnings).toEqual([
+      { path: collectionPath("eng"), message: expect.stringMatching(/badgeOverrides\.testing/) },
+    ]);
+    expect(state.collections[0].badgeOverrides).toEqual({ review: { palette: "teal-ice" } });
+    expect(resolveBadgeSettings(state.collections[0], "testing").title).toEqual({});
+    await saveCollection(storage, state.collections[0], state.raw[collectionPath("eng")]);
+    expect(storage.file(collectionPath("eng"))).toBe(entriesText);
+  });
+
+  it("a palette-only override does not inherit the collection's custom colors after a load", async () => {
+    const state = await loadFolder(badgedFolder(serializeCollection(badged)));
+    expect(resolveBadgeSettings(state.collections[0], "review")).toMatchObject({ palette: "pine-gold", colors: { ring: "#112233" } });
+    expect(resolveBadgeSettings(state.collections[0], "testing")).toEqual({
+      palette: "teal-ice",
+      colors: null,
+      art: null,
+      title: { main: "Tester", eyebrow: "ENG" },
+    });
+  });
+
+  it("Covers AE2. A collection palette change saves while the override stays", async () => {
+    const start: Collection = { ...collection, order: ["review", "testing"], codes: { review: 1, testing: 2 }, badge: { palette: "pine-gold" }, badgeOverrides: { testing: { palette: "teal-ice" } } };
+    const storage = badgedFolder(serializeCollection(start));
+    const state = await loadFolder(storage);
+    await saveCollection(storage, { ...state.collections[0], badge: { palette: "wine-crimson" } }, state.raw[collectionPath("eng")]);
+    const again = await loadFolder(storage);
+    expect(resolveBadgeSettings(again.collections[0], "review").palette).toBe("wine-crimson");
+    expect(resolveBadgeSettings(again.collections[0], "testing").palette).toBe("teal-ice");
+  });
+
+  it("Covers AE3. Clearing the override saves and falls back to the collection palette", async () => {
+    const start: Collection = { ...collection, order: ["review", "testing"], codes: { review: 1, testing: 2 }, badge: { palette: "wine-crimson" }, badgeOverrides: { testing: { palette: "teal-ice" } } };
+    const storage = badgedFolder(serializeCollection(start));
+    const state = await loadFolder(storage);
+    await saveCollection(storage, { ...state.collections[0], badgeOverrides: {} }, state.raw[collectionPath("eng")]);
+    const again = await loadFolder(storage);
+    expect(resolveBadgeSettings(again.collections[0], "testing").palette).toBe("wine-crimson");
   });
 });
