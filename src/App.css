@@ -259,3 +259,398 @@ textarea {
   margin-left: 0.5rem;
   color: var(--muted);
 }
+
+/* U9 */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.stack > h2 {
+  margin: 0.75rem 0 0;
+  font-size: 1.1rem;
+}
+
+.editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.editor-head h1,
+.editor-head h2 {
+  margin: 0;
+}
+
+.back {
+  align-self: flex-start;
+}
+
+.editor form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.stack > form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0;
+}
+
+fieldset.field {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem 1rem;
+  gap: 0.6rem;
+}
+
+fieldset.field > button {
+  align-self: flex-start;
+}
+
+.field > span:first-child,
+.field > label,
+.field legend {
+  font-weight: 600;
+}
+
+.field-hint {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.setup.locked input[readonly] {
+  background: var(--bg);
+  color: var(--muted);
+}
+
+.rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.item-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.item {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  text-align: left;
+}
+
+.item[aria-current="true"] {
+  border-color: var(--accent);
+}
+
+.item-name {
+  font-weight: 600;
+}
+
+.inline-form {
+  flex-direction: row !important;
+  align-items: flex-end;
+}
+
+.inline-form .field {
+  flex: 1;
+}
+
+.form-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.unsaved {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.form-error {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--error-border);
+  border-radius: var(--radius);
+  background: var(--error-bg);
+}
+
+.conflict {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--notice-border);
+  border-radius: var(--radius);
+  background: var(--notice-bg);
+}
+
+.conflict-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* U10 */
+
+:is(.prompt-panel, .assessment-form, .cell-history, .export-dialog) {
+  margin: 1.25rem 0;
+  padding: 1rem 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+:is(.prompt-panel, .cell-history, .export-dialog) > .panel-head,
+.matrix-view > .view-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+:is(.prompt-panel, .assessment-form, .export-dialog) .field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0 0 0.9rem;
+}
+
+.prompt-panel .field-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.prompt-panel .field-row .field {
+  flex: 1 1 14rem;
+}
+
+:is(.prompt-panel, .assessment-form, .export-dialog) textarea,
+:is(.prompt-panel, .assessment-form) select {
+  width: 100%;
+  padding: 0.45rem 0.55rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.prompt-panel .prompt-text,
+.cell-history .handback {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+}
+
+:is(.prompt-panel, .assessment-form, .cell-history, .export-dialog) .actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+}
+
+.prompt-panel .copy-status {
+  color: var(--muted);
+}
+
+.prompt-panel .blocked-note {
+  padding: 0.6rem 0.8rem;
+  background: var(--notice-bg);
+  border: 1px solid var(--notice-border);
+  border-radius: var(--radius);
+}
+
+:is(.prompt-panel, .assessment-form, .export-dialog) .form-error {
+  padding: 0.5rem 0.75rem;
+  background: var(--error-bg);
+  border: 1px solid var(--error-border);
+  border-radius: var(--radius);
+}
+
+.assessment-form .result-choice {
+  display: flex;
+  gap: 1.25rem;
+  border: none;
+  padding: 0;
+}
+
+.assessment-form .result-choice legend {
+  margin-bottom: 0.3rem;
+}
+
+:is(.assessment-form, .cell-history) .facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 2rem;
+  margin: 0 0 0.9rem;
+}
+
+:is(.assessment-form, .cell-history) .facts dt {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+:is(.assessment-form, .cell-history) .facts dd {
+  margin: 0;
+}
+
+.export-dialog .checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+}
+
+.matrix-view .empty-state {
+  padding: 1.5rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+}
+
+.matrix-scroll {
+  overflow-x: auto;
+}
+
+table.matrix {
+  border-collapse: collapse;
+  min-width: 100%;
+}
+
+table.matrix th,
+table.matrix td {
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+table.matrix th[scope="colgroup"] {
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 0.85rem;
+}
+
+table.matrix th[scope="row"] {
+  white-space: nowrap;
+}
+
+table.matrix .credential-unmet {
+  background: var(--sidebar);
+}
+
+table.matrix th.credential-unmet span:first-child {
+  font-style: italic;
+}
+
+table.matrix .unmet-note {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+table.matrix button.cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  text-align: left;
+}
+
+table.matrix button.cell[aria-current="true"] {
+  outline: 2px solid var(--focus);
+}
+
+table.matrix .cell-met .cell-status {
+  font-weight: 600;
+}
+
+table.matrix .cell-untested .cell-status {
+  color: var(--muted);
+}
+
+table.matrix .flag {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+table.matrix .flag::before {
+  content: "! ";
+}
+
+.cell-history .flag-reasons {
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.75rem;
+  background: var(--notice-bg);
+  border: 1px solid var(--notice-border);
+  border-radius: var(--radius);
+}
+
+.cell-history .flag-reasons ul {
+  margin: 0 0 0.5rem;
+  padding-left: 1.2rem;
+}
+
+.cell-history .history {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.cell-history .history li {
+  margin-bottom: 0.75rem;
+}
+
+.cell-history .history-head,
+.cell-history .history-note {
+  margin: 0 0 0.25rem;
+}
+
+.cell-history .handback {
+  white-space: pre-wrap;
+  margin: 0.4rem 0 0;
+  padding: 0.5rem;
+  background: var(--bg);
+  border-radius: var(--radius);
+}
