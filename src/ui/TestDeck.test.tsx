@@ -6,7 +6,7 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { loadFolder } from "../domain/folder";
 import { assignmentVersion } from "../domain/hash";
 import { addPending, readPending } from "./pendingTests";
-import { LANDING_MS } from "./TestDeck";
+import { LANDING_MS, SENDING_MS } from "./TestDeck";
 import { FOLDER, opus, renderApp, result, review, storageWith } from "./testFolder";
 
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ writeText: vi.fn() }));
@@ -33,6 +33,7 @@ async function pasteAndJudge(reply: string, answer: "Met" | "Not yet") {
   await userEvent.click(screen.getByRole("button", { name: answer }));
 }
 
+const machine = () => document.querySelector<SVGSVGElement>(".deck svg.cast-machine:not(.cast-machine-mini)")!;
 const badgeCard = async () => within(await screen.findByRole("region", { name: "Badges" })).getByRole("button", { name: /Code review/ });
 
 describe("TestDeck", () => {
@@ -74,6 +75,60 @@ describe("TestDeck", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Done" }));
     expect(within(await badgeCard()).getByText("No holders yet")).toBeTruthy();
+  });
+
+  it("the pickers show machines and cartridges, and the doors dashed outlines", async () => {
+    renderApp(storageWith({ credentials: [review], profiles: [opus] }), { view: "deck", deck: "test", profileSlug: "opus" });
+    const badge = await screen.findByRole("button", { name: "Code review" });
+    expect(badge.querySelector("svg.cast-cartridge")).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Create a credential" }).querySelector('[data-outline="cartridge"]')).not.toBeNull();
+    cleanup();
+
+    renderApp(storageWith({ credentials: [review], profiles: [opus] }), fromBadge);
+    const agent = await screen.findByRole("button", { name: "Opus agent" });
+    expect(agent.querySelector("svg.cast-machine-mini")).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Create an agent" }).querySelector('[data-outline="machine"]')).not.toBeNull();
+  });
+
+  it("hand it over loads the cartridge, Copy sends then waits, and the reply shows on the screen", async () => {
+    renderApp(storageWith({ credentials: [review], profiles: [opus] }), fromBadge);
+    await userEvent.click(await screen.findByRole("button", { name: "Opus agent" }));
+    await screen.findByRole("heading", { name: "Hand it over" });
+    expect(machine().getAttribute("data-screen")).toBe("idle");
+    await waitFor(() => expect(machine().querySelector(".cast-loaded image.cast-label")).not.toBeNull());
+
+    let release!: () => void;
+    vi.mocked(writeText).mockImplementationOnce(() => new Promise<void>((r) => (release = r)));
+    await userEvent.click(screen.getByRole("button", { name: "Copy" }));
+    expect(machine().getAttribute("data-screen")).toBe("sending");
+    release();
+    expect(await screen.findByRole("heading", { name: "What came back" })).toBeTruthy();
+    await waitFor(() => expect(machine().getAttribute("data-screen")).toBe("waiting"), { timeout: SENDING_MS + 1000 });
+    expect(machine().querySelector(".cast-loaded")).not.toBeNull();
+
+    await userEvent.type(screen.getByRole("textbox", { name: "Reply" }), "First line{Enter}second{Enter}third{Enter}fourth");
+    const lines = [...machine().querySelectorAll(".cast-screen-reply text")].map((t) => t.textContent);
+    expect(lines).toEqual(["First line", "second", "third"]);
+  });
+
+  it("Met ejects the cartridge and lights the agent's key", async () => {
+    renderApp(storageWith({ credentials: [review], profiles: [opus] }), fromBadge);
+    await takeAndCopy();
+    await pasteAndJudge("Done.", "Met");
+    const landing = await screen.findByTestId("landing");
+    const drawn = landing.querySelector("svg.cast-machine")!;
+    expect(drawn.classList.contains("cast-ejecting")).toBe(true);
+    await waitFor(() => expect(drawn.querySelector('[data-credential="eng/review"]')?.getAttribute("data-key")).toBe("lit"));
+    expect(drawn.querySelector('[data-credential="eng/review"]')!.classList.contains("cast-key-seated")).toBe(true);
+  });
+
+  it("Not yet ejects the cartridge and lights nothing", async () => {
+    renderApp(storageWith({ credentials: [review], profiles: [opus] }), fromBadge);
+    await takeAndCopy();
+    await pasteAndJudge("I tried.", "Not yet");
+    await screen.findByRole("heading", { name: "Not yet" });
+    expect(machine().classList.contains("cast-ejecting")).toBe(true);
+    expect(machine().querySelectorAll('[data-key="lit"], [data-key="raised"]')).toHaveLength(0);
   });
 
   it("Not yet offers Try another agent, back at who takes it with the credential picked", async () => {

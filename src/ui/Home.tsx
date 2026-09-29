@@ -1,17 +1,20 @@
-// Home, the only room (KTD1). Top to bottom: what needs you, your agents (each wearing
-// the badges it earned), your badges (each showing who holds it), then the two doors.
-// An empty folder shows only the doors (R5-R8).
+// Home, the only room (KTD1). Top to bottom: what needs you, your agents (machines, each
+// lighting the keys it earned), your badges (cartridges, each showing who holds it), then
+// the two doors with dashed outlines of what they make (R9, R12). The cast is hidden from
+// assistive tech, so names and what each agent earned stay in text.
 
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { cellKey } from "../domain/matrix";
 import { credentialKey, type AgentProfile, type Collection, type Credential } from "../domain/types";
-import { Badge } from "./Badge";
+import { Cartridge } from "../cast/Cartridge";
+import { Machine } from "../cast/Machine";
+import { Outline } from "../cast/Outline";
+import { machineKeys, type MachineKey } from "../cast/mappings";
 import { FLAG_SHORT } from "./format";
 import { useNav } from "./nav";
 import { needsYou, type NeedsYouItem } from "./needsYou";
 import { usePendingTests } from "./pendingTests";
-import { Person } from "./Person";
 import { useFolder } from "./useFolderState";
 import { useMatrix } from "./useMatrix";
 
@@ -21,6 +24,8 @@ interface Shelf {
   credentials: { credential: Credential; collection: Collection; key: string }[];
   byKey: Map<string, { credential: Credential; collection: Collection }>;
   profiles: Map<string, AgentProfile>;
+  /** Each agent's lit keys, oldest first. */
+  keys: Map<string, MachineKey[]>;
 }
 
 export function Home() {
@@ -39,6 +44,7 @@ export function Home() {
       credentials,
       byKey: new Map(credentials.map((c) => [c.key, c])),
       profiles: new Map(state.profiles.map((p) => [p.slug, p])),
+      keys: new Map(state.profiles.map((p) => [p.slug, machineKeys(matrix, p.slug)])),
     };
   }, [matrix, state]);
 
@@ -47,11 +53,11 @@ export function Home() {
   const doors = (
     <div className="doors">
       <button type="button" className="door" onClick={() => navigate({ view: "deck", deck: "agent" })}>
-        <Person />
+        <Outline kind="machine" width={72} />
         <span>Create an agent</span>
       </button>
       <button type="button" className="door" onClick={() => navigate({ view: "deck", deck: "credential" })}>
-        <span className="door-disc" aria-hidden="true" />
+        <Outline kind="cartridge" width={36} />
         <span>Create a credential</span>
       </button>
     </div>
@@ -93,13 +99,15 @@ export function Home() {
               return (
                 <li key={p.slug}>
                   <button type="button" className="agent-card" onClick={() => navigate({ view: "item", item: "agent", profileSlug: p.slug })}>
-                    <Person solid={earned.length > 0} />
+                    <Machine mini setup={p} keys={shelf.keys.get(p.slug)} width={128} />
                     <span className="agent-card-name">{p.name}</span>
                     <span className="agent-card-setup">{[p.harness, p.model, p.effort].filter(Boolean).join(" · ")}</span>
                     {earned.length > 0 && (
-                      <span className="agent-card-badges">
+                      <span className="visually-hidden" role="list" aria-label="Earned">
                         {earned.map((c) => (
-                          <Badge key={c.key} collection={c.collection} credential={c.credential} size={24} />
+                          <span key={c.key} role="listitem">
+                            {c.credential.name}
+                          </span>
                         ))}
                       </span>
                     )}
@@ -119,8 +127,8 @@ export function Home() {
               const holders = profiles.filter((p) => holds(p.slug, c.key));
               return (
                 <li key={c.key}>
-                  <button type="button" className="badge-card" onClick={() => navigate({ view: "item", item: "badge", credentialKey: c.key })}>
-                    <Badge collection={c.collection} credential={c.credential} size={72} />
+                  <button type="button" className={`badge-card${holders.length === 0 ? " badge-card-unheld" : ""}`} onClick={() => navigate({ view: "item", item: "badge", credentialKey: c.key })}>
+                    <Cartridge collection={c.collection} credential={c.credential} width={64} />
                     <span className="badge-card-name">{c.credential.name}</span>
                     <span className="holders">
                       {holders.length === 0 ? (
@@ -128,7 +136,7 @@ export function Home() {
                       ) : (
                         holders.map((p) => (
                           <span key={p.slug} className="holder" title={p.name}>
-                            <Person />
+                            <Machine mini setup={p} keys={shelf.keys.get(p.slug)} width={36} />
                             <span className="visually-hidden">{p.name}</span>
                           </span>
                         ))
@@ -182,8 +190,11 @@ function NeedRow({ item, shelf, onOpen }: { item: NeedsYouItem; shelf: Shelf; on
       break;
   }
 
-  let mark: ReactNode = <Person />;
-  if (cred) mark = <Badge collection={cred.collection} credential={cred.credential} size={28} />;
+  // An agent's row shows its machine, waiting on a reply with its cursor; a credential's
+  // shows its cartridge.
+  let mark: ReactNode = null;
+  if (agent) mark = <Machine mini setup={agent} keys={shelf.keys.get(agent.slug)} screen={{ kind: item.kind === "reply" ? "waiting" : "idle" }} width={60} />;
+  else if (cred) mark = <Cartridge collection={cred.collection} credential={cred.credential} width={28} />;
 
   return (
     <button type="button" className={`need need-${item.kind}`} onClick={onOpen}>

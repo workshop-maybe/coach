@@ -25,6 +25,8 @@ export interface MachineProps {
   loaded?: { collection: Collection; credential: Pick<Credential, "slug" | "name"> } | null;
   /** Keep room above the case for a cartridge, so loading one does not move the layout. */
   headroom?: boolean;
+  /** The id of a key that just lit, which plays its seating motion (R7). */
+  seated?: string;
   /** Clicking an encoder turns it: +1, or -1 with Shift or Alt (R3). */
   onStep?(dial: EncoderDial, by: 1 | -1): void;
   /** Rendered width in pixels. The height follows the drawing. */
@@ -64,7 +66,7 @@ const MINI = {
 
 type Geometry = typeof MINI;
 
-export function Machine({ setup, screen = { kind: "idle" }, keys = [], page = 0, mini = false, loaded = null, headroom = false, onStep, width, className }: MachineProps) {
+export function Machine({ setup, screen = { kind: "idle" }, keys = [], page = 0, mini = false, loaded = null, headroom = false, seated, onStep, width, className }: MachineProps) {
   const g: Geometry = mini ? MINI : FULL;
   const ink = mini ? INK_FINE : INK;
   const pages = trigPages(keys);
@@ -98,7 +100,7 @@ export function Machine({ setup, screen = { kind: "idle" }, keys = [], page = 0,
 
       <g className="cast-keys" data-page={at}>
         {Array.from({ length: KEYS_PER_PAGE }, (_, i) => (
-          <Key key={shown[i]?.id ?? `off-${i}`} index={i} g={g} ink={ink} lit={shown[i]} />
+          <Key key={shown[i]?.id ?? `off-${i}`} index={i} g={g} ink={ink} lit={shown[i]} seated={!!seated && shown[i]?.id === seated} />
         ))}
       </g>
 
@@ -217,7 +219,7 @@ function PageIndicator({ count, at }: { count: number; at: number }) {
 }
 
 /** One trig key. Lit in the badge's ring colors, half raised when it needs a re-test. */
-function Key({ index, g, ink, lit }: { index: number; g: Geometry; ink: string; lit?: MachineKey }) {
+function Key({ index, g, ink, lit, seated }: { index: number; g: Geometry; ink: string; lit?: MachineKey; seated: boolean }) {
   const colors = useKeyColors(lit?.collection ?? null, lit?.credentialSlug ?? "");
   const k = g.keys;
   const pitch = (k.span - k.w) / (KEYS_PER_PAGE - 1);
@@ -228,7 +230,7 @@ function Key({ index, g, ink, lit }: { index: number; g: Geometry; ink: string; 
   const stroke = g.stroke * 0.8;
   const led = isMini(g) ? 2 : 3;
   return (
-    <g className={`cast-key cast-key-${state}`} data-key={state} data-credential={lit?.id} filter={ink} stroke="currentColor" strokeLinejoin="round" strokeLinecap="round">
+    <g className={`cast-key cast-key-${state}${seated ? " cast-key-seated" : ""}`} data-key={state} data-credential={lit?.id} filter={ink} stroke="currentColor" strokeLinejoin="round" strokeLinecap="round">
       {raised && (
         // The key's sides, showing between the raised cap and its seat.
         <path d={`M${x} ${k.y + k.h - lift}V${k.y + k.h}H${x + k.w}V${k.y + k.h - lift}`} fill="none" strokeWidth={stroke * 0.8} />
@@ -304,8 +306,11 @@ function LoadedCartridge({ collection, credential }: { collection: Collection; c
   const x = s.x + s.w / 2 - (CARTRIDGE_W * scale) / 2;
   const y = FULL.case.y + 10 - CARTRIDGE_H * scale;
   return (
-    <g className="cast-loaded" transform={`translate(${x.toFixed(2)} ${y.toFixed(2)}) scale(${scale})`}>
-      <CartridgeArt src={src} />
+    // The outer group carries the slide in and the eject (CSS), the inner one its place.
+    <g className="cast-loaded-motion">
+      <g className="cast-loaded" transform={`translate(${x.toFixed(2)} ${y.toFixed(2)}) scale(${scale})`}>
+        <CartridgeArt src={src} />
+      </g>
     </g>
   );
 }

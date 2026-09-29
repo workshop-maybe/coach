@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { loadFolder } from "../domain/folder";
 import { setupName } from "./PlayerCard";
@@ -14,6 +14,8 @@ afterEach(cleanup);
 const heading = () => screen.getByRole("heading", { level: 2 }).textContent;
 const dial = (name: string) => screen.getByRole("radiogroup", { name });
 const checked = (name: string) => within(dial(name)).getByRole("radio", { checked: true });
+const encoder = (d: string) => document.querySelector(`svg.cast-machine [data-dial="${d}"]`)!;
+const angle = (d: string) => encoder(d).getAttribute("data-angle");
 
 describe("setupName", () => {
   it("names an agent for its setup, with a number when that name is taken", () => {
@@ -25,9 +27,10 @@ describe("setupName", () => {
 });
 
 describe("PlayerCard", () => {
-  it("is one card: a person, three dials and one button", async () => {
+  it("is one card: a machine, three dials and one button", async () => {
     renderApp(storageWith(), { view: "deck", deck: "agent" });
     expect(await screen.findByRole("heading", { name: "Claude Code, opus, high" })).toBeTruthy();
+    expect(document.querySelectorAll("svg.cast-machine [data-dial]")).toHaveLength(3);
     expect(screen.getAllByRole("radiogroup")).toHaveLength(3);
     expect(screen.queryByRole("combobox")).toBeNull();
     expect(screen.getByRole("button", { name: "Make the agent" })).toBeTruthy();
@@ -43,6 +46,31 @@ describe("PlayerCard", () => {
     await userEvent.keyboard("{ArrowLeft}{ArrowLeft}");
     expect(checked("Effort").textContent).toBe("medium");
     await waitFor(() => expect(document.activeElement?.textContent).toBe("medium"));
+  });
+
+  it("clicking an encoder turns its dial, and Shift turns it back", async () => {
+    renderApp(storageWith(), { view: "deck", deck: "agent" });
+    await screen.findByRole("heading", { name: "Claude Code, opus, high" });
+    fireEvent.click(encoder("effort"));
+    expect(checked("Effort").textContent).toBe("max");
+    expect(heading()).toBe("Claude Code, opus, max");
+    fireEvent.click(encoder("effort"), { shiftKey: true });
+    fireEvent.click(encoder("effort"), { shiftKey: true });
+    expect(checked("Effort").textContent).toBe("medium");
+
+    fireEvent.click(encoder("harness"));
+    expect(checked("Harness").textContent).toBe("Codex");
+    expect(checked("Model").textContent).toBe("gpt-5-codex");
+    expect(heading()).toBe("Codex, gpt-5-codex, medium");
+  });
+
+  it("changing a dial turns that encoder, and only that one", async () => {
+    renderApp(storageWith(), { view: "deck", deck: "agent" });
+    await screen.findByRole("heading", { name: "Claude Code, opus, high" });
+    const [harness, model, effort] = [angle("harness"), angle("model"), angle("effort")];
+    await userEvent.click(screen.getByRole("button", { name: "Next model" }));
+    expect(angle("model")).not.toBe(model);
+    expect([angle("harness"), angle("effort")]).toEqual([harness, effort]);
   });
 
   it("switching the harness resets the model to that harness's first model", async () => {
@@ -96,6 +124,8 @@ describe("PlayerCard", () => {
     expect(dial("Harness").getAttribute("aria-disabled")).toBe("true");
     expect(checked("Effort").textContent).toBe("medium");
     expect((screen.getByRole("button", { name: "Next effort" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(encoder("effort"));
+    expect(checked("Effort").textContent).toBe("medium");
 
     await userEvent.click(screen.getByRole("button", { name: "Make a new agent like this" }));
     expect(await screen.findByRole("heading", { name: "Claude Code, opus, medium" })).toBeTruthy();

@@ -1,6 +1,7 @@
-// Create an agent (U4, R13, KTD4): one card, chosen like a player. A drawn person stands
+// Create an agent (U4, R13, KTD4): one card, chosen like a player. The agent's machine sits
 // over three dials (harness, model, effort) and one button makes the agent, named for its
-// setup. Dials are buttons, never selects: each is a radio group to assistive tech, with
+// setup. Clicking an encoder on the machine turns its dial (Shift or Alt turns it back,
+// R3). Dials are buttons, never selects: each is a radio group to assistive tech, with
 // arrow keys and previous/next controls moving through its values. "Other" turns a dial
 // into one line to type on the same card. An agent with results is locked (KTD10) and
 // offers a new agent like it instead.
@@ -12,7 +13,8 @@ import { createProfile, duplicateProfileDraft, isSetupLocked, updateProfile } fr
 import type { AgentProfile, AgentSetup, FolderState, Slug } from "../domain/types";
 import { Deck } from "./Deck";
 import { useNav } from "./nav";
-import { Person } from "./Person";
+import { Machine } from "../cast/Machine";
+import type { EncoderDial } from "../cast/mappings";
 import type { TestPick } from "./routes";
 import { useFolder } from "./useFolderState";
 import { EFFORTS, HARNESSES, OTHER, modelsFor } from "./dialLists";
@@ -89,7 +91,6 @@ function Player({ profileSlug, returnTo, likeSlug }: PlayerCardProps) {
   const start = mode.kind === "create" ? (mode.draft ?? FIRST) : (stored ?? FIRST);
   const [dials, setDials] = useState<Dials>(() => dialsFor(start));
   const locked = mode.kind === "edit" && !!state && isSetupLocked(state, mode.slug);
-  const [hop, setHop] = useState(0);
 
   const setup: AgentSetup = { harness: fromDial(dials.harness), model: fromDial(dials.model), effort: fromDial(dials.effort) };
   const taken = state?.profiles.map((p) => p.name) ?? [];
@@ -100,15 +101,22 @@ function Player({ profileSlug, returnTo, likeSlug }: PlayerCardProps) {
   const harnessOptions = [...HARNESSES.map((h) => h.value), OTHER];
   const effortOptions = EFFORTS.includes(start.effort) || start.effort === "" ? EFFORTS : [...EFFORTS, start.effort];
 
-  function turn(next: Dials) {
-    setDials(next);
-    setHop((h) => h + 1);
+  function setHarness(d: DialValue) {
+    if (d.choice === dials.harness.choice) return setDials({ ...dials, harness: d });
+    const first = modelsFor(d.choice)[0];
+    setDials({ ...dials, harness: d, model: first ? { choice: first, other: "" } : { choice: OTHER, other: "" } });
   }
 
-  function setHarness(d: DialValue) {
-    if (d.choice === dials.harness.choice) return turn({ ...dials, harness: d });
-    const first = modelsFor(d.choice)[0];
-    turn({ ...dials, harness: d, model: first ? { choice: first, other: "" } : { choice: OTHER, other: "" } });
+  const optionsOf: Record<EncoderDial, string[]> = { harness: harnessOptions, model: models, effort: effortOptions };
+
+  /** An encoder click: the same step as that dial's previous and next controls. */
+  function stepDial(dial: EncoderDial, by: 1 | -1) {
+    const options = optionsOf[dial];
+    const current = dials[dial];
+    const next = options[(Math.max(0, options.indexOf(current.choice)) + by + options.length) % options.length];
+    const value = { choice: next, other: next === OTHER ? current.other : "" };
+    if (dial === "harness") setHarness(value);
+    else setDials({ ...dials, [dial]: value });
   }
 
   async function finish({ keepMine }: { keepMine: boolean }) {
@@ -152,10 +160,8 @@ function Player({ profileSlug, returnTo, likeSlug }: PlayerCardProps) {
           valid: locked || complete,
           body: (
             <div className={`player${locked ? " player-locked" : ""}`}>
-              <div className="player-stage" aria-hidden="true">
-                <span className="player-figure" key={hop}>
-                  <Person solid />
-                </span>
+              <div className="player-stage">
+                <Machine setup={setup} onStep={locked ? undefined : stepDial} width={300} />
               </div>
               <div className="dials">
                 <Dial
@@ -166,8 +172,8 @@ function Player({ profileSlug, returnTo, likeSlug }: PlayerCardProps) {
                   disabled={locked}
                   onChange={setHarness}
                 />
-                <Dial label="Model" options={models} value={dials.model} disabled={locked} onChange={(model) => turn({ ...dials, model })} />
-                <Dial label="Effort" options={effortOptions} value={dials.effort} disabled={locked} onChange={(effort) => turn({ ...dials, effort })} />
+                <Dial label="Model" options={models} value={dials.model} disabled={locked} onChange={(model) => setDials({ ...dials, model })} />
+                <Dial label="Effort" options={effortOptions} value={dials.effort} disabled={locked} onChange={(effort) => setDials({ ...dials, effort })} />
               </div>
             </div>
           ),

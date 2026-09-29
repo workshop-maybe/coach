@@ -550,10 +550,14 @@ button:focus-visible {
   font-weight: 400;
 }
 
-.agent-card .person {
-  width: 36px;
-  height: 40px;
+.agent-card .cast,
+.badge-card .cast {
   margin-bottom: var(--space-xs);
+}
+
+/* A cartridge nobody holds sits unslotted, a little off true (R9). */
+.badge-card-unheld .cast-cartridge {
+  transform: translate(4px, 2px) rotate(-7deg);
 }
 
 .agent-card-name,
@@ -570,7 +574,6 @@ button:focus-visible {
   color: var(--ink-muted);
 }
 
-.agent-card-badges,
 .holders {
   display: flex;
   flex-wrap: wrap;
@@ -584,10 +587,6 @@ button:focus-visible {
   color: var(--good);
 }
 
-.holder .person {
-  width: 13px;
-  height: 15px;
-}
 
 .holders-none {
   font-family: var(--font-mono);
@@ -621,18 +620,6 @@ button:focus-visible {
   letter-spacing: var(--heading-tracking);
 }
 
-.door .person {
-  width: 22px;
-  height: 25px;
-}
-
-.door-disc {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  border: var(--rule-width) solid var(--ink);
-  box-shadow: inset 0 0 0 4px var(--surface), inset 0 0 0 12px var(--ink);
-}
 
 /* A little lift under the pointer, where motion is welcome. */
 @media (prefers-reduced-motion: no-preference) {
@@ -694,7 +681,7 @@ button:focus-visible {
   margin: var(--space-sm) 0;
 }
 
-/* The player card: a person on a stage over three dials, like choosing a player. */
+/* The player card: the agent's machine on a stage over three dials, like choosing a player. */
 .player {
   display: flex;
   flex-direction: column;
@@ -705,23 +692,18 @@ button:focus-visible {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  height: 8.5rem;
+  padding: var(--space-md) 0 var(--space-sm);
   background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
   background-size: 16px 16px;
   border-bottom: var(--rule-width) solid var(--rule);
 }
 
-.player-figure {
-  display: inline-flex;
-  color: var(--ink);
+.player-stage .cast {
+  max-width: 100%;
+  height: auto;
 }
 
-.player-figure .person {
-  width: 72px;
-  height: 80px;
-}
-
-.player-locked .player-figure {
+.player-locked .player-stage .cast {
   color: var(--ink-muted);
 }
 
@@ -812,18 +794,6 @@ button:focus-visible {
   color: var(--ink-muted);
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .player-figure {
-    animation: player-hop 260ms ease-out;
-  }
-}
-
-@keyframes player-hop {
-  40% {
-    transform: translateY(-10px);
-  }
-}
-
 @media (max-width: 36rem) {
   .dial {
     grid-template-columns: 1fr;
@@ -852,10 +822,6 @@ button:focus-visible {
   font-weight: 400;
 }
 
-.choice .person {
-  width: 28px;
-  height: 31px;
-}
 
 .choice[aria-pressed="true"] {
   box-shadow: var(--focus-ring);
@@ -917,65 +883,75 @@ button:focus-visible {
   font-size: 15px;
 }
 
-/* The badge lands on the agent: the one orchestrated motion in the flow (R16). */
+/* The test on the agent's machine (R5-R7, KTD4). */
+.test-stage {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-sm) 0;
+}
+
+.test-stage .cast {
+  max-width: 100%;
+  height: auto;
+}
+
 .landing {
   align-items: center;
   text-align: center;
-}
-
-.landing-stage {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-xs);
-  padding: var(--space-base) 0;
-}
-
-.landing-person {
-  display: inline-flex;
-  color: var(--good);
-}
-
-.landing-person .person {
-  width: 80px;
-  height: 88px;
 }
 
 .landing .deck-actions {
   align-self: stretch;
 }
 
+/* A result ejects the cartridge. Without motion it is simply gone. */
+.cast-ejecting .cast-loaded-motion {
+  opacity: 0;
+}
+
 @media (prefers-reduced-motion: no-preference) {
-  .landing-badge {
-    animation: badge-land 900ms cubic-bezier(0.2, 0.8, 0.3, 1.2) both;
+  .cast-loading .cast-loaded-motion {
+    animation: cast-slide-in 420ms cubic-bezier(0.3, 0.7, 0.4, 1) both;
   }
 
-  .landing-person {
-    animation: person-catch 900ms ease-out both;
+  .cast-ejecting .cast-loaded-motion {
+    animation: cast-eject 520ms cubic-bezier(0.3, 0, 0.6, 1) both;
+  }
+
+  /* The key that just lit seats itself once the cartridge is out, inside LANDING_MS. */
+  .cast-key-seated {
+    animation: cast-key-seat 480ms cubic-bezier(0.2, 0.8, 0.3, 1.3) 420ms both;
   }
 }
 
-@keyframes badge-land {
-  0% {
+@keyframes cast-slide-in {
+  from {
     opacity: 0;
-    transform: translateY(-120px) scale(1.4) rotate(-12deg);
+    transform: translateY(-40px);
   }
-  60% {
+}
+
+@keyframes cast-eject {
+  0% {
     opacity: 1;
-    transform: translateY(6px) scale(0.95) rotate(2deg);
+    transform: none;
+  }
+  35% {
+    opacity: 1;
+    transform: translateY(-14px);
   }
   100% {
-    transform: none;
+    opacity: 0;
+    transform: translateY(-56px);
   }
 }
 
-@keyframes person-catch {
-  0%,
-  55% {
-    transform: none;
+@keyframes cast-key-seat {
+  0% {
+    transform: translateY(-9px);
   }
-  70% {
-    transform: scaleY(0.92) translateY(4px);
+  55% {
+    transform: translateY(2px);
   }
   100% {
     transform: none;

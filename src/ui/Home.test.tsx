@@ -112,15 +112,52 @@ describe("Home", () => {
     renderApp(storageWith({ credentials: [review, docs], profiles: [opus, codex], assessments: [await met(opus, review)] }));
     const agents = await screen.findByRole("region", { name: "Agents" });
     const opusCard = within(agents).getByRole("button", { name: /^Opus agent/ });
-    expect(await within(opusCard).findByRole("img", { name: "Badge for Code review" })).toBeTruthy();
+    expect(within(within(opusCard).getByRole("list", { name: "Earned" })).getByText("Code review")).toBeTruthy();
     const codexCard = within(agents).getByRole("button", { name: /^Codex agent/ });
-    expect(within(codexCard).queryByRole("img", { name: /Badge for/ })).toBeNull();
+    expect(within(codexCard).queryByRole("list", { name: "Earned" })).toBeNull();
 
     const badges = screen.getByRole("region", { name: "Badges" });
     const held = within(badges).getByRole("button", { name: /Code review/ });
     expect(within(held).getByText("Opus agent")).toBeTruthy();
     const unheld = within(badges).getByRole("button", { name: /Write docs/ });
     expect(within(unheld).queryByText("Opus agent")).toBeNull();
+  });
+
+  it("Covers AE4 (cast). Both doors show dashed outlines, and they stay dashed once a machine stands in the agents row", async () => {
+    renderApp(storageWith());
+    const agentDoor = await screen.findByRole("button", { name: "Create an agent" });
+    const credentialDoor = screen.getByRole("button", { name: "Create a credential" });
+    expect(agentDoor.querySelector('svg.cast-outline[data-outline="machine"] [stroke-dasharray]')).not.toBeNull();
+    expect(credentialDoor.querySelector('svg.cast-outline[data-outline="cartridge"] [stroke-dasharray]')).not.toBeNull();
+    cleanup();
+
+    renderApp(storageWith({ profiles: [opus] }));
+    const agents = await screen.findByRole("region", { name: "Agents" });
+    const card = within(agents).getByRole("button", { name: /^Opus agent/ });
+    expect(card.querySelector("svg.cast-machine")).not.toBeNull();
+    expect(card.querySelector("[stroke-dasharray]")).toBeNull();
+    const door = screen.getByRole("button", { name: "Create an agent" });
+    expect(door.querySelector('svg.cast-outline[data-outline="machine"] [stroke-dasharray]')).not.toBeNull();
+  });
+
+  it("an agent's machine lights a key for each credential it earned", async () => {
+    renderApp(storageWith({ credentials: [review, docs], profiles: [opus, codex], assessments: [await met(opus, review)] }));
+    const agents = await screen.findByRole("region", { name: "Agents" });
+    const opusCard = within(agents).getByRole("button", { name: /^Opus agent/ });
+    const lit = opusCard.querySelectorAll('svg.cast-machine-mini [data-key="lit"]');
+    expect([...lit].map((k) => k.getAttribute("data-credential"))).toEqual(["eng/review"]);
+    const codexCard = within(agents).getByRole("button", { name: /^Codex agent/ });
+    expect(codexCard.querySelectorAll('[data-key="lit"]')).toHaveLength(0);
+  });
+
+  it("credentials are cartridges, and one nobody holds sits unslotted", async () => {
+    renderApp(storageWith({ credentials: [review, docs], profiles: [opus], assessments: [await met(opus, review)] }));
+    const badges = await screen.findByRole("region", { name: "Badges" });
+    const held = within(badges).getByRole("button", { name: /Code review/ });
+    const unheld = within(badges).getByRole("button", { name: /Write docs/ });
+    expect(held.querySelector("svg.cast-cartridge")).not.toBeNull();
+    expect(held.classList.contains("badge-card-unheld")).toBe(false);
+    expect(unheld.classList.contains("badge-card-unheld")).toBe(true);
   });
 
   it("Covers AE3. A test waiting on a reply is listed first and opens at what came back", async () => {
@@ -135,6 +172,7 @@ describe("Home", () => {
     const [first] = await rows();
     expect(first.textContent).toContain("Paste Opus agent's reply");
     expect(first.textContent).toContain("Write docs");
+    expect(first.querySelector('svg.cast-machine-mini[data-screen="waiting"] .cast-cursor')).not.toBeNull();
     await userEvent.click(first);
     expect(await screen.findByRole("heading", { name: "What came back" })).toBeTruthy();
   });
@@ -148,7 +186,7 @@ describe("Home", () => {
     expect(row.textContent).toContain("Code review");
     expect(row.textContent).toContain("task changed");
     const agents = screen.getByRole("region", { name: "Agents" });
-    expect(await within(agents).findByRole("img", { name: "Badge for Code review" })).toBeTruthy();
+    expect(within(within(agents).getByRole("list", { name: "Earned" })).getByText("Code review")).toBeTruthy();
     await userEvent.click(row);
     expect(await screen.findByRole("heading", { name: "Hand it over" })).toBeTruthy();
     expect(screen.getByRole("list", { name: "Answered" }).textContent).toContain("Opus agent");

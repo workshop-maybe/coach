@@ -2,7 +2,9 @@
 // back, did it meet it. Starting from a badge asks for an agent; starting from an agent
 // asks for a badge, and a missing side has a door to create it and come back (AE2).
 // Copy leaves the test waiting in "What needs you" (KTD5) until a result is recorded or
-// it is dismissed. Met lands the badge on the agent, the one motion in the flow (R16).
+// it is dismissed. The exchange plays on the agent's machine (R5-R7, KTD4): the cartridge
+// slides into its slot, Copy sends dots across the screen and then a cursor waits, the
+// reply's first lines show, and a result ejects the cartridge. Met lights and seats a key.
 
 import { useEffect, useRef, useState } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
@@ -11,16 +13,26 @@ import { sameSetup } from "../domain/matrix";
 import { recordAssessment } from "../domain/operations";
 import { testPrompt } from "../domain/prompts";
 import { credentialKey, type AgentProfile, type AssessmentResult, type Credential, type Slug } from "../domain/types";
-import { Badge } from "./Badge";
+import { Cartridge } from "../cast/Cartridge";
+import { Machine } from "../cast/Machine";
+import { Outline } from "../cast/Outline";
+import { KEYS_PER_PAGE, machineKeys, replyScreen, type ScreenState } from "../cast/mappings";
 import { Deck, type Beat } from "./Deck";
 import { useNav } from "./nav";
 import { usePendingTests, type PendingTest } from "./pendingTests";
-import { Person } from "./Person";
 import { focusOnMount } from "./shared";
 import { useFolder } from "./useFolderState";
+import { useMatrix } from "./useMatrix";
 
 /** How long the landing plays before home returns. */
 export const LANDING_MS = 1400;
+
+/** How long the dots run across the screen after Copy before the cursor waits. */
+export const SENDING_MS = 700;
+
+function reducedMotion(): boolean {
+  return typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
 
 export interface TestDeckProps {
   profileSlug?: Slug;
@@ -47,6 +59,9 @@ export function TestDeck(props: TestDeckProps) {
   const [outcome, setOutcome] = useState<Outcome>({ kind: "open" });
   const result = useRef<AssessmentResult>("met");
   const [version, setVersion] = useState<string | null>(null);
+  // The machine's screen through Copy: dots out, then the cursor waits.
+  const [sending, setSending] = useState(false);
+  const matrix = useMatrix(state);
 
   const profile = state?.profiles.find((p) => p.slug === profileSlug);
   const credential = state?.credentials.find((c) => credentialKey(c) === key);
@@ -74,11 +89,24 @@ export function TestDeck(props: TestDeckProps) {
     return () => window.clearTimeout(t);
   }, [outcome.kind]);
 
+  // The dots run a moment, then the cursor waits. Under reduced motion it waits at once.
+  useEffect(() => {
+    if (!sending) return;
+    const t = window.setTimeout(() => setSending(false), reducedMotion() ? 0 : SENDING_MS);
+    return () => window.clearTimeout(t);
+  }, [sending]);
+
   if (!state) return null;
 
   async function copy() {
     if (!credential || !profile) return;
-    await writeText(testPrompt(credential, profile));
+    setSending(true);
+    try {
+      await writeText(testPrompt(credential, profile));
+    } catch (e) {
+      setSending(false);
+      throw e;
+    }
     add({
       profileSlug: profile.slug,
       credentialKey: credentialKey(credential),
@@ -108,26 +136,40 @@ export function TestDeck(props: TestDeckProps) {
     setAsks({ agent: true, badge: false });
     setReply("");
     setOutcome({ kind: "open" });
+    setSending(false);
     setRound((r) => r + 1);
   }
 
   const collection = credential ? collectionOf(credential) : undefined;
+  const keys = matrix && profile ? machineKeys(matrix, profile.slug) : [];
+
+  /** The agent's machine with this test's cartridge in its slot. */
+  const loadedMachine = (screen: ScreenState, className?: string, seated?: string) =>
+    profile && credential && collection ? (
+      <div className="test-stage">
+        <Machine
+          setup={profile}
+          keys={keys}
+          page={seated ? pageOf(keys, seated) : 0}
+          seated={seated}
+          screen={screen}
+          loaded={{ collection, credential }}
+          headroom
+          width={280}
+          className={className}
+        />
+      </div>
+    ) : null;
 
   if (outcome.kind === "met" && credential && collection && profile) {
+    const lit = credentialKey(credential);
     return (
       <section className="deck" aria-label="Test an agent">
         <div className="deck-card landing" data-testid="landing">
           <h2 tabIndex={-1} ref={focusOnMount}>
             {profile.name} holds it
           </h2>
-          <div className="landing-stage" aria-hidden="true">
-            <span className="landing-badge">
-              <Badge collection={collection} credential={credential} size={96} />
-            </span>
-            <span className="landing-person">
-              <Person solid />
-            </span>
-          </div>
+          {loadedMachine({ kind: "idle" }, "cast-ejecting", lit)}
           <div className="deck-actions">
             <button type="button" className="ghost" onClick={home}>
               Home
@@ -145,6 +187,7 @@ export function TestDeck(props: TestDeckProps) {
           <h2 tabIndex={-1} ref={focusOnMount}>
             Not yet
           </h2>
+          {loadedMachine({ kind: "idle" }, "cast-ejecting")}
           <p className="muted">{profile.name} does not hold it</p>
           <div className="deck-actions">
             <button type="button" className="ghost" onClick={home}>
@@ -182,7 +225,7 @@ export function TestDeck(props: TestDeckProps) {
                     advance();
                   }}
                 >
-                  {col && <Badge collection={col} credential={c} size={56} />}
+                  {col && <Cartridge collection={col} credential={c} width={48} />}
                   <span className="choice-name">{c.name}</span>
                 </button>
               </li>
@@ -190,7 +233,7 @@ export function TestDeck(props: TestDeckProps) {
           })}
           <li>
             <button type="button" className="choice choice-door" onClick={() => navigate({ view: "deck", deck: "credential", returnTo: { profileSlug } })}>
-              <span className="door-disc" aria-hidden="true" />
+              <Outline kind="cartridge" width={40} />
               <span className="choice-name">Create a credential</span>
             </button>
           </li>
@@ -217,14 +260,14 @@ export function TestDeck(props: TestDeckProps) {
                   advance();
                 }}
               >
-                <Person solid={p.slug === profileSlug} />
+                <Machine mini setup={p} keys={matrix ? machineKeys(matrix, p.slug) : []} width={96} />
                 <span className="choice-name">{p.name}</span>
               </button>
             </li>
           ))}
           <li>
             <button type="button" className="choice choice-door" onClick={() => navigate({ view: "deck", deck: "agent", returnTo: { credentialKey: key } })}>
-              <Person />
+              <Outline kind="machine" width={96} />
               <span className="choice-name">Create an agent</span>
             </button>
           </li>
@@ -244,11 +287,15 @@ export function TestDeck(props: TestDeckProps) {
     body: noTask ? (
       <p className="muted">This badge has no task yet</p>
     ) : (
-      <p className="muted">Copy the prompt, paste it into {profile?.name ?? "the agent"}, and bring back what it says</p>
+      <>
+        {loadedMachine({ kind: sending ? "sending" : "idle" }, "cast-loading")}
+        <p className="muted">Copy the prompt, paste it into {profile?.name ?? "the agent"}, and bring back what it says</p>
+      </>
     ),
   });
 
   const stale = staleReason(waiting, version, profile);
+  const replyMachine = loadedMachine(sending ? { kind: "sending" } : reply.trim() ? replyScreen(reply) : { kind: "waiting" });
   beats.push({
     id: "reply",
     title: "What came back",
@@ -258,6 +305,7 @@ export function TestDeck(props: TestDeckProps) {
     settled: reply.trim() ? `${reply.trim().slice(0, 80)}${reply.trim().length > 80 ? "…" : ""}` : undefined,
     body: stale ? (
       <>
+        {replyMachine}
         <p className="muted">{stale} since you copied it</p>
         <div>
           <button type="button" className="primary" onClick={() => void copy()}>
@@ -268,6 +316,7 @@ export function TestDeck(props: TestDeckProps) {
       </>
     ) : (
       <>
+        {replyMachine}
         <textarea aria-label="Reply" value={reply} onChange={(e) => setReply(e.target.value)} />
         {waiting && <DismissLink onDismiss={() => dismiss()} />}
       </>
@@ -321,6 +370,12 @@ export function TestDeck(props: TestDeckProps) {
   const startAt = props.resume && waiting ? replyAt : props.credentialKey && props.profileSlug && round === 0 ? handAt : 0;
 
   return <Deck key={round} label="Test an agent" beats={beats} startAt={startAt} onClose={home} onFinish={record} />;
+}
+
+/** The page of keys that holds `id`, so a key that just lit is in view. */
+function pageOf(keys: readonly { id: string }[], id: string): number {
+  const at = keys.findIndex((k) => k.id === id);
+  return at < 0 ? 0 : Math.floor(at / KEYS_PER_PAGE);
 }
 
 function staleReason(waiting: PendingTest | undefined, version: string | null, profile: AgentProfile | undefined): string | null {
