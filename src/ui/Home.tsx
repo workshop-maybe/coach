@@ -48,16 +48,18 @@ export function Home() {
     };
   }, [matrix, state]);
 
+  const empty = !shelf || (shelf.credentials.length === 0 && shelf.profiles.size === 0);
+
   const items = useMemo(() => (state && matrix ? needsYou(state, matrix, pending) : []), [state, matrix, pending]);
 
   const doors = (
     <div className="doors">
       <button type="button" className="door" onClick={() => navigate({ view: "deck", deck: "agent" })}>
-        <Outline kind="machine" width={72} />
+        <Outline kind="machine" width={empty ? 220 : 72} />
         <span>Create an agent</span>
       </button>
       <button type="button" className="door" onClick={() => navigate({ view: "deck", deck: "credential" })}>
-        <Outline kind="cartridge" width={36} />
+        <Outline kind="cartridge" width={empty ? 110 : 36} />
         <span>Create a credential</span>
       </button>
     </div>
@@ -69,7 +71,7 @@ export function Home() {
   const profiles = shelf ? (state?.profiles ?? []) : [];
 
   return (
-    <div className="home">
+    <div className={empty ? "home home-empty" : "home"}>
       <h1 className="visually-hidden">Home</h1>
 
       {shelf && items.length > 0 && (
