@@ -474,6 +474,11 @@ fieldset.field > button {
   font-weight: 600;
 }
 
+.field :is(input, select, textarea) {
+  font-size: 14px;
+  font-weight: 400;
+}
+
 .field-hint {
   color: var(--ink-muted);
   font-size: 13px;
@@ -1012,4 +1017,8 @@ img.badge-thumb,
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
+}
+
+.stack > .page-header {
+  margin-bottom: 0;
 }
