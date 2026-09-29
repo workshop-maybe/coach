@@ -183,18 +183,37 @@ describe("ExportDialog", () => {
     expect(include.checked).toBe(false);
 
     await userEvent.click(screen.getByRole("button", { name: "Choose folder and export" }));
-    expect(await screen.findByText(/Exported 5 files to \/exports/)).toBeTruthy();
+    expect(await screen.findByText(/Exported 7 files to \/exports/)).toBeTruthy();
     expect(invoke).toHaveBeenCalledWith("pick_export_folder");
     const out = storage.files("export");
     expect(Object.keys(out).sort()).toEqual([
       "eng.json",
       "eng/1/assignment.md",
+      "eng/1/badge.svg",
       "eng/1/outline.md",
       "eng/2/assignment.md",
+      "eng/2/badge.svg",
       "eng/2/outline.md",
     ]);
+    const badge = out["eng/1/badge.svg"];
+    expect(badge).toContain("<svg");
+    expect(badge).toContain("@font-face");
     expect(Object.values(out).join("\n")).not.toContain(RUBRIC);
     expect(storage.writes.every((w) => w.root === "export")).toBe(true);
+  });
+
+  it("embeds the collection art in each exported badge", async () => {
+    vi.mocked(invoke).mockResolvedValue("/exports");
+    const storage = fixture();
+    const art = "data:image/png;base64,QUJDREVGRw==";
+    storage.seedImage("art/eng.png", art);
+    const raw = JSON.parse(storage.file(collectionPath("eng"))!);
+    raw.badge = { art: "art/eng.png" };
+    storage.seed({ [collectionPath("eng")]: JSON.stringify(raw) });
+    renderDialog(storage);
+    await userEvent.click(await screen.findByRole("button", { name: "Choose folder and export" }));
+    await screen.findByText(/Exported/);
+    expect(storage.file("eng/1/badge.svg", "export")).toContain(art);
   });
 
   it("saves missing module codes before exporting, so exported codes match the folder", async () => {

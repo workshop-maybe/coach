@@ -8,6 +8,8 @@ import type { Collection, Credential } from "./types";
 export interface ExportOptions {
   /** The rubric stays out of every export unless the user opts in (R24). */
   includeRubric: boolean;
+  /** Rendered badge SVG by credential slug. Each one is written as `<code>/badge.svg`. */
+  badges?: Map<string, string>;
 }
 
 interface ModuleJson {
@@ -50,7 +52,8 @@ function assignmentMd(credential: Credential, options: ExportOptions): string {
 
 /**
  * Builds every export file in memory, keyed by export-root-relative path:
- * `<collection-slug>/<code>/outline.md`, `<collection-slug>/<code>/assignment.md`
+ * `<collection-slug>/<code>/outline.md`, `<collection-slug>/<code>/assignment.md`,
+ * `<collection-slug>/<code>/badge.svg` (when badges are passed)
  * and `<collection-slug>.json`. Pure.
  */
 export function buildExport(
@@ -75,6 +78,9 @@ export function buildExport(
     const dir = `${collection.slug}/${code}`;
     files.set(`${dir}/outline.md`, outlineMd(credential, code));
     files.set(`${dir}/assignment.md`, assignmentMd(credential, options));
+
+    const badge = options.badges?.get(slug);
+    if (badge !== undefined) files.set(`${dir}/badge.svg`, badge);
 
     const assignment: ModuleJson["assignment"] = {
       title: credential.name,

@@ -193,3 +193,33 @@ describe("writeExport", () => {
     expect(storage.writes.every((w) => w.root === "export")).toBe(true);
   });
 });
+
+describe("buildExport badges", () => {
+  const badges = new Map([
+    ["review-a-pr", "<svg>a</svg>"],
+    ["write-tests", "<svg>b</svg>"],
+  ]);
+
+  it("adds badge.svg per credential when badges are passed", () => {
+    const files = buildExport(collection(), [review, write], { includeRubric: false, badges });
+    expect(files.get("code-review/1/badge.svg")).toBe("<svg>a</svg>");
+    expect(files.get("code-review/2/badge.svg")).toBe("<svg>b</svg>");
+  });
+
+  it("adds no badge files without badges, and leaves other output unchanged", () => {
+    const without = buildExport(collection(), [review, write], { includeRubric: false });
+    expect([...without.keys()].some((k) => k.endsWith("badge.svg"))).toBe(false);
+    const withBadges = buildExport(collection(), [review, write], { includeRubric: false, badges });
+    for (const [k, v] of without) expect(withBadges.get(k)).toBe(v);
+    expect(withBadges.size).toBe(without.size + 2);
+  });
+
+  it("skips credentials with no badge", () => {
+    const files = buildExport(collection(), [review, write], {
+      includeRubric: false,
+      badges: new Map([["write-tests", "<svg>b</svg>"]]),
+    });
+    expect(files.has("code-review/1/badge.svg")).toBe(false);
+    expect(files.has("code-review/2/badge.svg")).toBe(true);
+  });
+});

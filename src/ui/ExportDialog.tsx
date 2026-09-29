@@ -4,6 +4,8 @@
 
 import { useId, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { buildBadgeInput } from "../badge/resolve";
+import { renderBadgeSvg } from "../badge/render";
 import { buildExport, writeExport } from "../domain/export";
 import { collectionPath, loadFolder, parseCollection, saveCollection } from "../domain/folder";
 import { describeError, useFolder } from "./useFolderState";
@@ -46,7 +48,14 @@ export function ExportDialog({ collectionSlug, onClose }: ExportDialogProps) {
         apply(current);
       }
       const saved = current.collections.find((c) => c.slug === collection.slug) ?? collection;
-      const files = buildExport(saved, current.credentials, { includeRubric });
+      const badges = new Map<string, string>();
+      for (const slug of saved.order) {
+        const credential = current.credentials.find((c) => c.collectionSlug === saved.slug && c.slug === slug);
+        if (!credential) continue;
+        const { input } = await buildBadgeInput(storage, saved, credential);
+        badges.set(slug, renderBadgeSvg(input));
+      }
+      const files = buildExport(saved, current.credentials, { includeRubric, badges });
       await writeExport(storage, files);
       const count = files.size;
       setOutcome({ kind: "done", message: `Exported ${count} ${count === 1 ? "file" : "files"} to ${folder}` });
