@@ -2,20 +2,25 @@
 // change, so a credential's rings never change when its name or content does.
 // Uses Web Crypto so the same code runs in the Tauri webview and in Node tests.
 
+import { sha256Hex } from "../domain/hash";
+
 /** Outer ring bytes, matching credential-badges' 224 ticks. */
 const OUTER_BYTES = 28;
 
 /** Number of credential-badges palettes. */
 const PALETTE_COUNT = 10;
 
-async function sha256Hex(text: string): Promise<string> {
-  const digest = await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
-}
+// Slugs never change, so a collection's fingerprint can be computed once and kept.
+const collectionCache = new Map<string, Promise<string>>();
 
 /** The first 28 bytes (56 hex) of sha256("andamio-desktop/collection:" + slug). */
-export async function collectionFingerprint(collectionSlug: string): Promise<string> {
-  return (await sha256Hex(`andamio-desktop/collection:${collectionSlug}`)).slice(0, OUTER_BYTES * 2);
+export function collectionFingerprint(collectionSlug: string): Promise<string> {
+  let hex = collectionCache.get(collectionSlug);
+  if (!hex) {
+    hex = sha256Hex(`andamio-desktop/collection:${collectionSlug}`).then((h) => h.slice(0, OUTER_BYTES * 2));
+    collectionCache.set(collectionSlug, hex);
+  }
+  return hex;
 }
 
 /** Outer ring: the collection (56 hex). Inner ring: collection and credential (64 hex). */

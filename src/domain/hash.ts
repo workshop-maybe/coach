@@ -17,13 +17,15 @@ function normalize(text: string): string {
   return lines.slice(start, end).join("\n");
 }
 
+/** Lowercase hex SHA-256 of a UTF-8 string, via Web Crypto. */
+export async function sha256Hex(text: string): Promise<string> {
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 /** Whitespace-only edits keep the version. Any other task or rubric edit changes it. */
 export async function assignmentVersion(task: string, rubric: string): Promise<string> {
   // A JSON array keeps the task/rubric boundary unambiguous.
   const input = JSON.stringify([normalize(task), normalize(rubric)]);
-  const bytes = new TextEncoder().encode(input);
-  const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
-  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0"))
-    .join("")
-    .slice(0, VERSION_LENGTH);
+  return (await sha256Hex(input)).slice(0, VERSION_LENGTH);
 }
