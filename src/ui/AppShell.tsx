@@ -3,15 +3,18 @@
 // notice and the notice banner, then home, a deck in progress, or one item open.
 
 import { useMemo, useState } from "react";
+import { AgentDetail } from "./AgentDetail";
+import { BadgeDetail } from "./BadgeDetail";
 import { CollectionsView } from "./CollectionsView";
 import { CredentialDeck } from "./CredentialDeck";
+import { EditAgentDeck, EditCredentialDeck } from "./EditDecks";
 import { exportAll, exportMessage } from "./exportAll";
 import { pickExportFolder } from "./exportFolder";
 import { Home } from "./Home";
 import { LoadErrors, LoadWarnings } from "./LoadErrors";
 import { Lockup } from "./Lockup";
 import { MatrixView } from "./MatrixView";
-import { NavContext, useNav } from "./nav";
+import { NavContext } from "./nav";
 import { PlayerCard } from "./PlayerCard";
 import { ProfilesView } from "./ProfilesView";
 import type { DeckRoute, ItemRoute, Route } from "./routes";
@@ -88,7 +91,7 @@ export function AppShell({ onChangeFolder, initialRoute = { view: "home" } }: Ap
           ) : route.view === "deck" ? (
             <DeckView key={JSON.stringify(route)} route={route} />
           ) : route.view === "item" ? (
-            <RoutePlaceholder route={route} />
+            <ItemView key={JSON.stringify(route)} route={route} />
           ) : route.view === "collections" ? (
             <CollectionsView />
           ) : route.view === "agents" ? (
@@ -111,26 +114,14 @@ function DeckView({ route }: { route: DeckRoute }) {
       return <PlayerCard returnTo={route.returnTo} />;
     case "test":
       return <TestDeck profileSlug={route.profileSlug} credentialKey={route.credentialKey} resume={route.resume} />;
-    default:
-      return <RoutePlaceholder route={route} />;
+    case "edit-credential":
+      return <EditCredentialDeck credentialKey={route.credentialKey} part={route.part} />;
+    case "edit-agent":
+      return <EditAgentDeck profileSlug={route.profileSlug} part={route.part} />;
   }
 }
 
-// TODO(U6-U7): the edit decks and badge (U6) and agent (U7) replace this placeholder. It exists so home's rows and doors have
-// somewhere to go while those units are built.
-function RoutePlaceholder({ route }: { route: DeckRoute | ItemRoute }) {
-  const { navigate } = useNav();
-  return (
-    <section className="deck" data-testid="route-placeholder" data-route={JSON.stringify(route)} aria-label="Not built yet">
-      <div className="deck-card">
-        <h2>Not built yet</h2>
-        <p className="muted">{route.view === "deck" ? `The ${route.deck} deck` : `This ${route.item}`} arrives in a later step</p>
-        <div className="deck-actions">
-          <button type="button" className="ghost" onClick={() => navigate({ view: "home" })}>
-            Home
-          </button>
-        </div>
-      </div>
-    </section>
-  );
+/** One item open: a badge or an agent. Keyed by route, so opening another starts fresh. */
+function ItemView({ route }: { route: ItemRoute }) {
+  return route.item === "badge" ? <BadgeDetail credentialKey={route.credentialKey} /> : <AgentDetail profileSlug={route.profileSlug} />;
 }

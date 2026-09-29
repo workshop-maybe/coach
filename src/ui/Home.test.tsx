@@ -87,12 +87,6 @@ function renderApp(storage: MemoryStorage) {
 const needs = () => screen.findByRole("region", { name: "What needs you" });
 const rows = async () => within(await needs()).getAllByRole("button").filter((b) => b.textContent !== "More");
 
-/** The placeholder a not-yet-built route renders, read back as its route. */
-async function openedRoute(): Promise<unknown> {
-  const placeholder = await screen.findByTestId("route-placeholder");
-  return JSON.parse(placeholder.getAttribute("data-route")!);
-}
-
 describe("Home", () => {
   it("Covers AE1. An empty folder shows only the two doors", async () => {
     renderApp(storageWith());
@@ -166,7 +160,8 @@ describe("Home", () => {
     expect(list).toHaveLength(1);
     expect(list[0].textContent).toContain("Finish Write docs");
     await userEvent.click(list[0]);
-    expect(await openedRoute()).toEqual({ view: "deck", deck: "edit-credential", credentialKey: "eng/docs", part: "task" });
+    expect(await screen.findByRole("heading", { name: "The task" })).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: "Task" })).toBeTruthy();
   });
 
   it("an agent with no results opens the test with the agent picked", async () => {
@@ -204,12 +199,14 @@ describe("Home", () => {
 
     const agents = await screen.findByRole("region", { name: "Agents" });
     await userEvent.click(within(agents).getByRole("button", { name: /^Opus agent/ }));
-    expect(await openedRoute()).toEqual({ view: "item", item: "agent", profileSlug: "opus" });
-    await userEvent.click(screen.getByRole("button", { name: "Home" }));
+    expect(await screen.findByRole("heading", { name: "Opus agent", level: 2 })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "An agent" })).toBeTruthy();
+    await userEvent.click(screen.getAllByRole("button", { name: "Close" })[0]);
 
     const badges = await screen.findByRole("region", { name: "Badges" });
     await userEvent.click(within(badges).getByRole("button", { name: /Code review/ }));
-    expect(await openedRoute()).toEqual({ view: "item", item: "badge", credentialKey: "eng/review" });
+    expect(await screen.findByRole("region", { name: "Code review" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Test it on an agent" })).toBeTruthy();
   });
 
   it("Export writes every collection and reports it", async () => {

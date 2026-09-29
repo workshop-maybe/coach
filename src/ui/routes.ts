@@ -6,6 +6,9 @@ import type { Slug } from "../domain/types";
 /** The parts of a credential that open as one-beat edits (R4). */
 export type CredentialPart = "name" | "targets" | "task" | "rubric" | "look";
 
+/** The parts of an agent that open as one-beat edits (R4). Its setup is the player card itself. */
+export type AgentPart = "name" | "repo" | "notes" | "params";
+
 /** What a test already has picked, carried through a detour to create the missing side (AE2). */
 export interface TestPick {
   profileSlug?: Slug;
@@ -23,7 +26,8 @@ export type DeckRoute =
       /** Resume a copied test at "what came back" (R17). */
       resume?: boolean;
     }
-  | { view: "deck"; deck: "edit-credential"; credentialKey: string; part: CredentialPart };
+  | { view: "deck"; deck: "edit-credential"; credentialKey: string; part: CredentialPart }
+  | { view: "deck"; deck: "edit-agent"; profileSlug: Slug; part: AgentPart };
 
 export type ItemRoute = { view: "item"; item: "badge"; credentialKey: string } | { view: "item"; item: "agent"; profileSlug: Slug };
 

@@ -201,9 +201,15 @@ export function Dial({ label, options, value, disabled = false, show = (v) => v,
   const line = useRef<HTMLInputElement>(null);
   const isOther = value.choice === OTHER;
 
+  // The dial's position between renders, so two quick key presses step twice rather than
+  // both reading the value from before the first one re-rendered.
+  const at = useRef(index);
+  at.current = index;
+
   function step(by: number, focus: boolean) {
     if (disabled) return;
-    const next = options[(index + by + options.length) % options.length];
+    at.current = (at.current + by + options.length) % options.length;
+    const next = options[at.current];
     onChange({ choice: next, other: next === OTHER ? value.other : "" });
     if (!focus) return;
     // Focus follows the value, onto its radio or onto the line Other opens.

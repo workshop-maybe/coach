@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AppShell, type Route } from "./AppShell";
 import { FolderProvider } from "./useFolderState";
@@ -261,7 +261,7 @@ describe("Earned badges", () => {
     expect(within(a).queryByText(/earlier version/)).toBeNull();
     expect(b.className).toContain("stale");
     expect(within(b).getByText("Tested against an earlier version of the assignment")).toBeTruthy();
-    expect((within(a).getByRole("img") as HTMLElement).getAttribute("width")).toBe("96");
+    await waitFor(() => expect((within(a).getByRole("img") as HTMLElement).getAttribute("width")).toBe("96"));
   });
 
   it("shows nothing for not met or untested credentials", async () => {

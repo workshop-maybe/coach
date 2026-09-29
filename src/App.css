@@ -1863,3 +1863,300 @@ img.badge-thumb,
     transform: none;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   An item, opened (U6, U7): a badge or an agent, its parts as small record cards that
+   each open a one-beat edit, then who holds it or what it earned. */
+
+.detail {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+  max-width: 40rem;
+  margin: var(--space-2xl) auto 0;
+}
+
+.agent-detail > .deck {
+  margin-top: 0;
+  max-width: none;
+}
+
+.detail-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
+  text-align: center;
+}
+
+.detail-head h2 {
+  margin: 0;
+  font-size: 1.6rem;
+  letter-spacing: var(--display-tracking);
+}
+
+.detail-head h2:focus-visible {
+  box-shadow: none;
+  outline: none;
+}
+
+.parts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: var(--space-md);
+}
+
+.part {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-xs);
+  width: 100%;
+  min-height: 100%;
+  padding: var(--space-md) var(--space-base);
+  background: var(--surface);
+  border: var(--rule-width) solid var(--rule);
+  box-shadow: var(--shadow);
+  text-align: left;
+  font-weight: 400;
+}
+
+.part:hover:not(:disabled) {
+  background: var(--data-wash);
+  opacity: 1;
+}
+
+.part-name {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: var(--heading-tracking);
+}
+
+.part-value {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: var(--value-tracking);
+  color: var(--ink-muted);
+}
+
+.detail-section h3 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  margin: 0 0 var(--space-md);
+  font-size: 1.05rem;
+}
+
+.detail-section h3::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--cell);
+}
+
+.detail-section > .muted {
+  margin: 0;
+}
+
+.detail-holders,
+.detail-earned {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+}
+
+.detail-holder {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: var(--space-md);
+  align-items: center;
+  padding: var(--space-sm) var(--space-base);
+  background: var(--surface);
+  border: var(--rule-width) solid var(--rule);
+  text-align: left;
+  font-weight: 400;
+  color: var(--good);
+}
+
+.detail-holder .person {
+  grid-row: span 2;
+  width: 20px;
+  height: 22px;
+}
+
+.detail-holder.flagged {
+  color: var(--ink-muted);
+}
+
+.detail-holder[aria-expanded="true"] {
+  box-shadow: var(--focus-ring);
+}
+
+.detail-holder-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.detail-holder-latest {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: var(--value-tracking);
+  color: var(--ink-muted);
+}
+
+.detail-history {
+  margin-top: var(--space-md);
+  padding: var(--space-base);
+  background: var(--surface);
+  border: var(--rule-width) solid var(--rule);
+}
+
+.detail-history ol,
+.detail-reasons {
+  list-style: none;
+  margin: 0 0 var(--space-md);
+  padding: 0;
+}
+
+.detail-history ol > li + li {
+  margin-top: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--cell);
+}
+
+.detail-history-head {
+  margin: 0 0 var(--space-xs);
+}
+
+.detail-reasons li {
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.detail-history .handback {
+  max-height: 16rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: 12.5px;
+}
+
+.earned {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  width: 9rem;
+  padding: var(--space-md);
+  background: var(--surface);
+  border: var(--rule-width) solid var(--rule);
+  text-align: center;
+  font-weight: 400;
+}
+
+.earned-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.earned-reason {
+  font-size: 11.5px;
+  color: var(--ink-muted);
+}
+
+.earned.flagged img,
+.earned.flagged .badge-placeholder {
+  opacity: 0.4;
+  filter: grayscale(1);
+}
+
+/* Edit decks: lines that settle above the next, a live badge preview, palette swatches. */
+.edit-lines li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+}
+
+.edit-lines li > span {
+  flex: 1;
+}
+
+.edit-line-remove {
+  padding: 0 var(--space-xs);
+  color: var(--ink-muted);
+}
+
+.edit-look {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-base);
+}
+
+.swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: var(--space-sm);
+  width: 100%;
+}
+
+.swatch {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+}
+
+.swatch[aria-pressed="true"] {
+  box-shadow: var(--focus-ring);
+}
+
+.swatch-chip {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 4px solid;
+  outline: 2px solid;
+  outline-offset: -8px;
+}
+
+.edit-warn p {
+  margin: 0 0 var(--space-md);
+}
+
+.edit-holders {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+}
+
+.edit-holders li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-weight: 600;
+}
+
+.edit-holders .person {
+  width: 14px;
+  height: 16px;
+}
