@@ -386,17 +386,37 @@ button:focus-visible {
 /* ---------------------------------------------------------------------------
    Rich text: a Markdown box on the white surface. Prose in Inter, code in the
    mono on a faint grid tint, square lists and task boxes. Formatting lives in a
-   small menu over a selection, never a standing toolbar. */
+   bar on top of the box, and the inline tools float over a selection too. */
 
 .rich {
   position: relative;
   width: 100%;
+  border: 1px solid var(--cell);
+  background: var(--surface);
+}
+
+.rich:focus-within {
+  box-shadow: var(--focus-ring);
+}
+
+.rich-bar {
+  display: flex;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--cell);
+  background: var(--surface);
+}
+
+.rich-gap {
+  flex: none;
+  width: 1px;
+  margin: 6px 4px;
+  background: var(--cell);
 }
 
 .rich-input {
   min-height: 8rem;
   padding: 10px 14px;
-  border: 1px solid var(--cell);
+  border: none;
   border-radius: 0;
   background: var(--surface);
   font-family: var(--font-sans);
@@ -411,7 +431,7 @@ button:focus-visible {
 .rich-input:focus,
 .rich-input:focus-visible {
   outline: none;
-  box-shadow: var(--focus-ring);
+  box-shadow: none;
 }
 
 .rich-input > * + * {
@@ -582,7 +602,8 @@ button:focus-visible {
   display: flex;
 }
 
-.rich-menu button {
+.rich-menu button,
+.rich-bar button {
   min-width: 30px;
   height: 30px;
   padding: 0 8px;
@@ -596,29 +617,36 @@ button:focus-visible {
   letter-spacing: 0;
 }
 
-.rich-menu button + button {
+.rich-menu button + button,
+.rich-bar button + button {
   border-left: 1px solid var(--cell);
 }
 
-.rich-menu button[aria-label="Bold"] {
+.rich-menu button[aria-label="Bold"],
+.rich-bar button[aria-label="Bold"] {
   font-weight: 700;
 }
 
-.rich-menu button[aria-label="Italic"] {
+.rich-menu button[aria-label="Italic"],
+.rich-bar button[aria-label="Italic"] {
   font-style: italic;
 }
 
-.rich-menu button[aria-pressed="true"] {
+.rich-menu button[aria-pressed="true"],
+.rich-bar button[aria-pressed="true"] {
   background: var(--ink);
   color: var(--on-ink);
 }
 
-.rich-menu button:hover:not([aria-pressed="true"]) {
+.rich-menu button:hover:not([aria-pressed="true"]),
+.rich-bar button:hover:not([aria-pressed="true"]) {
   opacity: 1;
   background: var(--grid);
 }
 
-.rich-menu .rich-link {
+.rich-menu .rich-link,
+.rich-bar + .rich-link,
+.rich > .rich-link {
   width: 16rem;
   height: 30px;
   padding: 0 8px;

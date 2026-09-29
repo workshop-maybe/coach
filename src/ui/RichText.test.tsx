@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type { Editor } from "@tiptap/react";
 import { TextSelection } from "@tiptap/pm/state";
 import { RichText, looksLikeMarkdown } from "./RichText";
@@ -151,7 +151,8 @@ describe("RichText", () => {
     act(() => {
       ed.view.dispatch(ed.state.tr.setSelection(TextSelection.create(ed.state.doc, 6, 10)));
     });
-    fireEvent.click(await screen.findByRole("button", { name: "Bold", hidden: true }, { timeout: 2000 }));
+    const menu = await screen.findByRole("toolbar", { name: "Format", hidden: true }, { timeout: 2000 });
+    fireEvent.click(within(menu).getByRole("button", { name: "Bold", hidden: true }));
     expect(onChange).toHaveBeenLastCalledWith("make **this** bold");
   });
 
@@ -192,5 +193,17 @@ describe("useRichDraft", () => {
       ed.commands.deleteRange({ from: ed.state.selection.from - 1, to: ed.state.selection.from });
     });
     expect(screen.getByRole("status").textContent).toBe("same");
+  });
+
+  it("stands a formatting bar on top of the box, whose tools change the text", () => {
+    const changes: string[] = [];
+    render(<RichText aria-label="Task" value="Keep the diff small" onChange={(md) => changes.push(md)} placeholder="What the agent is asked to do" />);
+    const bar = screen.getByRole("toolbar", { name: "Formatting" });
+    for (const name of ["Bold", "Italic", "Code", "Link", "Heading", "Bullet list", "Numbered list", "Checklist", "Quote", "Code block"]) {
+      expect(within(bar).getByRole("button", { name })).toBeTruthy();
+    }
+    fireEvent.click(within(bar).getByRole("button", { name: "Checklist" }));
+    expect(changes[changes.length - 1]).toBe("- [ ] Keep the diff small");
+    expect(within(bar).getByRole("button", { name: "Checklist" }).getAttribute("aria-pressed")).toBe("true");
   });
 });

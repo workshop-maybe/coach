@@ -103,14 +103,32 @@ export function RichText({ value, onChange, onNormalized, placeholder, autoFocus
 
   return (
     <div className="rich">
+      {editor && <Toolbar editor={editor} full label="Formatting" />}
       <EditorContent editor={editor} />
       {editor && <SelectionMenu editor={editor} />}
     </div>
   );
 }
 
-/** The small menu that floats over a selection. No persistent toolbar. */
+/** The small menu that floats over a selection, with the inline tools. */
 function SelectionMenu({ editor }: { editor: Editor }) {
+  return (
+    <BubbleMenu
+      editor={editor}
+      className="rich-menu"
+      options={{ placement: "top", offset: 8 }}
+      shouldShow={({ editor: e, state }) => e.isEditable && !state.selection.empty && !e.isActive("codeBlock")}
+    >
+      <Toolbar editor={editor} label="Format" />
+    </BubbleMenu>
+  );
+}
+
+/**
+ * The formatting tools. `full` is the bar that stands on top of every rich box, with the
+ * block tools as well; the selection menu shows only the inline ones.
+ */
+function Toolbar({ editor, full = false, label }: { editor: Editor; full?: boolean; label: string }) {
   const [linking, setLinking] = useState(false);
   const [href, setHref] = useState("");
   const active = useEditorState({
@@ -122,6 +140,10 @@ function SelectionMenu({ editor }: { editor: Editor }) {
       link: e.isActive("link"),
       heading: e.isActive("heading", { level: 2 }),
       bullets: e.isActive("bulletList"),
+      numbers: e.isActive("orderedList"),
+      tasks: e.isActive("taskList"),
+      quote: e.isActive("blockquote"),
+      codeBlock: e.isActive("codeBlock"),
     }),
   });
 
@@ -162,34 +184,34 @@ function SelectionMenu({ editor }: { editor: Editor }) {
     </button>
   );
 
+  if (linking) {
+    return (
+      <input
+        className="rich-link"
+        aria-label="Link address"
+        value={href}
+        placeholder="https://"
+        autoFocus
+        onChange={(e) => setHref(e.target.value)}
+        onKeyDown={onLinkKey}
+        onBlur={() => setLinking(false)}
+      />
+    );
+  }
+
   return (
-    <BubbleMenu
-      editor={editor}
-      className="rich-menu"
-      options={{ placement: "top", offset: 8 }}
-      shouldShow={({ editor: e, state }) => e.isEditable && !state.selection.empty && !e.isActive("codeBlock")}
-    >
-      {linking ? (
-        <input
-          className="rich-link"
-          aria-label="Link address"
-          value={href}
-          placeholder="https://"
-          autoFocus
-          onChange={(e) => setHref(e.target.value)}
-          onKeyDown={onLinkKey}
-          onBlur={() => setLinking(false)}
-        />
-      ) : (
-        <div role="toolbar" aria-label="Format">
-          {tool("Bold", "B", active.bold, () => editor.chain().focus().toggleBold().run())}
-          {tool("Italic", "I", active.italic, () => editor.chain().focus().toggleItalic().run())}
-          {tool("Code", "<>", active.code, () => editor.chain().focus().toggleCode().run())}
-          {tool("Link", "↗", active.link, startLink)}
-          {tool("Heading", "H", active.heading, () => editor.chain().focus().toggleHeading({ level: 2 }).run())}
-          {tool("Bullet list", "•", active.bullets, () => editor.chain().focus().toggleBulletList().run())}
-        </div>
-      )}
-    </BubbleMenu>
+    <div role="toolbar" aria-label={label} className={full ? "rich-bar" : undefined}>
+      {tool("Bold", "B", active.bold, () => editor.chain().focus().toggleBold().run())}
+      {tool("Italic", "I", active.italic, () => editor.chain().focus().toggleItalic().run())}
+      {tool("Code", "<>", active.code, () => editor.chain().focus().toggleCode().run())}
+      {tool("Link", "↗", active.link, startLink)}
+      {full && <span className="rich-gap" aria-hidden="true" />}
+      {tool("Heading", "H", active.heading, () => editor.chain().focus().toggleHeading({ level: 2 }).run())}
+      {tool("Bullet list", "•", active.bullets, () => editor.chain().focus().toggleBulletList().run())}
+      {full && tool("Numbered list", "1.", active.numbers, () => editor.chain().focus().toggleOrderedList().run())}
+      {full && tool("Checklist", "☐", active.tasks, () => editor.chain().focus().toggleTaskList().run())}
+      {full && tool("Quote", "❝", active.quote, () => editor.chain().focus().toggleBlockquote().run())}
+      {full && tool("Code block", "{ }", active.codeBlock, () => editor.chain().focus().toggleCodeBlock().run())}
+    </div>
   );
 }

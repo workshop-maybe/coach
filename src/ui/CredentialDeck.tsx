@@ -112,7 +112,7 @@ export function CredentialDeck({ returnTo }: { returnTo?: TestPick }) {
       valid: task.trim() !== "",
       body: (
         <>
-          <RichText aria-label="Task" value={task} onChange={setTask} />
+          <RichText aria-label="Task" value={task} onChange={setTask} placeholder="What the agent is asked to do" />
           <CopyHelper label="Suggest a task" text={() => suggestAssignmentsPrompt(draft)} />
         </>
       ),

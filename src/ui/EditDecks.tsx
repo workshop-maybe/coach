@@ -281,7 +281,7 @@ function EditCredential({ credentialKey: key, part, credential: atOpen, collecti
           settled: "Task changed",
           body: (
             <>
-              <RichText aria-label="Task" value={task} onChange={taskDraft.setValue} onNormalized={taskDraft.onNormalized} />
+              <RichText aria-label="Task" placeholder="What the agent is asked to do" value={task} onChange={taskDraft.setValue} onNormalized={taskDraft.onNormalized} />
               <CopyHelper label="Review this assignment" text={() => reviewAssignmentPrompt({ ...c, task })} />
               <CopyHelper label="Write a handoff note" text={() => refineHandoffNote({ ...c, task })} />
             </>
@@ -300,7 +300,7 @@ function EditCredential({ credentialKey: key, part, credential: atOpen, collecti
           settled: firstRubric ? "Rubric added" : "Rubric changed",
           body: (
             <>
-              <RichText aria-label="Rubric" value={rubric} onChange={rubricDraft.setValue} onNormalized={rubricDraft.onNormalized} />
+              <RichText aria-label="Rubric" placeholder="How you will judge it" value={rubric} onChange={rubricDraft.setValue} onNormalized={rubricDraft.onNormalized} />
               <CopyHelper label="Check my criteria" text={() => checkCriteriaPrompt({ ...c, rubric })} />
             </>
           ),
@@ -480,7 +480,7 @@ function EditAgent({ profileSlug, part, profile: atOpen, state: stateAtOpen }: E
         title: "Notes",
         forward: "Save",
         valid: notesDraft.changed,
-        body: <RichText aria-label="Notes" value={notes} onChange={notesDraft.setValue} onNormalized={notesDraft.onNormalized} />,
+        body: <RichText aria-label="Notes" placeholder="Anything worth remembering" value={notes} onChange={notesDraft.setValue} onNormalized={notesDraft.onNormalized} />,
       };
       break;
     case "params":
