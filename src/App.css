@@ -21,7 +21,7 @@ body {
 }
 
 /* ---------------------------------------------------------------------------
-   Type. Inter for headlines, prose and people; the mono for records. */
+   Type. Inter for headlines, prose and names; the mono for records. */
 
 h1,
 h2,
@@ -286,13 +286,6 @@ button:focus-visible {
 
 /* ---------------------------------------------------------------------------
    Shared pieces. */
-
-/* A person, drawn: head and shoulders. Agents are people. */
-.person {
-  flex: none;
-  width: 18px;
-  height: 20px;
-}
 
 .badge-placeholder {
   display: inline-block;
@@ -726,6 +719,71 @@ button:focus-visible {
   color: var(--ink-muted);
 }
 
+/* An agent's own machine: real buttons laid over its lit keys, the key's name under it,
+   and the pages when there are more than sixteen. */
+.keyed-machine {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  max-width: 100%;
+}
+
+.keyed-machine-frame {
+  position: relative;
+  max-width: 100%;
+}
+
+.keyed-machine-frame .cast {
+  display: block;
+}
+
+.machine-keys {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.machine-key {
+  position: absolute;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.machine-key:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.machine-under {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  width: 100%;
+  min-height: 1.75rem;
+}
+
+.machine-key-name {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: var(--value-tracking);
+}
+
+.machine-pages {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
 .dials {
   display: flex;
   flex-direction: column;
@@ -1101,10 +1159,13 @@ button:focus-visible {
   color: var(--good);
 }
 
-.detail-holder .person {
+.detail-holder .cast {
   grid-row: span 2;
-  width: 20px;
-  height: 22px;
+  color: var(--ink);
+}
+
+.detail-holder.flagged .cast {
+  color: var(--ink-muted);
 }
 
 .detail-holder.flagged {
@@ -1267,9 +1328,8 @@ button:focus-visible {
   font-weight: 600;
 }
 
-.edit-holders .person {
-  width: 14px;
-  height: 16px;
+.edit-holders .cast {
+  flex: none;
 }
 
 /* The cast (src/cast): agents are machines, credentials are cartridges, drawn in a

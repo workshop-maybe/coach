@@ -166,4 +166,64 @@ describe("AgentDetail", () => {
     await userEvent.click(await within(badges).findByRole("button", { name: "Test it" }));
     await waitFor(() => expect(screen.getByRole("heading", { name: "Which badge" })).toBeTruthy());
   });
+
+  describe("its machine", () => {
+    const keysOn = () => within(screen.getByRole("list", { name: "Earned" }));
+
+    it("Covers AE3. A flagged key sits half raised, and activating it opens the re-test", async () => {
+      const storage = storageWith({
+        credentials: [review, docs],
+        profiles: [opus],
+        assessments: [await result(opus, review), await result(opus, docs, { assignmentVersion: "an earlier task" })],
+      });
+      renderApp(storage, agent);
+      const raised = await screen.findByRole("button", { name: "Write docs, re-test" });
+      expect(raised.getAttribute("data-key")).toBe("raised");
+      expect(document.querySelector('svg.cast-machine [data-credential="eng/docs"]')!.getAttribute("data-key")).toBe("raised");
+      expect(document.querySelector('svg.cast-machine [data-credential="eng/review"]')!.getAttribute("data-key")).toBe("lit");
+      await userEvent.click(raised);
+      expect(await screen.findByRole("heading", { name: "Hand it over" })).toBeTruthy();
+    });
+
+    it("a lit key opens its badge", async () => {
+      renderApp(storageWith({ credentials: [review], profiles: [opus], assessments: [await result(opus, review)] }), agent);
+      await userEvent.click(await screen.findByRole("button", { name: "Code review" }));
+      expect(await screen.findByRole("heading", { name: "Code review", level: 2 })).toBeTruthy();
+    });
+
+    it("focusing a key names its credential", async () => {
+      renderApp(storageWith({ credentials: [review], profiles: [opus], assessments: [await result(opus, review)] }), agent);
+      const key = await screen.findByRole("button", { name: "Code review" });
+      expect(key.getAttribute("title")).toBe("Code review");
+      const caption = document.querySelector(".machine-key-name")!;
+      expect(caption.textContent).toBe("");
+      key.focus();
+      await waitFor(() => expect(caption.textContent).toBe("Code review"));
+      key.blur();
+      await waitFor(() => expect(caption.textContent).toBe(""));
+    });
+
+    it("paging moves between pages of sixteen keys", async () => {
+      const many = Array.from({ length: 17 }, (_, i) => ({ ...review, slug: `c${String(i + 1).padStart(2, "0")}`, name: `Credential ${i + 1}` }));
+      const assessments = await Promise.all(
+        many.map((c, i) => result(opus, c, { recordedAt: `2026-09-${String(i + 1).padStart(2, "0")}T09:00:00.000Z` })),
+      );
+      renderApp(storageWith({ credentials: many, profiles: [opus], assessments }), agent);
+      await screen.findByRole("button", { name: "Credential 1" });
+      expect(keysOn().getAllByRole("button")).toHaveLength(16);
+      expect(screen.getByRole("button", { name: "Previous page" })).toHaveProperty("disabled", true);
+      await userEvent.click(screen.getByRole("button", { name: "Next page" }));
+      expect(keysOn().getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["Credential 17"]);
+      expect(document.querySelector('svg.cast-machine .cast-pages')!.getAttribute("data-page")).toBe("1");
+      await userEvent.click(screen.getByRole("button", { name: "Previous page" }));
+      expect(keysOn().getAllByRole("button")).toHaveLength(16);
+      expect(screen.getByRole("button", { name: "Credential 1" })).toBeTruthy();
+    });
+
+    it("one page of keys shows no page control", async () => {
+      renderApp(storageWith({ credentials: [review], profiles: [opus], assessments: [await result(opus, review)] }), agent);
+      await screen.findByRole("button", { name: "Code review" });
+      expect(screen.queryByRole("group", { name: "Pages" })).toBeNull();
+    });
+  });
 });

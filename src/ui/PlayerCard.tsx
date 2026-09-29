@@ -14,7 +14,8 @@ import type { AgentProfile, AgentSetup, FolderState, Slug } from "../domain/type
 import { Deck } from "./Deck";
 import { useNav } from "./nav";
 import { Machine } from "../cast/Machine";
-import type { EncoderDial } from "../cast/mappings";
+import type { EncoderDial, MachineKey } from "../cast/mappings";
+import { KeyedMachine } from "./KeyedMachine";
 import type { TestPick } from "./routes";
 import { useFolder } from "./useFolderState";
 import { EFFORTS, HARNESSES, OTHER, modelsFor } from "./dialLists";
@@ -69,6 +70,10 @@ export interface PlayerCardProps {
   returnTo?: TestPick;
   /** A locked agent this new one starts from. Once made, the new agent opens. */
   likeSlug?: Slug;
+  /** An existing agent's earned keys, to handle on its machine (R8). */
+  keys?: readonly MachineKey[];
+  /** Activating one of `keys`. */
+  onKey?(key: MachineKey): void;
 }
 
 type Mode = { kind: "create"; draft: Omit<AgentProfile, "slug"> | null } | { kind: "edit"; slug: Slug };
@@ -79,7 +84,7 @@ export function PlayerCard(props: PlayerCardProps) {
   return state ? <Player {...props} /> : null;
 }
 
-function Player({ profileSlug, returnTo, likeSlug }: PlayerCardProps) {
+function Player({ profileSlug, returnTo, likeSlug, keys, onKey }: PlayerCardProps) {
   const { storage, state, apply } = useFolder();
   const { navigate } = useNav();
   const [mode] = useState<Mode>(() =>
@@ -161,7 +166,11 @@ function Player({ profileSlug, returnTo, likeSlug }: PlayerCardProps) {
           body: (
             <div className={`player${locked ? " player-locked" : ""}`}>
               <div className="player-stage">
-                <Machine setup={setup} onStep={locked ? undefined : stepDial} width={300} />
+                {keys && onKey ? (
+                  <KeyedMachine setup={setup} keys={keys} onKey={onKey} onStep={locked ? undefined : stepDial} width={300} />
+                ) : (
+                  <Machine setup={setup} onStep={locked ? undefined : stepDial} width={300} />
+                )}
               </div>
               <div className="dials">
                 <Dial

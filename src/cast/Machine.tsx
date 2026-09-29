@@ -66,6 +66,17 @@ const MINI = {
 
 type Geometry = typeof MINI;
 
+/**
+ * Where the full machine's key at `index` sits, in fractions of the drawing (no headroom),
+ * with room above for a half-raised cap. Lets a view lay real controls over the keys.
+ */
+export function keyBox(index: number): { left: number; top: number; width: number; height: number } {
+  const k = FULL.keys;
+  const pitch = (k.span - k.w) / (KEYS_PER_PAGE - 1);
+  const lift = Math.round(k.h * 0.3);
+  return { left: (k.x + index * pitch) / FULL.w, top: (k.y - lift) / FULL.h, width: k.w / FULL.w, height: (k.h + lift) / FULL.h };
+}
+
 export function Machine({ setup, screen = { kind: "idle" }, keys = [], page = 0, mini = false, loaded = null, headroom = false, seated, onStep, width, className }: MachineProps) {
   const g: Geometry = mini ? MINI : FULL;
   const ink = mini ? INK_FINE : INK;

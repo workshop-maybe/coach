@@ -1,7 +1,10 @@
-// An agent, opened (U7, R4, R7, R13). The player card in edit mode (locked once the agent
-// has results, offering a new agent like it), its other parts as small cards that open
+// An agent, opened (U7, R4, R7, R8, R13). The player card in edit mode (locked once the
+// agent has results, offering a new agent like it) with the agent's whole machine: its
+// earned keys page in sixteens, each names its credential, a lit one opens its badge and a
+// half-raised one starts its re-test. Then its other parts as small cards that open
 // one-beat edits, and the badges it earned, dimmed with the reason when a re-test is due.
 
+import { machineKeys, type MachineKey } from "../cast/mappings";
 import { FLAG_REASONS, cellKey } from "../domain/matrix";
 import { credentialKey } from "../domain/types";
 import { Badge } from "./Badge";
@@ -25,6 +28,9 @@ export function AgentDetail({ profileSlug }: { profileSlug: string }) {
 
   const edit = (part: AgentPart) => navigate({ view: "deck", deck: "edit-agent", profileSlug, part });
   const params = Object.keys(profile.params);
+  const keys = matrix ? machineKeys(matrix, profileSlug) : [];
+  const onKey = (key: MachineKey) =>
+    navigate(key.halfRaised ? { view: "deck", deck: "test", profileSlug, credentialKey: key.id } : { view: "item", item: "badge", credentialKey: key.id });
   const earned = (matrix?.columns ?? []).flatMap(({ collection, credentials }) =>
     credentials.flatMap((credential) => {
       const cell = matrix?.cells.get(cellKey(profileSlug, credentialKey(credential)));
@@ -34,7 +40,7 @@ export function AgentDetail({ profileSlug }: { profileSlug: string }) {
 
   return (
     <div className="detail agent-detail">
-      <PlayerCard key={profileSlug} profileSlug={profileSlug} />
+      <PlayerCard key={profileSlug} profileSlug={profileSlug} keys={keys} onKey={onKey} />
 
       <ul className="parts" aria-label="Parts">
         <PartCard name="Name" value={profile.name} onOpen={() => edit("name")} />

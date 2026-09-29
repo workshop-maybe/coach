@@ -5,9 +5,12 @@
  * copy of landing-page-and-blog and is never edited here.
  *
  * The world's four rules, as they apply to this app:
- *   1. People carry the feeling; records carry the facts. Agents are people,
- *      named in the sans. Credentials, results and prompts are records: square
- *      cards with a header bar, speaking in the mono.
+ *   1. The cast carries the feeling; records carry the facts. Agents are
+ *      machines with settings, named in the sans. Credentials are cartridges,
+ *      and a test loads a cartridge into a machine. Results and prompts are
+ *      records: square cards with a header bar, speaking in the mono. The cast
+ *      is hand-inked; the chrome stays crisp. Precise business logic in a
+ *      hand-drawn chassis.
  *   2. One idea a view. A headline, one piece under it, one next step.
  *   3. Ink on paper, one colour for what matters now. `data` blue lights the
  *      value being read or the row a view is about. Never a fill for a piece.
@@ -51,7 +54,7 @@
   --border: var(--cell);
   --focus-ring: inset 0 0 0 1.5px var(--data);
 
-  /* Type. Inter for headlines, prose and people; Fragment Mono for records. Both bundled, never fetched. */
+  /* Type. Inter for headlines, prose and names; Fragment Mono for records. Both bundled, never fetched. */
   --font-sans: "Inter Variable", "Inter", system-ui, -apple-system, sans-serif;
   --font-mono: "Fragment Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --label: 11.5px;

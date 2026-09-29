@@ -1,15 +1,17 @@
-// A badge, opened (U6, R4, R7, R12, R18). The badge, its parts as small cards (each opens a
-// one-beat edit deck), and its holders: the agents whose latest result met it. Opening a
-// holder shows every result it has for this badge, newest first.
+// A badge, opened (U6, R4, R7, R12, R18). The credential as its cartridge, its parts as
+// small cards (each opens a one-beat edit deck), and its holders as small machines: the
+// agents whose latest result met it. Opening a holder shows every result it has for this
+// badge, newest first.
 
 import { useState } from "react";
 import { resolveBadgeSettings } from "../badge/settings";
 import { FLAG_REASONS, cellKey, type Cell } from "../domain/matrix";
+import { Cartridge } from "../cast/Cartridge";
+import { Machine } from "../cast/Machine";
+import { machineKeys } from "../cast/mappings";
 import { credentialKey, type AgentProfile } from "../domain/types";
-import { Badge } from "./Badge";
 import { FLAG_SHORT, firstLine, formatDate, resultLabel } from "./format";
 import { useNav } from "./nav";
-import { Person } from "./Person";
 import type { CredentialPart } from "./routes";
 import { Missing, PartCard, fileName, focusOnMount, paletteName, useEscape } from "./shared";
 import { useFolder } from "./useFolderState";
@@ -44,7 +46,7 @@ export function BadgeDetail({ credentialKey: key }: { credentialKey: string }) {
         ×
       </button>
       <div className="detail-head">
-        <Badge collection={collection} credential={credential} size={160} />
+        <Cartridge collection={collection} credential={credential} width={136} />
         <h2 tabIndex={-1} ref={focusOnMount}>
           {credential.name}
         </h2>
@@ -75,7 +77,7 @@ export function BadgeDetail({ credentialKey: key }: { credentialKey: string }) {
                   aria-expanded={open === profile.slug}
                   onClick={() => setOpen(open === profile.slug ? null : profile.slug)}
                 >
-                  <Person solid={cell.flags.length === 0} />
+                  {matrix && <Machine mini setup={profile} keys={machineKeys(matrix, profile.slug)} width={64} />}
                   <span className="detail-holder-name">{profile.name}</span>
                   <span className="detail-holder-latest">
                     {[resultLabel(cell.status), cell.latest ? formatDate(cell.latest.recordedAt) : "", ...cell.flags.map((f) => FLAG_SHORT[f])].filter(Boolean).join(" · ")}

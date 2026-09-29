@@ -41,7 +41,7 @@ describe("BadgeDetail", () => {
     });
     renderApp(storage, badge);
     expect(await screen.findByRole("heading", { name: "Code review", level: 2 })).toBeTruthy();
-    expect(screen.getByRole("img", { name: "Badge for Code review" })).toBeTruthy();
+    expect(document.querySelector(".detail-head svg.cast-cartridge")).not.toBeNull();
     const names = within(parts())
       .getAllByRole("button")
       .map((b) => b.querySelector(".part-name")?.textContent);
@@ -49,6 +49,8 @@ describe("BadgeDetail", () => {
     const holders = screen.getByRole("region", { name: "Holders" });
     expect(await within(holders).findByRole("button", { name: /Opus agent/ })).toBeTruthy();
     expect(within(holders).queryByRole("button", { name: /Codex agent/ })).toBeNull();
+    // Holders are small machines, named in text beside them.
+    expect(within(holders).getByRole("button", { name: /Opus agent/ }).querySelector("svg.cast-machine-mini")).not.toBeNull();
   });
 
   it("opening a holder shows its history, newest first", async () => {

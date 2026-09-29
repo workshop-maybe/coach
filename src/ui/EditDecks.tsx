@@ -22,10 +22,10 @@ import {
   type FolderState,
   type Slug,
 } from "../domain/types";
+import { Machine } from "../cast/Machine";
 import { Badge } from "./Badge";
 import { Deck, type Beat } from "./Deck";
 import { useNav } from "./nav";
-import { Person } from "./Person";
 import type { AgentPart, CredentialPart } from "./routes";
 import { CopyHelper, Missing, fileName, paletteName } from "./shared";
 import { describeError, useFolder } from "./useFolderState";
@@ -215,7 +215,7 @@ function EditCredential({ credentialKey: key, part, credential: atOpen, collecti
         <ul className="edit-holders" aria-label="Holders">
           {opened.holders.map((p) => (
             <li key={p.slug}>
-              <Person />
+              <Machine mini setup={p} width={36} />
               <span>{p.name}</span>
             </li>
           ))}
