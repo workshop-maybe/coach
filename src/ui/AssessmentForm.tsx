@@ -14,11 +14,13 @@ export interface AssessmentFormProps {
   credentialKey?: string;
   /** When given, the agent is fixed; otherwise the user picks one. */
   profileSlug?: string;
+  /** `ink` when the form sits inside a view that already has its one orange primary action. */
+  submitVariant?: "primary" | "ink";
   onDone(): void;
   onCancel(): void;
 }
 
-export function AssessmentForm({ credentialKey, profileSlug, onDone, onCancel }: AssessmentFormProps) {
+export function AssessmentForm({ credentialKey, profileSlug, submitVariant = "primary", onDone, onCancel }: AssessmentFormProps) {
   const { state, storage, apply } = useFolder();
   const id = useId();
   const [profile, setProfile] = useState(profileSlug ?? "");
@@ -179,7 +181,7 @@ export function AssessmentForm({ credentialKey, profileSlug, onDone, onCancel }:
       )}
 
       <div className="actions">
-        <button type="submit" className="primary" disabled={saving || !state}>
+        <button type="submit" className={submitVariant} disabled={saving || !state}>
           Save result
         </button>
         <button type="button" onClick={onCancel}>

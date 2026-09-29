@@ -164,6 +164,7 @@ export function PromptPanel({ credentialKey, initialJob = "test", profileSlug, o
             <AssessmentForm
               credentialKey={credentialKey}
               profileSlug={profile === "" ? undefined : profile}
+              submitVariant="ink"
               onDone={() => setRecording(false)}
               onCancel={() => setRecording(false)}
             />

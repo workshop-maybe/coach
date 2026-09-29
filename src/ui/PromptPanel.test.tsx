@@ -164,6 +164,14 @@ describe("PromptPanel", () => {
     expect(within(form).queryByLabelText("Agent")).toBeNull();
     expect(within(form).queryByLabelText("Credential")).toBeNull();
   });
+
+  it("records with an ink Save, so the editor it sits in keeps its one orange action", async () => {
+    renderPanel(fixture(), { initialJob: "test", profileSlug: "opus" });
+    await promptText();
+    await userEvent.click(screen.getByRole("button", { name: "Record result" }));
+    const form = await screen.findByRole("form", { name: "Record result" });
+    expect(within(form).getByRole("button", { name: "Save result" }).className).toBe("ink");
+  });
 });
 
 describe("ExportDialog", () => {
