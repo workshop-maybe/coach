@@ -12,6 +12,8 @@ import { holdersOf, parseParam } from "./EditDecks";
 import { opus, renderApp, result, review, snapshot, storageWith } from "./testFolder";
 
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ writeText: vi.fn() }));
+// ProseMirror typing does not run in jsdom; these flows type into a textarea stand-in.
+vi.mock("./RichText", () => import("./richTextStub"));
 
 beforeEach(() => {
   localStorage.clear();
@@ -78,6 +80,16 @@ describe("BadgeDetail", () => {
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(await screen.findByRole("list", { name: "Parts" })).toBeTruthy();
     expect((await saved(storage)).task).toBe("Review the diff twice.");
+  });
+
+  it("Save waits for a real change to the task or rubric", async () => {
+    renderApp(storageWith({ credentials: [review] }), { view: "deck", deck: "edit-credential", credentialKey: "eng/review", part: "task" });
+    const box = await screen.findByRole("textbox", { name: "Task" });
+    expect((screen.getByRole("button", { name: "Save" }) as HTMLButtonElement).disabled).toBe(true);
+    await userEvent.type(box, "!");
+    expect((screen.getByRole("button", { name: "Save" }) as HTMLButtonElement).disabled).toBe(false);
+    await userEvent.type(box, "{Backspace}");
+    expect((screen.getByRole("button", { name: "Save" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("the task card copies the review and handoff-note prompts, and the rubric card checks criteria", async () => {

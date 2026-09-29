@@ -8,6 +8,8 @@ import type { MemoryStorage } from "../storage/memory";
 import { opus, renderApp, result, review, storageWith } from "./testFolder";
 
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ writeText: vi.fn() }));
+// ProseMirror typing does not run in jsdom; these flows type into a textarea stand-in.
+vi.mock("./RichText", () => import("./richTextStub"));
 
 beforeEach(() => localStorage.clear());
 afterEach(cleanup);

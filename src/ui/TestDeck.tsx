@@ -20,6 +20,7 @@ import { machineKeys, replyScreen, trigPages, type ScreenState } from "../cast/m
 import { Deck, type Beat } from "./Deck";
 import { useNav } from "./nav";
 import { usePendingTests, type PendingTest } from "./pendingTests";
+import { RichText } from "./RichText";
 import { focusOnMount } from "./shared";
 import { describeError, useFolder } from "./useFolderState";
 import { useMatrix } from "./useMatrix";
@@ -333,7 +334,7 @@ export function TestDeck(props: TestDeckProps) {
     ) : (
       <>
         {replyMachine}
-        <textarea aria-label="Reply" value={reply} onChange={(e) => setReply(e.target.value)} />
+        <RichText aria-label="Reply" value={reply} onChange={setReply} placeholder="Paste the reply" />
         {waiting && <DismissLink onDismiss={() => dismiss()} />}
       </>
     ),

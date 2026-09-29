@@ -13,6 +13,7 @@ import { Deck, type Beat } from "./Deck";
 import { useNav } from "./nav";
 import type { TestPick } from "./routes";
 import { CopyHelper, focusOnMount } from "./shared";
+import { RichText } from "./RichText";
 import { useFolder } from "./useFolderState";
 
 export const DEFAULT_COLLECTION_NAME = "My credentials";
@@ -111,7 +112,7 @@ export function CredentialDeck({ returnTo }: { returnTo?: TestPick }) {
       valid: task.trim() !== "",
       body: (
         <>
-          <textarea aria-label="Task" value={task} onChange={(e) => setTask(e.target.value)} />
+          <RichText aria-label="Task" value={task} onChange={setTask} />
           <CopyHelper label="Suggest a task" text={() => suggestAssignmentsPrompt(draft)} />
         </>
       ),

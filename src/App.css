@@ -383,6 +383,255 @@ button:focus-visible {
   resize: vertical;
 }
 
+/* ---------------------------------------------------------------------------
+   Rich text: a Markdown box on the white surface. Prose in Inter, code in the
+   mono on a faint grid tint, square lists and task boxes. Formatting lives in a
+   small menu over a selection, never a standing toolbar. */
+
+.rich {
+  position: relative;
+  width: 100%;
+}
+
+.rich-input {
+  min-height: 8rem;
+  padding: 10px 14px;
+  border: 1px solid var(--cell);
+  border-radius: 0;
+  background: var(--surface);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.55;
+  letter-spacing: var(--ui-tracking);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  cursor: text;
+}
+
+.rich-input:focus,
+.rich-input:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.rich-input > * + * {
+  margin-top: 0.6em;
+}
+
+.rich-input :is(p, ul, ol, blockquote, pre, h1, h2, h3) {
+  margin-bottom: 0;
+}
+
+.rich-input > :first-child {
+  margin-top: 0;
+}
+
+.rich-input p {
+  margin: 0;
+}
+
+.rich-input :is(h1, h2, h3) {
+  margin-top: 0.9em;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: var(--heading-tracking);
+}
+
+.rich-input h1 {
+  font-size: 1.45em;
+}
+
+.rich-input h2 {
+  font-size: 1.22em;
+}
+
+.rich-input h3 {
+  font-size: 1.05em;
+}
+
+.rich-input :is(ul, ol) {
+  margin-top: 0.4em;
+  padding-left: 1.4em;
+}
+
+.rich-input ul {
+  list-style-type: square;
+}
+
+.rich-input li > p + * {
+  margin-top: 0.2em;
+}
+
+.rich-input li::marker {
+  color: var(--ink-muted);
+}
+
+.rich-input ol li::marker {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+}
+
+.rich-input ul[data-type="taskList"] {
+  padding-left: 0;
+  list-style: none;
+}
+
+.rich-input ul[data-type="taskList"] > li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+}
+
+.rich-input ul[data-type="taskList"] > li > label {
+  flex: none;
+  padding-top: 0.28em;
+  user-select: none;
+}
+
+.rich-input ul[data-type="taskList"] > li > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.rich-input ul[data-type="taskList"] > li[data-checked="true"] > div {
+  color: var(--ink-muted);
+  text-decoration: line-through;
+  text-decoration-color: var(--ink-ghost);
+}
+
+.rich-input input[type="checkbox"] {
+  appearance: none;
+  display: block;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  padding: 0;
+  border: var(--rule-width) solid var(--ink);
+  border-radius: 0;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.rich-input input[type="checkbox"]:checked {
+  background: var(--ink);
+  box-shadow: inset 0 0 0 2px var(--surface);
+}
+
+.rich-input blockquote {
+  margin-left: 0;
+  margin-right: 0;
+  padding-left: var(--space-md);
+  border-left: var(--rule-width) solid var(--ink);
+  color: var(--ink-muted);
+}
+
+.rich-input code {
+  padding: 1px 4px;
+  background: var(--grid);
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  letter-spacing: 0;
+}
+
+.rich-input pre {
+  padding: var(--space-md);
+  border: 1px solid var(--cell);
+  background-color: var(--grid);
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 16px 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.rich-input pre code {
+  padding: 0;
+  background: none;
+  font-size: inherit;
+}
+
+.rich-input a {
+  color: var(--data);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.rich-input hr {
+  border: none;
+  border-top: 1px solid var(--cell);
+}
+
+.rich-input p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: var(--ink-ghost);
+  pointer-events: none;
+}
+
+.rich-menu {
+  display: flex;
+  z-index: 20;
+  border: 1px solid var(--ink);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.rich-menu [role="toolbar"] {
+  display: flex;
+}
+
+.rich-menu button {
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.rich-menu button + button {
+  border-left: 1px solid var(--cell);
+}
+
+.rich-menu button[aria-label="Bold"] {
+  font-weight: 700;
+}
+
+.rich-menu button[aria-label="Italic"] {
+  font-style: italic;
+}
+
+.rich-menu button[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--on-ink);
+}
+
+.rich-menu button:hover:not([aria-pressed="true"]) {
+  opacity: 1;
+  background: var(--grid);
+}
+
+.rich-menu .rich-link {
+  width: 16rem;
+  height: 30px;
+  padding: 0 8px;
+  border: none;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0;
+}
+
+.rich-menu .rich-link:focus-visible {
+  box-shadow: var(--focus-ring);
+}
+
 .deck-error {
   margin: 0;
   padding: var(--space-sm) var(--space-md);

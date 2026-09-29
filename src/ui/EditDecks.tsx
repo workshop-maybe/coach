@@ -25,6 +25,8 @@ import { Machine } from "../cast/Machine";
 import { Badge } from "./Badge";
 import { Deck, type Beat } from "./Deck";
 import { useNav } from "./nav";
+import { useRichDraft } from "./richDraft";
+import { RichText } from "./RichText";
 import type { AgentPart, CredentialPart } from "./routes";
 import { CopyHelper, Missing, fileName, paletteName } from "./shared";
 import { describeError, useFolder } from "./useFolderState";
@@ -153,8 +155,10 @@ function EditCredential({ credentialKey: key, part, credential: atOpen, collecti
   const [name, setName] = useState(c.name);
   const [targets, setTargets] = useState(() => c.learningTargets.filter((t) => t.trim() !== ""));
   const [line, setLine] = useState("");
-  const [task, setTask] = useState(c.task);
-  const [rubric, setRubric] = useState(c.rubric);
+  const taskDraft = useRichDraft(c.task);
+  const rubricDraft = useRichDraft(c.rubric);
+  const task = taskDraft.value;
+  const rubric = rubricDraft.value;
   const [look, setLook] = useState<BadgeSettings>(() => opened.collection.badgeOverrides?.[slug] ?? {});
   const [artError, setArtError] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
@@ -203,7 +207,7 @@ function EditCredential({ credentialKey: key, part, credential: atOpen, collecti
 
   // A changed task or rubric asks the holders to re-test, so the card says so before saving (R18, AE6).
   const firstRubric = part === "rubric" && c.rubric.trim() === "" && rubric.trim() !== "";
-  const changed = (part === "task" && task.trim() !== c.task.trim()) || (part === "rubric" && rubric.trim() !== c.rubric.trim());
+  const changed = (part === "task" && taskDraft.changed) || (part === "rubric" && rubricDraft.changed);
   const warn = changed && opened.holders.length > 0;
   const warnBeat: Beat = {
     id: "warn",
@@ -273,11 +277,11 @@ function EditCredential({ credentialKey: key, part, credential: atOpen, collecti
           id: "task",
           title: "The task",
           forward: warn ? "Next" : "Save",
-          valid: task.trim() !== "",
+          valid: task.trim() !== "" && taskDraft.changed,
           settled: "Task changed",
           body: (
             <>
-              <textarea aria-label="Task" value={task} onChange={(e) => setTask(e.target.value)} />
+              <RichText aria-label="Task" value={task} onChange={taskDraft.setValue} onNormalized={taskDraft.onNormalized} />
               <CopyHelper label="Review this assignment" text={() => reviewAssignmentPrompt({ ...c, task })} />
               <CopyHelper label="Write a handoff note" text={() => refineHandoffNote({ ...c, task })} />
             </>
@@ -292,10 +296,11 @@ function EditCredential({ credentialKey: key, part, credential: atOpen, collecti
           id: "rubric",
           title: "What good looks like",
           forward: warn ? "Next" : "Save",
+          valid: rubricDraft.changed,
           settled: firstRubric ? "Rubric added" : "Rubric changed",
           body: (
             <>
-              <textarea aria-label="Rubric" value={rubric} onChange={(e) => setRubric(e.target.value)} />
+              <RichText aria-label="Rubric" value={rubric} onChange={rubricDraft.setValue} onNormalized={rubricDraft.onNormalized} />
               <CopyHelper label="Check my criteria" text={() => checkCriteriaPrompt({ ...c, rubric })} />
             </>
           ),
@@ -414,7 +419,8 @@ function EditAgent({ profileSlug, part, profile: atOpen, state: stateAtOpen }: E
 
   const [name, setName] = useState(p.name);
   const [repo, setRepo] = useState(p.repo);
-  const [notes, setNotes] = useState(p.notes);
+  const notesDraft = useRichDraft(p.notes);
+  const notes = notesDraft.value;
   const [params, setParams] = useState(() => Object.entries(p.params).map(([k, v]) => `${k} = ${v}`));
   const [line, setLine] = useState("");
 
@@ -473,7 +479,8 @@ function EditAgent({ profileSlug, part, profile: atOpen, state: stateAtOpen }: E
         id: "notes",
         title: "Notes",
         forward: "Save",
-        body: <textarea aria-label="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} />,
+        valid: notesDraft.changed,
+        body: <RichText aria-label="Notes" value={notes} onChange={notesDraft.setValue} onNormalized={notesDraft.onNormalized} />,
       };
       break;
     case "params":
