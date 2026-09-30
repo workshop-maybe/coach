@@ -17,7 +17,7 @@ import type { EncoderDial, MachineKey } from "../cast/mappings";
 import { KeyedMachine } from "./KeyedMachine";
 import type { TestPick } from "./routes";
 import { useFolder } from "./useFolderState";
-import { EFFORTS, HARNESSES, OTHER, modelsFor } from "./dialLists";
+import { EFFORTS, HARNESSES, OTHER, modelsFor, rememberedModels } from "./dialLists";
 
 const FIRST: AgentSetup = { harness: "claude-code", model: "opus", effort: "high" };
 
@@ -57,10 +57,10 @@ function effortsWith(effort: string): string[] {
   return EFFORTS.includes(effort) || effort === "" ? EFFORTS : [...EFFORTS, effort];
 }
 
-function dialsFor(setup: AgentSetup): Dials {
+function dialsFor(setup: AgentSetup, known: readonly AgentSetup[]): Dials {
   return {
     harness: toDial(setup.harness, HARNESSES.map((h) => h.value)),
-    model: toDial(setup.model, modelsFor(setup.harness)),
+    model: toDial(setup.model, [...modelsFor(setup.harness), ...rememberedModels(setup.harness, known)]),
     effort: toDial(setup.effort, effortsWith(setup.effort)),
   };
 }
@@ -96,7 +96,8 @@ function Player({ profileSlug, returnTo, likeSlug, keys, onKey }: PlayerCardProp
   );
   const stored = mode.kind === "edit" ? state?.profiles.find((p) => p.slug === mode.slug) : undefined;
   const start = mode.kind === "create" ? (mode.draft ?? FIRST) : (stored ?? FIRST);
-  const [dials, setDials] = useState<Dials>(() => dialsFor(start));
+  const known = state?.profiles ?? [];
+  const [dials, setDials] = useState<Dials>(() => dialsFor(start, known));
   const locked = mode.kind === "edit" && !!state && isSetupLocked(state, mode.slug);
 
   const setup: AgentSetup = { harness: fromDial(dials.harness), model: fromDial(dials.model), effort: fromDial(dials.effort) };
@@ -104,13 +105,14 @@ function Player({ profileSlug, returnTo, likeSlug, keys, onKey }: PlayerCardProp
   const name = mode.kind === "edit" && stored ? stored.name : setupName(setup, taken);
   const complete = setup.harness !== "" && setup.model !== "" && setup.effort !== "";
 
-  const models = [...modelsFor(dials.harness.choice), OTHER];
+  // Listed models, then any typed on an earlier agent with this harness, then Other.
+  const models = [...modelsFor(setup.harness), ...rememberedModels(setup.harness, known), OTHER];
   const harnessOptions = [...HARNESSES.map((h) => h.value), OTHER];
   const effortOptions = effortsWith(start.effort);
 
   function setHarness(d: DialValue) {
     if (d.choice === dials.harness.choice) return setDials({ ...dials, harness: d });
-    const first = modelsFor(d.choice)[0];
+    const first = modelsFor(d.choice)[0] ?? rememberedModels(fromDial(d), known)[0];
     setDials({ ...dials, harness: d, model: first ? { choice: first, other: "" } : { choice: OTHER, other: "" } });
   }
 

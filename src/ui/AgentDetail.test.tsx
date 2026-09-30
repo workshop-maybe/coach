@@ -51,7 +51,7 @@ describe("AgentDetail", () => {
     await screen.findByRole("heading", { name: "Opus agent", level: 2 });
     await userEvent.click(screen.getByRole("button", { name: "Next effort" }));
     await userEvent.click(screen.getByRole("button", { name: "Keep this setup" }));
-    await waitFor(async () => expect((await saved(storage)).effort).toBe("max"));
+    await waitFor(async () => expect((await saved(storage)).effort).toBe("xhigh"));
     expect(await screen.findByRole("list", { name: "Parts" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Opus agent", level: 2 })).toBeTruthy();
     expect(screen.queryByRole("region", { name: "What needs you" })).toBeNull();
@@ -76,9 +76,9 @@ describe("AgentDetail", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Make a new agent like this" }));
     await userEvent.click(await screen.findByRole("button", { name: "Next effort" }));
     await userEvent.click(screen.getByRole("button", { name: "Make the agent" }));
-    expect(await screen.findByRole("heading", { name: "Claude Code, opus, max", level: 2 })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Claude Code, opus, xhigh", level: 2 })).toBeTruthy();
     const parts = screen.getByRole("list", { name: "Parts" });
-    expect(within(parts).getByRole("button", { name: /^Name/ }).textContent).toContain("Claude Code, opus, max");
+    expect(within(parts).getByRole("button", { name: /^Name/ }).textContent).toContain("Claude Code, opus, xhigh");
     expect(within(parts).getByRole("button", { name: /^Repo/ }).textContent).toContain("~/code/app");
     expect(within(screen.getByRole("region", { name: "Badges" })).queryByRole("button", { name: /Code review/ })).toBeNull();
   });
@@ -158,8 +158,8 @@ describe("AgentDetail", () => {
     await userEvent.click(screen.getByRole("button", { name: "Next effort" }));
     await userEvent.click(screen.getByRole("button", { name: "Keep this setup" }));
     await userEvent.click(await screen.findByRole("button", { name: "Keep mine" }));
-    await waitFor(async () => expect((await saved(storage)).effort).toBe("max"));
-    expect(await saved(storage)).toMatchObject({ notes: "Theirs", effort: "max" });
+    await waitFor(async () => expect((await saved(storage)).effort).toBe("xhigh"));
+    expect(await saved(storage)).toMatchObject({ notes: "Theirs", effort: "xhigh" });
   });
 
   it("shows earned badges, and a flagged one dimmed with the reason", async () => {

@@ -41,8 +41,8 @@ describe("PlayerCard", () => {
     await screen.findByRole("heading", { name: "Claude Code, opus, high" });
     checked("Effort").focus();
     await userEvent.keyboard("{ArrowRight}");
-    expect(checked("Effort").textContent).toBe("max");
-    expect(heading()).toBe("Claude Code, opus, max");
+    expect(checked("Effort").textContent).toBe("xhigh");
+    expect(heading()).toBe("Claude Code, opus, xhigh");
     await userEvent.keyboard("{ArrowLeft}{ArrowLeft}");
     expect(checked("Effort").textContent).toBe("medium");
     await waitFor(() => expect(document.activeElement?.textContent).toBe("medium"));
@@ -52,16 +52,16 @@ describe("PlayerCard", () => {
     renderApp(storageWith(), { view: "deck", deck: "agent" });
     await screen.findByRole("heading", { name: "Claude Code, opus, high" });
     fireEvent.click(encoder("effort"));
-    expect(checked("Effort").textContent).toBe("max");
-    expect(heading()).toBe("Claude Code, opus, max");
+    expect(checked("Effort").textContent).toBe("xhigh");
+    expect(heading()).toBe("Claude Code, opus, xhigh");
     fireEvent.click(encoder("effort"), { shiftKey: true });
     fireEvent.click(encoder("effort"), { shiftKey: true });
     expect(checked("Effort").textContent).toBe("medium");
 
     fireEvent.click(encoder("harness"));
     expect(checked("Harness").textContent).toBe("Codex");
-    expect(checked("Model").textContent).toBe("gpt-5-codex");
-    expect(heading()).toBe("Codex, gpt-5-codex, medium");
+    expect(checked("Model").textContent).toBe("gpt-6-astra");
+    expect(heading()).toBe("Codex, gpt-6-astra, medium");
   });
 
   it("changing a dial turns that encoder, and only that one", async () => {
@@ -80,8 +80,8 @@ describe("PlayerCard", () => {
     expect(checked("Model").textContent).toBe("sonnet");
     await userEvent.click(screen.getByRole("button", { name: "Next harness" }));
     expect(checked("Harness").textContent).toBe("Codex");
-    expect(checked("Model").textContent).toBe("gpt-5-codex");
-    expect(heading()).toBe("Codex, gpt-5-codex, high");
+    expect(checked("Model").textContent).toBe("gpt-6-astra");
+    expect(heading()).toBe("Codex, gpt-6-astra, high");
   });
 
   it("Other turns a dial into one line to type on the same card", async () => {
@@ -95,6 +95,18 @@ describe("PlayerCard", () => {
     await userEvent.type(screen.getByRole("textbox", { name: "Model, other" }), "local-7b");
     expect(heading()).toBe("aider, local-7b, high");
     expect(make.disabled).toBe(false);
+  });
+
+  it("a model typed on an earlier agent joins that harness's dial, before Other", async () => {
+    renderApp(storageWith({ profiles: [{ ...opus, model: "my-model" }] }), { view: "deck", deck: "agent" });
+    await screen.findByRole("heading", { name: "Claude Code, opus, high" });
+    const models = within(dial("Model")).getAllByRole("radio").map((r) => r.textContent);
+    expect(models.slice(-2)).toEqual(["my-model", "Other"]);
+    await userEvent.click(within(dial("Model")).getByRole("radio", { name: "my-model" }));
+    expect(heading()).toBe("Claude Code, my-model, high");
+    expect(screen.queryByRole("textbox", { name: "Model, other" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Next harness" }));
+    expect(within(dial("Model")).queryByRole("radio", { name: "my-model" })).toBeNull();
   });
 
   it("an agent with a custom effort opens with that effort checked", async () => {
@@ -115,10 +127,10 @@ describe("PlayerCard", () => {
     await userEvent.click(screen.getByRole("button", { name: "Next effort" }));
     await userEvent.click(screen.getByRole("button", { name: "Make the agent" }));
     const agents = await screen.findByRole("region", { name: "Agents" });
-    expect(within(agents).getByRole("button", { name: /Claude Code, opus, max/ })).toBeTruthy();
+    expect(within(agents).getByRole("button", { name: /Claude Code, opus, xhigh/ })).toBeTruthy();
     const state = await loadFolder(storage);
     expect(state.profiles).toEqual([
-      expect.objectContaining({ name: "Claude Code, opus, max", harness: "claude-code", model: "opus", effort: "max", repo: "", params: {} }),
+      expect.objectContaining({ name: "Claude Code, opus, xhigh", harness: "claude-code", model: "opus", effort: "xhigh", repo: "", params: {} }),
     ]);
   });
 
