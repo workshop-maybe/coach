@@ -36,7 +36,7 @@ The question the app answers: **which of my agents can actually meet my acceptan
 - **The cast and the records.** Agents are machines with settings (harness, model and effort on three encoders), named in Inter. Credentials are cartridges with the badge on the label, and a test loads a cartridge into a machine. Results and prompts are square record cards with a header bar, speaking in Fragment Mono. The cast (`src/cast/`) is hand-inked. The chrome stays crisp. Precise business logic in a hand-drawn chassis.
 - **Color.** Ink on paper. Data blue lights the value or row a view is about and links, never a fill for a piece. Good green marks a pass. Orange stays in the logo. The view's main action is the ink block (`button.primary`), one per view.
 - **Tokens.** `src/theme/tokens.css` and `src/theme/tokens.shared.ts` are synced copies of `landing-page-and-blog/src/ui/system/`. Never edit them except the provenance line. App values go in `src/theme/app-tokens.css`.
-- **Geometry.** Square. `src/theme/brand.test.ts` fails on color literals or rounded corners in component CSS.
+- **Geometry.** Square. The one exception is the window's own corners (`--window-radius`), since the window is frameless. `src/theme/brand.test.ts` fails on color literals or any other rounded corner in component CSS.
 - **Fonts.** Inter and Fragment Mono are bundled from `@fontsource`, never fetched.
 
 ### Interaction rules

@@ -18,12 +18,14 @@
         "resizable": false,
         "decorations": false,
         "maximizable": false,
-        "fullscreen": false
+        "fullscreen": false,
+        "transparent": true
       }
     ],
     "security": {
       "csp": null
-    }
+    },
+    "macOSPrivateApi": true
   },
   "bundle": {
     "active": true,

@@ -25,7 +25,8 @@ function brandViolations(css: string): string[] {
     const code = text.replace(/\/\*.*?\*\//g, "");
     const colorLiteral = /#[0-9a-fA-F]{3,8}\b|\b(?:rgba?|hsla?)\(/.test(code);
     const radius = /border-radius\s*:\s*([^;]+)/.exec(code);
-    const badRadius = radius && !/^(0|50%)$/.test(radius[1].trim());
+    // Square, round badge discs, and the window's own corners (the one exception).
+    const badRadius = radius && !/^(0|50%|var\(--window-radius\))$/.test(radius[1].trim());
     if (colorLiteral || badRadius) out.push(`${i + 1}: ${text.trim()}`);
   });
   return out;
@@ -47,6 +48,11 @@ describe("brandViolations", () => {
 
   it("allows square corners, round badge discs and token colors", () => {
     expect(brandViolations("a { border-radius: 0; color: var(--ink); }\nb { border-radius: 50%; }")).toEqual([]);
+  });
+
+  it("allows the window's own corners through their token, and no other radius token", () => {
+    expect(brandViolations("#root { border-radius: var(--window-radius); }")).toEqual([]);
+    expect(brandViolations("a { border-radius: var(--window-radius-xs); }")).toHaveLength(1);
   });
 
   it("ignores literals inside comments", () => {

@@ -6,7 +6,8 @@
   line-height: 1.5;
   letter-spacing: var(--ui-tracking);
   color: var(--text);
-  background-color: var(--bg);
+  /* The window itself is transparent, so its corners can round (#root below). */
+  background-color: transparent;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -16,8 +17,17 @@
 
 body {
   margin: 0;
-  background: var(--bg);
+  overflow: hidden;
   color: var(--text);
+}
+
+/* The window's frame: the paper, clipped to the window's rounded corners, scrolling
+   inside so the corners stay put. The one rounded thing in the app (CLAUDE.md). */
+#root {
+  height: 100vh;
+  overflow: auto;
+  background: var(--bg);
+  border-radius: var(--window-radius);
 }
 
 /* ---------------------------------------------------------------------------

@@ -64,6 +64,9 @@
   --heading-tracking: -0.02em;
   --ui-tracking: -0.01em;
 
+  /* The window's own corners: the one exception to square geometry. */
+  --window-radius: 6px;
+
   /* Pieces. */
   --rule-width: 1.5px;
   --header-bar: 38px;
