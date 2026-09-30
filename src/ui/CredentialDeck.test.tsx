@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, screen, waitFor } from "@testing-library/react";
+import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { loadFolder } from "../domain/folder";
+import { PRESETS, presetCredential } from "../domain/presets";
 import { renderApp, review, snapshot, storageWith } from "./testFolder";
 
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ writeText: vi.fn() }));
@@ -17,6 +18,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 async function walk(name: string, target: string, task: string) {
+  await userEvent.click(await screen.findByRole("button", { name: "Build your own" }));
   await userEvent.type(await screen.findByRole("textbox", { name: "Name" }), name);
   await userEvent.click(screen.getByRole("button", { name: "Next" }));
   await userEvent.type(screen.getByRole("textbox", { name: "Learning target" }), target);
@@ -25,8 +27,10 @@ async function walk(name: string, target: string, task: string) {
 }
 
 describe("CredentialDeck", () => {
-  it("asks one thing per card: its name, one thing its holder can do, then the task", async () => {
+  it("asks one thing per card: where to start, its name, one thing its holder can do, then the task", async () => {
     renderApp(storageWith(), { view: "deck", deck: "credential" });
+    expect(await screen.findByRole("heading", { name: "Where to start" })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Build your own" }));
     expect(await screen.findByRole("heading", { name: "What is it called" })).toBeTruthy();
     await userEvent.type(screen.getByRole("textbox", { name: "Name" }), "Code review");
     await userEvent.click(screen.getByRole("button", { name: "Next" }));
@@ -71,6 +75,7 @@ describe("CredentialDeck", () => {
   it("a target with a list offers to move it to the rubric, and the credential keeps both", async () => {
     const storage = storageWith();
     renderApp(storage, { view: "deck", deck: "credential" });
+    await userEvent.click(await screen.findByRole("button", { name: "Build your own" }));
     await userEvent.type(await screen.findByRole("textbox", { name: "Name" }), "Code review");
     await userEvent.click(screen.getByRole("button", { name: "Next" }));
     const box = screen.getByRole("textbox", { name: "Learning target" }) as HTMLInputElement;
@@ -124,5 +129,46 @@ describe("CredentialDeck", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Test it on an agent" }));
     expect(await screen.findByRole("heading", { name: "Who takes it" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Create an agent" })).toBeTruthy();
+  });
+
+  it("starting from a preset shows its targets on one card and makes the whole credential", async () => {
+    const storage = storageWith();
+    renderApp(storage, { view: "deck", deck: "credential" });
+    await userEvent.click(await screen.findByRole("button", { name: "Tighten a learning target" }));
+    expect(await screen.findByRole("heading", { name: "Tighten a learning target" })).toBeTruthy();
+    expect(within(screen.getByRole("list", { name: "Learning targets" })).getAllByRole("listitem")).toHaveLength(2);
+    await userEvent.click(screen.getByRole("button", { name: "Make the badge" }));
+
+    expect(await screen.findByRole("button", { name: "Test it on an agent" })).toBeTruthy();
+    const state = await loadFolder(storage);
+    const preset = presetCredential(PRESETS[0], state.collections[0].slug);
+    expect(state.collections.map((c) => c.name)).toEqual(["My credentials"]);
+    expect(state.credentials).toEqual([preset]);
+  });
+
+  it("Back from a preset returns to where to start, and your own still works", async () => {
+    const storage = storageWith({ credentials: [review] });
+    renderApp(storage, { view: "deck", deck: "credential" });
+    await userEvent.click(await screen.findByRole("button", { name: "Run a Nostr relay" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Back" }));
+    expect(await screen.findByRole("heading", { name: "Where to start" })).toBeTruthy();
+    await walk("Write docs", "I can explain a module", "Document the module");
+    await userEvent.click(screen.getByRole("button", { name: "Make the badge" }));
+    await screen.findByRole("button", { name: "Test it on an agent" });
+    const state = await loadFolder(storage);
+    expect(state.credentials.map((c) => c.name).sort()).toEqual(["Code review", "Write docs"]);
+  });
+
+  it("a preset made twice gets its own file", async () => {
+    const storage = storageWith();
+    for (let i = 0; i < 2; i++) {
+      cleanup();
+      renderApp(storage, { view: "deck", deck: "credential" });
+      await userEvent.click(await screen.findByRole("button", { name: "Rate your own confidence" }));
+      await userEvent.click(await screen.findByRole("button", { name: "Make the badge" }));
+      await screen.findByRole("button", { name: "Test it on an agent" });
+    }
+    const state = await loadFolder(storage);
+    expect(state.credentials.map((c) => c.slug).sort()).toEqual(["rate-your-own-confidence", "rate-your-own-confidence-2"]);
   });
 });

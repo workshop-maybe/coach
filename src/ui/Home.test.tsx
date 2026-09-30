@@ -244,7 +244,7 @@ describe("Home", () => {
   it("the doors, an agent and a badge each open their place, and the deck closes home", async () => {
     renderApp(storageWith({ credentials: [review], profiles: [opus] }));
     await userEvent.click(await screen.findByRole("button", { name: "Create a credential" }));
-    expect(await screen.findByRole("heading", { name: "What is it called" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Where to start" })).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Close" }));
 
     await userEvent.click(await screen.findByRole("button", { name: "Create an agent" }));

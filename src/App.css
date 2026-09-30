@@ -1266,6 +1266,14 @@ button:focus-visible {
   color: var(--ink-muted);
 }
 
+/* A preset's learning targets, on the card that makes it. */
+.preset-targets {
+  display: grid;
+  gap: var(--space-sm);
+  margin: 0;
+  padding-left: var(--space-lg);
+}
+
 /* Did it meet it: the rubric beside the two answers when one exists. */
 .meet {
   display: flex;
