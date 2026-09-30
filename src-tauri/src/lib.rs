@@ -1,3 +1,4 @@
+mod context;
 mod files;
 mod settings;
 
@@ -8,10 +9,40 @@ use files::{RootKind, Roots};
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
-/// Approved roots plus where settings live.
+/// Approved roots plus where settings live, and this machine's identity.
 struct AppState {
     roots: Mutex<Roots>,
     settings_path: PathBuf,
+    machine_id: String,
+    machine_name: String,
+    home: Option<PathBuf>,
+}
+
+/// The context a test starts with. Only the memory digest leaves `context`.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ContextReport {
+    machine_id: String,
+    machine: String,
+    memory: String,
+}
+
+/// The name people know this machine by: the macOS Computer Name, else the
+/// hostname, else "This computer".
+fn machine_display_name() -> String {
+    let run = |cmd: &str, args: &[&str]| {
+        std::process::Command::new(cmd)
+            .args(args)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .filter(|s| !s.is_empty())
+    };
+    let computer_name = if cfg!(target_os = "macos") { run("scutil", &["--get", "ComputerName"]) } else { None };
+    computer_name
+        .or_else(|| run("hostname", &[]))
+        .unwrap_or_else(|| "This computer".to_string())
 }
 
 impl AppState {
@@ -141,6 +172,20 @@ async fn read_data_uri(state: State<'_, AppState>, root: String, path: String) -
     files::read_data_uri_in(&state.root(&root)?, &path)
 }
 
+/// This machine and a fingerprint of the agent's memory for its repo (R1).
+#[tauri::command]
+async fn read_context(state: State<'_, AppState>, repo: String, harness: String) -> Result<ContextReport, String> {
+    let memory = match &state.home {
+        Some(home) => context::memory_fingerprint(home, &repo, &harness),
+        None => context::NOT_READ.to_string(),
+    };
+    Ok(ContextReport {
+        machine_id: state.machine_id.clone(),
+        machine: state.machine_name.clone(),
+        memory,
+    })
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -149,12 +194,16 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
             let settings_path = app.path().app_config_dir()?.join(settings::FILE_NAME);
-            let saved = settings::load(&settings_path);
+            let mut saved = settings::load(&settings_path);
+            let machine_id = settings::ensure_machine_id(&settings_path, &mut saved, context::new_machine_id);
             let mut roots = Roots::default();
             files::register_remembered(&mut roots, saved.data_folder.as_deref());
             app.manage(AppState {
                 roots: Mutex::new(roots),
                 settings_path,
+                machine_id,
+                machine_name: machine_display_name(),
+                home: app.path().home_dir().ok(),
             });
             Ok(())
         })
@@ -167,7 +216,8 @@ pub fn run() {
             list_files,
             move_file,
             import_badge_art,
-            read_data_uri
+            read_data_uri,
+            read_context
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
