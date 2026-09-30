@@ -31,3 +31,6 @@ src-tauri/gen
 .env
 .env.*
 *.tsbuildinfo
+
+# Compound Engineering scratch
+.context/compound-engineering/
