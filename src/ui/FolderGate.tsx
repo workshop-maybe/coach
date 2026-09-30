@@ -4,7 +4,9 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { InkDefs } from "../cast/InkDefs";
 import { Lockup } from "./Lockup";
+import { WindowControls } from "./WindowControls";
 import { describeError } from "./useFolderState";
 
 export interface FolderGateProps {
@@ -58,7 +60,12 @@ export function FolderGate({ getFolder = defaultGetFolder, pickFolder = defaultP
   if (gate.status === "ready") return <>{children(gate.folder, choose)}</>;
 
   return (
-    <main className="gate">
+    <>
+      <InkDefs />
+      <div className="gate-bar" data-tauri-drag-region>
+        <WindowControls />
+      </div>
+      <main className="gate">
       <Lockup className="lockup-wrap" />
       <h1>Andamio Desktop</h1>
       <p>Pick a folder for your credentials, agents and results. Everything is stored there as Markdown and JSON.</p>
@@ -66,6 +73,7 @@ export function FolderGate({ getFolder = defaultGetFolder, pickFolder = defaultP
         Choose folder
       </button>
       {error && <p className="gate-error" role="alert">{error}</p>}
-    </main>
+      </main>
+    </>
   );
 }

@@ -9,6 +9,7 @@ import { BadgeDetail } from "./BadgeDetail";
 import { CredentialDeck } from "./CredentialDeck";
 import { EditAgentDeck, EditCredentialDeck } from "./EditDecks";
 import { TrashDeck } from "./TrashDeck";
+import { WindowControls } from "./WindowControls";
 import { exportAll, exportMessage } from "./exportAll";
 import { pickExportFolder } from "./exportFolder";
 import { Home } from "./Home";
@@ -54,11 +55,12 @@ export function AppShell({ onChangeFolder, initialRoute = { view: "home" } }: Ap
     <NavContext.Provider value={nav}>
       <div className="shell">
         <InkDefs />
-        <header className="topbar">
+        <header className="topbar" data-tauri-drag-region>
+          <WindowControls />
           <button type="button" className="brand" aria-label="Andamio Desktop, go home" onClick={() => navigate({ view: "home" })}>
             <Lockup />
           </button>
-          <span className="folder-path" title={folder}>
+          <span className="folder-path" title={folder} data-tauri-drag-region>
             {folder}
           </span>
           <div className="topbar-actions">

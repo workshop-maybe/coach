@@ -1772,3 +1772,60 @@ button:focus-visible {
   font-weight: 500;
   padding-inline: 0;
 }
+
+/* The window's own keys (no system title bar): close and minimize, drawn like the
+   machine's keys. The bar they sit in is the window's drag region. */
+.window-keys {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.window-key {
+  border: none;
+  background: none;
+  padding: 0;
+  line-height: 0;
+}
+
+.window-key svg {
+  display: block;
+  overflow: visible;
+}
+
+.window-key-fill {
+  fill: none;
+}
+
+.window-key-edge,
+.window-key-icon {
+  fill: none;
+  stroke: var(--ink);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.window-key-edge {
+  stroke-width: 1.4;
+}
+
+.window-key-icon {
+  stroke-width: 1.8;
+}
+
+.window-key:hover .window-key-fill {
+  fill: var(--ink);
+}
+
+.window-key:hover .window-key-icon {
+  stroke: var(--on-ink);
+}
+
+.window-key:focus-visible {
+  outline: 1.5px solid var(--data);
+  outline-offset: 2px;
+}
+
+.gate-bar {
+  display: flex;
+  padding: var(--space-md) var(--space-xl);
+}
