@@ -69,6 +69,21 @@ describe("BadgeDetail", () => {
     expect(items[1].textContent).toContain("First try");
   });
 
+  it("each result in the history shows the machine it ran on, and memory changes", async () => {
+    const ctx = (memory: string, capturedAt: string) => ({ machineId: "laptop", machine: "Laptop", memory, capturedAt });
+    const first = await result(opus, review, { fileStem: "20260801T090000Z", recordedAt: "2026-08-01T09:00:00.000Z", context: ctx("aaaaaaaaaaaa", "2026-08-01T09:00:00.000Z") });
+    const same = await result(opus, review, { fileStem: "20260802T090000Z", recordedAt: "2026-08-02T09:00:00.000Z", context: ctx("aaaaaaaaaaaa", "2026-08-02T09:00:00.000Z") });
+    const changed = await result(opus, review, { fileStem: "20260803T090000Z", recordedAt: "2026-08-03T09:00:00.000Z", context: ctx("bbbbbbbbbbbb", "2026-08-03T09:00:00.000Z") });
+    const notRead = await result(opus, review, { fileStem: "20260804T090000Z", recordedAt: "2026-08-04T09:00:00.000Z", context: ctx("not-read", "2026-08-04T09:00:00.000Z") });
+    const unknown = await result(opus, review, { fileStem: "20260805T090000Z", recordedAt: "2026-08-05T09:00:00.000Z" });
+    const storage = storageWith({ credentials: [review], profiles: [opus], assessments: [first, same, changed, notRead, unknown] });
+    renderApp(storage, badge);
+    await userEvent.click(await screen.findByRole("button", { name: /Opus agent/ }));
+    const history = screen.getByRole("region", { name: "Opus agent results" });
+    const lines = [...history.querySelectorAll(".detail-history-context")].map((p) => p.textContent);
+    expect(lines).toEqual(["context unknown", "Laptop · memory not read", "Laptop · memory changed", "Laptop", "Laptop"]);
+  });
+
   it("editing the task saves through updateCredential and returns to the badge", async () => {
     const storage = storageWith({ credentials: [review] });
     renderApp(storage, badge);

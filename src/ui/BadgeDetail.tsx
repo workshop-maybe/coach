@@ -9,8 +9,9 @@ import { FLAG_REASONS, cellKey, type Cell } from "../domain/matrix";
 import { Cartridge } from "../cast/Cartridge";
 import { Machine } from "../cast/Machine";
 import { machineKeys } from "../cast/mappings";
-import { credentialKey, type AgentProfile } from "../domain/types";
-import { FLAG_SHORT, firstLine, formatDate, resultLabel } from "./format";
+import { credentialKey, type AgentProfile, type Assessment } from "../domain/types";
+import { contextLine } from "../domain/context";
+import { FLAG_SHORT, contextText, firstLine, formatDate, resultLabel } from "./format";
 import { useNav } from "./nav";
 import type { CredentialPart } from "./routes";
 import { Missing, PartCard, fileName, focusOnMount, paletteName, useEscape } from "./shared";
@@ -88,7 +89,7 @@ export function BadgeDetail({ credentialKey: key }: { credentialKey: string }) {
             ))}
           </ul>
         )}
-        {opened && <History profile={opened.profile} cell={opened.cell} onTestAgain={() => navigate({ view: "deck", deck: "test", profileSlug: opened.profile.slug, credentialKey: key })} />}
+        {opened && <History profile={opened.profile} cell={opened.cell} assessments={state.assessments} onTestAgain={() => navigate({ view: "deck", deck: "test", profileSlug: opened.profile.slug, credentialKey: key })} />}
       </section>
 
       <TrashLink onOpen={() => navigate({ view: "deck", deck: "trash", item: { kind: "badge", credentialKey: key } })} />
@@ -96,7 +97,18 @@ export function BadgeDetail({ credentialKey: key }: { credentialKey: string }) {
   );
 }
 
-function History({ profile, cell, onTestAgain }: { profile: AgentProfile; cell: Cell; onTestAgain(): void }) {
+function History({
+  profile,
+  cell,
+  assessments,
+  onTestAgain,
+}: {
+  profile: AgentProfile;
+  cell: Cell;
+  /** Every result in the folder, so memory compares across credentials (R7). */
+  assessments: readonly Assessment[];
+  onTestAgain(): void;
+}) {
   return (
     <div className="detail-history" aria-label={`${profile.name} results`} role="region">
       {cell.flags.length > 0 && (
@@ -112,6 +124,7 @@ function History({ profile, cell, onTestAgain }: { profile: AgentProfile; cell: 
             <p className="detail-history-head">
               <strong>{resultLabel(a.result)}</strong> <span className="muted">{formatDate(a.recordedAt)}</span>
             </p>
+            <p className="detail-history-context muted">{contextText(contextLine(assessments, a))}</p>
             {a.note.trim() !== "" && <p>{a.note}</p>}
             <details>
               <summary>Reply</summary>

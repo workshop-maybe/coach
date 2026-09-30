@@ -1563,6 +1563,12 @@ button:focus-visible {
   margin: 0 0 var(--space-xs);
 }
 
+.detail-history-context {
+  margin: 0 0 var(--space-xs);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
 .detail-reasons li {
   font-size: 13px;
   color: var(--ink-muted);
