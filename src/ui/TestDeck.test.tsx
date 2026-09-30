@@ -168,6 +168,7 @@ describe("TestDeck", () => {
     expect(await screen.findByRole("heading", { name: "Which badge" })).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Create a credential" }));
 
+    await userEvent.click(await screen.findByRole("button", { name: "Build your own" }));
     await userEvent.type(await screen.findByRole("textbox", { name: "Name" }), "Write docs");
     await userEvent.click(screen.getByRole("button", { name: "Next" }));
     await userEvent.type(screen.getByRole("textbox", { name: "Learning target" }), "I can explain a module");
