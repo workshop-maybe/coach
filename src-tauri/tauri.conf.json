@@ -14,7 +14,10 @@
       {
         "title": "Andamio Desktop",
         "width": 1100,
-        "height": 760
+        "height": 760,
+        "resizable": false,
+        "maximizable": false,
+        "fullscreen": false
       }
     ],
     "security": {
