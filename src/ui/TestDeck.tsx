@@ -12,7 +12,7 @@ import { assignmentVersion } from "../domain/hash";
 import { sameSetup } from "../domain/matrix";
 import { recordAssessment } from "../domain/operations";
 import { testPrompt } from "../domain/prompts";
-import { credentialKey, type AgentProfile, type AssessmentResult, type Credential, type Slug } from "../domain/types";
+import { credentialKey, type AgentProfile, type AssessmentResult, type Credential, type Slug, type TestContext } from "../domain/types";
 import { Cartridge } from "../cast/Cartridge";
 import { Machine } from "../cast/Machine";
 import { Outline } from "../cast/Outline";
@@ -104,18 +104,26 @@ export function TestDeck(props: TestDeckProps) {
   async function copy() {
     if (!credential || !profile) return;
     setSending(true);
+    // The context the test starts with (R1). It never blocks or fails the copy (KTD8).
+    const capturedAt = new Date().toISOString();
+    const reading = storage.readContext(profile.repo, profile.harness).then(
+      (r): TestContext => ({ ...r, capturedAt }),
+      () => undefined,
+    );
     try {
       await writeText(testPrompt(credential, profile));
     } catch (e) {
       setSending(false);
       throw e;
     }
+    const context = await reading;
     add({
       profileSlug: profile.slug,
       credentialKey: credentialKey(credential),
       copiedAt: new Date().toISOString(),
       assignmentVersion: version ?? (await assignmentVersion(credential.task, credential.rubric)),
       setup: { harness: profile.harness, model: profile.model, effort: profile.effort },
+      ...(context ? { context } : {}),
     });
   }
 
@@ -128,6 +136,7 @@ export function TestDeck(props: TestDeckProps) {
       result: result.current,
       note: "",
       handBack: reply,
+      ...(waiting?.context ? { context: waiting.context } : {}),
     });
     remove(profile.slug, credentialKey(credential));
     apply(next);

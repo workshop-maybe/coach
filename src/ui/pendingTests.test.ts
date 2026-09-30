@@ -62,4 +62,29 @@ describe("pendingTests", () => {
     expect(readPending("/data", broken)).toEqual([]);
     expect(() => addPending("/data", entry, broken)).not.toThrow();
   });
+
+  const context = { machineId: "m1", machine: "Studio Mac", memory: "0123456789ab", capturedAt: "2026-09-29T10:00:00.000Z" };
+
+  it("keeps the context a test was copied with", () => {
+    addPending("/data", { ...entry, context });
+    expect(readPending("/data")).toEqual([{ ...entry, context }]);
+  });
+
+  it("two waiting tests for one agent keep separate snapshots", () => {
+    addPending("/data", { ...entry, context });
+    const other = { ...entry, credentialKey: "eng/ship", copiedAt: "2026-09-29T11:00:00.000Z", context: { ...context, memory: "ffffffffffff" } };
+    addPending("/data", other);
+    const byKey = Object.fromEntries(readPending("/data").map((p) => [p.credentialKey, p.context?.memory]));
+    expect(byKey).toEqual({ "eng/review": "0123456789ab", "eng/ship": "ffffffffffff" });
+  });
+
+  it("a waiting test saved before context existed still loads", () => {
+    localStorage.setItem(pendingStorageKey("/data"), JSON.stringify([entry]));
+    expect(readPending("/data")).toEqual([entry]);
+  });
+
+  it("a malformed context is dropped, and the waiting test kept", () => {
+    localStorage.setItem(pendingStorageKey("/data"), JSON.stringify([{ ...entry, context: { machine: 3 } }]));
+    expect(readPending("/data")).toEqual([entry]);
+  });
 });

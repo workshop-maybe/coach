@@ -3,7 +3,7 @@
 // reminder, never a result. A copy of the same agent and credential replaces the last.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { AgentSetup, Slug } from "../domain/types";
+import type { AgentSetup, Slug, TestContext } from "../domain/types";
 
 export interface PendingTest {
   profileSlug: Slug;
@@ -14,6 +14,8 @@ export interface PendingTest {
   assignmentVersion: string;
   /** The agent's setup when copied. */
   setup: AgentSetup;
+  /** The machine and memory the test started with. Absent when it couldn't be read. */
+  context?: TestContext;
 }
 
 export function pendingStorageKey(folder: string): string {
@@ -45,6 +47,19 @@ function isPending(v: unknown): v is PendingTest {
   );
 }
 
+function isContext(v: unknown): v is TestContext {
+  if (typeof v !== "object" || v === null) return false;
+  const c = v as Record<string, unknown>;
+  return [c.machineId, c.machine, c.memory, c.capturedAt].every((f) => typeof f === "string" && f !== "");
+}
+
+/** A valid entry, with a malformed context dropped so the reminder survives. */
+function clean(p: PendingTest): PendingTest {
+  if (p.context === undefined || isContext(p.context)) return p;
+  const { context: _dropped, ...rest } = p;
+  return rest;
+}
+
 const newestFirst = (a: PendingTest, b: PendingTest) => (a.copiedAt < b.copiedAt ? 1 : a.copiedAt > b.copiedAt ? -1 : 0);
 
 /** Waiting tests for a folder, newest first. Unreadable storage reads as none. */
@@ -54,7 +69,7 @@ export function readPending(folder: string, store = defaultStore()): PendingTest
     if (!text) return [];
     const parsed: unknown = JSON.parse(text);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isPending).sort(newestFirst);
+    return parsed.filter(isPending).map(clean).sort(newestFirst);
   } catch {
     return [];
   }
@@ -71,7 +86,7 @@ function write(folder: string, list: PendingTest[], unchanged: PendingTest[], st
     // Blocked storage loses the reminder only.
     return unchanged;
   }
-  return (JSON.parse(text) as unknown[]).filter(isPending).sort(newestFirst);
+  return (JSON.parse(text) as unknown[]).filter(isPending).map(clean).sort(newestFirst);
 }
 
 const same = (a: Pick<PendingTest, "profileSlug" | "credentialKey">, profileSlug: Slug, credentialKey: string) =>

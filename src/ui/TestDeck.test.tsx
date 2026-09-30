@@ -209,6 +209,62 @@ describe("TestDeck", () => {
     expect(readPending(FOLDER)).toEqual([]);
   });
 
+  it("Copy snapshots this machine and the agent's memory into the waiting test", async () => {
+    const storage = storageWith({ credentials: [review], profiles: [opus] });
+    storage.queueContext({ machineId: "m1", machine: "Studio Mac", memory: "0123456789ab" });
+    renderApp(storage, fromBadge);
+    await takeAndCopy();
+    const [waiting] = readPending(FOLDER);
+    expect(waiting.context).toEqual({
+      machineId: "m1",
+      machine: "Studio Mac",
+      memory: "0123456789ab",
+      capturedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+    });
+  });
+
+  it("Covers AE2. The result carries the context from copy time, not record time", async () => {
+    const storage = storageWith({ credentials: [review], profiles: [opus] });
+    storage.queueContext({ machineId: "m1", machine: "Studio Mac", memory: "aaaaaaaaaaaa" });
+    storage.queueContext({ machineId: "m1", machine: "Studio Mac", memory: "bbbbbbbbbbbb" });
+    renderApp(storage, fromBadge);
+    await takeAndCopy();
+    await pasteAndJudge("Done.", "Not yet");
+    await screen.findByRole("heading", { name: "Not yet" });
+    const [saved] = (await loadFolder(storage)).assessments;
+    expect(saved.context?.memory).toBe("aaaaaaaaaaaa");
+  });
+
+  it("a failed context read still copies and waits, with no context", async () => {
+    const storage = storageWith({ credentials: [review], profiles: [opus] });
+    storage.queueContext(new Error("no home"));
+    renderApp(storage, fromBadge);
+    await takeAndCopy();
+    const [waiting] = readPending(FOLDER);
+    expect(waiting).toMatchObject({ profileSlug: "opus", credentialKey: "eng/review" });
+    expect(waiting).not.toHaveProperty("context");
+  });
+
+  it("Covers AE3, AE6. A waiting test from before context existed records a result with no context, and a changed memory never makes it stale", async () => {
+    const storage = storageWith({ credentials: [review], profiles: [opus] });
+    addPending(FOLDER, {
+      profileSlug: "opus",
+      credentialKey: "eng/review",
+      copiedAt: "2026-09-29T10:00:00.000Z",
+      assignmentVersion: await assignmentVersion(review.task, review.rubric),
+      setup: { harness: "claude-code", model: "opus", effort: "high" },
+    });
+    renderApp(storage);
+    const needs = await screen.findByRole("region", { name: "What needs you" });
+    await userEvent.click(within(needs).getAllByRole("button")[0]);
+    expect(await screen.findByRole("heading", { name: "What came back" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Copy again" })).toBeNull();
+    await pasteAndJudge("Here.", "Not yet");
+    await screen.findByRole("heading", { name: "Not yet" });
+    const [saved] = (await loadFolder(storage)).assessments;
+    expect(saved).not.toHaveProperty("context");
+  });
+
   it("dismissing a waiting test removes it and goes home", async () => {
     addPending(FOLDER, {
       profileSlug: "opus",
