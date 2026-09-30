@@ -68,6 +68,34 @@ describe("CredentialDeck", () => {
     expect(state.credentials.map((c) => c.name).sort()).toEqual(["Code review", "Write docs"]);
   });
 
+  it("a target with a list offers to move it to the rubric, and the credential keeps both", async () => {
+    const storage = storageWith();
+    renderApp(storage, { view: "deck", deck: "credential" });
+    await userEvent.type(await screen.findByRole("textbox", { name: "Name" }), "Code review");
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    const box = screen.getByRole("textbox", { name: "Learning target" }) as HTMLInputElement;
+    await userEvent.type(box, "I can review a PR (tests, types, docs).");
+    await userEvent.click(screen.getByRole("button", { name: "Move to the rubric" }));
+    expect(box.value).toBe("I can review a PR.");
+    expect(screen.getByRole("status").textContent).toBe("Moved to the rubric");
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    await userEvent.type(screen.getByRole("textbox", { name: "Task" }), "Review the diff");
+    await userEvent.click(screen.getByRole("button", { name: "Make the badge" }));
+    await screen.findByRole("button", { name: "Test it on an agent" });
+    const [saved] = (await loadFolder(storage)).credentials;
+    expect(saved).toMatchObject({ learningTargets: ["I can review a PR."], rubric: "- Tests, types, docs" });
+  });
+
+  it("a target kept as written moves on and saves as written", async () => {
+    const storage = storageWith();
+    renderApp(storage, { view: "deck", deck: "credential" });
+    await walk("Code review", "I can add at least one reviewer to a PR.", "Review it");
+    await userEvent.click(screen.getByRole("button", { name: "Make the badge" }));
+    await screen.findByRole("button", { name: "Test it on an agent" });
+    const [saved] = (await loadFolder(storage)).credentials;
+    expect(saved).toMatchObject({ learningTargets: ["I can add at least one reviewer to a PR."], rubric: "" });
+  });
+
   it("closing mid-deck writes nothing", async () => {
     const storage = storageWith();
     const before = await snapshot(storage);
