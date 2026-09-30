@@ -5,7 +5,7 @@
 
 import { cellKey, type Matrix } from "../domain/matrix";
 import { credentialKey, type AgentSetup, type Collection, type Slug } from "../domain/types";
-import { EFFORTS, HARNESSES, modelsFor } from "../ui/dialLists";
+import { EFFORTS, HARNESSES, modelsFor, splitModel } from "../ui/dialLists";
 
 export type EncoderDial = "harness" | "model" | "effort";
 
@@ -39,7 +39,9 @@ export function stableHash(text: string): number {
 
 /** Where one encoder points for a setup, in degrees clockwise from twelve o'clock. */
 export function encoderAngle(dial: EncoderDial, setup: AgentSetup): number {
-  const value = setup[dial].trim();
+  let value = setup[dial].trim();
+  // A pinned version turns no encoder: "opus-5.5" points where "opus" does.
+  if (dial === "model") value = splitModel(setup.harness, value)?.model ?? value;
   const options = dialOptions(dial, setup);
   const index = options.indexOf(value);
   if (index >= 0) {

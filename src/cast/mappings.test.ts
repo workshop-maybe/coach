@@ -14,6 +14,10 @@ function met(slug: string, recordedAt: string, flags: string[] = []): EarnedCell
 }
 
 describe("encoderAngle", () => {
+  it("a pinned version points the model encoder where its model points", () => {
+    expect(encoderAngle("model", { ...opusHigh, model: "opus-5.5" })).toBe(encoderAngle("model", opusHigh));
+  });
+
   it("points every encoder differently for two different setups (Covers AE1.)", () => {
     for (const dial of ["harness", "model", "effort"] as const) {
       expect(encoderAngle(dial, opusHigh)).not.toBe(encoderAngle(dial, codexLow));

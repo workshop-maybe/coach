@@ -17,7 +17,7 @@ import type { EncoderDial, MachineKey } from "../cast/mappings";
 import { KeyedMachine } from "./KeyedMachine";
 import type { TestPick } from "./routes";
 import { useFolder } from "./useFolderState";
-import { EFFORTS, HARNESSES, OTHER, modelsFor, rememberedModels } from "./dialLists";
+import { EFFORTS, HARNESSES, LATEST, OTHER, joinModel, modelsFor, rememberedModels, splitModel, versionsFor } from "./dialLists";
 
 const FIRST: AgentSetup = { harness: "claude-code", model: "opus", effort: "high" };
 
@@ -27,7 +27,9 @@ function harnessLabel(value: string): string {
 
 /** "<harness>, <model>, <effort>", or with a number when another agent has that name (KTD4). */
 export function setupName(setup: AgentSetup, taken: Iterable<string>, self?: string): string {
-  const parts = [harnessLabel(setup.harness.trim()), setup.model.trim(), setup.effort.trim()].filter(Boolean);
+  const split = splitModel(setup.harness, setup.model);
+  const model = split && split.version !== LATEST ? `${split.model} ${split.version}` : setup.model.trim();
+  const parts = [harnessLabel(setup.harness.trim()), model, setup.effort.trim()].filter(Boolean);
   const base = parts.join(", ") || "New agent";
   const names = new Set([...taken].filter((n) => n !== self).map((n) => n.toLowerCase()));
   if (!names.has(base.toLowerCase())) return base;
@@ -49,6 +51,8 @@ const fromDial = (d: DialValue) => (d.choice === OTHER ? d.other.trim() : d.choi
 interface Dials {
   harness: DialValue;
   model: DialValue;
+  /** The chosen model's version, or LATEST. Only a listed model with known versions has one. */
+  version: string;
   effort: DialValue;
 }
 
@@ -58,9 +62,11 @@ function effortsWith(effort: string): string[] {
 }
 
 function dialsFor(setup: AgentSetup, known: readonly AgentSetup[]): Dials {
+  const split = splitModel(setup.harness, setup.model);
   return {
     harness: toDial(setup.harness, HARNESSES.map((h) => h.value)),
-    model: toDial(setup.model, [...modelsFor(setup.harness), ...rememberedModels(setup.harness, known)]),
+    model: split ? { choice: split.model, other: "" } : toDial(setup.model, [...modelsFor(setup.harness), ...rememberedModels(setup.harness, known)]),
+    version: split?.version ?? LATEST,
     effort: toDial(setup.effort, effortsWith(setup.effort)),
   };
 }
@@ -100,7 +106,11 @@ function Player({ profileSlug, returnTo, likeSlug, keys, onKey }: PlayerCardProp
   const [dials, setDials] = useState<Dials>(() => dialsFor(start, known));
   const locked = mode.kind === "edit" && !!state && isSetupLocked(state, mode.slug);
 
-  const setup: AgentSetup = { harness: fromDial(dials.harness), model: fromDial(dials.model), effort: fromDial(dials.effort) };
+  const harness = fromDial(dials.harness);
+  // Versions belong to a listed model; a typed or remembered model has none.
+  const versions = dials.model.choice === OTHER ? [] : versionsFor(harness, dials.model.choice);
+  const model = versions.length > 0 ? joinModel(dials.model.choice, dials.version) : fromDial(dials.model);
+  const setup: AgentSetup = { harness, model, effort: fromDial(dials.effort) };
   const taken = state?.profiles.map((p) => p.name) ?? [];
   const name = mode.kind === "edit" && stored ? stored.name : setupName(setup, taken);
   const complete = setup.harness !== "" && setup.model !== "" && setup.effort !== "";
@@ -113,7 +123,12 @@ function Player({ profileSlug, returnTo, likeSlug, keys, onKey }: PlayerCardProp
   function setHarness(d: DialValue) {
     if (d.choice === dials.harness.choice) return setDials({ ...dials, harness: d });
     const first = modelsFor(d.choice)[0] ?? rememberedModels(fromDial(d), known)[0];
-    setDials({ ...dials, harness: d, model: first ? { choice: first, other: "" } : { choice: OTHER, other: "" } });
+    setDials({ ...dials, harness: d, model: first ? { choice: first, other: "" } : { choice: OTHER, other: "" }, version: LATEST });
+  }
+
+  /** A new model starts at its latest version. */
+  function setModel(d: DialValue) {
+    setDials({ ...dials, model: d, version: d.choice === dials.model.choice ? dials.version : LATEST });
   }
 
   const optionsOf: Record<EncoderDial, string[]> = { harness: harnessOptions, model: models, effort: effortOptions };
@@ -125,6 +140,7 @@ function Player({ profileSlug, returnTo, likeSlug, keys, onKey }: PlayerCardProp
     const next = options[(Math.max(0, options.indexOf(current.choice)) + by + options.length) % options.length];
     const value = { choice: next, other: next === OTHER ? current.other : "" };
     if (dial === "harness") setHarness(value);
+    else if (dial === "model") setModel(value);
     else setDials({ ...dials, [dial]: value });
   }
 
@@ -183,7 +199,16 @@ function Player({ profileSlug, returnTo, likeSlug, keys, onKey }: PlayerCardProp
                   disabled={locked}
                   onChange={setHarness}
                 />
-                <Dial label="Model" options={models} value={dials.model} disabled={locked} onChange={(model) => setDials({ ...dials, model })} />
+                <Dial label="Model" options={models} value={dials.model} disabled={locked} onChange={setModel} />
+                {versions.length > 0 && (
+                  <Dial
+                    label="Version"
+                    options={[LATEST, ...versions]}
+                    value={{ choice: dials.version, other: "" }}
+                    disabled={locked}
+                    onChange={(v) => setDials({ ...dials, version: v.choice })}
+                  />
+                )}
                 <Dial label="Effort" options={effortOptions} value={dials.effort} disabled={locked} onChange={(effort) => setDials({ ...dials, effort })} />
               </div>
             </div>

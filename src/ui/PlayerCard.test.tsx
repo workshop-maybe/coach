@@ -24,14 +24,18 @@ describe("setupName", () => {
     expect(setupName(setup, ["Claude Code, opus, high"])).toBe("Claude Code, opus, high 2");
     expect(setupName(setup, ["claude code, opus, high", "Claude Code, opus, high 2"])).toBe("Claude Code, opus, high 3");
   });
+
+  it("names a pinned version after its model", () => {
+    expect(setupName({ harness: "claude-code", model: "opus-5.5", effort: "high" }, [])).toBe("Claude Code, opus 5.5, high");
+  });
 });
 
 describe("PlayerCard", () => {
-  it("is one card: a machine, three dials and one button", async () => {
+  it("is one card: a machine, its dials and one button", async () => {
     renderApp(storageWith(), { view: "deck", deck: "agent" });
     expect(await screen.findByRole("heading", { name: "Claude Code, opus, high" })).toBeTruthy();
     expect(document.querySelectorAll("svg.cast-machine [data-dial]")).toHaveLength(3);
-    expect(screen.getAllByRole("radiogroup")).toHaveLength(3);
+    expect(screen.getAllByRole("radiogroup").map((g) => g.getAttribute("aria-label"))).toEqual(["Harness", "Model", "Version", "Effort"]);
     expect(screen.queryByRole("combobox")).toBeNull();
     expect(screen.getByRole("button", { name: "Make the agent" })).toBeTruthy();
   });
@@ -107,6 +111,51 @@ describe("PlayerCard", () => {
     expect(screen.queryByRole("textbox", { name: "Model, other" })).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "Next harness" }));
     expect(within(dial("Model")).queryByRole("radio", { name: "my-model" })).toBeNull();
+  });
+
+  it("a model with versions shows a Version dial that starts at latest", async () => {
+    const storage = storageWith();
+    renderApp(storage, { view: "deck", deck: "agent" });
+    await screen.findByRole("heading", { name: "Claude Code, opus, high" });
+    expect(checked("Version").textContent).toBe("latest");
+    await userEvent.click(within(dial("Version")).getByRole("radio", { name: "5.5" }));
+    expect(heading()).toBe("Claude Code, opus 5.5, high");
+    await userEvent.click(screen.getByRole("button", { name: "Make the agent" }));
+    await screen.findByRole("region", { name: "Agents" });
+    expect((await loadFolder(storage)).profiles).toEqual([expect.objectContaining({ name: "Claude Code, opus 5.5, high", model: "opus-5.5" })]);
+  });
+
+  it("changing the model starts its version at latest again", async () => {
+    renderApp(storageWith(), { view: "deck", deck: "agent" });
+    await screen.findByRole("heading", { name: "Claude Code, opus, high" });
+    await userEvent.click(within(dial("Version")).getByRole("radio", { name: "4.8" }));
+    await userEvent.click(screen.getByRole("button", { name: "Next model" }));
+    expect(checked("Model").textContent).toBe("sonnet");
+    expect(checked("Version").textContent).toBe("latest");
+    expect(heading()).toBe("Claude Code, sonnet, high");
+  });
+
+  it("a model without known versions, or typed under Other, shows no Version dial", async () => {
+    renderApp(storageWith(), { view: "deck", deck: "agent" });
+    await screen.findByRole("heading", { name: "Claude Code, opus, high" });
+    await userEvent.click(within(dial("Model")).getByRole("radio", { name: "Other" }));
+    expect(screen.queryByRole("radiogroup", { name: "Version" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Next harness" }));
+    expect(checked("Harness").textContent).toBe("Codex");
+    expect(screen.queryByRole("radiogroup", { name: "Version" })).toBeNull();
+  });
+
+  it("an agent pinned to a version opens with its model and version checked", async () => {
+    renderApp(storageWith({ profiles: [{ ...opus, model: "opus-4.7" }] }), { view: "item", item: "agent", profileSlug: "opus" });
+    await screen.findByRole("button", { name: "Keep this setup" });
+    expect(checked("Model").textContent).toBe("opus");
+    expect(checked("Version").textContent).toBe("4.7");
+  });
+
+  it("a pinned version never shows up as a remembered model", async () => {
+    renderApp(storageWith({ profiles: [{ ...opus, model: "opus-5.5" }] }), { view: "deck", deck: "agent" });
+    await screen.findByRole("heading", { name: "Claude Code, opus, high" });
+    expect(within(dial("Model")).queryByRole("radio", { name: "opus-5.5" })).toBeNull();
   });
 
   it("an agent with a custom effort opens with that effort checked", async () => {

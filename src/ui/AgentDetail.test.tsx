@@ -30,7 +30,7 @@ describe("AgentDetail", () => {
   it("shows the player card in edit mode with its parts", async () => {
     renderApp(storageWith({ profiles: [opus] }), agent);
     expect(await screen.findByRole("heading", { name: "Opus agent", level: 2 })).toBeTruthy();
-    expect(screen.getAllByRole("radiogroup")).toHaveLength(3);
+    expect(screen.getAllByRole("radiogroup").map((g) => g.getAttribute("aria-label"))).toEqual(["Harness", "Model", "Version", "Effort"]);
     expect(screen.getByRole("button", { name: "Keep this setup" })).toBeTruthy();
     const names = within(screen.getByRole("list", { name: "Parts" }))
       .getAllByRole("button")
