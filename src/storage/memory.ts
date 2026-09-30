@@ -1,7 +1,11 @@
 // In-memory Storage for tests. One Map of path -> text per root, plus a separate
 // Map of path -> data URI per root for images.
 
+import type { ContextReading } from "../domain/types";
 import type { RootKind, Storage } from "./storage";
+
+/** What `readContext` returns when nothing is queued. */
+export const TEST_CONTEXT: ContextReading = { machineId: "test-machine", machine: "Test Mac", memory: "000000000000" };
 
 export class MemoryStorage implements Storage {
   private readonly roots: Record<RootKind, Map<string, string>> = {
@@ -16,6 +20,9 @@ export class MemoryStorage implements Storage {
 
   /** Picks that `importBadgeArt` will return, in order. null models a cancelled picker. */
   private readonly artQueue: (string | null)[] = [];
+
+  /** Readings that `readContext` will return, in order. An Error models a failed read. */
+  private readonly contextQueue: (ContextReading | Error)[] = [];
 
   /** Every write, in order, for asserting what the domain layer touched. */
   readonly writes: { root: RootKind; path: string }[] = [];
@@ -72,6 +79,12 @@ export class MemoryStorage implements Storage {
     return path;
   }
 
+  async readContext(_repo: string, _harness: string): Promise<ContextReading> {
+    const next = this.contextQueue.shift() ?? TEST_CONTEXT;
+    if (next instanceof Error) throw next;
+    return next;
+  }
+
   // Test helpers. These bypass `writes` so they model edits made outside the app.
 
   /** Puts files in place as if they already existed on disk. */
@@ -82,6 +95,11 @@ export class MemoryStorage implements Storage {
   /** Queues what the next `importBadgeArt` picks: a data URI, or null for a cancel. */
   queueArt(dataUri: string | null): void {
     this.artQueue.push(dataUri);
+  }
+
+  /** Queues what the next `readContext` returns: a reading, or an Error for a failed read. */
+  queueContext(reading: ContextReading | Error): void {
+    this.contextQueue.push(reading);
   }
 
   /** Puts an image in place as a data URI, as if it already existed on disk. */

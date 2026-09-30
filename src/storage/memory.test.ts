@@ -49,3 +49,27 @@ describe("MemoryStorage badge art", () => {
     expect(await s.readText("data", "notes.md")).toBe("hi");
   });
 });
+
+describe("MemoryStorage context", () => {
+  it("returns a fixed reading when none is queued", async () => {
+    const s = new MemoryStorage();
+    expect(await s.readContext("/repo", "claude-code")).toEqual({
+      machineId: "test-machine",
+      machine: "Test Mac",
+      memory: "000000000000",
+    });
+  });
+
+  it("returns queued readings in order, then the default again", async () => {
+    const s = new MemoryStorage();
+    s.queueContext({ machineId: "m2", machine: "Studio Mac", memory: "abcdefabcdef" });
+    expect((await s.readContext("/repo", "claude-code")).machine).toBe("Studio Mac");
+    expect((await s.readContext("/repo", "claude-code")).machine).toBe("Test Mac");
+  });
+
+  it("rejects when an error is queued, as a failed native read would", async () => {
+    const s = new MemoryStorage();
+    s.queueContext(new Error("boom"));
+    await expect(s.readContext("/repo", "claude-code")).rejects.toThrow("boom");
+  });
+});

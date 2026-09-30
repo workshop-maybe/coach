@@ -60,6 +60,25 @@ export interface AgentProfile extends AgentSetup {
   params: Record<string, string>;
 }
 
+/** Recorded as `memory` when the harness's memory could not be read. */
+export const MEMORY_NOT_READ = "not-read";
+
+/** What the native side reports about this machine and the agent's memory (R1). */
+export interface ContextReading {
+  /** Stable per machine, kept outside the data folder. Comparisons use this. */
+  machineId: string;
+  /** The name people know the machine by. For display only. */
+  machine: string;
+  /** A 12-hex fingerprint of the memory and instruction files, or MEMORY_NOT_READ. */
+  memory: string;
+}
+
+/** The context a test started with, taken when its prompt was copied (KTD5). */
+export interface TestContext extends ContextReading {
+  /** Full ISO 8601 time of the copy. Earlier-or-later compares on this. */
+  capturedAt: string;
+}
+
 export type AssessmentResult = "met" | "not_met";
 
 export interface Assessment {
@@ -78,6 +97,8 @@ export interface Assessment {
   note: string;
   /** The agent's reply, pasted verbatim. Never parsed (KTD8). */
   handBack: string;
+  /** The context the test started with. Absent when none was captured. */
+  context?: TestContext;
 }
 
 /** A file the app could not read. The app reports it and never rewrites it (R22). */

@@ -1,6 +1,7 @@
 // Storage over the confined Rust file commands (KTD1, KTD2).
 
 import { invoke } from "@tauri-apps/api/core";
+import type { ContextReading } from "../domain/types";
 import type { RootKind, Storage } from "./storage";
 
 export class TauriStorage implements Storage {
@@ -26,5 +27,9 @@ export class TauriStorage implements Storage {
 
   importBadgeArt(collectionSlug: string, credentialSlug: string | null): Promise<string | null> {
     return invoke<string | null>("import_badge_art", { collectionSlug, credentialSlug });
+  }
+
+  readContext(repo: string, harness: string): Promise<ContextReading> {
+    return invoke<ContextReading>("read_context", { repo, harness });
   }
 }

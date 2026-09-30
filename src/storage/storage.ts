@@ -2,6 +2,8 @@
 // and always use forward slashes. The Tauri implementation calls the confined Rust
 // commands (KTD1). The memory implementation backs the tests.
 
+import type { ContextReading } from "../domain/types";
+
 export type RootKind = "data" | "export";
 
 export interface Storage {
@@ -21,6 +23,11 @@ export interface Storage {
    * With a credential slug the file is named for that credential's override.
    */
   importBadgeArt(collectionSlug: string, credentialSlug: string | null): Promise<string | null>;
+  /**
+   * This machine plus a fingerprint of the harness's memory for the agent's repo (R1). File
+   * contents never cross; only the digest does. Reads outside the chosen folders.
+   */
+  readContext(repo: string, harness: string): Promise<ContextReading>;
 }
 
 /** Thrown when a save finds the file changed since it was opened (KTD6). */
