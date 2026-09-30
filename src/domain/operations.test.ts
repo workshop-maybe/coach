@@ -277,6 +277,16 @@ describe("recording assessments", () => {
     });
   });
 
+  it("saves the context the test started with, and none when there was none", async () => {
+    const { storage, state } = await setup();
+    const context = { machineId: "m1", machine: "Studio Mac", memory: "0123456789ab", capturedAt: "2026-09-29T08:40:00.000Z" };
+    const withIt = await recordAssessment(storage, state, { ...input, result: "met", context }, new Date("2026-09-29T08:49:00Z"));
+    expect(withIt.assessments[0].context).toEqual(context);
+    const without = await recordAssessment(storage, withIt, { ...input, result: "met" }, new Date("2026-09-29T08:50:00Z"));
+    const second = without.assessments.find((a) => a.fileStem === "20260929T085000Z");
+    expect(second).not.toHaveProperty("context");
+  });
+
   it("stamps the edited assignment version after the credential changes", async () => {
     const { storage, state } = await setup();
     const path = credentialPath("go-basics", "write-a-cli");

@@ -32,6 +32,7 @@ import {
   type Credential,
   type FolderState,
   type Slug,
+  type TestContext,
 } from "./types";
 
 /** Thrown when an update would change the setup of a profile that has results (R6, KTD10). */
@@ -283,6 +284,8 @@ export interface AssessmentInput {
   result: AssessmentResult;
   note: string;
   handBack: string;
+  /** The context captured when the test prompt was copied, when there was one. */
+  context?: TestContext;
 }
 
 /**
@@ -315,6 +318,7 @@ export async function recordAssessment(
     setup: { harness: profile.harness, model: profile.model, effort: profile.effort },
     note: input.note ?? "",
     handBack: input.handBack,
+    ...(input.context ? { context: input.context } : {}),
   };
   await saveAssessment(storage, assessment);
   return loadFolder(storage);

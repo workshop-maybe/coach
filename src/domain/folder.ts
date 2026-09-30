@@ -16,6 +16,7 @@ import type {
   FolderState,
   LoadError,
   Slug,
+  TestContext,
 } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -236,6 +237,16 @@ export function serializeAssessment(a: Assessment): string {
     recorded_at: a.recordedAt,
     assignment_version: a.assignmentVersion,
     setup: { harness: a.setup.harness, model: a.setup.model, effort: a.setup.effort },
+    ...(a.context
+      ? {
+          context: {
+            machine_id: a.context.machineId,
+            machine: a.context.machine,
+            memory: a.context.memory,
+            captured_at: a.context.capturedAt,
+          },
+        }
+      : {}),
   });
   const note = a.note.replace(/\r\n?/g, "\n").trim();
   return [
@@ -256,6 +267,21 @@ function setupString(obj: Json, key: string): string {
   if (typeof v === "string") return v;
   if (typeof v === "number" || typeof v === "boolean") return String(v);
   throw new Error(`Frontmatter "setup.${key}" must be text.`);
+}
+
+/**
+ * The optional `context` mapping. Anything malformed reads as no context rather than
+ * failing the file, so a hand edit can't turn a result into a load error (KTD5).
+ */
+function parseContext(raw: unknown): TestContext | undefined {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return undefined;
+  const obj = raw as Json;
+  const captured = obj.captured_at;
+  const capturedAt = captured instanceof Date ? captured.toISOString() : captured;
+  const fields = [obj.machine_id, obj.machine, obj.memory, capturedAt];
+  if (!fields.every((f) => typeof f === "string" && f !== "")) return undefined;
+  const [machineId, machine, memory, at] = fields as string[];
+  return { machineId, machine, memory, capturedAt: at };
 }
 
 export function parseAssessment(text: string, ids: AssessmentIds): Assessment {
@@ -311,6 +337,7 @@ export function parseAssessment(text: string, ids: AssessmentIds): Assessment {
     handBack = "";
   }
 
+  const context = parseContext(fm.context);
   return {
     ...ids,
     result: result as AssessmentResult,
@@ -319,6 +346,7 @@ export function parseAssessment(text: string, ids: AssessmentIds): Assessment {
     setup,
     note: note.replace(/\r\n?/g, "\n").trim(),
     handBack,
+    ...(context ? { context } : {}),
   };
 }
 

@@ -162,6 +162,38 @@ describe("assessment Markdown", () => {
     expect(parseAssessment(serializeAssessment(empty), empty)).toEqual(empty);
   });
 
+  const context = {
+    machineId: "a1b2c3d4e5f60718",
+    machine: "Studio Mac",
+    memory: "0123456789ab",
+    capturedAt: "2026-09-29T08:40:00.000Z",
+  };
+
+  it("round-trips the context a test started with", () => {
+    const withContext = { ...assessment, context };
+    const text = serializeAssessment(withContext);
+    expect(text).toContain("context:");
+    expect(text).toContain("machine_id: a1b2c3d4e5f60718");
+    expect(parseAssessment(text, withContext)).toEqual(withContext);
+  });
+
+  it("writes a result without context exactly as before", () => {
+    const text = serializeAssessment(assessment);
+    expect(text).not.toContain("context");
+    expect(parseAssessment(text, assessment)).not.toHaveProperty("context");
+  });
+
+  it("reads a malformed context as none instead of failing the file", () => {
+    const text = serializeAssessment({ ...assessment, context });
+    const asString = text.replace(/context:\n(?:  .*\n)+/, "context: nonsense\n");
+    expect(asString).toContain("context: nonsense");
+    expect(parseAssessment(asString, assessment)).not.toHaveProperty("context");
+    const missingKey = text.replace(/  memory: .*\n/, "");
+    expect(parseAssessment(missingKey, assessment)).not.toHaveProperty("context");
+    const wrongType = text.replace(/  machine: .*\n/, "  machine: [1, 2]\n");
+    expect(parseAssessment(wrongType, assessment)).not.toHaveProperty("context");
+  });
+
   it("rejects missing frontmatter or an invalid result", () => {
     expect(() => parseAssessment("## Note\n\nx\n", assessment)).toThrow(/frontmatter/);
     const bad = serializeAssessment(assessment).replace("result: met", "result: maybe");
