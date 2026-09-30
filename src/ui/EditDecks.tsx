@@ -2,7 +2,8 @@
 // one part: a credential's name, learning targets, task, rubric or look, and an agent's
 // name, repo, notes or parameters. The file text each card opened with is the base of its
 // save, so a file changed on disk meanwhile turns into the deck's conflict card (KTD2, KTD3).
-// A task or rubric change on a badge with holders warns first that they will re-test (R18).
+// A task or rubric change on a badge with holders warns first that they will re-test (R18),
+// including detail the targets card moves from a target into the rubric.
 
 import { useState } from "react";
 import type { KeyboardEvent } from "react";
@@ -12,6 +13,7 @@ import { collectionPath, credentialPath, loadFolder, profilePath } from "../doma
 import { cellKey, type Matrix } from "../domain/matrix";
 import { importBadgeArt, setCredentialBadgeOverride, updateCredential, updateProfile } from "../domain/operations";
 import { checkCriteriaPrompt, refineHandoffNote, reviewAssignmentPrompt } from "../domain/prompts";
+import { appendToRubric } from "../domain/target-check";
 import {
   credentialKey,
   parseCredentialKey,
@@ -28,7 +30,7 @@ import { useNav } from "./nav";
 import { useRichDraft } from "./richDraft";
 import { RichText } from "./RichText";
 import type { AgentPart, CredentialPart } from "./routes";
-import { CopyHelper, Missing, fileName, paletteName } from "./shared";
+import { CopyHelper, LineMove, Missing, TargetHint, fileName, paletteName } from "./shared";
 import { describeError, useFolder } from "./useFolderState";
 import { useMatrix } from "./useMatrix";
 
@@ -57,7 +59,8 @@ function cleanSettings(s: BadgeSettings): BadgeSettings {
 
 /**
  * Lines added one at a time, each settling above the next (the cycle-deck idiom). Enter on
- * a line with text adds it; Enter on an empty line moves the deck on.
+ * a line with text adds it; Enter on an empty line moves the deck on. With `onMove`, the
+ * lines are learning targets and each offers to move its detail to the rubric.
  */
 function Lines({
   lines,
@@ -66,6 +69,7 @@ function Lines({
   onLine,
   label,
   placeholder,
+  onMove,
 }: {
   lines: string[];
   onChange(next: string[]): void;
@@ -73,6 +77,7 @@ function Lines({
   onLine(next: string): void;
   label: string;
   placeholder: string;
+  onMove?(rubricLine: string): void;
 }) {
   function add() {
     if (line.trim() === "") return;
@@ -91,6 +96,15 @@ function Lines({
           {lines.map((t, i) => (
             <li key={`${i}:${t}`}>
               <span>{t}</span>
+              {onMove && (
+                <LineMove
+                  text={t}
+                  onMove={(m) => {
+                    onChange(lines.map((x, j) => (j === i ? m.target : x)));
+                    onMove(m.rubricLine);
+                  }}
+                />
+              )}
               <button type="button" className="link edit-line-remove" aria-label={`Remove ${t}`} onClick={() => onChange(lines.filter((_, j) => j !== i))}>
                 ×
               </button>
@@ -99,6 +113,15 @@ function Lines({
         </ol>
       )}
       <input aria-label={`New ${label.toLowerCase().replace(/s$/, "")}`} value={line} autoComplete="off" placeholder={placeholder} onChange={(e) => onLine(e.target.value)} onKeyDown={onKeyDown} />
+      {onMove && (
+        <TargetHint
+          text={line}
+          onMove={(m) => {
+            onLine(m.target);
+            onMove(m.rubricLine);
+          }}
+        />
+      )}
       <p className="helper">
         <button type="button" className="link" onClick={add} disabled={line.trim() === ""}>
           Add another
@@ -155,6 +178,8 @@ function EditCredential({ credentialKey: key, part, credential: atOpen, collecti
   const [name, setName] = useState(c.name);
   const [targets, setTargets] = useState(() => c.learningTargets.filter((t) => t.trim() !== ""));
   const [line, setLine] = useState("");
+  // Detail moved out of a target, appended to the rubric as it is when the card saves.
+  const [moved, setMoved] = useState<string[]>([]);
   const taskDraft = useRichDraft(c.task);
   const rubricDraft = useRichDraft(c.rubric);
   const task = taskDraft.value;
@@ -166,12 +191,13 @@ function EditCredential({ credentialKey: key, part, credential: atOpen, collecti
   const badgeHome = () => navigate({ view: "item", item: "badge", credentialKey: key });
   const allTargets = line.trim() ? [...targets, line.trim()] : targets;
 
-  async function saveCredential(patch: Partial<Credential>, keepMine: boolean) {
+  async function saveCredential(patch: Partial<Credential> | ((base: Credential) => Partial<Credential>), keepMine: boolean) {
     // Keep mine lays only this part over the file as it is now, so other changes on disk stay.
     const current = keepMine ? await loadFolder(storage) : state;
     const base = keepMine ? (current?.raw[credPath] ?? null) : opened.credBase;
     const onDisk = keepMine ? current?.credentials.find((x) => credentialKey(x) === key) : undefined;
-    apply(await updateCredential(storage, { ...(onDisk ?? c), ...patch }, base));
+    const from = onDisk ?? c;
+    apply(await updateCredential(storage, { ...from, ...(typeof patch === "function" ? patch(from) : patch) }, base));
   }
 
   async function finish({ keepMine }: { keepMine: boolean }) {
@@ -180,7 +206,10 @@ function EditCredential({ credentialKey: key, part, credential: atOpen, collecti
         await saveCredential({ name: name.trim() }, keepMine);
         break;
       case "targets":
-        await saveCredential({ learningTargets: allTargets }, keepMine);
+        await saveCredential(
+          (from) => (moved.length === 0 ? { learningTargets: allTargets } : { learningTargets: allTargets, rubric: moved.reduce(appendToRubric, from.rubric).trim() }),
+          keepMine,
+        );
         break;
       case "task":
         await saveCredential({ task: task.trim() }, keepMine);
@@ -206,8 +235,10 @@ function EditCredential({ credentialKey: key, part, credential: atOpen, collecti
   }
 
   // A changed task or rubric asks the holders to re-test, so the card says so before saving (R18, AE6).
-  const firstRubric = part === "rubric" && c.rubric.trim() === "" && rubric.trim() !== "";
-  const changed = (part === "task" && taskDraft.changed) || (part === "rubric" && rubricDraft.changed);
+  // Detail moved out of a target changes the rubric too.
+  const rubricAdded = part === "rubric" ? rubric.trim() !== "" : part === "targets" && moved.length > 0;
+  const firstRubric = c.rubric.trim() === "" && rubricAdded;
+  const changed = (part === "task" && taskDraft.changed) || (part === "rubric" && rubricDraft.changed) || (part === "targets" && moved.length > 0);
   const warn = changed && opened.holders.length > 0;
   const warnBeat: Beat = {
     id: "warn",
@@ -265,10 +296,21 @@ function EditCredential({ credentialKey: key, part, credential: atOpen, collecti
         {
           id: "targets",
           title: "What its holder can do",
-          forward: "Save",
+          forward: warn ? "Next" : "Save",
           valid: allTargets.length > 0,
-          body: <Lines lines={targets} onChange={setTargets} line={line} onLine={setLine} label="Learning targets" placeholder="I can…" />,
+          body: (
+            <Lines
+              lines={targets}
+              onChange={setTargets}
+              line={line}
+              onLine={setLine}
+              label="Learning targets"
+              placeholder="I can…"
+              onMove={(l) => setMoved((m) => [...m, l])}
+            />
+          ),
         },
+        ...(warn ? [warnBeat] : []),
       ];
       break;
     case "task":

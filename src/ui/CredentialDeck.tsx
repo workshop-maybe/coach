@@ -7,12 +7,13 @@ import { useRef, useState } from "react";
 import { credentialPath, loadFolder } from "../domain/folder";
 import { createCollection, createCredential, updateCredential } from "../domain/operations";
 import { suggestAssignmentsPrompt } from "../domain/prompts";
+import { appendToRubric } from "../domain/target-check";
 import { credentialKey, parseCredentialKey, type Credential } from "../domain/types";
 import { Badge } from "./Badge";
 import { Deck, type Beat } from "./Deck";
 import { useNav } from "./nav";
 import type { TestPick } from "./routes";
-import { CopyHelper, focusOnMount } from "./shared";
+import { CopyHelper, TargetHint, focusOnMount } from "./shared";
 import { RichText } from "./RichText";
 import { useFolder } from "./useFolderState";
 
@@ -24,6 +25,8 @@ export function CredentialDeck({ returnTo }: { returnTo?: TestPick }) {
   const [name, setName] = useState("");
   const [target, setTarget] = useState("");
   const [task, setTask] = useState("");
+  // Detail the target check moved out of the target. There is no rubric card here, so it waits.
+  const [rubric, setRubric] = useState("");
   const [made, setMade] = useState<string | null>(null);
   // Set once the credential file exists, so a retry after a failed second save never makes a second one.
   const created = useRef<string | null>(null);
@@ -34,7 +37,7 @@ export function CredentialDeck({ returnTo }: { returnTo?: TestPick }) {
     name: name.trim(),
     learningTargets: target.trim() ? [target.trim()] : [],
     task,
-    rubric: "",
+    rubric,
     extraSections: [],
   };
 
@@ -59,7 +62,7 @@ export function CredentialDeck({ returnTo }: { returnTo?: TestPick }) {
     const stored = current.credentials.find((c) => credentialKey(c) === key);
     if (!stored) throw new Error("The new credential could not be read back.");
     const base = current.raw[credentialPath(collectionSlug, slug)] ?? null;
-    const next = await updateCredential(storage, { ...stored, learningTargets: draft.learningTargets, task: task.trim() }, base);
+    const next = await updateCredential(storage, { ...stored, learningTargets: draft.learningTargets, task: task.trim(), rubric: rubric.trim() }, base);
     apply(next);
     if (returnTo?.profileSlug) navigate({ view: "deck", deck: "test", profileSlug: returnTo.profileSlug, credentialKey: key });
     else setMade(key);
@@ -103,7 +106,18 @@ export function CredentialDeck({ returnTo }: { returnTo?: TestPick }) {
       forward: "Next",
       valid: target.trim() !== "",
       settled: target.trim(),
-      body: <input aria-label="Learning target" value={target} autoComplete="off" placeholder="I can…" onChange={(e) => setTarget(e.target.value)} />,
+      body: (
+        <>
+          <input aria-label="Learning target" value={target} autoComplete="off" placeholder="I can…" onChange={(e) => setTarget(e.target.value)} />
+          <TargetHint
+            text={target}
+            onMove={(m) => {
+              setTarget(m.target);
+              setRubric((r) => appendToRubric(r, m.rubricLine));
+            }}
+          />
+        </>
+      ),
     },
     {
       id: "task",

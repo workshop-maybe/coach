@@ -165,6 +165,57 @@ describe("BadgeDetail", () => {
     expect((await saved(storage)).learningTargets).toEqual(["I can find bugs in a diff.", "I can explain a fix.", "I can write a test."]);
   });
 
+  it("a target's detail moves to the rubric from the targets card", async () => {
+    const storage = storageWith({ credentials: [{ ...review, learningTargets: ["I can find at least one bug in a diff."], rubric: "Finds it." }] });
+    renderApp(storage, badge);
+    await openPart(/^Learning targets/);
+    await userEvent.click(await screen.findByRole("button", { name: "Move to the rubric: At least one bug in a diff" }));
+    const line = screen.getByRole("textbox", { name: "New learning target" });
+    await userEvent.type(line, "I can review a PR (tests, types, docs).");
+    await userEvent.click(screen.getByRole("button", { name: "Move to the rubric" }));
+    expect((line as HTMLInputElement).value).toBe("I can review a PR.");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await screen.findByRole("list", { name: "Parts" });
+    expect(await saved(storage)).toMatchObject({
+      learningTargets: ["I can find a bug in a diff.", "I can review a PR."],
+      rubric: "Finds it.\n\n- At least one bug in a diff\n- Tests, types, docs",
+    });
+  });
+
+  it("moving a target's detail on a held badge warns that holders will re-test", async () => {
+    const held = { ...review, learningTargets: ["I can find at least one bug in a diff."] };
+    const storage = storageWith({ credentials: [held], profiles: [opus], assessments: [await result(opus, held)] });
+    renderApp(storage, badge);
+    await openPart(/^Learning targets/);
+    await userEvent.click(await screen.findByRole("button", { name: /^Move to the rubric/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(await screen.findByRole("heading", { name: "Holders will re-test" })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await screen.findByRole("list", { name: "Parts" });
+    expect(await saved(storage)).toMatchObject({ learningTargets: ["I can find a bug in a diff."], rubric: "- At least one bug in a diff" });
+  });
+
+  it("Keep mine after a move adds the moved line to the rubric on disk now", async () => {
+    const held = { ...review, learningTargets: ["I can find at least one bug in a diff."] };
+    const storage = storageWith({ credentials: [held] });
+    renderApp(storage, { view: "deck", deck: "edit-credential", credentialKey: "eng/review", part: "targets" });
+    await userEvent.click(await screen.findByRole("button", { name: /^Move to the rubric/ }));
+    storage.seed({ [credentialPath("eng", "review")]: serializeCredentialMd({ ...held, rubric: "Their rubric." }) });
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Keep mine" }));
+    await screen.findByRole("list", { name: "Parts" });
+    expect(await saved(storage)).toMatchObject({ learningTargets: ["I can find a bug in a diff."], rubric: "Their rubric.\n\n- At least one bug in a diff" });
+  });
+
+  it("two skills in a new target are asked about, with nothing to move", async () => {
+    renderApp(storageWith({ credentials: [review] }), badge);
+    await openPart(/^Learning targets/);
+    await userEvent.type(await screen.findByRole("textbox", { name: "New learning target" }), "I can fix a bug and explain why it happened.");
+    expect(screen.getByText("Two skills, or one workflow?")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Move to the rubric/ })).toBeNull();
+    expect((screen.getByRole("button", { name: "Save" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it("a palette tap, then skipping art and title, saves the credential's badge override", async () => {
     const storage = storageWith({ credentials: [review] });
     renderApp(storage, badge);

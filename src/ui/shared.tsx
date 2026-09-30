@@ -1,9 +1,11 @@
-// Pieces shared by the decks and the opened items: focus on mount, the copy helper, a part
-// card, the not-found card, display names for a palette and a file, and Escape.
+// Pieces shared by the decks and the opened items: focus on mount, the copy helper, the
+// target check's hint and line move, a part card, the not-found card, display names for a
+// palette and a file, and Escape.
 
 import { useEffect, useRef, useState } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { PALETTES } from "../badge/palettes";
+import { checkTarget, type TargetMove } from "../domain/target-check";
 import { describeError } from "./useFolderState";
 
 /** A stable ref callback that focuses a card's heading once, when it appears. */
@@ -42,6 +44,46 @@ export function CopyHelper({ label, text }: { label: string; text(): string }) {
         {status.kind === "copied" ? "Copied. Paste it into any agent" : status.kind === "error" ? status.message : ""}
       </span>
     </p>
+  );
+}
+
+/**
+ * A quiet hint under a learning target. A list, a quantity or a how clause offers to move
+ * to the rubric; two skills in one target are only asked about. Nothing here blocks.
+ */
+export function TargetHint({ text, onMove }: { text: string; onMove(move: TargetMove): void }) {
+  const [movedTo, setMovedTo] = useState<string | null>(null);
+  const hit = checkTarget(text);
+  if (hit?.kind === "move") {
+    return (
+      <p className="helper">
+        <button
+          type="button"
+          className="link"
+          onClick={() => {
+            setMovedTo(hit.target);
+            onMove(hit);
+          }}
+        >
+          Move to the rubric
+        </button>
+        <span className="helper-status">{hit.rubricLine}</span>
+      </p>
+    );
+  }
+  if (hit?.kind === "ask") return <p className="helper helper-status">Two skills, or one workflow?</p>;
+  if (movedTo !== null && movedTo === text.trim()) return <p className="helper helper-status" role="status">Moved to the rubric</p>;
+  return null;
+}
+
+/** The move for a settled target, when the check finds detail in it. */
+export function LineMove({ text, onMove }: { text: string; onMove(move: TargetMove): void }) {
+  const hit = checkTarget(text);
+  if (hit?.kind !== "move") return null;
+  return (
+    <button type="button" className="link" aria-label={`Move to the rubric: ${hit.rubricLine}`} onClick={() => onMove(hit)}>
+      Move to the rubric
+    </button>
   );
 }
 
