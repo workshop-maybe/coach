@@ -26,7 +26,11 @@ export type DeckRoute =
       resume?: boolean;
     }
   | { view: "deck"; deck: "edit-credential"; credentialKey: string; part: CredentialPart }
-  | { view: "deck"; deck: "edit-agent"; profileSlug: Slug; part: AgentPart };
+  | { view: "deck"; deck: "edit-agent"; profileSlug: Slug; part: AgentPart }
+  | { view: "deck"; deck: "trash"; item: TrashItem };
+
+/** An agent or a credential on its way to the trash. */
+export type TrashItem = { kind: "agent"; profileSlug: Slug } | { kind: "badge"; credentialKey: string };
 
 export type ItemRoute = { view: "item"; item: "badge"; credentialKey: string } | { view: "item"; item: "agent"; profileSlug: Slug };
 

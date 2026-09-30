@@ -13,6 +13,7 @@ import { useNav } from "./nav";
 import { PlayerCard } from "./PlayerCard";
 import type { AgentPart } from "./routes";
 import { Missing, PartCard, useEscape } from "./shared";
+import { TrashLink } from "./TrashDeck";
 import { useFolder } from "./useFolderState";
 import { useMatrix } from "./useMatrix";
 
@@ -85,6 +86,8 @@ export function AgentDetail({ profileSlug }: { profileSlug: string }) {
           </ul>
         )}
       </section>
+
+      <TrashLink onOpen={() => navigate({ view: "deck", deck: "trash", item: { kind: "agent", profileSlug } })} />
     </div>
   );
 }

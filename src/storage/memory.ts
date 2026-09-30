@@ -39,6 +39,18 @@ export class MemoryStorage implements Storage {
     return [...paths].filter((p) => p.startsWith(prefix)).sort();
   }
 
+  /** Mirrors the Rust command: a missing source or an existing target is an error. */
+  async moveFile(root: RootKind, from: string, to: string): Promise<void> {
+    const texts = this.roots[root];
+    const images = this.images[root];
+    const map = texts.has(from) ? texts : images.has(from) ? images : null;
+    if (map === null) throw new Error(`Cannot move "${from}": it does not exist.`);
+    if (texts.has(to) || images.has(to)) throw new Error(`Cannot move to "${to}": something is already there.`);
+    map.set(to, map.get(from)!);
+    map.delete(from);
+    this.writes.push({ root, path: to });
+  }
+
   async readDataUri(root: RootKind, path: string): Promise<string | null> {
     const uri = this.images[root].get(path);
     if (uri !== undefined) return uri;

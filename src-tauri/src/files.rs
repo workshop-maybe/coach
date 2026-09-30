@@ -189,6 +189,30 @@ fn write_bytes_in(root: &Path, rel: &str, contents: &[u8]) -> Result<(), String>
     commit_temp(&temp, &target)
 }
 
+/// Moves one file to another path inside the root, creating the destination's
+/// folders. Refuses a missing source, anything that is not a plain file, and an
+/// existing destination, so a move never overwrites.
+pub fn move_in(root: &Path, from: &str, to: &str) -> Result<(), String> {
+    let source = resolve_in_root(root, from)?;
+    let target = resolve_in_root(root, to)?;
+    // Resolving follows a link to its target, so check the path as named for a link first.
+    if std::fs::symlink_metadata(root.join(from)).is_ok_and(|m| m.file_type().is_symlink()) {
+        return Err(format!("\"{from}\" is not a file."));
+    }
+    match std::fs::symlink_metadata(&source) {
+        Ok(m) if m.is_file() => {}
+        Ok(_) => return Err(format!("\"{from}\" is not a file.")),
+        Err(_) => return Err(format!("Cannot move \"{from}\": it does not exist.")),
+    }
+    if std::fs::symlink_metadata(&target).is_ok() {
+        return Err(format!("Cannot move to \"{to}\": something is already there."));
+    }
+    if let Some(parent) = target.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("Cannot create folders for \"{to}\": {e}"))?;
+    }
+    std::fs::rename(&source, &target).map_err(|e| format!("Cannot move \"{from}\": {e}"))
+}
+
 /// Lists files under `dir`, recursively, as root-relative paths with forward
 /// slashes, sorted. Missing `dir` gives an empty list. Symlinks and temp
 /// files are skipped.
@@ -338,6 +362,39 @@ mod tests {
         write_text_in(&root, "credentials/a.md", "# A\n").unwrap();
         assert_eq!(fs::read_to_string(root.join("credentials/a.md")).unwrap(), "# A\n");
         assert_eq!(read_text_in(&root, "credentials/a.md").unwrap().as_deref(), Some("# A\n"));
+    }
+
+    #[test]
+    fn move_puts_a_file_at_its_new_path_and_creates_its_folders() {
+        let (_d, root) = root();
+        write_text_in(&root, "agents/a.json", "{}").unwrap();
+        move_in(&root, "agents/a.json", "trash/20260930T000000Z/agents/a.json").unwrap();
+        assert!(!root.join("agents/a.json").exists());
+        assert_eq!(fs::read_to_string(root.join("trash/20260930T000000Z/agents/a.json")).unwrap(), "{}");
+    }
+
+    #[test]
+    fn move_refuses_to_overwrite_leave_the_folder_or_move_a_missing_file() {
+        let (_d, root) = root();
+        write_text_in(&root, "a.md", "a").unwrap();
+        write_text_in(&root, "b.md", "b").unwrap();
+        assert!(move_in(&root, "a.md", "b.md").is_err());
+        assert_eq!(fs::read_to_string(root.join("b.md")).unwrap(), "b");
+        assert!(move_in(&root, "a.md", "../out.md").is_err());
+        assert!(move_in(&root, "missing.md", "c.md").is_err());
+        assert!(move_in(&root, "", "c").is_err());
+        assert_eq!(fs::read_to_string(root.join("a.md")).unwrap(), "a");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn move_refuses_a_link_and_leaves_its_target_in_place() {
+        let (_d, root) = root();
+        write_text_in(&root, "collections/c/collection.json", "{}").unwrap();
+        std::os::unix::fs::symlink(root.join("collections/c/collection.json"), root.join("agents.json")).unwrap();
+        assert!(move_in(&root, "agents.json", "trash/x/agents.json").is_err());
+        assert!(root.join("collections/c/collection.json").exists());
+        assert!(!root.join("trash").exists());
     }
 
     #[test]

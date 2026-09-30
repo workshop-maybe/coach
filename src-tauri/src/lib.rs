@@ -92,6 +92,11 @@ async fn list_files(state: State<'_, AppState>, root: String, dir: String) -> Re
     files::list_files_in(&state.root(&root)?, &dir)
 }
 
+#[tauri::command]
+async fn move_file(state: State<'_, AppState>, root: String, from: String, to: String) -> Result<(), String> {
+    files::move_in(&state.root(&root)?, &from, &to)
+}
+
 /// Reads at most one byte past the image limit, so an oversized pick is
 /// refused by `validate_image` without loading the whole file.
 fn read_picked_image(path: &std::path::Path) -> Result<Vec<u8>, String> {
@@ -160,6 +165,7 @@ pub fn run() {
             read_text,
             write_text,
             list_files,
+            move_file,
             import_badge_art,
             read_data_uri
         ])

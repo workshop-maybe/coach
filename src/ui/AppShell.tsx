@@ -8,6 +8,7 @@ import { AgentDetail } from "./AgentDetail";
 import { BadgeDetail } from "./BadgeDetail";
 import { CredentialDeck } from "./CredentialDeck";
 import { EditAgentDeck, EditCredentialDeck } from "./EditDecks";
+import { TrashDeck } from "./TrashDeck";
 import { exportAll, exportMessage } from "./exportAll";
 import { pickExportFolder } from "./exportFolder";
 import { Home } from "./Home";
@@ -111,6 +112,8 @@ function DeckView({ route }: { route: DeckRoute }) {
       return <EditCredentialDeck credentialKey={route.credentialKey} part={route.part} />;
     case "edit-agent":
       return <EditAgentDeck profileSlug={route.profileSlug} part={route.part} />;
+    case "trash":
+      return <TrashDeck item={route.item} />;
   }
 }
 

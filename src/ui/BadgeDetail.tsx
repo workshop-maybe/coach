@@ -14,6 +14,7 @@ import { FLAG_SHORT, firstLine, formatDate, resultLabel } from "./format";
 import { useNav } from "./nav";
 import type { CredentialPart } from "./routes";
 import { Missing, PartCard, fileName, focusOnMount, paletteName, useEscape } from "./shared";
+import { TrashLink } from "./TrashDeck";
 import { useFolder } from "./useFolderState";
 import { useMatrix } from "./useMatrix";
 
@@ -89,6 +90,8 @@ export function BadgeDetail({ credentialKey: key }: { credentialKey: string }) {
         )}
         {opened && <History profile={opened.profile} cell={opened.cell} onTestAgain={() => navigate({ view: "deck", deck: "test", profileSlug: opened.profile.slug, credentialKey: key })} />}
       </section>
+
+      <TrashLink onOpen={() => navigate({ view: "deck", deck: "trash", item: { kind: "badge", credentialKey: key } })} />
     </section>
   );
 }

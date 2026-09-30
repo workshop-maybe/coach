@@ -26,7 +26,8 @@ export const FORMAT_VERSION = 1;
 
 const COLLECTIONS_DIR = "collections";
 const AGENTS_DIR = "agents";
-const ASSESSMENTS_DIR = "assessments";
+export const ASSESSMENTS_DIR = "assessments";
+const TRASH_DIR = "trash";
 
 export function collectionPath(slug: Slug): string {
   return `${COLLECTIONS_DIR}/${slug}/collection.json`;
@@ -42,6 +43,22 @@ export function profilePath(slug: Slug): string {
 
 export function assessmentPath(profileSlug: Slug, collectionSlug: Slug, credentialSlug: Slug, fileStem: string): string {
   return `${ASSESSMENTS_DIR}/${profileSlug}/${collectionSlug}/${credentialSlug}/${fileStem}.md`;
+}
+
+/** Where a file moved to the trash at `stamp` lands: its own path under trash/<stamp>/. */
+export function trashPath(stamp: string, path: string): string {
+  return `${TRASH_DIR}/${stamp}/${path}`;
+}
+
+/** True for any file under assessments/<agent>/<collection>/<credential>/, whatever the agent. */
+export function isCredentialResult(path: string, collectionSlug: Slug, credentialSlug: Slug): boolean {
+  const parts = path.split("/");
+  return parts.length > 4 && parts[0] === ASSESSMENTS_DIR && parts[2] === collectionSlug && parts[3] === credentialSlug;
+}
+
+/** Every result file for one agent, parsed or not. */
+export function profileResultsDir(profileSlug: Slug): string {
+  return `${ASSESSMENTS_DIR}/${profileSlug}`;
 }
 
 /** A Windows-safe UTC stamp, e.g. 20260929T084900Z. */

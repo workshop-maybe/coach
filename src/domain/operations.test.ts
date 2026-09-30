@@ -14,6 +14,8 @@ import {
   recordAssessment,
   reorderCredentials,
   setCredentialBadgeOverride,
+  trashCredential,
+  trashProfile,
   updateCollection,
   updateCollectionBadge,
   updateCredential,
@@ -472,5 +474,72 @@ describe("badge operations", () => {
     ]);
     expect(storage.image(plate!)).toBe(PNG);
     expect(storage.file(collectionPath("go-basics"))).toBe(collectionText);
+  });
+});
+
+describe("moving to trash", () => {
+  const now = new Date("2026-09-30T10:00:00.000Z");
+
+  it("moves an agent and its results into the trash, and leaves the rest", async () => {
+    const { storage, state } = await withOneAssessment();
+    const other = await createProfile(storage, state, { ...baseProfile, name: "Other" });
+    const kept = await recordAssessment(storage, other.state, { profileSlug: "other", collectionSlug: "go-basics", credentialSlug: "write-a-cli", result: "met", note: "", handBack: "Mine." });
+    const keptPath = "assessments/other/go-basics/write-a-cli/" + kept.assessments.find((a) => a.profileSlug === "other")!.fileStem + ".md";
+    const result = "assessments/claude-opus/go-basics/write-a-cli/20260929T084900Z.md";
+    const agentText = storage.file(profilePath("claude-opus"));
+    const next = await trashProfile(storage, kept, "claude-opus", now);
+    expect(storage.file(keptPath)).toBeDefined();
+    expect(next.assessments.map((a) => a.profileSlug)).toEqual(["other"]);
+    expect(storage.file(profilePath("claude-opus"))).toBeUndefined();
+    expect(storage.file(result)).toBeUndefined();
+    expect(storage.file(`trash/20260930T100000Z/${profilePath("claude-opus")}`)).toBe(agentText);
+    expect(storage.file(`trash/20260930T100000Z/${result}`)).toBeDefined();
+    expect(next.profiles.map((p) => p.slug)).toEqual(["other"]);
+  });
+
+  it("moves a credential and every agent's results for it, and drops it from its collection", async () => {
+    const { storage, state: first } = await withOneAssessment();
+    const second = await createCredential(storage, first, "go-basics", "Read a file");
+    const withOther = await recordAssessment(storage, second.state, { profileSlug: "claude-opus", collectionSlug: "go-basics", credentialSlug: "read-a-file", result: "met", note: "", handBack: "Read." });
+    const otherResult = "assessments/claude-opus/go-basics/read-a-file/" + withOther.assessments.find((a) => a.credentialSlug === "read-a-file")!.fileStem + ".md";
+    let state = await setCredentialBadgeOverride(storage, withOther, "go-basics", "write-a-cli", { palette: "ink" }, withOther.raw[collectionPath("go-basics")]);
+    const credText = storage.file(credentialPath("go-basics", "write-a-cli"));
+    const collectionBefore = storage.file(collectionPath("go-basics"));
+    state = await trashCredential(storage, state, "go-basics", "write-a-cli", now);
+    expect(storage.file(otherResult)).toBeDefined();
+    expect(storage.file(`trash/20260930T100000Z/${collectionPath("go-basics")}`)).toBe(collectionBefore);
+    expect(storage.file(credentialPath("go-basics", "write-a-cli"))).toBeUndefined();
+    expect(storage.file(`trash/20260930T100000Z/${credentialPath("go-basics", "write-a-cli")}`)).toBe(credText);
+    expect(storage.file("trash/20260930T100000Z/assessments/claude-opus/go-basics/write-a-cli/20260929T084900Z.md")).toBeDefined();
+    expect(state.credentials.map((c) => c.slug)).toEqual(["read-a-file"]);
+    expect(state.collections[0].order).toEqual(["read-a-file"]);
+    expect(state.collections[0].badgeOverrides?.["write-a-cli"]).toBeUndefined();
+    expect(state.assessments.map((a) => a.credentialSlug)).toEqual(["read-a-file"]);
+    expect(state.profiles.map((p) => p.slug)).toEqual(["claude-opus"]);
+  });
+
+  it("moves nothing when the collection changed on disk since it was opened", async () => {
+    const { storage, state } = await withOneAssessment();
+    storage.seed({ [collectionPath("go-basics")]: `${storage.file(collectionPath("go-basics"))}\n` });
+    await expect(trashCredential(storage, state, "go-basics", "write-a-cli", now)).rejects.toBeInstanceOf(ChangedOnDiskError);
+    expect(storage.file(credentialPath("go-basics", "write-a-cli"))).toBeDefined();
+    expect(Object.keys(storage.files()).some((p) => p.startsWith("trash/"))).toBe(false);
+  });
+
+  it("a move that fails partway leaves the agent loadable, and trashing it again moves the rest", async () => {
+    const { storage, state } = await withOneAssessment();
+    const failing = Object.create(storage) as MemoryStorage;
+    let calls = 0;
+    failing.moveFile = async (root, from, to) => {
+      if (++calls === 2) throw new Error("disk full");
+      return storage.moveFile(root, from, to);
+    };
+    const withTwo = await recordAssessment(storage, state, { profileSlug: "claude-opus", collectionSlug: "go-basics", credentialSlug: "write-a-cli", result: "met", note: "", handBack: "Again." }, new Date("2026-09-30T09:00:00Z"));
+    await expect(trashProfile(failing, withTwo, "claude-opus", now)).rejects.toThrow("disk full");
+    const between = await loadFolder(storage);
+    expect(between.profiles.map((p) => p.slug)).toEqual(["claude-opus"]);
+    const done = await trashProfile(storage, between, "claude-opus", new Date("2026-09-30T10:00:05Z"));
+    expect(done.profiles).toEqual([]);
+    expect(Object.keys(storage.files()).filter((p) => p.startsWith("assessments/"))).toEqual([]);
   });
 });

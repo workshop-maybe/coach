@@ -1761,3 +1761,14 @@ button:focus-visible {
   -webkit-mask-box-image: url("./assets/sketch-frame.svg") 16 / 16px round;
   mask-border: url("./assets/sketch-frame.svg") 16 / 16px round;
 }
+
+/* The quiet way to move an opened agent or badge to the trash. */
+.detail-trash {
+  margin-top: var(--space-xl);
+}
+
+.detail-trash-button {
+  color: var(--ink-muted);
+  font-weight: 500;
+  padding-inline: 0;
+}

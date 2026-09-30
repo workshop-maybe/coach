@@ -3,6 +3,7 @@ import { MemoryStorage } from "../storage/memory";
 import { ChangedOnDiskError } from "../storage/storage";
 import { serializeCredentialMd } from "./credential-md";
 import {
+  isCredentialResult,
   MARKER_PATH,
   assessmentPath,
   collectionPath,
@@ -505,5 +506,16 @@ describe("badge settings in collection.json", () => {
     await saveCollection(storage, { ...state.collections[0], badgeOverrides: {} }, state.raw[collectionPath("eng")]);
     const again = await loadFolder(storage);
     expect(resolveBadgeSettings(again.collections[0], "testing").palette).toBe("wine-crimson");
+  });
+});
+
+describe("isCredentialResult", () => {
+  it("matches any agent's result files for exactly that credential", () => {
+    expect(isCredentialResult("assessments/opus/eng/review/20260930T000000Z.md", "eng", "review")).toBe(true);
+    expect(isCredentialResult("assessments/other/eng/review/notes.txt", "eng", "review")).toBe(true);
+    expect(isCredentialResult("assessments/opus/eng/review-2/20260930T000000Z.md", "eng", "review")).toBe(false);
+    expect(isCredentialResult("assessments/opus/ops/review/20260930T000000Z.md", "eng", "review")).toBe(false);
+    expect(isCredentialResult("assessments/opus/eng/review", "eng", "review")).toBe(false);
+    expect(isCredentialResult("trash/x/eng/review/a.md", "eng", "review")).toBe(false);
   });
 });

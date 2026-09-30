@@ -11,6 +11,8 @@ export interface Storage {
   writeText(root: RootKind, path: string, contents: string): Promise<void>;
   /** Lists every file under `dir` (recursively), as root-relative paths. Missing dir lists nothing. */
   listFiles(root: RootKind, dir: string): Promise<string[]>;
+  /** Moves one file to another path in the same root, creating folders. Never overwrites. */
+  moveFile(root: RootKind, from: string, to: string): Promise<void>;
   /** Returns a JPEG or PNG inside the root as a base64 data URI, or null when it does not exist. */
   readDataUri(root: RootKind, path: string): Promise<string | null>;
   /**

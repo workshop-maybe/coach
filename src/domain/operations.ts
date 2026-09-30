@@ -6,14 +6,19 @@
 import type { BadgeSettings } from "../badge/settings";
 import { ChangedOnDiskError, type Storage } from "../storage/storage";
 import {
+  ASSESSMENTS_DIR,
   collectionPath,
   credentialPath,
   fileStemFor,
+  isCredentialResult,
   loadFolder,
+  profilePath,
+  profileResultsDir,
   saveAssessment,
   saveCollection,
   saveCredential,
   saveProfile,
+  trashPath,
 } from "./folder";
 import { assignmentVersion } from "./hash";
 import { uniqueSlug } from "./slug";
@@ -142,21 +147,25 @@ export async function setCredentialBadgeOverride(
   const stored = findCollection(state, collectionSlug);
   if (override !== null) findCredential(state, collectionSlug, credentialSlug);
 
+  const next = withoutOverride(stored, credentialSlug);
+  if (override !== null) next.badgeOverrides = { ...(stored.badgeOverrides ?? {}), [credentialSlug]: override };
+  await saveCollection(storage, next, baseText);
+  return loadFolder(storage);
+}
+
+/** The collection with one credential's badge override removed, malformed entry included. */
+function withoutOverride(stored: Collection, credentialSlug: Slug): Collection {
   const next: Collection = { ...stored };
-  // A malformed entry for this credential is replaced or removed along with it.
   if (stored.badgeOverrideEntriesRaw !== undefined) {
     const { [credentialSlug]: _dropped, ...otherRaw } = stored.badgeOverrideEntriesRaw;
     if (Object.keys(otherRaw).length > 0) next.badgeOverrideEntriesRaw = otherRaw;
     else delete next.badgeOverrideEntriesRaw;
   }
-  if (override !== null) {
-    next.badgeOverrides = { ...(stored.badgeOverrides ?? {}), [credentialSlug]: override };
-  } else if (stored.badgeOverrides !== undefined) {
+  if (stored.badgeOverrides !== undefined) {
     const { [credentialSlug]: _removed, ...others } = stored.badgeOverrides;
     next.badgeOverrides = others;
   }
-  await saveCollection(storage, next, baseText);
-  return loadFolder(storage);
+  return next;
 }
 
 /**
@@ -308,5 +317,52 @@ export async function recordAssessment(
     handBack: input.handBack,
   };
   await saveAssessment(storage, assessment);
+  return loadFolder(storage);
+}
+
+// ---------------------------------------------------------------------------
+// Trash: an agent or a credential leaves the app with its results, moved (never
+// deleted) under trash/<stamp>/ at the same paths, so moving the files back restores it.
+// The item's own file moves last: if a move fails partway, the item still loads and
+// trashing it again moves what is left.
+
+async function moveToTrash(storage: Storage, paths: string[], stamp: string): Promise<void> {
+  for (const path of paths) await storage.moveFile("data", path, trashPath(stamp, path));
+}
+
+/** Moves an agent and every result recorded for it to the trash. */
+export async function trashProfile(storage: Storage, state: FolderState, profileSlug: Slug, now = new Date()): Promise<FolderState> {
+  findProfile(state, profileSlug);
+  const results = await storage.listFiles("data", profileResultsDir(profileSlug));
+  await moveToTrash(storage, [...results, profilePath(profileSlug)], fileStemFor(now));
+  return loadFolder(storage);
+}
+
+/**
+ * Moves a credential and every agent's results for it to the trash, and takes it out of
+ * its collection's order and badge overrides. The collection as it was goes into the
+ * trash too, so its order and the credential's badge look can be restored. The
+ * collection saves before anything moves, so a file changed on disk moves nothing (KTD6).
+ */
+export async function trashCredential(
+  storage: Storage,
+  state: FolderState,
+  collectionSlug: Slug,
+  credentialSlug: Slug,
+  now = new Date(),
+): Promise<FolderState> {
+  const stored = findCollection(state, collectionSlug);
+  findCredential(state, collectionSlug, credentialSlug);
+  const path = collectionPath(collectionSlug);
+  const base = state.raw[path] ?? null;
+  const stamp = fileStemFor(now);
+
+  const next = { ...withoutOverride(stored, credentialSlug), order: stored.order.filter((s) => s !== credentialSlug) };
+  await saveCollection(storage, next, base);
+  if (base !== null) await storage.writeText("data", trashPath(stamp, path), base);
+
+  // Every agent's results for it, parsed or not.
+  const results = (await storage.listFiles("data", ASSESSMENTS_DIR)).filter((p) => isCredentialResult(p, collectionSlug, credentialSlug));
+  await moveToTrash(storage, [...results, credentialPath(collectionSlug, credentialSlug)], stamp);
   return loadFolder(storage);
 }
