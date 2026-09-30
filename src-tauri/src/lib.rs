@@ -14,7 +14,8 @@ struct AppState {
     roots: Mutex<Roots>,
     settings_path: PathBuf,
     machine_id: String,
-    machine_name: String,
+    /// Looked up on the first copy, not at launch, since it spawns a process.
+    machine_name: std::sync::OnceLock<String>,
     home: Option<PathBuf>,
 }
 
@@ -181,7 +182,7 @@ async fn read_context(state: State<'_, AppState>, repo: String, harness: String)
     };
     Ok(ContextReport {
         machine_id: state.machine_id.clone(),
-        machine: state.machine_name.clone(),
+        machine: state.machine_name.get_or_init(machine_display_name).clone(),
         memory,
     })
 }
@@ -202,7 +203,7 @@ pub fn run() {
                 roots: Mutex::new(roots),
                 settings_path,
                 machine_id,
-                machine_name: machine_display_name(),
+                machine_name: std::sync::OnceLock::new(),
                 home: app.path().home_dir().ok(),
             });
             Ok(())

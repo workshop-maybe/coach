@@ -6,6 +6,7 @@ import YAML from "yaml";
 import { parseBadgeSettings, type BadgeSettings } from "../badge/settings";
 import { ChangedOnDiskError, type Storage } from "../storage/storage";
 import { parseCredentialMd, serializeCredentialMd } from "./credential-md";
+import { isTestContext } from "./context";
 import type {
   AgentProfile,
   AgentSetup,
@@ -277,11 +278,13 @@ function parseContext(raw: unknown): TestContext | undefined {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return undefined;
   const obj = raw as Json;
   const captured = obj.captured_at;
-  const capturedAt = captured instanceof Date ? captured.toISOString() : captured;
-  const fields = [obj.machine_id, obj.machine, obj.memory, capturedAt];
-  if (!fields.every((f) => typeof f === "string" && f !== "")) return undefined;
-  const [machineId, machine, memory, at] = fields as string[];
-  return { machineId, machine, memory, capturedAt: at };
+  const context = {
+    machineId: obj.machine_id,
+    machine: obj.machine,
+    memory: obj.memory,
+    capturedAt: captured instanceof Date ? captured.toISOString() : captured,
+  };
+  return isTestContext(context) ? context : undefined;
 }
 
 export function parseAssessment(text: string, ids: AssessmentIds): Assessment {

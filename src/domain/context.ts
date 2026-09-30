@@ -2,7 +2,14 @@
 // shown, never stored, and never a matrix flag, so it can't mark a result out of date
 // or change who holds a badge (R8, R9).
 
-import { MEMORY_NOT_READ, type Assessment } from "./types";
+import { MEMORY_NOT_READ, type Assessment, type TestContext } from "./types";
+
+/** A complete context: all four fields non-empty text. Anything else reads as no context. */
+export function isTestContext(v: unknown): v is TestContext {
+  if (typeof v !== "object" || v === null) return false;
+  const c = v as Record<string, unknown>;
+  return [c.machineId, c.machine, c.memory, c.capturedAt].every((f) => typeof f === "string" && f !== "");
+}
 
 export interface ContextLine {
   /** The machine the test ran on. */

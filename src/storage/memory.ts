@@ -5,7 +5,7 @@ import type { ContextReading } from "../domain/types";
 import type { RootKind, Storage } from "./storage";
 
 /** What `readContext` returns when nothing is queued. */
-export const TEST_CONTEXT: ContextReading = { machineId: "test-machine", machine: "Test Mac", memory: "000000000000" };
+const TEST_CONTEXT: ContextReading = { machineId: "test-machine", machine: "Test Mac", memory: "000000000000" };
 
 export class MemoryStorage implements Storage {
   private readonly roots: Record<RootKind, Map<string, string>> = {

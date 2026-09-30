@@ -3,6 +3,7 @@
 // reminder, never a result. A copy of the same agent and credential replaces the last.
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { isTestContext } from "../domain/context";
 import type { AgentSetup, Slug, TestContext } from "../domain/types";
 
 export interface PendingTest {
@@ -47,15 +48,9 @@ function isPending(v: unknown): v is PendingTest {
   );
 }
 
-function isContext(v: unknown): v is TestContext {
-  if (typeof v !== "object" || v === null) return false;
-  const c = v as Record<string, unknown>;
-  return [c.machineId, c.machine, c.memory, c.capturedAt].every((f) => typeof f === "string" && f !== "");
-}
-
 /** A valid entry, with a malformed context dropped so the reminder survives. */
 function clean(p: PendingTest): PendingTest {
-  if (p.context === undefined || isContext(p.context)) return p;
+  if (p.context === undefined || isTestContext(p.context)) return p;
   const { context: _dropped, ...rest } = p;
   return rest;
 }

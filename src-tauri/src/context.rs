@@ -6,6 +6,7 @@
 //! folder. Plain Rust with no Tauri types, so it is unit-tested without a
 //! runtime; the command in `lib.rs` is a thin wrapper.
 
+use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 
 /// Recorded when memory could not be read, so no false change is reported.
@@ -49,7 +50,6 @@ pub fn project_dir_name(repo: &Path) -> String {
 
 /// A new random-enough machine id: 16 hex characters.
 pub fn new_machine_id() -> String {
-    use sha2::{Digest, Sha256};
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -110,7 +110,6 @@ fn source_hashes(home: &Path, repo: &Path) -> Option<Vec<(String, String)>> {
 /// The hex SHA-256 of a regular file of at most `MAX_SOURCE_BYTES`,
 /// "absent" when it doesn't exist, or None when it can't be read safely.
 fn hash_source(path: &Path) -> Option<String> {
-    use sha2::{Digest, Sha256};
     use std::io::Read;
 
     let meta = match std::fs::metadata(path) {
@@ -131,7 +130,6 @@ fn hash_source(path: &Path) -> Option<String> {
 }
 
 fn digest(entries: &[(String, String)]) -> String {
-    use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
     for (label, hash) in entries {
         hasher.update(format!("{label}\t{hash}\n").as_bytes());
