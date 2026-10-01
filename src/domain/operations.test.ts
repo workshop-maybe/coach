@@ -2,26 +2,32 @@ import { describe, expect, it } from "vitest";
 import { ChangedOnDiskError } from "../storage/storage";
 import { MemoryStorage } from "../storage/memory";
 import { assignmentVersion } from "./hash";
-import { collectionPath, credentialPath, loadFolder, profilePath } from "./folder";
+import { collectionPath, credentialPath, handoffPath, loadFolder, profilePath, SKELETON_PATH } from "./folder";
+import { BUILT_IN_HANDOFF, defaultHandoff, handoffsFor, isHandoffLocked, SKELETON_ID, winnerFor } from "./handoffs";
 import {
+  HandoffLockedError,
+  HandoffProblemError,
   SetupLockedError,
   createCollection,
   createCredential,
+  createHandoff,
   createProfile,
   duplicateProfileDraft,
   importBadgeArt,
   isSetupLocked,
   recordAssessment,
   reorderCredentials,
+  saveSkeleton,
   setCredentialBadgeOverride,
   trashCredential,
   trashProfile,
   updateCollection,
   updateCollectionBadge,
   updateCredential,
+  updateHandoff,
   updateProfile,
 } from "./operations";
-import type { AgentProfile, FolderState } from "./types";
+import type { AgentProfile, AssessmentResult, FolderState } from "./types";
 
 const baseProfile: Omit<AgentProfile, "slug"> = {
   name: "Claude Opus",
@@ -528,6 +534,23 @@ describe("moving to trash", () => {
     expect(state.profiles.map((p) => p.slug)).toEqual(["claude-opus"]);
   });
 
+  it("moves a badge's handoff files into the same trash stamp, and leaves nothing in its handoffs folder", async () => {
+    const { storage, state: first } = await withOneAssessment();
+    const a = await createHandoff(storage, first, "go-basics", "write-a-cli", "A {{task}}", new Date("2026-09-30T08:00:00Z"));
+    const b = await createHandoff(storage, a.state, "go-basics", "write-a-cli", "B {{task}}", new Date("2026-09-30T08:00:00Z"));
+    storage.seed({ "collections/go-basics/handoffs/write-a-cli/.draft.md.swp": "x" });
+    const state = await trashCredential(storage, b.state, "go-basics", "write-a-cli", now);
+    const dir = "collections/go-basics/handoffs/write-a-cli/";
+    expect(Object.keys(storage.files()).filter((p) => p.startsWith(dir))).toEqual([]);
+    expect(storage.file(`trash/20260930T100000Z/${handoffPath("go-basics", "write-a-cli", a.id)}`)).toBe("A {{task}}");
+    expect(storage.file(`trash/20260930T100000Z/${handoffPath("go-basics", "write-a-cli", b.id)}`)).toBe("B {{task}}");
+    expect(storage.file("trash/20260930T100000Z/assessments/claude-opus/go-basics/write-a-cli/20260929T084900Z.md")).toBeDefined();
+    expect(state.handoffs).toEqual([]);
+    // The credential's own file moves last.
+    const moved = storage.writes.filter((w) => w.path.startsWith("trash/20260930T100000Z/collections/go-basics/") && !w.path.endsWith("collection.json"));
+    expect(moved[moved.length - 1].path).toBe(`trash/20260930T100000Z/${credentialPath("go-basics", "write-a-cli")}`);
+  });
+
   it("moves nothing when the collection changed on disk since it was opened", async () => {
     const { storage, state } = await withOneAssessment();
     storage.seed({ [collectionPath("go-basics")]: `${storage.file(collectionPath("go-basics"))}\n` });
@@ -551,5 +574,156 @@ describe("moving to trash", () => {
     const done = await trashProfile(storage, between, "claude-opus", new Date("2026-09-30T10:00:05Z"));
     expect(done.profiles).toEqual([]);
     expect(Object.keys(storage.files()).filter((p) => p.startsWith("assessments/"))).toEqual([]);
+  });
+});
+
+describe("handoffs", () => {
+  const KEY = "go-basics/write-a-cli";
+  const at = new Date("2026-10-01T09:00:00.000Z");
+
+  /** Records a result, then marks it as run with a handoff in memory (U3 writes this field). */
+  async function recordWith(storage: MemoryStorage, state: FolderState, result: AssessmentResult, when: Date, handoffId?: string): Promise<FolderState> {
+    const next = await recordAssessment(storage, state, { profileSlug: "claude-opus", collectionSlug: "go-basics", credentialSlug: "write-a-cli", result, note: "", handBack: "Done." }, when);
+    if (handoffId === undefined) return next;
+    const stamp = when.toISOString().replace(/\.\d+Z$/, "Z").replace(/[-:]/g, "");
+    return {
+      ...next,
+      assessments: next.assessments.map((a) => (a.fileStem === stamp ? { ...a, handoff: { id: handoffId, text: "filled" } } : a)),
+    };
+  }
+
+  it("a folder with no skeleton file uses the built-in skeleton, and saving writes handoffs/skeleton.md", async () => {
+    const { storage, state } = await setup();
+    expect(defaultHandoff(state, KEY)).toEqual({ id: SKELETON_ID, text: BUILT_IN_HANDOFF });
+    expect(storage.file(SKELETON_PATH)).toBeUndefined();
+    const edited = `${BUILT_IN_HANDOFF}\nKeep it short.\n`;
+    const next = await saveSkeleton(storage, edited, state.raw[SKELETON_PATH] ?? null);
+    expect(storage.file(SKELETON_PATH)).toBe(edited);
+    expect(next.skeleton).toBe(edited);
+    expect(next.raw[SKELETON_PATH]).toBe(edited);
+  });
+
+  it("Covers AE1. After the skeleton is edited, a badge with no handoffs has the edited skeleton as its default", async () => {
+    const { storage, state } = await setup();
+    expect(defaultHandoff(state, KEY).text).toBe(BUILT_IN_HANDOFF);
+    const first = await saveSkeleton(storage, "v1 {{task}}", null);
+    const second = await saveSkeleton(storage, "v2 {{task}}", first.raw[SKELETON_PATH]);
+    expect(handoffsFor(second, KEY)).toEqual([]);
+    expect(defaultHandoff(second, KEY)).toEqual({ id: SKELETON_ID, text: "v2 {{task}}" });
+  });
+
+  it("a skeleton save from an outdated base is refused with ChangedOnDiskError", async () => {
+    const { storage } = await setup();
+    const first = await saveSkeleton(storage, "v1 {{task}}", null);
+    storage.seed({ [SKELETON_PATH]: "hand edit {{task}}" });
+    await expect(saveSkeleton(storage, "v2 {{task}}", first.raw[SKELETON_PATH])).rejects.toBeInstanceOf(ChangedOnDiskError);
+    expect(storage.file(SKELETON_PATH)).toBe("hand edit {{task}}");
+  });
+
+  it("two handoffs created in the same second load in creation order, with distinct ids, and the newer one is the default", async () => {
+    const { storage, state } = await setup();
+    const a = await createHandoff(storage, state, "go-basics", "write-a-cli", "A {{task}}", at);
+    const b = await createHandoff(storage, a.state, "go-basics", "write-a-cli", "B {{task}}", at);
+    expect(a.id).toBe("20261001T090000Z");
+    expect(b.id).not.toBe(a.id);
+    expect(b.id > a.id).toBe(true);
+    expect(storage.file(handoffPath("go-basics", "write-a-cli", a.id))).toBe("A {{task}}");
+    expect(storage.file(handoffPath("go-basics", "write-a-cli", b.id))).toBe("B {{task}}");
+    expect(handoffsFor(b.state, KEY).map((h) => h.text)).toEqual(["A {{task}}", "B {{task}}"]);
+    expect(defaultHandoff(b.state, KEY)).toEqual({ id: b.id, text: "B {{task}}" });
+  });
+
+  it("a handoff created while the clock reads earlier than the newest one still becomes the default", async () => {
+    const { storage, state } = await setup();
+    const a = await createHandoff(storage, state, "go-basics", "write-a-cli", "A {{task}}", at);
+    const b = await createHandoff(storage, a.state, "go-basics", "write-a-cli", "B {{task}}", new Date("2026-10-01T08:00:00Z"));
+    expect(defaultHandoff(b.state, KEY).id).toBe(b.id);
+  });
+
+  it("handoffs belong to one badge: another badge keeps the skeleton as its default", async () => {
+    const { storage, state } = await setup();
+    const other = await createCredential(storage, state, "go-basics", "Read a file");
+    const a = await createHandoff(storage, other.state, "go-basics", "write-a-cli", "A {{task}}", at);
+    expect(handoffsFor(a.state, other.key)).toEqual([]);
+    expect(defaultHandoff(a.state, other.key).id).toBe(SKELETON_ID);
+  });
+
+  it("Covers AE2. Updating a handoff that a result names is refused and the file is unchanged; the edit saves as a new default handoff", async () => {
+    const { storage, state } = await setup();
+    const b = await createHandoff(storage, state, "go-basics", "write-a-cli", "B {{task}}", at);
+    const earned = await recordWith(storage, b.state, "met", new Date("2026-10-01T09:30:00Z"), b.id);
+    expect(isHandoffLocked(earned, KEY, b.id)).toBe(true);
+    const path = handoffPath("go-basics", "write-a-cli", b.id);
+    const writes = storage.writes.length;
+    const err = await updateHandoff(storage, earned, "go-basics", "write-a-cli", b.id, "B2 {{task}}", earned.raw[path]).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(HandoffLockedError);
+    expect((err as HandoffLockedError).handoffId).toBe(b.id);
+    expect(storage.file(path)).toBe("B {{task}}");
+    expect(storage.writes.length).toBe(writes);
+
+    const saved = await createHandoff(storage, earned, "go-basics", "write-a-cli", "B2 {{task}}", new Date("2026-10-01T10:00:00Z"));
+    expect(storage.file(path)).toBe("B {{task}}");
+    expect(defaultHandoff(saved.state, KEY)).toEqual({ id: saved.id, text: "B2 {{task}}" });
+  });
+
+  it("updating a handoff that no result names rewrites it in place and keeps its id", async () => {
+    const { storage, state } = await setup();
+    const a = await createHandoff(storage, state, "go-basics", "write-a-cli", "A {{task}}", at);
+    const path = handoffPath("go-basics", "write-a-cli", a.id);
+    expect(isHandoffLocked(a.state, KEY, a.id)).toBe(false);
+    const next = await updateHandoff(storage, a.state, "go-basics", "write-a-cli", a.id, "A2 {{task}}", a.state.raw[path]);
+    expect(storage.file(path)).toBe("A2 {{task}}");
+    expect(handoffsFor(next, KEY)).toEqual([{ collectionSlug: "go-basics", credentialSlug: "write-a-cli", id: a.id, text: "A2 {{task}}" }]);
+  });
+
+  it("a result on another badge or with another handoff does not lock it, and the skeleton never locks", async () => {
+    const { storage, state } = await setup();
+    const a = await createHandoff(storage, state, "go-basics", "write-a-cli", "A {{task}}", at);
+    const withOther = await recordWith(storage, a.state, "met", new Date("2026-10-01T09:30:00Z"), "20200101T000000Z");
+    const withSkeleton = await recordWith(storage, withOther, "met", new Date("2026-10-01T09:40:00Z"));
+    expect(isHandoffLocked(withSkeleton, KEY, a.id)).toBe(false);
+    expect(isHandoffLocked(withSkeleton, KEY, SKELETON_ID)).toBe(false);
+    expect(isHandoffLocked(withSkeleton, "go-basics/other", "20200101T000000Z")).toBe(false);
+  });
+
+  it("a handoff changed on disk since it was read refuses the save with ChangedOnDiskError", async () => {
+    const { storage, state } = await setup();
+    const a = await createHandoff(storage, state, "go-basics", "write-a-cli", "A {{task}}", at);
+    const path = handoffPath("go-basics", "write-a-cli", a.id);
+    storage.seed({ [path]: "hand edit {{task}}" });
+    await expect(updateHandoff(storage, a.state, "go-basics", "write-a-cli", a.id, "A2 {{task}}", a.state.raw[path])).rejects.toBeInstanceOf(ChangedOnDiskError);
+    expect(storage.file(path)).toBe("hand edit {{task}}");
+  });
+
+  it("refuses a template without {{task}}, and a badge handoff holding that badge's rubric, writing nothing (KTD2)", async () => {
+    const { storage, state } = await setup();
+    const writes = storage.writes.length;
+    await expect(saveSkeleton(storage, "no slot", null)).rejects.toBeInstanceOf(HandoffProblemError);
+    await expect(createHandoff(storage, state, "go-basics", "write-a-cli", "no slot", at)).rejects.toBeInstanceOf(HandoffProblemError);
+    const leak = await createHandoff(storage, state, "go-basics", "write-a-cli", "{{task}}\n\nFlags parse.", at).catch((e: unknown) => e);
+    expect(leak).toBeInstanceOf(HandoffProblemError);
+    expect((leak as HandoffProblemError).problem).toEqual({ kind: "has-rubric" });
+    const a = await createHandoff(storage, state, "go-basics", "write-a-cli", "A {{task}}", at);
+    const path = handoffPath("go-basics", "write-a-cli", a.id);
+    await expect(updateHandoff(storage, a.state, "go-basics", "write-a-cli", a.id, "Flags parse. {{task}}", a.state.raw[path])).rejects.toBeInstanceOf(HandoffProblemError);
+    expect(storage.file(path)).toBe("A {{task}}");
+    expect(storage.writes.length).toBe(writes + 1);
+  });
+
+  it("winnerFor returns the handoff of the latest Met result, and nothing when the latest result is Not yet", async () => {
+    const { storage, state } = await setup();
+    expect(winnerFor(state, "claude-opus", KEY)).toBeNull();
+    const a = await createHandoff(storage, state, "go-basics", "write-a-cli", "A {{task}}", at);
+    const met = await recordWith(storage, a.state, "met", new Date("2026-10-01T09:30:00Z"), a.id);
+    expect(winnerFor(met, "claude-opus", KEY)).toBe(a.id);
+    expect(winnerFor(met, "someone-else", KEY)).toBeNull();
+    const notYet = await recordWith(storage, met, "not_met", new Date("2026-10-01T09:40:00Z"), a.id);
+    expect(winnerFor(notYet, "claude-opus", KEY)).toBeNull();
+  });
+
+  it("winnerFor counts a Met result with no handoff as the skeleton", async () => {
+    const { storage, state } = await setup();
+    const met = await recordWith(storage, state, "met", new Date("2026-10-01T09:30:00Z"));
+    expect(winnerFor(met, "claude-opus", KEY)).toBe(SKELETON_ID);
   });
 });

@@ -15,6 +15,7 @@ import type {
   Collection,
   Credential,
   FolderState,
+  Handoff,
   LoadError,
   Slug,
   TestContext,
@@ -31,6 +32,9 @@ const AGENTS_DIR = "agents";
 export const ASSESSMENTS_DIR = "assessments";
 const TRASH_DIR = "trash";
 
+/** The edited skeleton. Absent means the built-in one; written only on the first edit (KTD1). */
+export const SKELETON_PATH = "handoffs/skeleton.md";
+
 export function collectionPath(slug: Slug): string {
   return `${COLLECTIONS_DIR}/${slug}/collection.json`;
 }
@@ -45,6 +49,15 @@ export function profilePath(slug: Slug): string {
 
 export function assessmentPath(profileSlug: Slug, collectionSlug: Slug, credentialSlug: Slug, fileStem: string): string {
   return `${ASSESSMENTS_DIR}/${profileSlug}/${collectionSlug}/${credentialSlug}/${fileStem}.md`;
+}
+
+/** Every handoff file for one badge, parsed or not. */
+export function handoffsDir(collectionSlug: Slug, credentialSlug: Slug): string {
+  return `${COLLECTIONS_DIR}/${collectionSlug}/handoffs/${credentialSlug}`;
+}
+
+export function handoffPath(collectionSlug: Slug, credentialSlug: Slug, id: string): string {
+  return `${handoffsDir(collectionSlug, credentialSlug)}/${id}.md`;
 }
 
 /** Where a file moved to the trash at `stamp` lands: its own path under trash/<stamp>/. */
@@ -377,6 +390,15 @@ function byName<T extends { name: string; slug: string }>(a: T, b: T): number {
   return a.name.localeCompare(b.name) || a.slug.localeCompare(b.slug);
 }
 
+/** By collection, then credential, then id: stems are stamps, so ids sort in creation order (KTD3). */
+function byHandoffOrder(a: Handoff, b: Handoff): number {
+  return compare(a.collectionSlug, b.collectionSlug) || compare(a.credentialSlug, b.credentialSlug) || compare(a.id, b.id);
+}
+
+function compare(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
 function message(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
@@ -388,6 +410,8 @@ export async function loadFolder(storage: Storage): Promise<FolderState> {
     credentials: [],
     profiles: [],
     assessments: [],
+    skeleton: null,
+    handoffs: [],
     errors: [],
     warnings: [],
     raw: {},
@@ -420,6 +444,7 @@ export async function loadFolder(storage: Storage): Promise<FolderState> {
   // Collections and credentials.
   const collectionFiles = new Map<Slug, string>();
   const credentialFiles = new Map<Slug, { slug: Slug; path: string }[]>();
+  const handoffFiles: { collectionSlug: Slug; credentialSlug: Slug; id: string; path: string }[] = [];
   for (const path of await storage.listFiles("data", COLLECTIONS_DIR)) {
     const parts = path.split("/");
     if (parts.length === 3 && parts[2] === "collection.json" && !isIgnoredName(parts[1])) {
@@ -430,6 +455,9 @@ export async function loadFolder(storage: Storage): Promise<FolderState> {
       const list = credentialFiles.get(parts[1]) ?? [];
       list.push({ slug, path });
       credentialFiles.set(parts[1], list);
+    } else if (parts.length === 5 && parts[2] === "handoffs" && !isIgnoredName(parts[1]) && !isIgnoredName(parts[3])) {
+      const id = stem(parts[4], ".md");
+      if (id !== null) handoffFiles.push({ collectionSlug: parts[1], credentialSlug: parts[3], id, path });
     }
   }
 
@@ -468,6 +496,14 @@ export async function loadFolder(storage: Storage): Promise<FolderState> {
     state.credentials.push(...ordered);
   }
   state.collections = collections;
+
+  // Handoffs (KTD1): template text, verbatim. A file that cannot be read lands in errors.
+  state.skeleton = await load(SKELETON_PATH, (t) => t);
+  for (const { path, ...ids } of handoffFiles) {
+    const text = await load(path, (t) => t);
+    if (text !== null) state.handoffs.push({ ...ids, text });
+  }
+  state.handoffs.sort(byHandoffOrder);
 
   // Agent profiles.
   for (const path of await storage.listFiles("data", AGENTS_DIR)) {

@@ -10,6 +10,8 @@ import {
   collectionPath,
   credentialPath,
   fileStemFor,
+  handoffPath,
+  handoffsDir,
   isCredentialResult,
   loadFolder,
   profilePath,
@@ -18,8 +20,11 @@ import {
   saveCollection,
   saveCredential,
   saveProfile,
+  saveText,
+  SKELETON_PATH,
   trashPath,
 } from "./folder";
+import { checkHandoff, isHandoffLocked, type HandoffProblem } from "./handoffs";
 import { assignmentVersion } from "./hash";
 import { uniqueSlug } from "./slug";
 import {
@@ -47,6 +52,25 @@ export class SetupLockedError extends Error {
 }
 
 const SETUP_FIELDS: (keyof AgentSetup)[] = ["harness", "model", "effort"];
+
+/** Thrown when an update would change a handoff that a result names (R5, KTD5). Save it as a new handoff instead. */
+export class HandoffLockedError extends Error {
+  constructor(
+    public readonly credentialKey: string,
+    public readonly handoffId: string,
+  ) {
+    super(`The handoff "${handoffId}" of "${credentialKey}" is locked because it has results. Save the edit as a new handoff.`);
+    this.name = "HandoffLockedError";
+  }
+}
+
+/** Thrown when a template fails the save check (KTD2, R7). */
+export class HandoffProblemError extends Error {
+  constructor(public readonly problem: HandoffProblem) {
+    super(problem.kind === "missing-slot" ? `A handoff needs ${problem.slot}.` : "A handoff cannot include the badge's rubric.");
+    this.name = "HandoffProblemError";
+  }
+}
 
 function findCollection(state: FolderState, slug: Slug): Collection {
   const c = state.collections.find((x) => x.slug === slug);
@@ -275,6 +299,71 @@ export function duplicateProfileDraft(state: FolderState, profileSlug: Slug): Om
 }
 
 // ---------------------------------------------------------------------------
+// Handoffs (KTD1, KTD3, KTD5): template files, saved verbatim.
+
+function assertHandoffOk(text: string, rubric?: string): void {
+  const problem = checkHandoff(text, rubric);
+  if (problem) throw new HandoffProblemError(problem);
+}
+
+/** Saves the skeleton. Base null means the folder still uses the built-in one (R2). */
+export async function saveSkeleton(storage: Storage, text: string, baseText: string | null): Promise<FolderState> {
+  assertHandoffOk(text);
+  await saveText(storage, SKELETON_PATH, text, baseText);
+  return loadFolder(storage);
+}
+
+const STAMP = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/;
+
+/**
+ * A stamp later than every stamp the badge already has on disk, so the new handoff is
+ * its newest (R6) even when two are made in the same second or the clock reads earlier.
+ */
+async function nextHandoffId(storage: Storage, collectionSlug: Slug, credentialSlug: Slug, now: Date): Promise<string> {
+  let time = Math.floor(now.getTime() / 1000) * 1000;
+  for (const path of await storage.listFiles("data", handoffsDir(collectionSlug, credentialSlug))) {
+    const m = STAMP.exec(path.slice(path.lastIndexOf("/") + 1).replace(/\.md$/, ""));
+    if (m) time = Math.max(time, Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]) + 1000);
+  }
+  return fileStemFor(new Date(time));
+}
+
+/** Adds a handoff to a badge as a new file, which becomes the badge's default (R4, R6). */
+export async function createHandoff(
+  storage: Storage,
+  state: FolderState,
+  collectionSlug: Slug,
+  credentialSlug: Slug,
+  text: string,
+  now = new Date(),
+): Promise<{ state: FolderState; id: string }> {
+  const credential = findCredential(state, collectionSlug, credentialSlug);
+  assertHandoffOk(text, credential.rubric);
+  const id = await nextHandoffId(storage, collectionSlug, credentialSlug, now);
+  await saveText(storage, handoffPath(collectionSlug, credentialSlug, id), text, null);
+  return { state: await loadFolder(storage), id };
+}
+
+/** Rewrites a handoff in place, keeping its id. Refuses one that a result names (R5). */
+export async function updateHandoff(
+  storage: Storage,
+  state: FolderState,
+  collectionSlug: Slug,
+  credentialSlug: Slug,
+  id: string,
+  text: string,
+  baseText: string | null,
+): Promise<FolderState> {
+  const credential = findCredential(state, collectionSlug, credentialSlug);
+  const key = credentialKey(credential);
+  if (!state.handoffs.some((h) => credentialKey(h) === key && h.id === id)) throw new Error(`No handoff "${id}" on "${key}".`);
+  if (isHandoffLocked(state, key, id)) throw new HandoffLockedError(key, id);
+  assertHandoffOk(text, credential.rubric);
+  await saveText(storage, handoffPath(collectionSlug, credentialSlug, id), text, baseText);
+  return loadFolder(storage);
+}
+
+// ---------------------------------------------------------------------------
 // Assessments
 
 export interface AssessmentInput {
@@ -343,10 +432,10 @@ export async function trashProfile(storage: Storage, state: FolderState, profile
 }
 
 /**
- * Moves a credential and every agent's results for it to the trash, and takes it out of
- * its collection's order and badge overrides. The collection as it was goes into the
- * trash too, so its order and the credential's badge look can be restored. The
- * collection saves before anything moves, so a file changed on disk moves nothing (KTD6).
+ * Moves a credential, its handoffs and every agent's results for it to the trash, and
+ * takes it out of its collection's order and badge overrides. The collection as it was
+ * goes into the trash too, so its order and the credential's badge look can be restored.
+ * The collection saves before anything moves, so a file changed on disk moves nothing (KTD6).
  */
 export async function trashCredential(
   storage: Storage,
@@ -365,8 +454,9 @@ export async function trashCredential(
   await saveCollection(storage, next, base);
   if (base !== null) await storage.writeText("data", trashPath(stamp, path), base);
 
-  // Every agent's results for it, parsed or not.
+  // Every agent's results for it and every handoff file, parsed or not.
   const results = (await storage.listFiles("data", ASSESSMENTS_DIR)).filter((p) => isCredentialResult(p, collectionSlug, credentialSlug));
-  await moveToTrash(storage, [...results, credentialPath(collectionSlug, credentialSlug)], stamp);
+  const handoffs = await storage.listFiles("data", handoffsDir(collectionSlug, credentialSlug));
+  await moveToTrash(storage, [...results, ...handoffs, credentialPath(collectionSlug, credentialSlug)], stamp);
   return loadFolder(storage);
 }

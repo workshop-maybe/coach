@@ -4,7 +4,8 @@
 // targets and task (R12). There is no rubric slot, and any other `{{…}}` stays literal
 // (KTD2). The built-in skeleton is the test prompt as it read before handoffs.
 
-import type { Credential } from "./types";
+import { newestFirst } from "./matrix";
+import { credentialKey, type Credential, type FolderState, type Handoff, type HandoffTemplate, type Slug } from "./types";
 
 export const SLOTS = {
   name: "{{name}}",
@@ -83,4 +84,45 @@ export function checkHandoff(template: string, rubric?: string): HandoffProblem 
   const hidden = rubric?.trim() ?? "";
   if (hidden !== "" && template.includes(hidden)) return { kind: "has-rubric" };
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// Handoffs in the folder (KTD3). A badge handoff's id is its file stem. The skeleton
+// is one identity, `skeleton`, whether it is the built-in text or an edited one.
+
+export const SKELETON_ID = "skeleton";
+
+/** The skeleton in force: the edited one, or the built-in one when the folder has none (R2). */
+export function skeletonOf(state: FolderState): HandoffTemplate {
+  return { id: SKELETON_ID, text: state.skeleton ?? BUILT_IN_HANDOFF };
+}
+
+/** A badge's own handoffs, oldest first, so the last one is the newest. */
+export function handoffsFor(state: FolderState, key: string): Handoff[] {
+  return state.handoffs.filter((h) => credentialKey(h) === key);
+}
+
+/** The badge's newest handoff by stem, or the skeleton when it has none (R6). */
+export function defaultHandoff(state: FolderState, key: string): HandoffTemplate {
+  const own = handoffsFor(state, key);
+  const newest = own[own.length - 1];
+  return newest ? { id: newest.id, text: newest.text } : skeletonOf(state);
+}
+
+/** True when any result for the badge names the handoff (KTD5). The skeleton never locks. */
+export function isHandoffLocked(state: FolderState, key: string, id: string): boolean {
+  if (id === SKELETON_ID) return false;
+  return state.assessments.some((a) => credentialKey(a) === key && a.handoff?.id === id);
+}
+
+/**
+ * The handoff on the agent's latest result for the badge when that result is Met, or
+ * null. A result with no handoff counts as the skeleton (Assumptions).
+ */
+export function winnerFor(state: FolderState, profileSlug: Slug, key: string): string | null {
+  const latest = state.assessments
+    .filter((a) => a.profileSlug === profileSlug && credentialKey(a) === key)
+    .sort(newestFirst)[0];
+  if (!latest || latest.result !== "met") return null;
+  return latest.handoff?.id ?? SKELETON_ID;
 }

@@ -9,6 +9,8 @@ import {
   collectionPath,
   credentialPath,
   fileStemFor,
+  handoffPath,
+  handoffsDir,
   loadFolder,
   parseAssessment,
   parseCollection,
@@ -19,6 +21,7 @@ import {
   saveCredential,
   saveProfile,
   saveText,
+  SKELETON_PATH,
   serializeAssessment,
   serializeCollection,
   serializeProfile,
@@ -549,5 +552,81 @@ describe("isCredentialResult", () => {
     expect(isCredentialResult("assessments/opus/ops/review/20260930T000000Z.md", "eng", "review")).toBe(false);
     expect(isCredentialResult("assessments/opus/eng/review", "eng", "review")).toBe(false);
     expect(isCredentialResult("trash/x/eng/review/a.md", "eng", "review")).toBe(false);
+  });
+});
+
+describe("handoff files", () => {
+  const skeletonText = "# {{name}}\n\n{{task}}\n";
+
+  it("puts the skeleton and a badge's handoffs at their layout paths (KTD1)", () => {
+    expect(SKELETON_PATH).toBe("handoffs/skeleton.md");
+    expect(handoffsDir("eng", "review")).toBe("collections/eng/handoffs/review");
+    expect(handoffPath("eng", "review", "20260929T084900Z")).toBe("collections/eng/handoffs/review/20260929T084900Z.md");
+  });
+
+  it("a folder from before handoffs loads as before, with no skeleton file and no handoffs, and writes nothing", async () => {
+    const storage = fixture();
+    const state = await loadFolder(storage);
+    expect(state.errors).toEqual([]);
+    expect(state.skeleton).toBeNull();
+    expect(state.handoffs).toEqual([]);
+    expect(storage.writes).toEqual([]);
+  });
+
+  it("loads the skeleton text and each badge's handoffs verbatim, oldest first, with raw text", async () => {
+    const storage = fixture();
+    const newer = "# Newer\n\n{{task}}\n\n---\n\n## Handback\n";
+    const older = "Older {{task}}";
+    storage.seed({
+      [SKELETON_PATH]: skeletonText,
+      [handoffPath("eng", "review", "20261001T090000Z")]: newer,
+      [handoffPath("eng", "review", "20260930T090000Z")]: older,
+    });
+    const state = await loadFolder(storage);
+    expect(state.errors).toEqual([]);
+    expect(state.skeleton).toBe(skeletonText);
+    expect(state.handoffs).toEqual([
+      { collectionSlug: "eng", credentialSlug: "review", id: "20260930T090000Z", text: older },
+      { collectionSlug: "eng", credentialSlug: "review", id: "20261001T090000Z", text: newer },
+    ]);
+    expect(state.raw[SKELETON_PATH]).toBe(skeletonText);
+    expect(state.raw[handoffPath("eng", "review", "20261001T090000Z")]).toBe(newer);
+    expect(state.credentials.map((c) => c.slug)).toEqual(["review"]);
+    expect(storage.writes).toEqual([]);
+  });
+
+  it("ignores editor temp files and anything else in a handoffs folder", async () => {
+    const storage = fixture();
+    storage.seed({
+      [handoffPath("eng", "review", "20260930T090000Z")]: "{{task}}",
+      "collections/eng/handoffs/review/.20260930T090000Z.md.swp": "x",
+      "collections/eng/handoffs/review/20260930T090000Z.md~": "x",
+      "collections/eng/handoffs/review/20260930T090000Z.md.tmp-1": "x",
+      "collections/eng/handoffs/review/notes.txt": "x",
+      "collections/eng/handoffs/.hidden/20260930T090000Z.md": "x",
+      "handoffs/.skeleton.md.swp": "x",
+    });
+    const state = await loadFolder(storage);
+    expect(state.errors).toEqual([]);
+    expect(state.skeleton).toBeNull();
+    expect(state.handoffs.map((h) => h.id)).toEqual(["20260930T090000Z"]);
+  });
+
+  it("reports an unreadable skeleton or handoff by path, keeps loading, and never rewrites it", async () => {
+    const storage = fixture();
+    const bad = handoffPath("eng", "review", "20260930T090000Z");
+    storage.seed({ [SKELETON_PATH]: skeletonText, [bad]: "{{task}}", [handoffPath("eng", "review", "20261001T090000Z")]: "ok {{task}}" });
+    const failing = Object.create(storage) as MemoryStorage;
+    failing.readText = async (root, path) => {
+      if (path === bad || path === SKELETON_PATH) throw new Error("stream did not contain valid UTF-8");
+      return storage.readText(root, path);
+    };
+    const state = await loadFolder(failing);
+    expect(state.errors.map((e) => e.path).sort()).toEqual([bad, SKELETON_PATH].sort());
+    expect(state.skeleton).toBeNull();
+    expect(state.handoffs.map((h) => h.id)).toEqual(["20261001T090000Z"]);
+    expect(state.raw[bad]).toBeUndefined();
+    expect(state.credentials.map((c) => c.slug)).toEqual(["review"]);
+    expect(storage.writes).toEqual([]);
   });
 });

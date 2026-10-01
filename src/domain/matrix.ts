@@ -48,7 +48,7 @@ export function cellKey(profileSlug: Slug, credentialKey: string): string {
 }
 
 /** Newest first: recorded time descending, then file stem descending. */
-function newestFirst(a: Assessment, b: Assessment): number {
+export function newestFirst(a: Assessment, b: Assessment): number {
   const ta = Date.parse(a.recordedAt);
   const tb = Date.parse(b.recordedAt);
   if (ta !== tb) return tb - ta;
