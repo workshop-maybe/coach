@@ -67,7 +67,7 @@ export function FolderGate({ getFolder = defaultGetFolder, pickFolder = defaultP
       </div>
       <main className="gate">
       <Lockup className="lockup-wrap" />
-      <h1>Andamio Desktop</h1>
+      <h1 className="visually-hidden">Andamio Desktop</h1>
       <p>Pick a folder for your credentials, agents and results. Everything is stored there as Markdown and JSON.</p>
       <button type="button" className="primary" onClick={() => void choose()}>
         Choose folder

@@ -177,6 +177,7 @@ button:focus-visible {
 
 .gate .lockup-wrap {
   display: block;
+  height: 40px;
   margin-bottom: var(--space-3xl);
 }
 
@@ -218,6 +219,19 @@ button:focus-visible {
   display: block;
   height: 22px;
   width: auto;
+  overflow: visible;
+}
+
+.lockup-ink {
+  stroke: var(--ink);
+}
+
+.lockup-brace {
+  stroke: var(--sys-orange);
+}
+
+.lockup-dot {
+  fill: var(--ink);
 }
 
 .topbar {
