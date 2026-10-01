@@ -30,13 +30,14 @@ async function saved(storage: MemoryStorage, slug = "review") {
 }
 
 const parts = () => screen.getByRole("list", { name: "Parts" });
+const openedPart = async (name: RegExp) => within(await screen.findByRole("list", { name: "Parts" })).getByRole("button", { name });
 const openPart = async (name: RegExp) => {
   await screen.findByRole("list", { name: "Parts" });
   await userEvent.click(within(parts()).getByRole("button", { name }));
 };
 
 describe("BadgeDetail", () => {
-  it("shows the badge, its five parts, and only the agents that met it as holders", async () => {
+  it("shows the badge, its six parts, and only the agents that met it as holders", async () => {
     const storage = storageWith({
       credentials: [review],
       profiles: [opus, codex],
@@ -48,12 +49,24 @@ describe("BadgeDetail", () => {
     const names = within(parts())
       .getAllByRole("button")
       .map((b) => b.querySelector(".part-name")?.textContent);
-    expect(names).toEqual(["Name", "Learning targets", "Task", "Rubric", "Look"]);
+    expect(names).toEqual(["Name", "Learning targets", "Task", "Rubric", "Look", "Handoffs"]);
     const holders = screen.getByRole("region", { name: "Holders" });
     expect(await within(holders).findByRole("button", { name: /Opus agent/ })).toBeTruthy();
     expect(within(holders).queryByRole("button", { name: /Codex agent/ })).toBeNull();
     // Holders are small machines, named in text beside them.
     expect(within(holders).getByRole("button", { name: /Opus agent/ }).querySelector("svg.cast-machine-mini")).not.toBeNull();
+  });
+
+  it("the Handoffs part shows how many the badge has, or Skeleton when it has none", async () => {
+    const handoff = (id: string) => ({ collectionSlug: "eng", credentialSlug: "review", id, text: "{{task}}\n" });
+    renderApp(storageWith({ credentials: [review] }), badge);
+    expect((await openedPart(/Handoffs/)).querySelector(".part-value")?.textContent).toBe("Skeleton");
+    cleanup();
+    renderApp(storageWith({ credentials: [review], handoffs: [handoff("20260901T090000Z")] }), badge);
+    expect((await openedPart(/Handoffs/)).querySelector(".part-value")?.textContent).toBe("1 handoff");
+    cleanup();
+    renderApp(storageWith({ credentials: [review], handoffs: [handoff("20260901T090000Z"), handoff("20260902T090000Z")] }), badge);
+    expect((await openedPart(/Handoffs/)).querySelector(".part-value")?.textContent).toBe("2 handoffs");
   });
 
   it("opening a holder shows its history, newest first", async () => {

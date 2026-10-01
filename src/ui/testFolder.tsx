@@ -6,7 +6,9 @@ import {
   MARKER_PATH,
   assessmentPath,
   collectionPath,
+  SKELETON_PATH,
   credentialPath,
+  handoffPath,
   profilePath,
   serializeAssessment,
   serializeCollection,
@@ -14,7 +16,7 @@ import {
 } from "../domain/folder";
 import { serializeCredentialMd } from "../domain/credential-md";
 import { assignmentVersion } from "../domain/hash";
-import type { AgentProfile, Assessment, Credential } from "../domain/types";
+import type { AgentProfile, Assessment, Credential, Handoff } from "../domain/types";
 import { MemoryStorage } from "../storage/memory";
 import { AppShell, type Route } from "./AppShell";
 import { FolderProvider } from "./useFolderState";
@@ -58,7 +60,17 @@ export async function result(profile: AgentProfile, credential: Credential, over
   };
 }
 
-export function storageWith(opts: { credentials?: Credential[]; profiles?: AgentProfile[]; assessments?: Assessment[] } = {}): MemoryStorage {
+export function storageWith(
+  opts: {
+    credentials?: Credential[];
+    profiles?: AgentProfile[];
+    assessments?: Assessment[];
+    /** Badge handoff files, written verbatim. */
+    handoffs?: Handoff[];
+    /** An edited skeleton. Absent means the built-in one. */
+    skeleton?: string;
+  } = {},
+): MemoryStorage {
   const credentials = opts.credentials ?? [];
   const files: Record<string, string> = { [MARKER_PATH]: '{ "format": 1 }\n' };
   if (credentials.length > 0) {
@@ -75,6 +87,8 @@ export function storageWith(opts: { credentials?: Credential[]; profiles?: Agent
   for (const a of opts.assessments ?? []) {
     files[assessmentPath(a.profileSlug, a.collectionSlug, a.credentialSlug, a.fileStem)] = serializeAssessment(a);
   }
+  for (const h of opts.handoffs ?? []) files[handoffPath(h.collectionSlug, h.credentialSlug, h.id)] = h.text;
+  if (opts.skeleton !== undefined) files[SKELETON_PATH] = opts.skeleton;
   return new MemoryStorage(files);
 }
 

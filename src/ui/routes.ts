@@ -12,7 +12,12 @@ export type AgentPart = "name" | "repo" | "notes" | "params";
 export interface TestPick {
   profileSlug?: Slug;
   credentialKey?: string;
+  /** The handoff to light in the box: the one a handoff edit saved, or the test's own pick (KTD10). */
+  handoffId?: string;
 }
+
+/** Which handoff an edit opens: a badge handoff's id (its stem), "new", or "skeleton" (KTD3, KTD10). */
+export type HandoffTarget = string;
 
 export type DeckRoute =
   | { view: "deck"; deck: "credential"; returnTo?: TestPick }
@@ -24,9 +29,15 @@ export type DeckRoute =
       credentialKey?: string;
       /** Resume a copied test at "what came back" (R17). */
       resume?: boolean;
+      /** The handoff to light, back from a handoff edit (KTD10). */
+      handoffId?: string;
     }
   | { view: "deck"; deck: "edit-credential"; credentialKey: string; part: CredentialPart }
   | { view: "deck"; deck: "edit-agent"; profileSlug: Slug; part: AgentPart }
+  /** The handoff box for one badge (R9). With `returnTo`, it was opened from the test and goes back there. */
+  | { view: "deck"; deck: "handoffs"; credentialKey: string; returnTo?: TestPick }
+  /** One handoff, a new one or the skeleton, as a one-beat edit (R3, R4, R5). */
+  | { view: "deck"; deck: "edit-handoff"; credentialKey: string; handoff: HandoffTarget; returnTo?: TestPick }
   | { view: "deck"; deck: "trash"; item: TrashItem };
 
 /** An agent or a credential on its way to the trash. */

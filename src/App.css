@@ -1266,6 +1266,39 @@ button:focus-visible {
   color: var(--ink-muted);
 }
 
+/* The handoff box for one badge (U7): the box, a key per handoff, the default in blue. */
+.handoffs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-base);
+}
+
+.handoffs-box {
+  align-self: center;
+}
+
+.choice-default {
+  color: var(--data);
+}
+
+/* A handoff is written as it is copied: plain mono text, slot braces and all. */
+.deck-body textarea.handoff-text {
+  min-height: 18rem;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: var(--value-tracking);
+  white-space: pre-wrap;
+}
+
+.handoff-slots {
+  color: var(--ink-muted);
+}
+
+.handoff-slots code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
 /* A preset's learning targets, on the card that makes it. */
 .preset-targets {
   display: grid;

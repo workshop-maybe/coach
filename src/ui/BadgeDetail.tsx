@@ -11,6 +11,7 @@ import { Machine } from "../cast/Machine";
 import { machineKeys } from "../cast/mappings";
 import { credentialKey, type AgentProfile, type Assessment } from "../domain/types";
 import { contextLine } from "../domain/context";
+import { handoffsFor } from "../domain/handoffs";
 import { FLAG_SHORT, contextText, firstLine, formatDate, resultLabel } from "./format";
 import { useNav } from "./nav";
 import type { CredentialPart } from "./routes";
@@ -41,6 +42,7 @@ export function BadgeDetail({ credentialKey: key }: { credentialKey: string }) {
   const opened = holders.find((h) => h.profile.slug === open);
   const targets = credential.learningTargets.filter((t) => t.trim() !== "");
   const look = resolveBadgeSettings(collection, credential.slug);
+  const handoffs = handoffsFor(state, key).length;
 
   return (
     <section className="detail" aria-label={credential.name}>
@@ -63,6 +65,11 @@ export function BadgeDetail({ credentialKey: key }: { credentialKey: string }) {
         <PartCard name="Task" value={firstLine(credential.task) || "None yet"} onOpen={() => edit("task")} />
         <PartCard name="Rubric" value={firstLine(credential.rubric) || "None yet"} onOpen={() => edit("rubric")} />
         <PartCard name="Look" value={[paletteName(look.palette), look.art ? fileName(look.art) : ""].filter(Boolean).join(" · ")} onOpen={() => edit("look")} />
+        <PartCard
+          name="Handoffs"
+          value={handoffs === 0 ? "Skeleton" : handoffs === 1 ? "1 handoff" : `${handoffs} handoffs`}
+          onOpen={() => navigate({ view: "deck", deck: "handoffs", credentialKey: key })}
+        />
       </ul>
 
       <section className="detail-section" aria-labelledby="badge-holders">
