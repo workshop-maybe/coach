@@ -105,4 +105,32 @@ describe("Machine", () => {
     expect(container.querySelector("svg")!.getAttribute("viewBox")!.startsWith("0 -")).toBe(true);
     await waitFor(() => expect(container.querySelector(".cast-loaded image.cast-label")).not.toBeNull());
   });
+
+  it("draws a plugged handoff card in its slot at full and mini size, and none when unplugged", () => {
+    for (const mini of [false, true]) {
+      const { container } = render(<Machine mini={mini} setup={opusHigh} plugged={{ label: "B" }} />);
+      const svg = container.querySelector("svg")!;
+      const card = svg.querySelector(".cast-plugged-motion .cast-plugged");
+      expect(card).not.toBeNull();
+      // The card moves when it feeds in, so it carries its own wobble; its letter stays crisp.
+      expect(card!.querySelector("g[filter]")).not.toBeNull();
+      expect(card!.querySelector("text")!.textContent).toBe("B");
+      expect(card!.querySelector("text")!.closest("[filter]")).toBeNull();
+      // Room above the case for the card, at both sizes.
+      expect(svg.getAttribute("viewBox")!.startsWith("0 -")).toBe(true);
+      cleanup();
+    }
+    for (const mini of [false, true]) {
+      const { container } = render(<Machine mini={mini} setup={opusHigh} />);
+      expect(container.querySelector(".cast-plugged")).toBeNull();
+      expect(container.querySelector("svg")!.getAttribute("viewBox")!.startsWith("0 0")).toBe(true);
+      cleanup();
+    }
+  });
+
+  it("keeps room above a mini machine when asked, so a plug does not move a row", () => {
+    const { container } = render(<Machine mini headroom setup={opusHigh} />);
+    expect(container.querySelector("svg")!.getAttribute("viewBox")!.startsWith("0 -")).toBe(true);
+  });
 });
+

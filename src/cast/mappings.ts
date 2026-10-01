@@ -143,11 +143,99 @@ export function cutLine(line: string, columns: number): string {
  * ellipsis. An empty reply shows the idle screen; the whole reply stays in the deck.
  */
 export function replyScreen(reply: string, columns = SCREEN_COLUMNS): ScreenState {
-  const lines = reply
+  const lines = firstLines(reply, columns);
+  return lines.length ? { kind: "reply", lines } : { kind: "idle" };
+}
+
+/** A text's first three non-blank lines, spaces collapsed, each cut to `columns`. */
+function firstLines(text: string, columns: number): string[] {
+  return text
     .split(/\r?\n/)
     .map((l) => l.replace(/\s+/g, " ").trim())
     .filter(Boolean)
     .slice(0, SCREEN_LINES)
     .map((l) => cutLine(l, columns));
-  return lines.length ? { kind: "reply", lines } : { kind: "idle" };
+}
+
+// The handoff box's rules (KTD9): its keys' letters and places, which key is lit, and
+// which two carry marks when the test asks (R9, R11).
+
+/** The skeleton's handoff id (KTD3). The built-in prompt shares it. */
+export const SKELETON_HANDOFF = "skeleton";
+
+/** The skeleton key's label, set apart from the handoffs' letters. */
+export const SKELETON_LABEL = "S";
+
+/** One of the box's pattern keys: a handoff id and its label. */
+export interface HandoffKey {
+  id: string;
+  label: string;
+}
+
+/** The letter for the handoff at `index` in creation order: A to Z, then AA, AB and on. */
+export function handoffLetter(index: number): string {
+  let n = index;
+  let out = "";
+  do {
+    out = String.fromCharCode(65 + (n % 26)) + out;
+    n = Math.floor(n / 26) - 1;
+  } while (n >= 0);
+  return out;
+}
+
+/** The box's keys: the skeleton's first, then a badge's handoffs lettered in creation order. `ids` are oldest first. */
+export function handoffKeys(ids: readonly string[]): HandoffKey[] {
+  return [{ id: SKELETON_HANDOFF, label: SKELETON_LABEL }, ...ids.map((id, i) => ({ id, label: handoffLetter(i) }))];
+}
+
+/** The two keys the test offers when an agent's winner is not the badge default (R11). */
+export interface BoxAsk {
+  winner: string;
+  default: string;
+}
+
+/** What the box lights: one key, or none while it asks. A pick in the ask state keeps the marks. */
+export interface BoxChoice {
+  lit: string | null;
+  ask: BoxAsk | null;
+}
+
+/** The box as a test opens it: the default lit, unless the agent's winner differs, then it asks (KTD8). */
+export function openingChoice(defaultId: string, winnerId: string | null): BoxChoice {
+  if (winnerId === null || winnerId === defaultId) return { lit: defaultId, ask: null };
+  return { lit: null, ask: { winner: winnerId, default: defaultId } };
+}
+
+/** A key ready to draw. */
+export interface BoxKey extends HandoffKey {
+  state: "lit" | "off";
+  mark: "winner" | "default" | null;
+}
+
+export function boxKeys(keys: readonly HandoffKey[], { lit, ask }: BoxChoice): BoxKey[] {
+  return keys.map((k) => ({
+    ...k,
+    state: k.id === lit ? "lit" : "off",
+    mark: ask?.winner === k.id ? "winner" : ask?.default === k.id ? "default" : null,
+  }));
+}
+
+export const BOX_KEYS_PER_ROW = 8;
+
+/** Where the key at `index` sits on the box's panel. */
+export function boxKeyPlace(index: number): { row: number; col: number } {
+  return { row: Math.floor(index / BOX_KEYS_PER_ROW), col: index % BOX_KEYS_PER_ROW };
+}
+
+/** Rows of keys for `count` keys. Always at least one, so an empty panel still has its row. */
+export function boxRows(count: number): number {
+  return Math.max(1, Math.ceil(count / BOX_KEYS_PER_ROW));
+}
+
+/** Characters that fit on one line of the box's screen. */
+export const BOX_SCREEN_COLUMNS = 26;
+
+/** The box's screen: the lit handoff's first three non-blank lines, each cut with an ellipsis. */
+export function boxScreen(text: string, columns = BOX_SCREEN_COLUMNS): string[] {
+  return firstLines(text, columns);
 }

@@ -1,5 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { KEYS_PER_PAGE, OTHER_ARC, cutLine, encoderAngle, replyScreen, trigKeys, trigPages, type EarnedCell } from "./mappings";
+import {
+  BOX_KEYS_PER_ROW,
+  KEYS_PER_PAGE,
+  OTHER_ARC,
+  SKELETON_HANDOFF,
+  boxKeyPlace,
+  boxKeys,
+  boxRows,
+  boxScreen,
+  cutLine,
+  encoderAngle,
+  handoffKeys,
+  handoffLetter,
+  openingChoice,
+  replyScreen,
+  trigKeys,
+  trigPages,
+  type EarnedCell,
+} from "./mappings";
 
 const opusHigh = { harness: "claude-code", model: "opus", effort: "high" };
 const codexLow = { harness: "codex", model: "gpt-5", effort: "low" };
@@ -101,5 +119,77 @@ describe("replyScreen", () => {
 
   it("leaves a line that fits alone", () => {
     expect(cutLine("short", 20)).toBe("short");
+  });
+});
+
+describe("handoff box keys", () => {
+  it("letters a badge's handoffs A, B, C in creation order, after the skeleton's own key", () => {
+    expect(handoffKeys(["2026-09-01-a", "2026-09-02-b", "2026-09-03-c"])).toEqual([
+      { id: SKELETON_HANDOFF, label: "S" },
+      { id: "2026-09-01-a", label: "A" },
+      { id: "2026-09-02-b", label: "B" },
+      { id: "2026-09-03-c", label: "C" },
+    ]);
+    expect(handoffKeys([])).toEqual([{ id: "skeleton", label: "S" }]);
+  });
+
+  it("keeps lettering past Z", () => {
+    expect([0, 25, 26, 27, 51, 52].map(handoffLetter)).toEqual(["A", "Z", "AA", "AB", "AZ", "BA"]);
+  });
+
+  it("lights the default when the agent has no winner, or its winner is the default", () => {
+    expect(openingChoice("b", null)).toEqual({ lit: "b", ask: null });
+    expect(openingChoice("b", "b")).toEqual({ lit: "b", ask: null });
+  });
+
+  it("asks when the agent's winner differs from the default, lighting nothing (R11)", () => {
+    expect(openingChoice("b", "a")).toEqual({ lit: null, ask: { winner: "a", default: "b" } });
+  });
+
+  it("draws the lit key lit and every other key off", () => {
+    const keys = handoffKeys(["a", "b"]);
+    expect(boxKeys(keys, { lit: "b", ask: null }).map((k) => [k.label, k.state, k.mark])).toEqual([
+      ["S", "off", null],
+      ["A", "off", null],
+      ["B", "lit", null],
+    ]);
+  });
+
+  it("in the ask state, lights no key and marks the winner and the default", () => {
+    const keys = handoffKeys(["a", "b"]);
+    const drawn = boxKeys(keys, openingChoice("b", SKELETON_HANDOFF));
+    expect(drawn.map((k) => [k.label, k.state, k.mark])).toEqual([
+      ["S", "off", "winner"],
+      ["A", "off", null],
+      ["B", "off", "default"],
+    ]);
+  });
+
+  it("keeps the marks once a key is picked in the ask state", () => {
+    const keys = handoffKeys(["a", "b"]);
+    const drawn = boxKeys(keys, { lit: "b", ask: { winner: "a", default: "b" } });
+    expect(drawn.map((k) => [k.state, k.mark])).toEqual([
+      ["off", null],
+      ["off", "winner"],
+      ["lit", "default"],
+    ]);
+  });
+
+  it("sets keys in rows, left to right, and grows a row at a time", () => {
+    expect(boxKeyPlace(0)).toEqual({ row: 0, col: 0 });
+    expect(boxKeyPlace(BOX_KEYS_PER_ROW - 1)).toEqual({ row: 0, col: BOX_KEYS_PER_ROW - 1 });
+    expect(boxKeyPlace(BOX_KEYS_PER_ROW)).toEqual({ row: 1, col: 0 });
+    expect(boxRows(1)).toBe(1);
+    expect(boxRows(BOX_KEYS_PER_ROW)).toBe(1);
+    expect(boxRows(BOX_KEYS_PER_ROW + 1)).toBe(2);
+  });
+
+  it("shows the handoff's first non-blank lines on the box's screen, each cut", () => {
+    expect(boxScreen("# Hand it over\n\nThis is a test. Do it and I'll review what you hand back.\nthree\nfour", 20)).toEqual([
+      "# Hand it over",
+      "This is a test. Do…",
+      "three",
+    ]);
+    expect(boxScreen("  \n")).toEqual([]);
   });
 });

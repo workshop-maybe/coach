@@ -1391,6 +1391,49 @@ button:focus-visible {
   }
 }
 
+/* The handoff box prints its handoff as a card (U5, KTD9), and the card feeds into the
+   agent's slot. A view sets `.cast-printing` on the box while it prints and
+   `.cast-feeding` on the agent while the card goes in. Without motion, the card simply
+   stands out of the print slot, then simply stands in the agent. */
+.cast-print-motion {
+  visibility: hidden;
+}
+
+.cast-printing .cast-print-motion {
+  visibility: visible;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .cast-printing .cast-print-motion {
+    animation: cast-print 760ms cubic-bezier(0.4, 0, 0.3, 1) both;
+  }
+
+  .cast-feeding .cast-plugged-motion {
+    animation: cast-feed 520ms cubic-bezier(0.3, 0.7, 0.4, 1) both;
+  }
+}
+
+/* Out of the slot from inside the case, the way a printer pushes paper. */
+@keyframes cast-print {
+  from {
+    transform: translateY(48px);
+  }
+}
+
+@keyframes cast-feed {
+  0% {
+    opacity: 0;
+    transform: translateY(-32px);
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* ---------------------------------------------------------------------------
    An item, opened (U6, U7): a badge or an agent, its parts as small record cards that
    each open a one-beat edit, then who holds it or what it earned. */
@@ -1723,6 +1766,24 @@ button:focus-visible {
 .cast-screen-text {
   font-family: var(--font-mono);
   letter-spacing: 0;
+}
+
+/* The handoff box's letters, and the letter on a handoff card's header bar. */
+.cast-handoff-label,
+.cast-card-label {
+  font-family: var(--font-mono);
+  letter-spacing: 0;
+  fill: currentColor;
+}
+
+.cast-handoff-label-lit,
+.cast-card-label {
+  fill: var(--surface);
+}
+
+/* The lit key's light: the handoff the view is about. */
+.cast-handoff-led {
+  fill: var(--data);
 }
 
 .cast-outline {
