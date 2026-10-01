@@ -5,7 +5,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { isTestContext } from "../domain/context";
-import { credentialKey, type AgentSetup, type FolderState, type Slug, type TestContext } from "../domain/types";
+import { credentialKey, type AgentSetup, type FolderState, type HandoffTemplate, type Slug, type TestContext } from "../domain/types";
 
 export interface PendingTest {
   profileSlug: Slug;
@@ -19,7 +19,7 @@ export interface PendingTest {
   /** The machine and memory the test started with. Absent when it couldn't be read. */
   context?: TestContext;
   /** The handoff copied: its id ("skeleton" or a file stem) and the filled text. Absent on tests saved before handoffs. */
-  handoff?: { id: string; text: string };
+  handoff?: HandoffTemplate;
 }
 
 export function pendingStorageKey(folder: string): string {
@@ -51,7 +51,7 @@ function isPending(v: unknown): v is PendingTest {
   );
 }
 
-function isHandoff(v: unknown): v is NonNullable<PendingTest["handoff"]> {
+function isHandoff(v: unknown): v is HandoffTemplate {
   if (typeof v !== "object" || v === null) return false;
   const h = v as Record<string, unknown>;
   return typeof h.id === "string" && h.id !== "" && typeof h.text === "string";

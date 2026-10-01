@@ -15,7 +15,7 @@ import { SKELETON_ID, defaultHandoff, fillHandoff, handoffsFor, skeletonOf, winn
 import { assignmentVersion } from "../domain/hash";
 import { sameSetup } from "../domain/matrix";
 import { recordAssessment } from "../domain/operations";
-import { credentialKey, type AgentProfile, type AssessmentResult, type Credential, type Slug, type TestContext } from "../domain/types";
+import { credentialKey, type AgentProfile, type AssessmentResult, type Credential, type HandoffTemplate, type Slug, type TestContext } from "../domain/types";
 import { Cartridge } from "../cast/Cartridge";
 import { HandoffBox } from "../cast/HandoffBox";
 import { Machine } from "../cast/Machine";
@@ -23,6 +23,7 @@ import { Outline } from "../cast/Outline";
 import { handoffKeys, machineKeys, openingChoice, replyScreen, trigPages, type HandoffKey, type ScreenState } from "../cast/mappings";
 import { Deck, type Beat } from "./Deck";
 import { backToTest } from "./HandoffDecks";
+import { handoffLabel } from "./format";
 import { useNav } from "./nav";
 import { livePlugs, plugFor, usePendingTests, type PendingTest } from "./pendingTests";
 import { RichText } from "./RichText";
@@ -53,7 +54,7 @@ export interface TestDeckProps {
 }
 
 /** A handoff as it was copied: its id and the filled text. */
-type Copied = { id: string; text: string };
+type Copied = HandoffTemplate;
 
 type Outcome = { kind: "open" } | { kind: "met"; plugId: string } | { kind: "not-yet"; plugId: string };
 
@@ -401,7 +402,7 @@ export function TestDeck(props: TestDeckProps) {
   const holder = profile && credential && !waiting ? plugFor(livePlugs(pending, state), profile.slug) : undefined;
   if (holder && profile) {
     const held = state.credentials.find((c) => credentialKey(c) === holder.credentialKey);
-    const heldLabel = held ? handoffKeys(handoffsFor(state, holder.credentialKey).map((h) => h.id)).find((k) => k.id === (holder.handoff?.id ?? SKELETON_ID))?.label : undefined;
+    const heldLabel = held ? (handoffLabel(state, holder.credentialKey, holder.handoff?.id) ?? undefined) : undefined;
     beats.push({
       id: "pull-first",
       title: "Pull that handoff first",

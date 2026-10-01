@@ -100,7 +100,7 @@ export interface Assessment {
   /** The context the test started with. Absent when none was captured. */
   context?: TestContext;
   /** The handoff that ran: its id and the filled text as copied (KTD4). Absent means the skeleton. */
-  handoff?: { id: string; text: string };
+  handoff?: HandoffTemplate;
 }
 
 /** A handoff's identity and template text. The skeleton's id is SKELETON_ID (KTD3). */

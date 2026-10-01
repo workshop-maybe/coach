@@ -3,6 +3,7 @@
 // Machine.tsx reads only these, so every rule is tested without a DOM. Named apart from
 // Machine.tsx because "machine.ts" and "Machine.tsx" collide on case-insensitive disks.
 
+import { SKELETON_ID } from "../domain/handoffs";
 import { cellKey, type Matrix } from "../domain/matrix";
 import { credentialKey, type AgentSetup, type Collection, type Slug } from "../domain/types";
 import { EFFORTS, HARNESSES, modelsFor, splitModel } from "../ui/dialLists";
@@ -160,9 +161,6 @@ function firstLines(text: string, columns: number): string[] {
 // The handoff box's rules (KTD9): its keys' letters and places, which key is lit, and
 // which two carry marks when the test asks (R9, R11).
 
-/** The skeleton's handoff id (KTD3). The built-in prompt shares it. */
-export const SKELETON_HANDOFF = "skeleton";
-
 /** The skeleton key's label, set apart from the handoffs' letters. */
 export const SKELETON_LABEL = "S";
 
@@ -185,7 +183,7 @@ export function handoffLetter(index: number): string {
 
 /** The box's keys: the skeleton's first, then a badge's handoffs lettered in creation order. `ids` are oldest first. */
 export function handoffKeys(ids: readonly string[]): HandoffKey[] {
-  return [{ id: SKELETON_HANDOFF, label: SKELETON_LABEL }, ...ids.map((id, i) => ({ id, label: handoffLetter(i) }))];
+  return [{ id: SKELETON_ID, label: SKELETON_LABEL }, ...ids.map((id, i) => ({ id, label: handoffLetter(i) }))];
 }
 
 /** The two keys the test offers when an agent's winner is not the badge default (R11). */

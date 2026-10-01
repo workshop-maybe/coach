@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { SKELETON_ID } from "../domain/handoffs";
 import {
   BOX_KEYS_PER_ROW,
   KEYS_PER_PAGE,
   OTHER_ARC,
-  SKELETON_HANDOFF,
   boxKeyPlace,
   boxKeys,
   boxRows,
@@ -125,7 +125,7 @@ describe("replyScreen", () => {
 describe("handoff box keys", () => {
   it("letters a badge's handoffs A, B, C in creation order, after the skeleton's own key", () => {
     expect(handoffKeys(["2026-09-01-a", "2026-09-02-b", "2026-09-03-c"])).toEqual([
-      { id: SKELETON_HANDOFF, label: "S" },
+      { id: SKELETON_ID, label: "S" },
       { id: "2026-09-01-a", label: "A" },
       { id: "2026-09-02-b", label: "B" },
       { id: "2026-09-03-c", label: "C" },
@@ -157,7 +157,7 @@ describe("handoff box keys", () => {
 
   it("in the ask state, lights no key and marks the winner and the default", () => {
     const keys = handoffKeys(["a", "b"]);
-    const drawn = boxKeys(keys, openingChoice("b", SKELETON_HANDOFF));
+    const drawn = boxKeys(keys, openingChoice("b", SKELETON_ID));
     expect(drawn.map((k) => [k.label, k.state, k.mark])).toEqual([
       ["S", "off", "winner"],
       ["A", "off", null],

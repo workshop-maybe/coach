@@ -31,7 +31,6 @@ interface Shelf {
   plugs: Map<string, { label?: string }>;
 }
 
-
 export function Home() {
   const { state, folder } = useFolder();
   const { navigate } = useNav();
