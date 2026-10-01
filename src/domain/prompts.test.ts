@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AgentProfile, Credential } from "./types";
+import { BUILT_IN_HANDOFF, fillHandoff } from "./handoffs";
 import {
   PROMPT_JOBS,
   buildPrompt,
@@ -53,6 +54,12 @@ function allPrompts(c: Credential): Record<PromptJob, string> {
 }
 
 describe("testPrompt", () => {
+  it("is the built-in handoff skeleton filled from the credential", () => {
+    for (const c of [credential(), credential({ learningTargets: [], task: "" })]) {
+      expect(testPrompt(c, profile)).toBe(fillHandoff(BUILT_IN_HANDOFF, c));
+    }
+  });
+
   it("Covers AE4. contains the task and every learning target and never the rubric", () => {
     const c = credential({ rubric: "must include tests" });
     const out = testPrompt(c);
