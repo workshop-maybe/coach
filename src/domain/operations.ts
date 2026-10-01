@@ -375,6 +375,8 @@ export interface AssessmentInput {
   handBack: string;
   /** The context captured when the test prompt was copied, when there was one. */
   context?: TestContext;
+  /** The handoff the test ran with, as copied. Recording it locks that handoff (KTD5). */
+  handoff?: Assessment["handoff"];
 }
 
 /**
@@ -408,6 +410,7 @@ export async function recordAssessment(
     note: input.note ?? "",
     handBack: input.handBack,
     ...(input.context ? { context: input.context } : {}),
+    ...(input.handoff ? { handoff: { id: input.handoff.id, text: input.handoff.text } } : {}),
   };
   await saveAssessment(storage, assessment);
   return loadFolder(storage);

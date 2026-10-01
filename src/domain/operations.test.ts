@@ -293,6 +293,20 @@ describe("recording assessments", () => {
     expect(second).not.toHaveProperty("context");
   });
 
+  it("saves the handoff the test ran with, which locks it, and none when there was none", async () => {
+    const { storage, state } = await setup();
+    const made = await createHandoff(storage, state, "go-basics", "write-a-cli", "A {{task}}", new Date("2026-10-01T09:00:00Z"));
+    const handoff = { id: made.id, text: "A Build a CLI.\n---\n## Handback\n" };
+    const withIt = await recordAssessment(storage, made.state, { ...input, result: "met", handoff }, new Date("2026-10-01T09:30:00Z"));
+    expect(withIt.assessments[0].handoff).toEqual(handoff);
+    expect(withIt.assessments[0].handBack).toBe(input.handBack);
+    expect(isHandoffLocked(withIt, "go-basics/write-a-cli", made.id)).toBe(true);
+    expect(await loadFolder(storage)).toEqual(withIt);
+    const without = await recordAssessment(storage, withIt, { ...input, result: "met" }, new Date("2026-10-01T09:40:00Z"));
+    const second = without.assessments.find((a) => a.fileStem === "20261001T094000Z");
+    expect(second).not.toHaveProperty("handoff");
+  });
+
   it("stamps the edited assignment version after the credential changes", async () => {
     const { storage, state } = await setup();
     const path = credentialPath("go-basics", "write-a-cli");
@@ -581,15 +595,10 @@ describe("handoffs", () => {
   const KEY = "go-basics/write-a-cli";
   const at = new Date("2026-10-01T09:00:00.000Z");
 
-  /** Records a result, then marks it as run with a handoff in memory (U3 writes this field). */
-  async function recordWith(storage: MemoryStorage, state: FolderState, result: AssessmentResult, when: Date, handoffId?: string): Promise<FolderState> {
-    const next = await recordAssessment(storage, state, { profileSlug: "claude-opus", collectionSlug: "go-basics", credentialSlug: "write-a-cli", result, note: "", handBack: "Done." }, when);
-    if (handoffId === undefined) return next;
-    const stamp = when.toISOString().replace(/\.\d+Z$/, "Z").replace(/[-:]/g, "");
-    return {
-      ...next,
-      assessments: next.assessments.map((a) => (a.fileStem === stamp ? { ...a, handoff: { id: handoffId, text: "filled" } } : a)),
-    };
+  /** Records a result, run with the handoff when one is named. */
+  function recordWith(storage: MemoryStorage, state: FolderState, result: AssessmentResult, when: Date, handoffId?: string): Promise<FolderState> {
+    const handoff = handoffId === undefined ? undefined : { id: handoffId, text: "filled" };
+    return recordAssessment(storage, state, { profileSlug: "claude-opus", collectionSlug: "go-basics", credentialSlug: "write-a-cli", result, note: "", handBack: "Done.", handoff }, when);
   }
 
   it("a folder with no skeleton file uses the built-in skeleton, and saving writes handoffs/skeleton.md", async () => {

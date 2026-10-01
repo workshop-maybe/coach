@@ -197,6 +197,77 @@ describe("assessment Markdown", () => {
     expect(parseAssessment(wrongType, assessment)).not.toHaveProperty("context");
   });
 
+  const handoff = {
+    id: "20261001T090000Z",
+    text: ["Hi.", "---", "## Note", "", "Not a note.", "", "## Handback", "", "  indented", "trailing  ", ""].join("\n"),
+  };
+
+  it("round-trips the handoff a result ran with, even when its text holds ---, ## Note and ## Handback lines", () => {
+    const withHandoff = { ...assessment, handoff };
+    const text = serializeAssessment(withHandoff);
+    expect(text).toContain("handoff:");
+    expect(text).toContain("id: 20261001T090000Z");
+    const parsed = parseAssessment(text, withHandoff);
+    expect(parsed).toEqual(withHandoff);
+    expect(parsed.note).toBe(assessment.note);
+    expect(parsed.handBack).toBe(handBack);
+  });
+
+  it("round-trips handoff text with edge whitespace, carriage returns and no final newline", () => {
+    for (const t of ["\n  lead\n", "a\n\n\n", "a\r\nb\tc", "no newline end", "--- at the start\n---\n", ""]) {
+      const withHandoff = { ...assessment, handoff: { id: "skeleton", text: t } };
+      expect(parseAssessment(serializeAssessment(withHandoff), withHandoff).handoff).toEqual({ id: "skeleton", text: t });
+    }
+  });
+
+  it("writes a result without a handoff byte for byte as before", () => {
+    const plain: Assessment = { ...assessment, note: "Fine.", handBack: "Done.\n---\n" };
+    expect(serializeAssessment(plain)).toBe(
+      [
+        "---",
+        "result: met",
+        "recorded_at: 2026-09-29T08:49:00.123Z",
+        'assignment_version: "12e456789012"',
+        "setup:",
+        "  harness: claude-code",
+        "  model: opus",
+        "  effort: high",
+        "---",
+        "",
+        "## Note",
+        "",
+        "Fine.",
+        "",
+        "## Handback",
+        "",
+        "Done.",
+        "---",
+        "",
+        "",
+      ].join("\n"),
+    );
+    expect(parseAssessment(serializeAssessment(plain), plain)).not.toHaveProperty("handoff");
+  });
+
+  it("reads a handoff id YAML takes as a number as text", () => {
+    const text = serializeAssessment({ ...assessment, handoff: { id: "x", text: "hi" } }).replace("  id: x\n", "  id: 20261001\n");
+    expect(parseAssessment(text, assessment).handoff).toEqual({ id: "20261001", text: "hi" });
+  });
+
+  it("reads a malformed handoff as none instead of failing the file", () => {
+    const text = serializeAssessment({ ...assessment, handoff });
+    const asString = text.replace(/handoff:\n(?:  .*\n|\n)+?(?=---\n)/, "handoff: nonsense\n");
+    expect(asString).toContain("handoff: nonsense\n---\n");
+    expect(parseAssessment(asString, assessment)).not.toHaveProperty("handoff");
+    const plain = serializeAssessment({ ...assessment, handoff: { id: "x", text: "hi" } });
+    expect(parseAssessment(plain.replace("  id: x\n", ""), assessment)).not.toHaveProperty("handoff");
+    expect(parseAssessment(plain.replace("  id: x\n", '  id: ""\n'), assessment)).not.toHaveProperty("handoff");
+    expect(parseAssessment(plain.replace("  id: x\n", "  id: [1, 2]\n"), assessment)).not.toHaveProperty("handoff");
+    expect(parseAssessment(plain.replace("  text: hi\n", ""), assessment)).not.toHaveProperty("handoff");
+    expect(parseAssessment(plain.replace("  text: hi\n", "  text: { a: 1 }\n"), assessment)).not.toHaveProperty("handoff");
+    expect(parseAssessment(plain.replace(/handoff:\n.*\n.*\n/, "handoff: [x, hi]\n"), assessment)).not.toHaveProperty("handoff");
+  });
+
   it("rejects missing frontmatter or an invalid result", () => {
     expect(() => parseAssessment("## Note\n\nx\n", assessment)).toThrow(/frontmatter/);
     const bad = serializeAssessment(assessment).replace("result: met", "result: maybe");

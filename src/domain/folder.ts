@@ -261,6 +261,7 @@ export function serializeAssessment(a: Assessment): string {
           },
         }
       : {}),
+    ...(a.handoff ? { handoff: { id: a.handoff.id, text: a.handoff.text } } : {}),
   });
   const note = a.note.replace(/\r\n?/g, "\n").trim();
   return [
@@ -298,6 +299,18 @@ function parseContext(raw: unknown): TestContext | undefined {
     capturedAt: captured instanceof Date ? captured.toISOString() : captured,
   };
   return isTestContext(context) ? context : undefined;
+}
+
+/**
+ * The optional `handoff` mapping. Anything malformed reads as no handoff rather than
+ * failing the file (KTD4). An id YAML took as a number reads as text.
+ */
+function parseHandoff(raw: unknown): Assessment["handoff"] {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return undefined;
+  const { id, text } = raw as Json;
+  const idText = typeof id === "number" ? String(id) : id;
+  if (typeof idText !== "string" || idText === "" || typeof text !== "string") return undefined;
+  return { id: idText, text };
 }
 
 export function parseAssessment(text: string, ids: AssessmentIds): Assessment {
@@ -354,6 +367,7 @@ export function parseAssessment(text: string, ids: AssessmentIds): Assessment {
   }
 
   const context = parseContext(fm.context);
+  const handoff = parseHandoff(fm.handoff);
   return {
     ...ids,
     result: result as AssessmentResult,
@@ -363,6 +377,7 @@ export function parseAssessment(text: string, ids: AssessmentIds): Assessment {
     note: note.replace(/\r\n?/g, "\n").trim(),
     handBack,
     ...(context ? { context } : {}),
+    ...(handoff ? { handoff } : {}),
   };
 }
 
