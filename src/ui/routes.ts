@@ -31,6 +31,8 @@ export type DeckRoute =
       resume?: boolean;
       /** The handoff to light, back from a handoff edit (KTD10). */
       handoffId?: string;
+      /** The test held up while this one's plug is pulled; the pull goes back to it (R18, AE5). */
+      returnTo?: TestPick;
     }
   | { view: "deck"; deck: "edit-credential"; credentialKey: string; part: CredentialPart }
   | { view: "deck"; deck: "edit-agent"; profileSlug: Slug; part: AgentPart }

@@ -1,26 +1,32 @@
-// Test an agent against a credential (U5, R14-R17): who takes it, hand it over, what came
-// back, did it meet it. Starting from a badge asks for an agent; starting from an agent
-// asks for a badge, and a missing side has a door to create it and come back (AE2).
-// Copy leaves the test waiting in "What needs you" (KTD5) until a result is recorded or
-// it is dismissed. The exchange plays on the agent's machine (R5-R7, KTD4): the cartridge
-// slides into its slot, Copy sends dots across the screen and then a cursor waits, the
-// reply's first lines show, and a result ejects the cartridge. Met lights and seats a key.
+// Test an agent against a credential (U5, R14-R17) with the handoff box (U6, R9-R13,
+// R16-R18, KTD8, KTD11): which badge, who takes it, hand it over, what came back, did it
+// meet it. Starting from a badge asks for the agent first, so the box knows the agent's
+// winner (R11); a missing side has a door to create it and come back (AE2). "Hand it over"
+// plugs the badge into the box beside the agent and offers the badge's handoffs as keys;
+// Copy fills the lit one from the badge, and only once the clipboard holds it does the box
+// print the card and the agent take it in. The waiting test is the agent's plug (KTD6)
+// until a result is recorded with the handoff that ran, or it is pulled without a result.
+// An agent holds one plug: a plug on this badge opens at "What came back", and a plug on
+// another badge must be pulled first, as a detour that comes back to this test (R18).
 
 import { useEffect, useRef, useState } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { SKELETON_ID, defaultHandoff, fillHandoff, handoffsFor, skeletonOf, winnerFor } from "../domain/handoffs";
 import { assignmentVersion } from "../domain/hash";
 import { sameSetup } from "../domain/matrix";
 import { recordAssessment } from "../domain/operations";
-import { testPrompt } from "../domain/prompts";
 import { credentialKey, type AgentProfile, type AssessmentResult, type Credential, type Slug, type TestContext } from "../domain/types";
 import { Cartridge } from "../cast/Cartridge";
+import { HandoffBox } from "../cast/HandoffBox";
 import { Machine } from "../cast/Machine";
 import { Outline } from "../cast/Outline";
-import { machineKeys, replyScreen, trigPages, type ScreenState } from "../cast/mappings";
+import { handoffKeys, machineKeys, openingChoice, replyScreen, trigPages, type HandoffKey, type ScreenState } from "../cast/mappings";
 import { Deck, type Beat } from "./Deck";
+import { backToTest } from "./HandoffDecks";
 import { useNav } from "./nav";
-import { usePendingTests, type PendingTest } from "./pendingTests";
+import { livePlugs, plugFor, usePendingTests, type PendingTest } from "./pendingTests";
 import { RichText } from "./RichText";
+import type { TestPick } from "./routes";
 import { focusOnMount } from "./shared";
 import { describeError, useFolder } from "./useFolderState";
 import { useMatrix } from "./useMatrix";
@@ -40,9 +46,16 @@ export interface TestDeckProps {
   credentialKey?: string;
   /** Open at "what came back" for a test already copied (R17). */
   resume?: boolean;
+  /** The handoff to light in the box, back from a handoff edit (KTD10). */
+  handoffId?: string;
+  /** The test this pull holds up: a recorded result or a pull goes back to it (R18, AE5). */
+  returnTo?: TestPick;
 }
 
-type Outcome = { kind: "open" } | { kind: "met" } | { kind: "not-yet" };
+/** A handoff as it was copied: its id and the filled text. */
+type Copied = { id: string; text: string };
+
+type Outcome = { kind: "open" } | { kind: "met"; plugId: string } | { kind: "not-yet"; plugId: string };
 
 export function TestDeck(props: TestDeckProps) {
   const { storage, state, folder, apply } = useFolder();
@@ -64,6 +77,10 @@ export function TestDeck(props: TestDeckProps) {
   const [sending, setSending] = useState(false);
   // A failed Copy again, shown on the card as the deck shows its own errors.
   const [copyError, setCopyError] = useState<string | null>(null);
+  // The key the operator pressed in the box, for the agent and badge it was pressed for.
+  const [picked, setPicked] = useState<{ profileSlug: Slug; key: string; id: string } | null>(null);
+  // What this visit put on the clipboard. `fromHand` keeps "Hand it over" in the deck after its own Copy.
+  const [copied, setCopied] = useState<(Copied & { profileSlug: Slug; key: string; fromHand: boolean }) | null>(null);
   const matrix = useMatrix(state);
 
   const profile = state?.profiles.find((p) => p.slug === profileSlug);
@@ -82,13 +99,15 @@ export function TestDeck(props: TestDeckProps) {
   }, [credential?.task, credential?.rubric]);
 
   const home = () => navigate({ view: "home" });
-  const goHome = useRef(home);
-  goHome.current = home;
+  // Where a finished test goes: home, or back to the test this pull held up (AE5).
+  const leave = () => navigate(props.returnTo ? backToTest(props.returnTo) : { view: "home" });
+  const goOn = useRef(leave);
+  goOn.current = leave;
 
-  // Met plays the landing, then home returns on its own.
+  // Met plays the landing, then home (or the held-up test) returns on its own.
   useEffect(() => {
     if (outcome.kind !== "met") return;
-    const t = window.setTimeout(() => goHome.current(), LANDING_MS);
+    const t = window.setTimeout(() => goOn.current(), LANDING_MS);
     return () => window.clearTimeout(t);
   }, [outcome.kind]);
 
@@ -101,8 +120,31 @@ export function TestDeck(props: TestDeckProps) {
 
   if (!state) return null;
 
-  async function copy() {
+  // The badge's box: its handoffs, the default, and what opens lit for this agent (KTD8).
+  const own = key ? handoffsFor(state, key) : [];
+  const keys = handoffKeys(own.map((h) => h.id));
+  const has = (id: string | null | undefined): id is string => !!id && keys.some((k) => k.id === id);
+  const def = key ? defaultHandoff(state, key).id : SKELETON_ID;
+  const won = profile && key ? winnerFor(state, profile.slug, key) : null;
+  const choice = openingChoice(def, has(won) ? won : null);
+  const pick = picked && picked.profileSlug === profileSlug && picked.key === key && has(picked.id) ? picked.id : null;
+  const back = key === props.credentialKey && has(props.handoffId) ? props.handoffId : null;
+  const lit = pick ?? back ?? choice.lit;
+  const ask = choice.ask;
+  const here = copied && copied.profileSlug === profileSlug && copied.key === key ? copied : null;
+
+  const templateOf = (id: string): string | null => (id === SKELETON_ID ? skeletonOf(state).text : own.find((h) => h.id === id)?.text ?? null);
+  const fill = (id: string): Copied | null => {
+    const template = templateOf(id);
+    return credential && template !== null ? { id, text: fillHandoff(template, credential) } : null;
+  };
+  const labelOf = (id: string) => keys.find((k) => k.id === id)?.label;
+
+  /** Copies a handoff filled from the badge as it is now, then plugs it into the agent (R12, R15). */
+  async function copy(id: string, fromHand: boolean) {
     if (!credential || !profile) return;
+    const handoff = fill(id);
+    if (!handoff) throw new Error("That handoff is no longer in the folder.");
     setSending(true);
     // The context the test starts with (R1). It never blocks or fails the copy (KTD8).
     const capturedAt = new Date().toISOString();
@@ -111,11 +153,13 @@ export function TestDeck(props: TestDeckProps) {
       () => undefined,
     );
     try {
-      await writeText(testPrompt(credential, profile));
+      await writeText(handoff.text);
     } catch (e) {
       setSending(false);
       throw e;
     }
+    // Only now does the box print and the agent take the card in.
+    setCopied({ ...handoff, profileSlug: profile.slug, key: credentialKey(credential), fromHand });
     const context = await reading;
     add({
       profileSlug: profile.slug,
@@ -124,11 +168,23 @@ export function TestDeck(props: TestDeckProps) {
       assignmentVersion: version ?? (await assignmentVersion(credential.task, credential.rubric)),
       setup: { harness: profile.harness, model: profile.model, effort: profile.effort },
       ...(context ? { context } : {}),
+      handoff,
     });
+  }
+
+  /**
+   * The handoff that ran (R13): the plug's, as copied. A plug saved before handoffs ran the
+   * built-in prompt and records none (R14). A plug lost from storage falls back to what this
+   * visit copied, or to the badge default filled now when the deck resumed past the box.
+   */
+  function ran(): Copied | undefined {
+    if (waiting) return waiting.handoff;
+    return here ? { id: here.id, text: here.text } : fill(def) ?? undefined;
   }
 
   async function record() {
     if (!state || !credential || !profile) return;
+    const handoff = ran();
     const next = await recordAssessment(storage, state, {
       profileSlug: profile.slug,
       collectionSlug: credential.collectionSlug,
@@ -137,16 +193,21 @@ export function TestDeck(props: TestDeckProps) {
       note: "",
       handBack: reply,
       ...(waiting?.context ? { context: waiting.context } : {}),
+      ...(handoff ? { handoff } : {}),
     });
+    // The plug comes out only once the result is written.
     remove(profile.slug, credentialKey(credential));
     apply(next);
-    setOutcome({ kind: result.current === "met" ? "met" : "not-yet" });
+    const plugId = handoff?.id ?? SKELETON_ID;
+    setOutcome(result.current === "met" ? { kind: "met", plugId } : { kind: "not-yet", plugId });
   }
 
+  /** Copies the plugged handoff again, refilled from the badge as it is now (KTD11). */
   async function copyAgain() {
     setCopyError(null);
+    const id = waiting?.handoff?.id ?? SKELETON_ID;
     try {
-      await copy();
+      await copy(templateOf(id) === null ? def : id, false);
     } catch (e) {
       setCopyError(describeError(e));
     }
@@ -158,39 +219,63 @@ export function TestDeck(props: TestDeckProps) {
     setReply("");
     setOutcome({ kind: "open" });
     setSending(false);
+    setCopied(null);
+    setPicked(null);
     setRound((r) => r + 1);
   }
 
   const collection = credential ? collectionOf(credential) : undefined;
-  const keys = matrix && profile ? machineKeys(matrix, profile.slug) : [];
+  const agentKeys = matrix && profile ? machineKeys(matrix, profile.slug) : [];
 
-  /** The agent's machine with this test's cartridge in its slot, sliding in or ejecting. */
-  const loadedMachine = (screen: ScreenState, { phase, seated }: { phase?: "loading" | "ejecting"; seated?: string } = {}) =>
+  /** The agent's machine, with a handoff card in its slot going in, standing or ejecting. */
+  const agentMachine = (
+    screen: ScreenState,
+    { phase, seated, plugged = null, width = 280 }: { phase?: keyof typeof PHASE_CLASS; seated?: string; plugged?: { label?: string } | null; width?: number } = {},
+  ) =>
+    profile ? (
+      <Machine
+        setup={profile}
+        keys={agentKeys}
+        page={seated ? pageOf(agentKeys, seated) : 0}
+        seated={seated}
+        screen={screen}
+        plugged={plugged}
+        headroom
+        width={width}
+        className={phase && PHASE_CLASS[phase]}
+      />
+    ) : null;
+
+  const stage = (screen: ScreenState, opts: Parameters<typeof agentMachine>[1] = {}) => <div className="test-stage">{agentMachine(screen, opts)}</div>;
+
+  /**
+   * The badge in the box beside the agent. With `fed`, the handoff just copied, the box
+   * prints that card and the agent takes it in; without, the box shows the choice.
+   */
+  const boxStage = (screen: ScreenState, fed: Copied | null = null) =>
     profile && credential && collection ? (
-      <div className="test-stage">
-        <Machine
-          setup={profile}
+      <div className="test-stage test-stage-handoff">
+        <HandoffBox
+          badge={{ collection, credential }}
           keys={keys}
-          page={seated ? pageOf(keys, seated) : 0}
-          seated={seated}
-          screen={screen}
-          loaded={{ collection, credential }}
-          headroom
-          width={280}
-          className={phase && PHASE_CLASS[phase]}
+          lit={fed ? fed.id : lit}
+          ask={fed ? null : ask}
+          screen={fed ? fed.text : lit ? fill(lit)?.text ?? "" : ""}
+          width={250}
+          className={fed ? "cast-printing" : undefined}
         />
+        {agentMachine(screen, fed ? { phase: "feeding", plugged: { label: labelOf(fed.id) }, width: 230 } : { width: 230 })}
       </div>
     ) : null;
 
-  if (outcome.kind === "met" && credential && collection && profile) {
-    const lit = credentialKey(credential);
+  if (outcome.kind === "met" && credential && profile) {
     return (
       <section className="deck" aria-label="Test an agent">
         <div className="deck-card landing" data-testid="landing">
           <h2 tabIndex={-1} ref={focusOnMount}>
             {profile.name} holds it
           </h2>
-          {loadedMachine({ kind: "idle" }, { phase: "ejecting", seated: lit })}
+          {stage({ kind: "idle" }, { phase: "ejecting", seated: credentialKey(credential), plugged: { label: labelOf(outcome.plugId) } })}
           <div className="deck-actions">
             <button type="button" className="ghost" onClick={home}>
               Home
@@ -202,21 +287,35 @@ export function TestDeck(props: TestDeckProps) {
   }
 
   if (outcome.kind === "not-yet" && profile) {
+    const heldUp = props.returnTo && state.credentials.find((c) => credentialKey(c) === props.returnTo?.credentialKey);
     return (
       <section className="deck" aria-label="Test an agent">
         <div className="deck-card">
           <h2 tabIndex={-1} ref={focusOnMount}>
             Not yet
           </h2>
-          {loadedMachine({ kind: "idle" }, { phase: "ejecting" })}
+          {stage({ kind: "idle" }, { phase: "ejecting", plugged: { label: labelOf(outcome.plugId) } })}
           <p className="muted">{profile.name} does not hold it</p>
           <div className="deck-actions">
-            <button type="button" className="ghost" onClick={home}>
-              Done
-            </button>
-            <button type="button" className="primary" onClick={tryAnother}>
-              Try another agent
-            </button>
+            {props.returnTo ? (
+              <>
+                <button type="button" className="ghost" onClick={home}>
+                  Home
+                </button>
+                <button type="button" className="primary" onClick={leave}>
+                  {heldUp ? `Hand over ${heldUp.name}` : "Back to the test"}
+                </button>
+              </>
+            ) : (
+              <>
+                <button type="button" className="ghost" onClick={home}>
+                  Done
+                </button>
+                <button type="button" className="primary" onClick={tryAnother}>
+                  Try another agent
+                </button>
+              </>
+            )}
           </div>
         </div>
       </section>
@@ -297,26 +396,82 @@ export function TestDeck(props: TestDeckProps) {
     });
   }
 
-  const noTask = !!credential && credential.task.trim() === "";
-  beats.push({
-    id: "hand",
-    title: "Hand it over",
-    forward: "Copy",
-    valid: !!credential && !!profile && !noTask,
-    settled: "Copied",
-    onForward: copy,
-    body: noTask ? (
-      <p className="muted">This badge has no task yet</p>
-    ) : (
-      <>
-        {loadedMachine({ kind: sending ? "sending" : "idle" }, { phase: "loading" })}
-        <p className="muted">Copy the prompt, paste it into {profile?.name ?? "the agent"}, and bring back what it says</p>
-      </>
-    ),
-  });
+  // The plug guard (R18, KTD8). A plug on this badge skips the box and opens at "What came
+  // back"; a plug on another badge replaces the box with pulling it first.
+  const holder = profile && credential && !waiting ? plugFor(livePlugs(pending, state), profile.slug) : undefined;
+  if (holder && profile) {
+    const held = state.credentials.find((c) => credentialKey(c) === holder.credentialKey);
+    const heldLabel = held ? handoffKeys(handoffsFor(state, holder.credentialKey).map((h) => h.id)).find((k) => k.id === (holder.handoff?.id ?? SKELETON_ID))?.label : undefined;
+    beats.push({
+      id: "pull-first",
+      title: "Pull that handoff first",
+      forward: "Pull it",
+      onForward: () =>
+        navigate({
+          view: "deck",
+          deck: "test",
+          profileSlug: profile.slug,
+          credentialKey: holder.credentialKey,
+          resume: true,
+          returnTo: { profileSlug: profile.slug, credentialKey: key, ...(props.handoffId ? { handoffId: props.handoffId } : {}) },
+        }),
+      body: (
+        <>
+          {stage({ kind: "waiting" }, { plugged: { label: heldLabel } })}
+          <p className="muted">
+            {profile.name} holds the {held?.name ?? "other"} handoff
+          </p>
+        </>
+      ),
+    });
+  } else if (!waiting || here?.fromHand) {
+    const noTask = !!credential && credential.task.trim() === "";
+    const keyName = (k: HandoffKey) =>
+      ask?.winner === k.id ? `${k.label} · this agent's winner` : ask?.default === k.id ? `${k.label} · badge default` : !ask && k.id === def ? `${k.label} · default` : k.label;
+    const editPick: TestPick = { ...(profileSlug ? { profileSlug } : {}), ...(key ? { credentialKey: key } : {}), ...(lit ? { handoffId: lit } : {}) };
+    beats.push({
+      id: "hand",
+      title: "Hand it over",
+      forward: "Copy",
+      valid: !!credential && !!profile && !noTask && lit !== null,
+      settled: "Copied",
+      onForward: () => (lit ? copy(lit, true) : undefined),
+      body: noTask ? (
+        <p className="muted">This badge has no task yet</p>
+      ) : (
+        <>
+          {boxStage({ kind: sending ? "sending" : "idle" })}
+          <ul className="handoff-keys" aria-label="Handoffs">
+            {keys.map((k) => (
+              <li key={k.id}>
+                <button
+                  type="button"
+                  className="handoff-key"
+                  aria-pressed={k.id === lit}
+                  onClick={() => profileSlug && key && setPicked({ profileSlug, key, id: k.id })}
+                >
+                  {keyName(k)}
+                </button>
+              </li>
+            ))}
+          </ul>
+          <p className="muted">{ask && lit === null ? "Pick one to copy" : `Copy the handoff, paste it into ${profile?.name ?? "the agent"}, and bring back what it says`}</p>
+          {key && (
+            <p className="helper">
+              <button type="button" className="link" onClick={() => navigate({ view: "deck", deck: "handoffs", credentialKey: key, returnTo: editPick })}>
+                Edit handoffs
+              </button>
+            </p>
+          )}
+        </>
+      ),
+    });
+  }
 
   const stale = staleReason(waiting, version, profile);
-  const replyMachine = loadedMachine(sending ? { kind: "sending" } : reply.trim() ? replyScreen(reply) : { kind: "waiting" });
+  const plugId = waiting ? waiting.handoff?.id ?? SKELETON_ID : here?.id;
+  const replyScreenState: ScreenState = sending ? { kind: "sending" } : reply.trim() ? replyScreen(reply) : { kind: "waiting" };
+  const replyStage = here ? boxStage(replyScreenState, here) : stage(replyScreenState, { plugged: plugId ? { label: labelOf(plugId) } : null });
   beats.push({
     id: "reply",
     title: "What came back",
@@ -326,7 +481,7 @@ export function TestDeck(props: TestDeckProps) {
     settled: reply.trim() ? `${reply.trim().slice(0, 80)}${reply.trim().length > 80 ? "…" : ""}` : undefined,
     body: stale ? (
       <>
-        {replyMachine}
+        {replyStage}
         <p className="muted">{stale} since you copied it</p>
         <div>
           <button type="button" className="primary" onClick={() => void copyAgain()}>
@@ -338,13 +493,13 @@ export function TestDeck(props: TestDeckProps) {
             {copyError}
           </p>
         )}
-        <DismissLink onDismiss={() => dismiss()} />
+        <PullLink onPull={pull} />
       </>
     ) : (
       <>
-        {replyMachine}
+        {replyStage}
         <RichText aria-label="Reply" value={reply} onChange={setReply} placeholder="Paste the reply" />
-        {waiting && <DismissLink onDismiss={() => dismiss()} />}
+        {waiting && <PullLink onPull={pull} />}
       </>
     ),
   });
@@ -386,20 +541,23 @@ export function TestDeck(props: TestDeckProps) {
     ),
   });
 
-  function dismiss() {
+  /** Ejects the plug and records nothing (R17). */
+  function pull() {
     if (profileSlug && key) remove(profileSlug, key);
-    home();
+    leave();
   }
 
+  // Both sides known from the route: a plug on this badge opens at "What came back",
+  // otherwise the deck opens at the box (or at pulling the other plug first).
   const replyAt = beats.findIndex((b) => b.id === "reply");
-  const handAt = replyAt - 1;
-  const startAt = props.resume && waiting ? replyAt : props.credentialKey && props.profileSlug && round === 0 ? handAt : 0;
+  const bothKnown = !!props.credentialKey && !!props.profileSlug && round === 0;
+  const startAt = waiting && (bothKnown || props.resume) ? replyAt : bothKnown ? replyAt - 1 : 0;
 
   return <Deck key={round} label="Test an agent" beats={beats} startAt={startAt} onClose={home} onFinish={record} />;
 }
 
-/** The cartridge's motion for each phase of the test. */
-const PHASE_CLASS = { loading: "cast-loading", ejecting: "cast-ejecting" } as const;
+/** The motion for each phase of the test: the handoff card going in, or ejecting. */
+const PHASE_CLASS = { feeding: "cast-feeding", ejecting: "cast-ejecting" } as const;
 
 /** The page of keys that holds `id`, so a key that just lit is in view. The machine clamps the rest. */
 function pageOf(keys: readonly { id: string }[], id: string): number {
@@ -413,13 +571,12 @@ function staleReason(waiting: PendingTest | undefined, version: string | null, p
   return null;
 }
 
-function DismissLink({ onDismiss }: { onDismiss(): void }) {
+function PullLink({ onPull }: { onPull(): void }) {
   return (
     <p className="helper">
-      <button type="button" className="link" onClick={onDismiss}>
-        Dismiss this test
+      <button type="button" className="link" onClick={onPull}>
+        Pull without a result
       </button>
     </p>
   );
 }
-
