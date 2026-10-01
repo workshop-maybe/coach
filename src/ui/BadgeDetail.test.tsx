@@ -6,7 +6,7 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { credentialPath, loadFolder } from "../domain/folder";
 import { serializeCredentialMd } from "../domain/credential-md";
 import { buildMatrix } from "../domain/matrix";
-import { checkCriteriaPrompt, refineHandoffNote, reviewAssignmentPrompt } from "../domain/prompts";
+import { checkCriteriaPrompt, refinePrompt, reviewAssignmentPrompt } from "../domain/prompts";
 import type { MemoryStorage } from "../storage/memory";
 import { holdersOf, parseParam } from "./EditDecks";
 import { opus, renderApp, result, review, snapshot, storageWith } from "./testFolder";
@@ -111,8 +111,8 @@ describe("BadgeDetail", () => {
     renderApp(storageWith({ credentials: [review] }), { view: "deck", deck: "edit-credential", credentialKey: "eng/review", part: "task" });
     await userEvent.click(await screen.findByRole("button", { name: "Review this assignment" }));
     expect(writeText).toHaveBeenLastCalledWith(reviewAssignmentPrompt(review));
-    await userEvent.click(screen.getByRole("button", { name: "Write a handoff note" }));
-    expect(writeText).toHaveBeenLastCalledWith(refineHandoffNote(review));
+    await userEvent.click(screen.getByRole("button", { name: "Write a refine prompt" }));
+    expect(writeText).toHaveBeenLastCalledWith(refinePrompt(review));
     cleanup();
 
     renderApp(storageWith({ credentials: [review] }), { view: "deck", deck: "edit-credential", credentialKey: "eng/review", part: "rubric" });

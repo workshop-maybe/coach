@@ -5,7 +5,7 @@ import {
   PROMPT_JOBS,
   buildPrompt,
   checkCriteriaPrompt,
-  refineHandoffNote,
+  refinePrompt,
   reviewAssignmentPrompt,
   suggestAssignmentsPrompt,
   testPrompt,
@@ -49,7 +49,7 @@ function allPrompts(c: Credential): Record<PromptJob, string> {
     check: checkCriteriaPrompt(c),
     review: reviewAssignmentPrompt(c),
     suggest: suggestAssignmentsPrompt(c),
-    refine: refineHandoffNote(c),
+    refine: refinePrompt(c),
   };
 }
 
@@ -149,7 +149,7 @@ describe("helper prompts", () => {
 
   it("refine includes the rubric, task and targets", () => {
     const c = credential();
-    const out = refineHandoffNote(c);
+    const out = refinePrompt(c);
     expect(out).toContain(RUBRIC);
     expect(out).toContain(c.task);
     for (const t of c.learningTargets) expect(out).toContain(t);
@@ -160,7 +160,7 @@ describe("helper prompts", () => {
       checkCriteriaPrompt(credential()),
       reviewAssignmentPrompt(credential()),
       suggestAssignmentsPrompt(credential()),
-      refineHandoffNote(credential()),
+      refinePrompt(credential()),
     ]) {
       expect(out).not.toMatch(/this is a test/i);
     }
@@ -183,9 +183,9 @@ describe("suggestAssignmentsPrompt", () => {
   });
 });
 
-describe("refineHandoffNote", () => {
+describe("refinePrompt", () => {
   it("puts the brief above a line and a Handback section below it", () => {
-    const out = refineHandoffNote(credential());
+    const out = refinePrompt(credential());
     const lineAt = out.lastIndexOf("\n---\n");
     const handbackAt = out.indexOf("## Handback");
     expect(lineAt).toBeGreaterThan(0);
@@ -241,7 +241,7 @@ describe("all prompts", () => {
       expect(out, job).not.toContain("undefined");
       expect(out, job).not.toMatch(/\n{4,}/);
     }
-    for (const out of [checkCriteriaPrompt(c), reviewAssignmentPrompt(c), refineHandoffNote(c)]) {
+    for (const out of [checkCriteriaPrompt(c), reviewAssignmentPrompt(c), refinePrompt(c)]) {
       expect(out).toMatch(/no rubric/i);
     }
   });

@@ -21,7 +21,7 @@ export const PROMPT_JOBS: readonly PromptJobInfo[] = [
   { job: "check", label: "Check my acceptance criteria", needsProfile: false },
   { job: "review", label: "Review this assignment", needsProfile: false },
   { job: "suggest", label: "Suggest assignments for these learning targets", needsProfile: false },
-  { job: "refine", label: "Handoff note: refine this assignment", needsProfile: false },
+  { job: "refine", label: "Refine prompt: refine this assignment", needsProfile: false },
 ];
 
 const NO_RUBRIC = "(No rubric written yet.)";
@@ -155,8 +155,8 @@ export function suggestAssignmentsPrompt(credential: Credential): string {
   return join(parts);
 }
 
-/** Handoff note: the brief above a line, and a Handback section below it (R13). */
-export function refineHandoffNote(credential: Credential): string {
+/** Refine prompt: the brief above a line, and a Handback section below it (R13). */
+export function refinePrompt(credential: Credential): string {
   return join([...helperBrief(credential), REFINE_JOB, REFINE_HANDBACK]);
 }
 
@@ -171,6 +171,6 @@ export function buildPrompt(job: PromptJob, credential: Credential, profile?: Ag
     case "suggest":
       return suggestAssignmentsPrompt(credential);
     case "refine":
-      return refineHandoffNote(credential);
+      return refinePrompt(credential);
   }
 }
