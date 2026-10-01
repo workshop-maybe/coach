@@ -1,7 +1,8 @@
 // A badge, opened (U6, R4, R7, R12, R18). The credential as its cartridge, its parts as
 // small cards (each opens a one-beat edit deck), and its holders as small machines: the
-// agents whose latest result met it. Opening a holder shows every result it has for this
-// badge, newest first.
+// agents whose latest result met it, each naming the handoff that earned it (R20).
+// Opening a holder shows every result it has for this badge, newest first, each with the
+// handoff text that ran; one recorded before handoffs shows the built-in skeleton (R14).
 
 import { useState } from "react";
 import { resolveBadgeSettings } from "../badge/settings";
@@ -11,9 +12,10 @@ import { Machine } from "../cast/Machine";
 import { machineKeys } from "../cast/mappings";
 import { credentialKey, type AgentProfile, type Assessment } from "../domain/types";
 import { contextLine } from "../domain/context";
-import { handoffsFor } from "../domain/handoffs";
-import { FLAG_SHORT, contextText, firstLine, formatDate, resultLabel } from "./format";
+import { BUILT_IN_HANDOFF, handoffsFor } from "../domain/handoffs";
+import { FLAG_SHORT, contextText, firstLine, formatDate, handoffText, plugMark, resultLabel } from "./format";
 import { useNav } from "./nav";
+import { livePlugs, plugFor, usePendingTests } from "./pendingTests";
 import type { CredentialPart } from "./routes";
 import { Missing, PartCard, fileName, focusOnMount, paletteName, useEscape } from "./shared";
 import { TrashLink } from "./TrashDeck";
@@ -21,8 +23,9 @@ import { useFolder } from "./useFolderState";
 import { useMatrix } from "./useMatrix";
 
 export function BadgeDetail({ credentialKey: key }: { credentialKey: string }) {
-  const { state } = useFolder();
+  const { state, folder } = useFolder();
   const { navigate } = useNav();
+  const { pending } = usePendingTests(folder);
   const matrix = useMatrix(state);
   const [open, setOpen] = useState<string | null>(null);
   useEscape(() => navigate({ view: "home" }));
@@ -43,6 +46,9 @@ export function BadgeDetail({ credentialKey: key }: { credentialKey: string }) {
   const targets = credential.learningTargets.filter((t) => t.trim() !== "");
   const look = resolveBadgeSettings(collection, credential.slug);
   const handoffs = handoffsFor(state, key).length;
+  const live = livePlugs(pending, state);
+  const plugged = (slug: string) => plugMark(state, plugFor(live, slug));
+  const ranWith = (a: Assessment) => ({ name: handoffText(state, key, a.handoff?.id), text: a.handoff?.text ?? BUILT_IN_HANDOFF });
 
   return (
     <section className="detail" aria-label={credential.name}>
@@ -86,17 +92,24 @@ export function BadgeDetail({ credentialKey: key }: { credentialKey: string }) {
                   aria-expanded={open === profile.slug}
                   onClick={() => setOpen(open === profile.slug ? null : profile.slug)}
                 >
-                  {matrix && <Machine mini setup={profile} keys={machineKeys(matrix, profile.slug)} width={64} />}
+                  {matrix && <Machine mini setup={profile} keys={machineKeys(matrix, profile.slug)} plugged={plugged(profile.slug)} width={64} />}
                   <span className="detail-holder-name">{profile.name}</span>
                   <span className="detail-holder-latest">
-                    {[resultLabel(cell.status), cell.latest ? formatDate(cell.latest.recordedAt) : "", ...cell.flags.map((f) => FLAG_SHORT[f])].filter(Boolean).join(" · ")}
+                    {[
+                      resultLabel(cell.status),
+                      cell.latest ? formatDate(cell.latest.recordedAt) : "",
+                      cell.latest ? ranWith(cell.latest).name : "",
+                      ...cell.flags.map((f) => FLAG_SHORT[f]),
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </span>
                 </button>
               </li>
             ))}
           </ul>
         )}
-        {opened && <History profile={opened.profile} cell={opened.cell} assessments={state.assessments} onTestAgain={() => navigate({ view: "deck", deck: "test", profileSlug: opened.profile.slug, credentialKey: key })} />}
+        {opened && <History profile={opened.profile} cell={opened.cell} assessments={state.assessments} ranWith={ranWith} onTestAgain={() => navigate({ view: "deck", deck: "test", profileSlug: opened.profile.slug, credentialKey: key })} />}
       </section>
 
       <TrashLink onOpen={() => navigate({ view: "deck", deck: "trash", item: { kind: "badge", credentialKey: key } })} />
@@ -108,12 +121,15 @@ function History({
   profile,
   cell,
   assessments,
+  ranWith,
   onTestAgain,
 }: {
   profile: AgentProfile;
   cell: Cell;
   /** Every result in the folder, so memory compares across credentials (R7). */
   assessments: readonly Assessment[];
+  /** The handoff a result ran with: its name and the text as copied (R13, R14). */
+  ranWith(a: Assessment): { name: string; text: string };
   onTestAgain(): void;
 }) {
   return (
@@ -137,6 +153,7 @@ function History({
               <summary>Reply</summary>
               <pre className="handback">{a.handBack}</pre>
             </details>
+            <RanWith {...ranWith(a)} />
           </li>
         ))}
       </ol>
@@ -146,5 +163,15 @@ function History({
         </button>
       </p>
     </div>
+  );
+}
+
+/** The handoff a result ran with, named and collapsed under its reply. */
+function RanWith({ name, text }: { name: string; text: string }) {
+  return (
+    <details>
+      <summary>{name}</summary>
+      <pre className="handback">{text}</pre>
+    </details>
   );
 }

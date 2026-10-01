@@ -82,6 +82,8 @@ export interface PlayerCardProps {
   keys?: readonly MachineKey[];
   /** Activating one of `keys`. */
   onKey?(key: MachineKey): void;
+  /** The handoff plugged into an existing agent, drawn on its machine (R15). */
+  plugged?: { label?: string } | null;
 }
 
 type Mode = { kind: "create"; draft: Omit<AgentProfile, "slug"> | null } | { kind: "edit"; slug: Slug };
@@ -92,7 +94,7 @@ export function PlayerCard(props: PlayerCardProps) {
   return state ? <Player {...props} /> : null;
 }
 
-function Player({ profileSlug, returnTo, likeSlug, keys, onKey }: PlayerCardProps) {
+function Player({ profileSlug, returnTo, likeSlug, keys, onKey, plugged }: PlayerCardProps) {
   const { storage, state, apply } = useFolder();
   const { navigate } = useNav();
   const [mode] = useState<Mode>(() =>
@@ -188,7 +190,7 @@ function Player({ profileSlug, returnTo, likeSlug, keys, onKey }: PlayerCardProp
           body: (
             <div className={`player${locked ? " player-locked" : ""}`}>
               <div className="player-stage">
-                <KeyedMachine setup={setup} keys={keys} onKey={onKey} onStep={locked ? undefined : stepDial} width={300} />
+                <KeyedMachine setup={setup} keys={keys} onKey={onKey} onStep={locked ? undefined : stepDial} plugged={plugged} width={300} />
               </div>
               <div className="dials">
                 <Dial

@@ -1,6 +1,7 @@
 // Moving an agent or a credential to the trash: one card that names what goes with it.
 // Nothing is deleted. The files move under trash/<stamp>/ in the data folder at their
-// own paths, so moving them back restores the item and its results.
+// own paths, so moving them back restores the item and its results. A handoff plugged
+// into the agent, or fed from the badge, is pulled with no result (R17).
 
 import { loadFolder } from "../domain/folder";
 import { trashCredential, trashProfile } from "../domain/operations";
@@ -8,7 +9,7 @@ import { credentialKey, parseCredentialKey, type FolderState } from "../domain/t
 import { Deck } from "./Deck";
 import { useNav } from "./nav";
 import type { TrashItem } from "./routes";
-import { usePendingTests } from "./pendingTests";
+import { livePlugs, usePendingTests } from "./pendingTests";
 import { Missing } from "./shared";
 import { useFolder } from "./useFolderState";
 
@@ -26,6 +27,13 @@ export function TrashLink({ onOpen }: { onOpen(): void }) {
 function resultsLine(count: number): string {
   if (count === 0) return "It has no results.";
   return count === 1 ? "Its result goes with it." : `Its ${count} results go with it.`;
+}
+
+/** The plugs that go: the agent's own, or each agent's fed from the badge. */
+function plugLine(item: TrashItem, holders: string[]): string | null {
+  if (holders.length === 0) return null;
+  if (item.kind === "agent") return "Its handoff is pulled with no result.";
+  return holders.length === 1 ? `${holders[0]}'s handoff is pulled with no result.` : `${holders.length} handoffs are pulled with no result.`;
 }
 
 export function TrashDeck({ item }: { item: TrashItem }) {
@@ -47,6 +55,10 @@ export function TrashDeck({ item }: { item: TrashItem }) {
   const results = state.assessments.filter((a) =>
     item.kind === "agent" ? a.profileSlug === item.profileSlug : credentialKey(a) === item.credentialKey,
   ).length;
+  const plugged = livePlugs(pending, state)
+    .filter((p) => (item.kind === "agent" ? p.profileSlug === item.profileSlug : p.credentialKey === item.credentialKey))
+    .map((p) => state.profiles.find((a) => a.slug === p.profileSlug)!.name);
+  const pulled = plugLine(item, plugged);
 
   async function move(current: FolderState) {
     if (item.kind === "agent") return trashProfile(storage, current, item.profileSlug);
@@ -84,7 +96,12 @@ export function TrashDeck({ item }: { item: TrashItem }) {
           id: "trash",
           title: `Move ${name} to trash`,
           forward: "Move to trash",
-          body: <p className="muted">{resultsLine(results)}</p>,
+          body: (
+            <>
+              <p className="muted">{resultsLine(results)}</p>
+              {pulled && <p className="muted">{pulled}</p>}
+            </>
+          ),
         },
       ]}
     />

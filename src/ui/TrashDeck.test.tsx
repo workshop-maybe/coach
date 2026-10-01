@@ -20,6 +20,7 @@ describe("Move to trash", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Move to trash" }));
     expect(await screen.findByRole("heading", { name: "Move Opus agent to trash" })).toBeTruthy();
     expect(screen.getByText("Its result goes with it.")).toBeTruthy();
+    expect(screen.queryByText(/pulled with no result/)).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "Move to trash" }));
     await screen.findAllByRole("button", { name: /Create an agent/ });
     expect(screen.queryByRole("button", { name: /Opus agent/ })).toBeNull();
@@ -63,12 +64,23 @@ describe("Move to trash", () => {
     expect((await loadFolder(storage)).credentials).toEqual([]);
   });
 
-  it("moving an agent to the trash clears the tests waiting on it", async () => {
+  it("Covers GAP-9. Trashing a plugged agent says its handoff is pulled with no result, and the plug is gone afterward", async () => {
     const storage = storageWith({ credentials: [review], profiles: [opus] });
     addPending(FOLDER, { profileSlug: "opus", credentialKey: "eng/review", copiedAt: "2026-09-30T09:00:00.000Z", assignmentVersion: "v", setup: { harness: opus.harness, model: opus.model, effort: opus.effort } });
     renderApp(storage, { view: "deck", deck: "trash", item: { kind: "agent", profileSlug: "opus" } });
+    expect(await screen.findByText("Its handoff is pulled with no result.")).toBeTruthy();
     await userEvent.click(await screen.findByRole("button", { name: "Move to trash" }));
     await screen.findAllByRole("button", { name: /Create an agent/ });
+    expect(readPending(FOLDER)).toEqual([]);
+  });
+
+  it("trashing a badge plugged into an agent says that handoff is pulled with no result, and the plug is gone afterward", async () => {
+    const storage = storageWith({ credentials: [review], profiles: [opus] });
+    addPending(FOLDER, { profileSlug: "opus", credentialKey: "eng/review", copiedAt: "2026-09-30T09:00:00.000Z", assignmentVersion: "v", setup: { harness: opus.harness, model: opus.model, effort: opus.effort } });
+    renderApp(storage, { view: "deck", deck: "trash", item: { kind: "badge", credentialKey: "eng/review" } });
+    expect(await screen.findByText("Opus agent's handoff is pulled with no result.")).toBeTruthy();
+    await userEvent.click(await screen.findByRole("button", { name: "Move to trash" }));
+    await screen.findAllByRole("button", { name: /Create a credential/ });
     expect(readPending(FOLDER)).toEqual([]);
   });
 });
