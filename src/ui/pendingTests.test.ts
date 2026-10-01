@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from "vitest";
-import { addPending, pendingStorageKey, readPending, removePending, type PendingTest } from "./pendingTests";
+import { addPending, livePlugs, pendingStorageKey, plugFor, readPending, removePending, type PendingTest } from "./pendingTests";
+import type { AgentProfile, Credential, FolderState } from "../domain/types";
 
 const entry: PendingTest = {
   profileSlug: "opus",
@@ -86,5 +87,82 @@ describe("pendingTests", () => {
   it("a malformed context is dropped, and the waiting test kept", () => {
     localStorage.setItem(pendingStorageKey("/data"), JSON.stringify([{ ...entry, context: { machine: 3 } }]));
     expect(readPending("/data")).toEqual([entry]);
+  });
+
+  const handoff = { id: "20260930T120000Z", text: "This is a test. Review the attached diff." };
+
+  it("keeps the handoff a test was copied with", () => {
+    addPending("/data", { ...entry, handoff });
+    expect(readPending("/data")).toEqual([{ ...entry, handoff }]);
+  });
+
+  it("a waiting test saved before handoffs existed still loads, with no handoff", () => {
+    localStorage.setItem(pendingStorageKey("/data"), JSON.stringify([{ ...entry, context }]));
+    const [loaded] = readPending("/data");
+    expect(loaded).toEqual({ ...entry, context });
+    expect(loaded.handoff).toBeUndefined();
+  });
+
+  it("a malformed handoff is dropped, and the waiting test kept", () => {
+    const bad = [{ id: "", text: "x" }, { id: "skeleton" }, { id: 3, text: "x" }, "skeleton", null];
+    for (const h of bad) {
+      localStorage.setItem(pendingStorageKey("/data"), JSON.stringify([{ ...entry, context, handoff: h }]));
+      expect(readPending("/data")).toEqual([{ ...entry, context }]);
+    }
+  });
+
+  it("a second copy for the same agent on another badge keeps the first plug", () => {
+    addPending("/data", { ...entry, handoff });
+    addPending("/data", { ...entry, credentialKey: "eng/ship", copiedAt: "2026-09-29T11:00:00.000Z" });
+    expect(readPending("/data").map((p) => p.credentialKey)).toEqual(["eng/ship", "eng/review"]);
+  });
+
+  describe("plugs", () => {
+    it("an agent's plug is its waiting test", () => {
+      const other = { ...entry, profileSlug: "codex", copiedAt: "2026-09-29T12:00:00.000Z" };
+      expect(plugFor([other, entry], "opus")).toEqual(entry);
+      expect(plugFor([other, entry], "sonnet")).toBeUndefined();
+    });
+
+    it("a legacy agent with several waiting tests is plugged with the newest", () => {
+      const older = { ...entry, credentialKey: "eng/ship", copiedAt: "2026-09-28T10:00:00.000Z" };
+      const newer = { ...entry, credentialKey: "eng/docs", copiedAt: "2026-09-30T10:00:00.000Z" };
+      expect(plugFor([older, entry, newer], "opus")).toEqual(newer);
+      expect(plugFor([newer, older], "opus")).toEqual(newer);
+    });
+
+    const opus: AgentProfile = { slug: "opus", name: "Opus", harness: "claude-code", model: "opus", effort: "high", repo: "", notes: "", params: {} };
+    const review: Credential = {
+      slug: "review",
+      collectionSlug: "eng",
+      name: "Code review",
+      learningTargets: ["I can find bugs."],
+      task: "Review it.",
+      rubric: "",
+      extraSections: [],
+    };
+    const state = (parts: Partial<FolderState>): FolderState => ({
+      collections: [],
+      credentials: [review],
+      profiles: [opus],
+      assessments: [],
+      skeleton: null,
+      handoffs: [],
+      errors: [],
+      warnings: [],
+      raw: {},
+      ...parts,
+    });
+
+    it("a plug whose agent or badge is gone is dropped from what readers see, and storage is untouched", () => {
+      addPending("/data", { ...entry, handoff });
+      const stored = localStorage.getItem(pendingStorageKey("/data"));
+      const pending = readPending("/data");
+      expect(livePlugs(pending, state({}))).toEqual([{ ...entry, handoff }]);
+      expect(livePlugs(pending, state({ profiles: [] }))).toEqual([]);
+      expect(livePlugs(pending, state({ credentials: [] }))).toEqual([]);
+      expect(plugFor(livePlugs(pending, state({ profiles: [] })), "opus")).toBeUndefined();
+      expect(localStorage.getItem(pendingStorageKey("/data"))).toBe(stored);
+    });
   });
 });

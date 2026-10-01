@@ -1,11 +1,12 @@
-// "What needs you" (KTD7, R8, R18), computed from the matrix and the waiting tests,
+// "What needs you" (KTD7, R8, R18, R19), computed from the matrix and the waiting tests,
 // never stored. Most urgent first: replies to paste, re-tests, half-made things, then
-// badges nobody holds. Each credential appears at most once, at its most urgent item.
-// Every item carries the one route its row opens.
+// badges nobody holds. Each plugged agent gets one reply row. Below the replies, each
+// credential appears at most once, at its most urgent item. Every item carries the one
+// route its row opens.
 
 import type { CellFlag, Matrix } from "../domain/matrix";
 import { credentialKey, type FolderState, type Slug } from "../domain/types";
-import type { PendingTest } from "./pendingTests";
+import { livePlugs, plugFor, type PendingTest } from "./pendingTests";
 import type { Route } from "./routes";
 
 export type NeedsYouItem =
@@ -18,18 +19,21 @@ export type NeedsYouItem =
 export function needsYou(state: FolderState, matrix: Matrix, pending: PendingTest[]): NeedsYouItem[] {
   const items: NeedsYouItem[] = [];
   const seen = new Set<string>();
-  const profiles = new Set(state.profiles.map((p) => p.slug));
   const credentials = matrix.columns.flatMap((g) => g.credentials);
   const keys = new Set(credentials.map(credentialKey));
 
-  for (const p of pending) {
-    if (!profiles.has(p.profileSlug) || !keys.has(p.credentialKey) || seen.has(p.credentialKey)) continue;
-    seen.add(p.credentialKey);
+  const live = livePlugs(pending, state).filter((p) => keys.has(p.credentialKey));
+  const plugged = new Set<Slug>();
+  for (const { profileSlug } of live) {
+    if (plugged.has(profileSlug)) continue;
+    plugged.add(profileSlug);
+    const plug = plugFor(live, profileSlug)!;
+    seen.add(plug.credentialKey);
     items.push({
       kind: "reply",
-      profileSlug: p.profileSlug,
-      credentialKey: p.credentialKey,
-      route: { view: "deck", deck: "test", profileSlug: p.profileSlug, credentialKey: p.credentialKey, resume: true },
+      profileSlug,
+      credentialKey: plug.credentialKey,
+      route: { view: "deck", deck: "test", profileSlug, credentialKey: plug.credentialKey, resume: true },
     });
   }
 
@@ -61,7 +65,7 @@ export function needsYou(state: FolderState, matrix: Matrix, pending: PendingTes
 
   const tested = new Set(state.assessments.map((a) => a.profileSlug));
   for (const p of state.profiles) {
-    if (tested.has(p.slug)) continue;
+    if (tested.has(p.slug) || plugged.has(p.slug)) continue;
     items.push({ kind: "half-agent", profileSlug: p.slug, route: { view: "deck", deck: "test", profileSlug: p.slug } });
   }
 
