@@ -1266,6 +1266,39 @@ button:focus-visible {
   color: var(--ink-muted);
 }
 
+/* The handoff box for one badge (U7): the box, a key per handoff, the default in blue. */
+.handoffs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-base);
+}
+
+.handoffs-box {
+  align-self: center;
+}
+
+.choice-default {
+  color: var(--data);
+}
+
+/* A handoff is written as it is copied: plain mono text, slot braces and all. */
+.deck-body textarea.handoff-text {
+  min-height: 18rem;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: var(--value-tracking);
+  white-space: pre-wrap;
+}
+
+.handoff-slots {
+  color: var(--ink-muted);
+}
+
+.handoff-slots code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
 /* A preset's learning targets, on the card that makes it. */
 .preset-targets {
   display: grid;
@@ -1337,30 +1370,53 @@ button:focus-visible {
   align-self: stretch;
 }
 
-/* A result ejects the cartridge. Without motion it is simply gone. */
-.cast-ejecting .cast-loaded-motion {
+/* "Hand it over": the badge in the handoff box, the agent beside it (U6, KTD8). */
+.test-stage-handoff {
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-md);
+}
+
+/* The box's keys as real buttons, one per handoff, the lit one in data blue. */
+.handoff-keys {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin: 0;
+  padding: 0;
+}
+
+.handoff-key {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: var(--value-tracking);
+}
+
+.handoff-key[aria-pressed="true"] {
+  box-shadow: var(--focus-ring);
+  color: var(--data);
+}
+
+/* A result ejects the plugged handoff. Without motion it is simply gone. */
+.cast-ejecting :is(.cast-loaded-motion, .cast-plugged-motion) {
   opacity: 0;
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .cast-loading .cast-loaded-motion {
-    animation: cast-slide-in 420ms cubic-bezier(0.3, 0.7, 0.4, 1) both;
+  .cast-ejecting :is(.cast-loaded-motion, .cast-plugged-motion) {
+    animation: cast-eject 520ms cubic-bezier(0.3, 0, 0.6, 1) both;
   }
 
-  .cast-ejecting .cast-loaded-motion {
-    animation: cast-eject 520ms cubic-bezier(0.3, 0, 0.6, 1) both;
+  /* In the test, the card goes into the agent once the box has printed it. */
+  .test-stage-handoff .cast-feeding .cast-plugged-motion {
+    animation-delay: 560ms;
   }
 
   /* The key that just lit seats itself once the cartridge is out, inside LANDING_MS. */
   .cast-key-seated {
     animation: cast-key-seat 480ms cubic-bezier(0.2, 0.8, 0.3, 1.3) 420ms both;
-  }
-}
-
-@keyframes cast-slide-in {
-  from {
-    opacity: 0;
-    transform: translateY(-40px);
   }
 }
 
@@ -1387,6 +1443,49 @@ button:focus-visible {
     transform: translateY(2px);
   }
   100% {
+    transform: none;
+  }
+}
+
+/* The handoff box prints its handoff as a card (U5, KTD9), and the card feeds into the
+   agent's slot. A view sets `.cast-printing` on the box while it prints and
+   `.cast-feeding` on the agent while the card goes in. Without motion, the card simply
+   stands out of the print slot, then simply stands in the agent. */
+.cast-print-motion {
+  visibility: hidden;
+}
+
+.cast-printing .cast-print-motion {
+  visibility: visible;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .cast-printing .cast-print-motion {
+    animation: cast-print 760ms cubic-bezier(0.4, 0, 0.3, 1) both;
+  }
+
+  .cast-feeding .cast-plugged-motion {
+    animation: cast-feed 520ms cubic-bezier(0.3, 0.7, 0.4, 1) both;
+  }
+}
+
+/* Out of the slot from inside the case, the way a printer pushes paper. */
+@keyframes cast-print {
+  from {
+    transform: translateY(48px);
+  }
+}
+
+@keyframes cast-feed {
+  0% {
+    opacity: 0;
+    transform: translateY(-32px);
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
     transform: none;
   }
 }
@@ -1723,6 +1822,24 @@ button:focus-visible {
 .cast-screen-text {
   font-family: var(--font-mono);
   letter-spacing: 0;
+}
+
+/* The handoff box's letters, and the letter on a handoff card's header bar. */
+.cast-handoff-label,
+.cast-card-label {
+  font-family: var(--font-mono);
+  letter-spacing: 0;
+  fill: currentColor;
+}
+
+.cast-handoff-label-lit,
+.cast-card-label {
+  fill: var(--surface);
+}
+
+/* The lit key's light: the handoff the view is about. */
+.cast-handoff-led {
+  fill: var(--data);
 }
 
 .cast-outline {

@@ -36,7 +36,7 @@ describe("Cartridge", () => {
 });
 
 describe("Outline", () => {
-  it.each(["machine", "cartridge"] as const)("draws an empty %s dashed, with no badge", (kind) => {
+  it.each(["machine", "cartridge", "handoff"] as const)("draws an empty %s dashed, with no badge", (kind) => {
     const { container } = render(<Outline kind={kind} />);
     const svg = container.querySelector("svg")!;
     expect(svg.getAttribute("aria-hidden")).toBe("true");

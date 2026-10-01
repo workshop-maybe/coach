@@ -12,7 +12,7 @@ import type { BadgeSettings, BadgeTitle } from "../badge/settings";
 import { collectionPath, credentialPath, loadFolder, profilePath } from "../domain/folder";
 import { cellKey, type Matrix } from "../domain/matrix";
 import { importBadgeArt, setCredentialBadgeOverride, updateCredential, updateProfile } from "../domain/operations";
-import { checkCriteriaPrompt, refineHandoffNote, reviewAssignmentPrompt } from "../domain/prompts";
+import { checkCriteriaPrompt, refinePrompt, reviewAssignmentPrompt } from "../domain/prompts";
 import { appendToRubric } from "../domain/target-check";
 import {
   credentialKey,
@@ -325,7 +325,7 @@ function EditCredential({ credentialKey: key, part, credential: atOpen, collecti
             <>
               <RichText aria-label="Task" placeholder="What the agent is asked to do" value={task} onChange={taskDraft.setValue} onNormalized={taskDraft.onNormalized} />
               <CopyHelper label="Review this assignment" text={() => reviewAssignmentPrompt({ ...c, task })} />
-              <CopyHelper label="Write a handoff note" text={() => refineHandoffNote({ ...c, task })} />
+              <CopyHelper label="Write a refine prompt" text={() => refinePrompt({ ...c, task })} />
             </>
           ),
         },

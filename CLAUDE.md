@@ -7,7 +7,7 @@ A simple, beautiful little desktop app for building credentials and offering the
 - **Credentials.** A credential has a name and a set of learning targets.
 - **Acceptance criteria.** Each credential has assignments that a person or an agent can complete and that the user can review.
 - **Agent profiles.** Named agent setups the user runs locally: harness, model, effort level, the repo it opens in, and free-form parameters.
-- **Prompts and handoff notes.** The app writes prompts the user copies into the agent of their choice: test prompts ("this is a test, do it and I'll review your results"), "check my acceptance criteria", "review this assignment", "suggest assignments for these learning targets". Handoff notes give an agent the full context to help refine an assignment.
+- **Prompts and handoffs.** The app writes prompts the user copies into the agent of their choice. A handoff wraps a badge's assignment for a test ("this is a test, do it and I'll review your results"). It is customizable: a default skeleton plus one or more handoffs per badge. Other prompts: "check my acceptance criteria", "review this assignment", "suggest assignments for these learning targets". A refine prompt gives an agent the full context to help refine an assignment.
 - **Assessments.** The user records whether an agent met a credential's acceptance criteria, with evidence. Home shows the badges each agent holds and who holds each badge.
 - **Export.** Markdown and JSON.
 - **Beyond your computer.** When no local agent meets a credential, the app shows a quiet path toward finding people who hold it. No upsell screens.

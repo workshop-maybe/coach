@@ -5,8 +5,9 @@ import userEvent from "@testing-library/user-event";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { credentialPath, loadFolder } from "../domain/folder";
 import { serializeCredentialMd } from "../domain/credential-md";
+import { BUILT_IN_HANDOFF } from "../domain/handoffs";
 import { buildMatrix } from "../domain/matrix";
-import { checkCriteriaPrompt, refineHandoffNote, reviewAssignmentPrompt } from "../domain/prompts";
+import { checkCriteriaPrompt, refinePrompt, reviewAssignmentPrompt } from "../domain/prompts";
 import type { MemoryStorage } from "../storage/memory";
 import { holdersOf, parseParam } from "./EditDecks";
 import { opus, renderApp, result, review, snapshot, storageWith } from "./testFolder";
@@ -30,13 +31,14 @@ async function saved(storage: MemoryStorage, slug = "review") {
 }
 
 const parts = () => screen.getByRole("list", { name: "Parts" });
+const openedPart = async (name: RegExp) => within(await screen.findByRole("list", { name: "Parts" })).getByRole("button", { name });
 const openPart = async (name: RegExp) => {
   await screen.findByRole("list", { name: "Parts" });
   await userEvent.click(within(parts()).getByRole("button", { name }));
 };
 
 describe("BadgeDetail", () => {
-  it("shows the badge, its five parts, and only the agents that met it as holders", async () => {
+  it("shows the badge, its six parts, and only the agents that met it as holders", async () => {
     const storage = storageWith({
       credentials: [review],
       profiles: [opus, codex],
@@ -48,12 +50,24 @@ describe("BadgeDetail", () => {
     const names = within(parts())
       .getAllByRole("button")
       .map((b) => b.querySelector(".part-name")?.textContent);
-    expect(names).toEqual(["Name", "Learning targets", "Task", "Rubric", "Look"]);
+    expect(names).toEqual(["Name", "Learning targets", "Task", "Rubric", "Look", "Handoffs"]);
     const holders = screen.getByRole("region", { name: "Holders" });
     expect(await within(holders).findByRole("button", { name: /Opus agent/ })).toBeTruthy();
     expect(within(holders).queryByRole("button", { name: /Codex agent/ })).toBeNull();
     // Holders are small machines, named in text beside them.
     expect(within(holders).getByRole("button", { name: /Opus agent/ }).querySelector("svg.cast-machine-mini")).not.toBeNull();
+  });
+
+  it("the Handoffs part shows how many the badge has, or Skeleton when it has none", async () => {
+    const handoff = (id: string) => ({ collectionSlug: "eng", credentialSlug: "review", id, text: "{{task}}\n" });
+    renderApp(storageWith({ credentials: [review] }), badge);
+    expect((await openedPart(/Handoffs/)).querySelector(".part-value")?.textContent).toBe("Skeleton");
+    cleanup();
+    renderApp(storageWith({ credentials: [review], handoffs: [handoff("20260901T090000Z")] }), badge);
+    expect((await openedPart(/Handoffs/)).querySelector(".part-value")?.textContent).toBe("1 handoff");
+    cleanup();
+    renderApp(storageWith({ credentials: [review], handoffs: [handoff("20260901T090000Z"), handoff("20260902T090000Z")] }), badge);
+    expect((await openedPart(/Handoffs/)).querySelector(".part-value")?.textContent).toBe("2 handoffs");
   });
 
   it("opening a holder shows its history, newest first", async () => {
@@ -84,6 +98,52 @@ describe("BadgeDetail", () => {
     expect(lines).toEqual(["context unknown", "Laptop · memory not read", "Laptop · memory changed", "Laptop", "Laptop"]);
   });
 
+  describe("handoffs on results", () => {
+    const handoff = (id: string) => ({ collectionSlug: "eng", credentialSlug: "review", id, text: "{{task}}\n" });
+    const handoffs = [handoff("20260901T090000Z"), handoff("20260902T090000Z")];
+
+    it("Covers R20. Each holder shows the handoff that earned it, and one recorded before handoffs shows the skeleton", async () => {
+      const storage = storageWith({
+        credentials: [review],
+        profiles: [opus, codex],
+        handoffs,
+        assessments: [await result(opus, review, { handoff: { id: "20260902T090000Z", text: "Review the attached diff." } }), await result(codex, review)],
+      });
+      renderApp(storage, badge);
+      const holders = await screen.findByRole("region", { name: "Holders" });
+      const latest = async (name: RegExp) => (await within(holders).findByRole("button", { name })).querySelector(".detail-holder-latest")?.textContent;
+      expect(await latest(/Opus agent/)).toContain("Handoff B");
+      expect(await latest(/Codex agent/)).toContain("Skeleton");
+    });
+
+    it("the history names each result's handoff and keeps the text that ran under the reply", async () => {
+      const older = await result(opus, review, { fileStem: "20260801T090000Z", recordedAt: "2026-08-01T09:00:00.000Z", result: "not_met", handoff: { id: "20260901T090000Z", text: "First framing" } });
+      const latest = await result(opus, review, { handoff: { id: "20260902T090000Z", text: "Second framing" } });
+      renderApp(storageWith({ credentials: [review], profiles: [opus], handoffs, assessments: [older, latest] }), badge);
+      await userEvent.click(await screen.findByRole("button", { name: /Opus agent/ }));
+      const items = within(screen.getByRole("region", { name: "Opus agent results" })).getAllByRole("listitem");
+      const ran = items.map((li) => {
+        const [reply, ranWith] = li.querySelectorAll("details");
+        return [reply.querySelector("summary")?.textContent, ranWith.querySelector("summary")?.textContent, ranWith.querySelector("pre")?.textContent];
+      });
+      expect(ran).toEqual([
+        ["Reply", "Handoff B", "Second framing"],
+        ["Reply", "Handoff A", "First framing"],
+      ]);
+      // Collapsed until opened, like the reply.
+      expect(items[0].querySelectorAll("details")[1].open).toBe(false);
+    });
+
+    it("Covers R14. A result recorded before handoffs shows the built-in prompt as the skeleton", async () => {
+      renderApp(storageWith({ credentials: [review], profiles: [opus], assessments: [await result(opus, review)] }), badge);
+      await userEvent.click(await screen.findByRole("button", { name: /Opus agent/ }));
+      const [item] = within(screen.getByRole("region", { name: "Opus agent results" })).getAllByRole("listitem");
+      const ranWith = item.querySelectorAll("details")[1];
+      expect(ranWith.querySelector("summary")?.textContent).toBe("Skeleton");
+      expect(ranWith.querySelector("pre")?.textContent).toBe(BUILT_IN_HANDOFF);
+    });
+  });
+
   it("editing the task saves through updateCredential and returns to the badge", async () => {
     const storage = storageWith({ credentials: [review] });
     renderApp(storage, badge);
@@ -111,8 +171,8 @@ describe("BadgeDetail", () => {
     renderApp(storageWith({ credentials: [review] }), { view: "deck", deck: "edit-credential", credentialKey: "eng/review", part: "task" });
     await userEvent.click(await screen.findByRole("button", { name: "Review this assignment" }));
     expect(writeText).toHaveBeenLastCalledWith(reviewAssignmentPrompt(review));
-    await userEvent.click(screen.getByRole("button", { name: "Write a handoff note" }));
-    expect(writeText).toHaveBeenLastCalledWith(refineHandoffNote(review));
+    await userEvent.click(screen.getByRole("button", { name: "Write a refine prompt" }));
+    expect(writeText).toHaveBeenLastCalledWith(refinePrompt(review));
     cleanup();
 
     renderApp(storageWith({ credentials: [review] }), { view: "deck", deck: "edit-credential", credentialKey: "eng/review", part: "rubric" });

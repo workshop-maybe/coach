@@ -20,7 +20,7 @@ const opus: AgentProfile = { slug: "opus", name: "Opus agent", harness: "claude-
 const codex: AgentProfile = { ...opus, slug: "codex", name: "Codex agent", harness: "codex", model: "gpt" };
 
 function folder(parts: Partial<FolderState>): FolderState {
-  return { collections: [eng], credentials: [], profiles: [], assessments: [], errors: [], warnings: [], raw: {}, ...parts };
+  return { collections: [eng], credentials: [], profiles: [], assessments: [], skeleton: null, handoffs: [], errors: [], warnings: [], raw: {}, ...parts };
 }
 
 async function met(profile: AgentProfile, credential: Credential, overrides: Partial<Assessment> = {}): Promise<Assessment> {
@@ -146,5 +146,69 @@ describe("needsYou", () => {
     const state = folder({ credentials: [docs, fourth, review, third], profiles: [opus, codex], assessments: [earned] });
     const items = await run(state, [pending]);
     expect(items.map((i) => i.kind)).toEqual(["reply", "retest", "half-credential", "half-agent", "unheld"]);
+  });
+
+  const plug = (profileSlug: string, credentialKey: string, copiedAt = "2026-09-29T10:00:00.000Z"): PendingTest => ({
+    profileSlug,
+    credentialKey,
+    copiedAt,
+    assignmentVersion: "x",
+    setup: { harness: "claude-code", model: "opus", effort: "high" },
+    handoff: { id: "skeleton", text: "This is a test." },
+  });
+
+  it("Covers R19. Two agents plugged on the same badge give two reply rows", async () => {
+    const state = folder({ credentials: [review], profiles: [opus, codex], assessments: [await met(opus, review), await met(codex, review)] });
+    const items = await run(state, [plug("codex", "eng/review", "2026-09-29T11:00:00.000Z"), plug("opus", "eng/review")]);
+    expect(items).toEqual([
+      {
+        kind: "reply",
+        profileSlug: "codex",
+        credentialKey: "eng/review",
+        route: { view: "deck", deck: "test", profileSlug: "codex", credentialKey: "eng/review", resume: true },
+      },
+      {
+        kind: "reply",
+        profileSlug: "opus",
+        credentialKey: "eng/review",
+        route: { view: "deck", deck: "test", profileSlug: "opus", credentialKey: "eng/review", resume: true },
+      },
+    ]);
+  });
+
+  it("a plugged agent's badge is seen, so lower rows skip it", async () => {
+    const earned = await met(opus, review, { assignmentVersion: "old" });
+    const items = await run(folder({ credentials: [review], profiles: [opus], assessments: [earned] }), [plug("opus", "eng/review")]);
+    expect(items.map((i) => i.kind)).toEqual(["reply"]);
+  });
+
+  it("a legacy agent with several waiting tests gets one reply row, for the newest", async () => {
+    const state = folder({ credentials: [review, docs], profiles: [opus], assessments: [await met(opus, review)] });
+    const items = await run(state, [plug("opus", "eng/review", "2026-09-28T10:00:00.000Z"), plug("opus", "eng/docs", "2026-09-30T10:00:00.000Z")]);
+    expect(items.filter((i) => i.kind === "reply")).toEqual([
+      {
+        kind: "reply",
+        profileSlug: "opus",
+        credentialKey: "eng/docs",
+        route: { view: "deck", deck: "test", profileSlug: "opus", credentialKey: "eng/docs", resume: true },
+      },
+    ]);
+  });
+
+  it("a plugged agent with no results gets a reply row and no half-agent row", async () => {
+    const items = await run(folder({ credentials: [review], profiles: [codex] }), [plug("codex", "eng/review")]);
+    expect(items).toEqual([
+      {
+        kind: "reply",
+        profileSlug: "codex",
+        credentialKey: "eng/review",
+        route: { view: "deck", deck: "test", profileSlug: "codex", credentialKey: "eng/review", resume: true },
+      },
+    ]);
+  });
+
+  it("a plug whose badge is gone leaves its agent unplugged, so it is half-made again", async () => {
+    const items = await run(folder({ credentials: [review], profiles: [codex] }), [plug("codex", "eng/gone")]);
+    expect(items.map((i) => i.kind)).toEqual(["half-agent", "unheld"]);
   });
 });

@@ -1,10 +1,11 @@
 // Tests waiting on a reply (KTD5, R17). They live in the webview's local storage, keyed
 // by data folder, so nothing new is written to the folder. Losing one loses only the
 // reminder, never a result. A copy of the same agent and credential replaces the last.
+// A waiting test is the agent's plug (KTD6): the handoff it holds until the test ends.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { isTestContext } from "../domain/context";
-import type { AgentSetup, Slug, TestContext } from "../domain/types";
+import { credentialKey, type AgentSetup, type FolderState, type HandoffTemplate, type Slug, type TestContext } from "../domain/types";
 
 export interface PendingTest {
   profileSlug: Slug;
@@ -17,6 +18,8 @@ export interface PendingTest {
   setup: AgentSetup;
   /** The machine and memory the test started with. Absent when it couldn't be read. */
   context?: TestContext;
+  /** The handoff copied: its id ("skeleton" or a file stem) and the filled text. Absent on tests saved before handoffs. */
+  handoff?: HandoffTemplate;
 }
 
 export function pendingStorageKey(folder: string): string {
@@ -48,11 +51,20 @@ function isPending(v: unknown): v is PendingTest {
   );
 }
 
-/** A valid entry, with a malformed context dropped so the reminder survives. */
+function isHandoff(v: unknown): v is HandoffTemplate {
+  if (typeof v !== "object" || v === null) return false;
+  const h = v as Record<string, unknown>;
+  return typeof h.id === "string" && h.id !== "" && typeof h.text === "string";
+}
+
+/** A valid entry, with a malformed context or handoff dropped so the reminder survives. */
 function clean(p: PendingTest): PendingTest {
-  if (p.context === undefined || isTestContext(p.context)) return p;
-  const { context: _dropped, ...rest } = p;
-  return rest;
+  const { context, handoff, ...rest } = p;
+  return {
+    ...rest,
+    ...(context !== undefined && isTestContext(context) ? { context } : {}),
+    ...(handoff !== undefined && isHandoff(handoff) ? { handoff } : {}),
+  };
 }
 
 const newestFirst = (a: PendingTest, b: PendingTest) => (a.copiedAt < b.copiedAt ? 1 : a.copiedAt > b.copiedAt ? -1 : 0);
@@ -68,6 +80,25 @@ export function readPending(folder: string, store = defaultStore()): PendingTest
   } catch {
     return [];
   }
+}
+
+/** The agent's plug: its waiting test, or the newest when one saved before handoffs holds several. */
+export function plugFor(pending: PendingTest[], profileSlug: Slug): PendingTest | undefined {
+  let plug: PendingTest | undefined;
+  for (const p of pending) {
+    if (p.profileSlug === profileSlug && (!plug || p.copiedAt > plug.copiedAt)) plug = p;
+  }
+  return plug;
+}
+
+/**
+ * The waiting tests whose agent and badge are both in the folder. Readers use it so a plug
+ * left by something gone never shows. Storage keeps them; trashing removes them there.
+ */
+export function livePlugs(pending: PendingTest[], state: Pick<FolderState, "profiles" | "credentials">): PendingTest[] {
+  const profiles = new Set(state.profiles.map((p) => p.slug));
+  const keys = new Set(state.credentials.map(credentialKey));
+  return pending.filter((p) => profiles.has(p.profileSlug) && keys.has(p.credentialKey));
 }
 
 /** Saves the list and returns it as a fresh read would. Blocked storage keeps `unchanged`. */

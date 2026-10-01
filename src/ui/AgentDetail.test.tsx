@@ -5,7 +5,8 @@ import userEvent from "@testing-library/user-event";
 import { loadFolder, profilePath, serializeProfile } from "../domain/folder";
 import { FLAG_REASONS } from "../domain/matrix";
 import type { MemoryStorage } from "../storage/memory";
-import { opus, renderApp, result, review, storageWith } from "./testFolder";
+import { addPending } from "./pendingTests";
+import { FOLDER, opus, renderApp, result, review, storageWith } from "./testFolder";
 
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ writeText: vi.fn() }));
 // ProseMirror typing does not run in jsdom; these flows type into a textarea stand-in.
@@ -36,6 +37,25 @@ describe("AgentDetail", () => {
       .getAllByRole("button")
       .map((b) => b.querySelector(".part-name")?.textContent);
     expect(names).toEqual(["Name", "Repo", "Notes", "Parameters"]);
+    // Nothing plugged in, so nothing to pull.
+    expect(screen.queryByRole("button", { name: "Pull the handoff" })).toBeNull();
+    expect(document.querySelector(".cast-plugged")).toBeNull();
+  });
+
+  it("Covers F2. A plugged agent shows its handoff, and Pull the handoff opens what came back", async () => {
+    addPending(FOLDER, {
+      profileSlug: "opus",
+      credentialKey: "eng/review",
+      copiedAt: "2026-09-30T09:00:00.000Z",
+      assignmentVersion: "v",
+      setup: { harness: opus.harness, model: opus.model, effort: opus.effort },
+      handoff: { id: "skeleton", text: "Review the attached diff." },
+    });
+    renderApp(storageWith({ credentials: [review], profiles: [opus] }), agent);
+    const pull = await screen.findByRole("button", { name: "Pull the handoff" });
+    expect(document.querySelector(".player svg.cast-machine .cast-plugged text")?.textContent).toBe("S");
+    await userEvent.click(pull);
+    expect(await screen.findByRole("heading", { name: "What came back" })).toBeTruthy();
   });
 
   it("a locked agent offers Make a new agent like this", async () => {

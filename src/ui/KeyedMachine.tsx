@@ -2,7 +2,8 @@
 // decorative; a real button sits over each lit key, named for its credential on hover
 // and focus. A half-raised key starts its re-test, a lit one opens its badge. Keys page
 // in sixteens, with a page control under the machine when there is more than one page.
-// Without `onKey` there is nothing to handle, so it is the plain machine.
+// Without `onKey` there is nothing to handle, so it is the plain machine. A plugged-in
+// handoff draws in its slot either way (R15).
 
 import { useState } from "react";
 import type { AgentSetup } from "../domain/types";
@@ -14,6 +15,8 @@ export interface KeyedMachineProps {
   keys?: readonly MachineKey[];
   onKey?(key: MachineKey): void;
   onStep?(dial: EncoderDial, by: 1 | -1): void;
+  /** The handoff plugged into this agent (R15). */
+  plugged?: { label?: string } | null;
   width?: number;
 }
 
@@ -24,18 +27,18 @@ export function keyLabel(key: MachineKey): string {
   return key.halfRaised ? `${key.name}, re-test` : key.name;
 }
 
-export function KeyedMachine({ setup, keys = [], onKey, onStep, width = 300 }: KeyedMachineProps) {
+export function KeyedMachine({ setup, keys = [], onKey, onStep, plugged = null, width = 300 }: KeyedMachineProps) {
   const pages = trigPages(keys);
   const [page, setPage] = useState(0);
   const [named, setNamed] = useState<MachineKey | null>(null);
   const at = Math.min(page, pages.length - 1);
 
-  if (!onKey) return <Machine setup={setup} keys={keys} onStep={onStep} width={width} />;
+  if (!onKey) return <Machine setup={setup} keys={keys} onStep={onStep} plugged={plugged} width={width} />;
 
   return (
     <div className="keyed-machine">
       <div className="keyed-machine-frame">
-        <Machine setup={setup} keys={keys} page={at} onStep={onStep} width={width} />
+        <Machine setup={setup} keys={keys} page={at} onStep={onStep} plugged={plugged} width={width} />
         <ul className="machine-keys" aria-label="Earned">
           {pages[at].map((key, i) => {
             const box = keyBox(i);

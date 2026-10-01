@@ -1,20 +1,21 @@
 // Home, the only room (KTD1). Top to bottom: what needs you, your agents (machines, each
 // lighting the keys it earned), your badges (cartridges, each showing who holds it), then
-// the two doors with dashed outlines of what they make (R9, R12). The cast is hidden from
+// the two doors with dashed outlines of what they make (R9, R12). An agent holding a
+// handoff shows it plugged in wherever it stands (R15). The cast is hidden from
 // assistive tech, so names and what each agent earned stay in text.
 
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { cellKey } from "../domain/matrix";
-import { credentialKey, type AgentProfile, type Collection, type Credential } from "../domain/types";
+import { credentialKey, type AgentProfile, type Collection, type Credential, type FolderState } from "../domain/types";
 import { Cartridge } from "../cast/Cartridge";
 import { Machine } from "../cast/Machine";
 import { Outline } from "../cast/Outline";
 import { machineKeys, type MachineKey } from "../cast/mappings";
-import { FLAG_SHORT } from "./format";
+import { FLAG_SHORT, plugMark } from "./format";
 import { useNav } from "./nav";
 import { needsYou, type NeedsYouItem } from "./needsYou";
-import { usePendingTests } from "./pendingTests";
+import { livePlugs, plugFor, usePendingTests, type PendingTest } from "./pendingTests";
 import { useFolder } from "./useFolderState";
 import { useMatrix } from "./useMatrix";
 
@@ -26,6 +27,8 @@ interface Shelf {
   profiles: Map<string, AgentProfile>;
   /** Each agent's lit keys, oldest first. */
   keys: Map<string, MachineKey[]>;
+  /** Each plugged agent's handoff, as its machine draws it. */
+  plugs: Map<string, { label?: string }>;
 }
 
 export function Home() {
@@ -45,8 +48,9 @@ export function Home() {
       byKey: new Map(credentials.map((c) => [c.key, c])),
       profiles: new Map(state.profiles.map((p) => [p.slug, p])),
       keys: new Map(state.profiles.map((p) => [p.slug, machineKeys(matrix, p.slug)])),
+      plugs: plugsOf(state, pending),
     };
-  }, [matrix, state]);
+  }, [matrix, state, pending]);
 
   // Empty is read from the folder, not the matrix, so a full folder never flashes the empty
   // layout while its matrix builds; until then the full layout shows only its doors.
@@ -103,7 +107,7 @@ export function Home() {
               return (
                 <li key={p.slug}>
                   <button type="button" className="agent-card" onClick={() => navigate({ view: "item", item: "agent", profileSlug: p.slug })}>
-                    <Machine mini setup={p} keys={shelf.keys.get(p.slug)} width={128} />
+                    <Machine mini setup={p} keys={shelf.keys.get(p.slug)} plugged={shelf.plugs.get(p.slug)} width={128} />
                     <span className="agent-card-name">{p.name}</span>
                     <span className="agent-card-setup">{[p.harness, p.model, p.effort].filter(Boolean).join(" · ")}</span>
                     {earned.length > 0 && (
@@ -140,7 +144,7 @@ export function Home() {
                       ) : (
                         holders.map((p) => (
                           <span key={p.slug} className="holder" title={p.name}>
-                            <Machine mini setup={p} keys={shelf.keys.get(p.slug)} width={36} />
+                            <Machine mini setup={p} keys={shelf.keys.get(p.slug)} plugged={shelf.plugs.get(p.slug)} width={36} />
                             <span className="visually-hidden">{p.name}</span>
                           </span>
                         ))
@@ -159,6 +163,17 @@ export function Home() {
   );
 }
 
+/** Each agent's plug, labeled with its handoff's key: "S" or the badge handoff's letter. */
+function plugsOf(state: FolderState, pending: PendingTest[]): Shelf["plugs"] {
+  const live = livePlugs(pending, state);
+  const plugs: Shelf["plugs"] = new Map();
+  for (const p of state.profiles) {
+    const mark = plugMark(state, plugFor(live, p.slug));
+    if (mark) plugs.set(p.slug, mark);
+  }
+  return plugs;
+}
+
 function itemId(item: NeedsYouItem): string {
   return "credentialKey" in item ? `${item.credentialKey}|${"profileSlug" in item ? item.profileSlug : ""}` : item.profileSlug;
 }
@@ -173,7 +188,7 @@ function NeedRow({ item, shelf, onOpen }: { item: NeedsYouItem; shelf: Shelf; on
   let detail: string;
   switch (item.kind) {
     case "reply":
-      title = `Paste ${who}'s reply`;
+      title = `Pull ${who}'s handoff`;
       detail = name;
       break;
     case "retest":
@@ -194,10 +209,10 @@ function NeedRow({ item, shelf, onOpen }: { item: NeedsYouItem; shelf: Shelf; on
       break;
   }
 
-  // An agent's row shows its machine, waiting on a reply with its cursor; a credential's
-  // shows its cartridge.
+  // An agent's row shows its machine, waiting on a reply with its cursor and its handoff
+  // plugged in; a credential's shows its cartridge.
   let mark: ReactNode = null;
-  if (agent) mark = <Machine mini setup={agent} keys={shelf.keys.get(agent.slug)} screen={{ kind: item.kind === "reply" ? "waiting" : "idle" }} width={60} />;
+  if (agent) mark = <Machine mini setup={agent} keys={shelf.keys.get(agent.slug)} screen={{ kind: item.kind === "reply" ? "waiting" : "idle" }} plugged={shelf.plugs.get(agent.slug)} width={60} />;
   else if (cred) mark = <Cartridge collection={cred.collection} credential={cred.credential} width={28} />;
 
   return (

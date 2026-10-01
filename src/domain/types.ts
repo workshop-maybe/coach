@@ -99,6 +99,22 @@ export interface Assessment {
   handBack: string;
   /** The context the test started with. Absent when none was captured. */
   context?: TestContext;
+  /** The handoff that ran: its id and the filled text as copied (KTD4). Absent means the skeleton. */
+  handoff?: HandoffTemplate;
+}
+
+/** A handoff's identity and template text. The skeleton's id is SKELETON_ID (KTD3). */
+export interface HandoffTemplate {
+  /** The file stem, or "skeleton". */
+  id: string;
+  /** The template, verbatim from its file. */
+  text: string;
+}
+
+/** One of a badge's handoffs, read from collections/<collection>/handoffs/<credential>/<stem>.md (KTD1). */
+export interface Handoff extends HandoffTemplate {
+  collectionSlug: Slug;
+  credentialSlug: Slug;
 }
 
 /** A file the app could not read. The app reports it and never rewrites it (R22). */
@@ -113,6 +129,10 @@ export interface FolderState {
   credentials: Credential[];
   profiles: AgentProfile[];
   assessments: Assessment[];
+  /** The edited skeleton's text, or null when the folder has none and the built-in one applies (KTD1). */
+  skeleton: string | null;
+  /** Every badge's handoffs, by collection, credential, then id (creation order). */
+  handoffs: Handoff[];
   errors: LoadError[];
   /** Readable files with settings that fall back to defaults (KTD3). Never gate anything. */
   warnings: LoadError[];

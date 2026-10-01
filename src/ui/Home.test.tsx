@@ -11,6 +11,7 @@ import {
   assessmentPath,
   collectionPath,
   credentialPath,
+  handoffPath,
   profilePath,
   serializeAssessment,
   serializeCollection,
@@ -186,11 +187,38 @@ describe("Home", () => {
     });
     renderApp(storageWith({ credentials: [review, docs], profiles: [opus] }));
     const [first] = await rows();
-    expect(first.textContent).toContain("Paste Opus agent's reply");
+    expect(first.textContent).toContain("Pull Opus agent's handoff");
     expect(first.textContent).toContain("Write docs");
     expect(first.querySelector('svg.cast-machine-mini[data-screen="waiting"] .cast-cursor')).not.toBeNull();
+    // A test copied before handoffs holds the skeleton.
+    expect(first.querySelector("svg.cast-machine-mini .cast-plugged text")?.textContent).toBe("S");
     await userEvent.click(first);
     expect(await screen.findByRole("heading", { name: "What came back" })).toBeTruthy();
+  });
+
+  it("Covers R15. A plugged agent's card draws its handoff by letter, and an unplugged one draws none", async () => {
+    addPending("/data", {
+      profileSlug: "opus",
+      credentialKey: "eng/docs",
+      copiedAt: "2026-09-29T10:00:00.000Z",
+      assignmentVersion: "x",
+      setup: { harness: "claude-code", model: "opus", effort: "high" },
+      handoff: { id: "20260902T090000Z", text: "Document the module." },
+    });
+    const storage = storageWith({ credentials: [review, docs], profiles: [opus, codex] });
+    storage.seed({
+      [handoffPath("eng", "docs", "20260901T090000Z")]: "{{task}}\n",
+      [handoffPath("eng", "docs", "20260902T090000Z")]: "{{task}}\n",
+    });
+    renderApp(storage);
+    const agents = await screen.findByRole("region", { name: "Agents" });
+    const opusCard = within(agents).getByRole("button", { name: /^Opus agent/ });
+    await waitFor(() => expect(opusCard.querySelector("svg.cast-machine-mini .cast-plugged text")?.textContent).toBe("B"));
+    const codexCard = within(agents).getByRole("button", { name: /^Codex agent/ });
+    expect(codexCard.querySelector(".cast-plugged")).toBeNull();
+    const [first] = await rows();
+    expect(first.textContent).toContain("Pull Opus agent's handoff");
+    expect(first.querySelector(".cast-plugged text")?.textContent).toBe("B");
   });
 
   it("Covers AE5. An edited task keeps the badge on the agent and suggests a re-test", async () => {

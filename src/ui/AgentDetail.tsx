@@ -3,13 +3,16 @@
 // earned keys page in sixteens, each names its credential, a lit one opens its badge and a
 // half-raised one starts its re-test. Then its other parts as small cards that open
 // one-beat edits, and the badges it earned, dimmed with the reason when a re-test is due.
+// An agent holding a handoff shows it plugged in, and pulling it opens the test at what
+// came back (R15, R16, KTD11).
 
 import { machineKeys, type MachineKey } from "../cast/mappings";
 import { FLAG_REASONS, cellKey } from "../domain/matrix";
 import { credentialKey } from "../domain/types";
 import { Badge } from "./Badge";
-import { firstLine } from "./format";
+import { firstLine, plugMark } from "./format";
 import { useNav } from "./nav";
+import { livePlugs, plugFor, usePendingTests } from "./pendingTests";
 import { PlayerCard } from "./PlayerCard";
 import type { AgentPart } from "./routes";
 import { Missing, PartCard, useEscape } from "./shared";
@@ -18,8 +21,9 @@ import { useFolder } from "./useFolderState";
 import { useMatrix } from "./useMatrix";
 
 export function AgentDetail({ profileSlug }: { profileSlug: string }) {
-  const { state } = useFolder();
+  const { state, folder } = useFolder();
   const { navigate } = useNav();
+  const { pending } = usePendingTests(folder);
   const matrix = useMatrix(state);
   useEscape(() => navigate({ view: "home" }));
 
@@ -32,6 +36,7 @@ export function AgentDetail({ profileSlug }: { profileSlug: string }) {
   const keys = matrix ? machineKeys(matrix, profileSlug) : [];
   const onKey = (key: MachineKey) =>
     navigate(key.halfRaised ? { view: "deck", deck: "test", profileSlug, credentialKey: key.id } : { view: "item", item: "badge", credentialKey: key.id });
+  const plug = plugFor(livePlugs(pending, state), profileSlug);
   const earned = (matrix?.columns ?? []).flatMap(({ collection, credentials }) =>
     credentials.flatMap((credential) => {
       const cell = matrix?.cells.get(cellKey(profileSlug, credentialKey(credential)));
@@ -41,7 +46,22 @@ export function AgentDetail({ profileSlug }: { profileSlug: string }) {
 
   return (
     <div className="detail agent-detail">
-      <PlayerCard key={profileSlug} profileSlug={profileSlug} keys={keys} onKey={onKey} />
+      <PlayerCard
+        key={profileSlug}
+        profileSlug={profileSlug}
+        keys={keys}
+        onKey={onKey}
+        plugged={plugMark(state, plug)}
+      />
+
+      {plug && (
+        <p className="helper">
+          <button type="button" className="link" onClick={() => navigate({ view: "deck", deck: "test", profileSlug, credentialKey: plug.credentialKey, resume: true })}>
+            Pull the handoff
+          </button>{" "}
+          <span className="muted">{state.credentials.find((c) => credentialKey(c) === plug.credentialKey)?.name}</span>
+        </p>
+      )}
 
       <ul className="parts" aria-label="Parts">
         <PartCard name="Name" value={profile.name} onOpen={() => edit("name")} />

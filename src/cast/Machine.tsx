@@ -1,13 +1,15 @@
 // An agent, drawn as a machine (R1, R2, KTD2): a compact hand-inked case with a small
 // screen top left, three knurled encoders set by the agent's setup, a slot on top and a
 // strip of trig keys along the bottom lit by what the agent earned. The `mini` variant
-// drops the encoders and shows only the first sixteen keys. Decorative to assistive
+// drops the encoders and shows only the first sixteen keys. A plugged-in handoff stands
+// in the slot at both sizes (R15). Decorative to assistive
 // tech: the agent's name, setup and results stay in the text around it.
 
 import type { MouseEvent } from "react";
 import type { AgentSetup, Collection, Credential } from "../domain/types";
 import { useBadgeSrc } from "../ui/Badge";
 import { CARTRIDGE_H, CARTRIDGE_W, CartridgeArt } from "./Cartridge";
+import { CARD_H, CARD_W, HandoffCardArt } from "./HandoffBox";
 import { INK, INK_FINE, sketchRect } from "./InkDefs";
 import { useKeyColors } from "./keyColors";
 import { ENCODER_DIALS, KEYS_PER_PAGE, LISTED_ARC, SCREEN_LINES, encoderAngle, trigPages, type EncoderDial, type MachineKey, type ScreenState } from "./mappings";
@@ -23,7 +25,9 @@ export interface MachineProps {
   mini?: boolean;
   /** A credential loaded into the slot while a test runs (R5). */
   loaded?: { collection: Collection; credential: Pick<Credential, "slug" | "name"> } | null;
-  /** Keep room above the case for a cartridge, so loading one does not move the layout. */
+  /** A handoff plugged into the slot while the operator works in this agent (R15). */
+  plugged?: { label?: string } | null;
+  /** Keep room above the case for a cartridge or a plug, so loading one does not move the layout. */
   headroom?: boolean;
   /** The id of a key that just lit, which plays its seating motion (R7). */
   seated?: string;
@@ -39,6 +43,8 @@ export const FULL = {
   w: 320,
   h: 186,
   headroom: 76,
+  /** A plugged card's scale, and how deep it sinks into the slot. */
+  plug: { scale: 1, sink: 8 },
   stroke: 2.5,
   detail: 1.4,
   case: { x: 10, y: 26, w: 300, h: 150 },
@@ -59,6 +65,8 @@ export const FULL = {
 export const MINI = {
   w: 200,
   h: 112,
+  headroom: 22,
+  plug: { scale: 0.8, sink: 5 },
   stroke: 1.8,
   detail: 1.1,
   case: { x: 6, y: 16, w: 188, h: 90 },
@@ -100,13 +108,13 @@ export function keyBox(index: number): { left: number; top: number; width: numbe
   return { left: keyX(k, index) / FULL.w, top: (k.y - lift) / FULL.h, width: k.w / FULL.w, height: (k.h + lift) / FULL.h };
 }
 
-export function Machine({ setup, screen = { kind: "idle" }, keys = [], page = 0, mini = false, loaded = null, headroom = false, seated, onStep, width, className }: MachineProps) {
+export function Machine({ setup, screen = { kind: "idle" }, keys = [], page = 0, mini = false, loaded = null, plugged = null, headroom = false, seated, onStep, width, className }: MachineProps) {
   const g: Geometry = mini ? MINI : FULL;
   const ink = mini ? INK_FINE : INK;
   const pages = trigPages(keys);
   const at = mini ? 0 : Math.min(Math.max(0, page), pages.length - 1);
   const shown = mini ? keys.slice(0, KEYS_PER_PAGE) : pages[at];
-  const room = !mini && (headroom || !!loaded) ? FULL.headroom : 0;
+  const room = headroom || (!mini && !!loaded) || !!plugged ? g.headroom : 0;
   const w = width ?? (mini ? 120 : 320);
 
   return (
@@ -120,6 +128,7 @@ export function Machine({ setup, screen = { kind: "idle" }, keys = [], page = 0,
       data-screen={screen.kind}
     >
       {!mini && loaded && <LoadedCartridge collection={loaded.collection} credential={loaded.credential} />}
+      {plugged && <PluggedCard g={g} mini={mini} label={plugged.label} />}
 
       <g filter={ink} fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
         <Body g={g} mini={mini} />
@@ -347,6 +356,22 @@ function LoadedCartridge({ collection, credential }: { collection: Collection; c
     <g className="cast-loaded-motion">
       <g className="cast-loaded" transform={`translate(${x.toFixed(2)} ${y.toFixed(2)}) scale(${scale})`}>
         <CartridgeArt src={src} />
+      </g>
+    </g>
+  );
+}
+
+/** The handoff card standing in the slot, its lower edge hidden inside the case. */
+function PluggedCard({ g, mini, label }: { g: Geometry; mini: boolean; label?: string }) {
+  const { scale, sink } = g.plug;
+  const s = g.slot;
+  const x = s.x + s.w / 2 - (CARD_W * scale) / 2;
+  const y = g.case.y + sink - CARD_H * scale;
+  return (
+    // The outer group carries the feed (CSS), the inner one its place.
+    <g className="cast-plugged-motion">
+      <g className="cast-plugged" transform={`translate(${x.toFixed(2)} ${y.toFixed(2)}) scale(${scale})`}>
+        <HandoffCardArt label={label} fine={mini} />
       </g>
     </g>
   );

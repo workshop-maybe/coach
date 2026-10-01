@@ -9,6 +9,8 @@ import {
   collectionPath,
   credentialPath,
   fileStemFor,
+  handoffPath,
+  handoffsDir,
   loadFolder,
   parseAssessment,
   parseCollection,
@@ -19,6 +21,7 @@ import {
   saveCredential,
   saveProfile,
   saveText,
+  SKELETON_PATH,
   serializeAssessment,
   serializeCollection,
   serializeProfile,
@@ -192,6 +195,77 @@ describe("assessment Markdown", () => {
     expect(parseAssessment(missingKey, assessment)).not.toHaveProperty("context");
     const wrongType = text.replace(/  machine: .*\n/, "  machine: [1, 2]\n");
     expect(parseAssessment(wrongType, assessment)).not.toHaveProperty("context");
+  });
+
+  const handoff = {
+    id: "20261001T090000Z",
+    text: ["Hi.", "---", "## Note", "", "Not a note.", "", "## Handback", "", "  indented", "trailing  ", ""].join("\n"),
+  };
+
+  it("round-trips the handoff a result ran with, even when its text holds ---, ## Note and ## Handback lines", () => {
+    const withHandoff = { ...assessment, handoff };
+    const text = serializeAssessment(withHandoff);
+    expect(text).toContain("handoff:");
+    expect(text).toContain("id: 20261001T090000Z");
+    const parsed = parseAssessment(text, withHandoff);
+    expect(parsed).toEqual(withHandoff);
+    expect(parsed.note).toBe(assessment.note);
+    expect(parsed.handBack).toBe(handBack);
+  });
+
+  it("round-trips handoff text with edge whitespace, carriage returns and no final newline", () => {
+    for (const t of ["\n  lead\n", "a\n\n\n", "a\r\nb\tc", "no newline end", "--- at the start\n---\n", ""]) {
+      const withHandoff = { ...assessment, handoff: { id: "skeleton", text: t } };
+      expect(parseAssessment(serializeAssessment(withHandoff), withHandoff).handoff).toEqual({ id: "skeleton", text: t });
+    }
+  });
+
+  it("writes a result without a handoff byte for byte as before", () => {
+    const plain: Assessment = { ...assessment, note: "Fine.", handBack: "Done.\n---\n" };
+    expect(serializeAssessment(plain)).toBe(
+      [
+        "---",
+        "result: met",
+        "recorded_at: 2026-09-29T08:49:00.123Z",
+        'assignment_version: "12e456789012"',
+        "setup:",
+        "  harness: claude-code",
+        "  model: opus",
+        "  effort: high",
+        "---",
+        "",
+        "## Note",
+        "",
+        "Fine.",
+        "",
+        "## Handback",
+        "",
+        "Done.",
+        "---",
+        "",
+        "",
+      ].join("\n"),
+    );
+    expect(parseAssessment(serializeAssessment(plain), plain)).not.toHaveProperty("handoff");
+  });
+
+  it("reads a handoff id YAML takes as a number as text", () => {
+    const text = serializeAssessment({ ...assessment, handoff: { id: "x", text: "hi" } }).replace("  id: x\n", "  id: 20261001\n");
+    expect(parseAssessment(text, assessment).handoff).toEqual({ id: "20261001", text: "hi" });
+  });
+
+  it("reads a malformed handoff as none instead of failing the file", () => {
+    const text = serializeAssessment({ ...assessment, handoff });
+    const asString = text.replace(/handoff:\n(?:  .*\n|\n)+?(?=---\n)/, "handoff: nonsense\n");
+    expect(asString).toContain("handoff: nonsense\n---\n");
+    expect(parseAssessment(asString, assessment)).not.toHaveProperty("handoff");
+    const plain = serializeAssessment({ ...assessment, handoff: { id: "x", text: "hi" } });
+    expect(parseAssessment(plain.replace("  id: x\n", ""), assessment)).not.toHaveProperty("handoff");
+    expect(parseAssessment(plain.replace("  id: x\n", '  id: ""\n'), assessment)).not.toHaveProperty("handoff");
+    expect(parseAssessment(plain.replace("  id: x\n", "  id: [1, 2]\n"), assessment)).not.toHaveProperty("handoff");
+    expect(parseAssessment(plain.replace("  text: hi\n", ""), assessment)).not.toHaveProperty("handoff");
+    expect(parseAssessment(plain.replace("  text: hi\n", "  text: { a: 1 }\n"), assessment)).not.toHaveProperty("handoff");
+    expect(parseAssessment(plain.replace(/handoff:\n.*\n.*\n/, "handoff: [x, hi]\n"), assessment)).not.toHaveProperty("handoff");
   });
 
   it("rejects missing frontmatter or an invalid result", () => {
@@ -549,5 +623,81 @@ describe("isCredentialResult", () => {
     expect(isCredentialResult("assessments/opus/ops/review/20260930T000000Z.md", "eng", "review")).toBe(false);
     expect(isCredentialResult("assessments/opus/eng/review", "eng", "review")).toBe(false);
     expect(isCredentialResult("trash/x/eng/review/a.md", "eng", "review")).toBe(false);
+  });
+});
+
+describe("handoff files", () => {
+  const skeletonText = "# {{name}}\n\n{{task}}\n";
+
+  it("puts the skeleton and a badge's handoffs at their layout paths (KTD1)", () => {
+    expect(SKELETON_PATH).toBe("handoffs/skeleton.md");
+    expect(handoffsDir("eng", "review")).toBe("collections/eng/handoffs/review");
+    expect(handoffPath("eng", "review", "20260929T084900Z")).toBe("collections/eng/handoffs/review/20260929T084900Z.md");
+  });
+
+  it("a folder from before handoffs loads as before, with no skeleton file and no handoffs, and writes nothing", async () => {
+    const storage = fixture();
+    const state = await loadFolder(storage);
+    expect(state.errors).toEqual([]);
+    expect(state.skeleton).toBeNull();
+    expect(state.handoffs).toEqual([]);
+    expect(storage.writes).toEqual([]);
+  });
+
+  it("loads the skeleton text and each badge's handoffs verbatim, oldest first, with raw text", async () => {
+    const storage = fixture();
+    const newer = "# Newer\n\n{{task}}\n\n---\n\n## Handback\n";
+    const older = "Older {{task}}";
+    storage.seed({
+      [SKELETON_PATH]: skeletonText,
+      [handoffPath("eng", "review", "20261001T090000Z")]: newer,
+      [handoffPath("eng", "review", "20260930T090000Z")]: older,
+    });
+    const state = await loadFolder(storage);
+    expect(state.errors).toEqual([]);
+    expect(state.skeleton).toBe(skeletonText);
+    expect(state.handoffs).toEqual([
+      { collectionSlug: "eng", credentialSlug: "review", id: "20260930T090000Z", text: older },
+      { collectionSlug: "eng", credentialSlug: "review", id: "20261001T090000Z", text: newer },
+    ]);
+    expect(state.raw[SKELETON_PATH]).toBe(skeletonText);
+    expect(state.raw[handoffPath("eng", "review", "20261001T090000Z")]).toBe(newer);
+    expect(state.credentials.map((c) => c.slug)).toEqual(["review"]);
+    expect(storage.writes).toEqual([]);
+  });
+
+  it("ignores editor temp files and anything else in a handoffs folder", async () => {
+    const storage = fixture();
+    storage.seed({
+      [handoffPath("eng", "review", "20260930T090000Z")]: "{{task}}",
+      "collections/eng/handoffs/review/.20260930T090000Z.md.swp": "x",
+      "collections/eng/handoffs/review/20260930T090000Z.md~": "x",
+      "collections/eng/handoffs/review/20260930T090000Z.md.tmp-1": "x",
+      "collections/eng/handoffs/review/notes.txt": "x",
+      "collections/eng/handoffs/.hidden/20260930T090000Z.md": "x",
+      "handoffs/.skeleton.md.swp": "x",
+    });
+    const state = await loadFolder(storage);
+    expect(state.errors).toEqual([]);
+    expect(state.skeleton).toBeNull();
+    expect(state.handoffs.map((h) => h.id)).toEqual(["20260930T090000Z"]);
+  });
+
+  it("reports an unreadable skeleton or handoff by path, keeps loading, and never rewrites it", async () => {
+    const storage = fixture();
+    const bad = handoffPath("eng", "review", "20260930T090000Z");
+    storage.seed({ [SKELETON_PATH]: skeletonText, [bad]: "{{task}}", [handoffPath("eng", "review", "20261001T090000Z")]: "ok {{task}}" });
+    const failing = Object.create(storage) as MemoryStorage;
+    failing.readText = async (root, path) => {
+      if (path === bad || path === SKELETON_PATH) throw new Error("stream did not contain valid UTF-8");
+      return storage.readText(root, path);
+    };
+    const state = await loadFolder(failing);
+    expect(state.errors.map((e) => e.path).sort()).toEqual([bad, SKELETON_PATH].sort());
+    expect(state.skeleton).toBeNull();
+    expect(state.handoffs.map((h) => h.id)).toEqual(["20261001T090000Z"]);
+    expect(state.raw[bad]).toBeUndefined();
+    expect(state.credentials.map((c) => c.slug)).toEqual(["review"]);
+    expect(storage.writes).toEqual([]);
   });
 });
