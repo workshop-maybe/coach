@@ -41,6 +41,42 @@ const machine = () => document.querySelector<SVGSVGElement>(".deck svg.cast-mach
 const box = () => document.querySelector<SVGSVGElement>(".deck svg.cast-handoff-box")!;
 const badgeCard = async () => within(await screen.findByRole("region", { name: "Badges" })).getByRole("button", { name: /Code review/ });
 
+describe("the first test", () => {
+  it("runs from an empty home to one agent, one badge and one result", async () => {
+    const storage = storageWith();
+    renderApp(storage);
+    await userEvent.click(await screen.findByRole("button", { name: "Try a first test" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Make the agent" }));
+    expect(await screen.findByRole("heading", { name: "Hand it over" })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Copy" }));
+    expect(vi.mocked(writeText).mock.calls[0][0]).toContain("# Test: Name what matters next");
+    expect(await screen.findByRole("heading", { name: "What came back" })).toBeTruthy();
+    await pasteAndJudge("1. Fix the flaky export test.", "Met");
+    expect(await screen.findByTestId("landing")).toBeTruthy();
+
+    const state = await loadFolder(storage);
+    expect(state.profiles).toHaveLength(1);
+    expect(state.credentials.map((c) => c.name)).toEqual(["Name what matters next"]);
+    expect(state.assessments).toEqual([expect.objectContaining({ profileSlug: state.profiles[0].slug, credentialSlug: "name-what-matters-next", result: "met" })]);
+  });
+
+  it("a failed badge save then Close leaves home with the agent and no first test", async () => {
+    const storage = storageWith();
+    const real = storage.writeText.bind(storage);
+    vi.spyOn(storage, "writeText").mockImplementation(async (root, path, text) => {
+      if (path.endsWith(".md")) throw new Error("disk full");
+      return real(root, path, text);
+    });
+    renderApp(storage);
+    await userEvent.click(await screen.findByRole("button", { name: "Try a first test" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Make the agent" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("disk full");
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(await screen.findByRole("region", { name: "Agents" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Try a first test" })).toBeNull();
+  });
+});
+
 describe("TestDeck", () => {
   it("four beats record a met result, the badge lands on the agent, then home", async () => {
     const storage = storageWith({ credentials: [review], profiles: [opus] });
