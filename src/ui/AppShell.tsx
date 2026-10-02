@@ -129,7 +129,7 @@ function DeckView({ route }: { route: DeckRoute }) {
 function ItemView({ route }: { route: ItemRoute }) {
   switch (route.item) {
     case "badge":
-      return <BadgeDetail credentialKey={route.credentialKey} />;
+      return <BadgeDetail credentialKey={route.credentialKey} lit={route.lit} />;
     case "agent":
       return <AgentDetail profileSlug={route.profileSlug} />;
     case "handoff":

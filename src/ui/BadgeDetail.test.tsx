@@ -70,20 +70,32 @@ describe("BadgeDetail", () => {
     expect((await openedPart(/Handoffs/)).querySelector(".part-value")?.textContent).toBe("2 handoffs");
   });
 
-  it("opening a holder shows its history, newest first", async () => {
-    const older = await result(opus, review, { fileStem: "20260801T090000Z", recordedAt: "2026-08-01T09:00:00.000Z", result: "not_met", handBack: "First try" });
-    const storage = storageWith({ credentials: [review], profiles: [opus], assessments: [older, await result(opus, review)] });
+  it("Covers AE1, F1. A single-handoff badge lists every agent that ran it, Not met included, without opening a holder", async () => {
+    const storage = storageWith({
+      credentials: [review],
+      profiles: [opus, codex],
+      assessments: [await result(opus, review, { handBack: "Opus reply" }), await result(codex, review, { result: "not_met", handBack: "Codex reply" })],
+    });
     renderApp(storage, badge);
-    const holder = await screen.findByRole("button", { name: /Opus agent/ });
-    await userEvent.click(holder);
-    const history = screen.getByRole("region", { name: "Opus agent results" });
-    const items = within(history).getAllByRole("listitem");
-    expect(items[0].textContent).toContain("Met");
-    expect(items[1].textContent).toContain("Not met");
-    expect(items[1].textContent).toContain("First try");
+    const replies = await screen.findByRole("region", { name: "Replies" });
+    expect(within(replies).getByText("Skeleton")).toBeTruthy();
+    const rows = within(replies).getAllByRole("listitem");
+    expect(rows.map((li) => li.getAttribute("aria-label")).sort()).toEqual(["Codex agent", "Opus agent"]);
+    expect(within(replies).getByText(/Codex reply/)).toBeTruthy();
   });
 
-  it("each result in the history shows the machine it ran on, and memory changes", async () => {
+  it("an agent's older take sits under its latest one", async () => {
+    const older = await result(opus, review, { fileStem: "20260801T090000Z", recordedAt: "2026-08-01T09:00:00.000Z", result: "not_met", handBack: "First try" });
+    renderApp(storageWith({ credentials: [review], profiles: [opus], assessments: [older, await result(opus, review)] }), badge);
+    const [row] = within(await screen.findByRole("region", { name: "Replies" })).getAllByRole("listitem");
+    const [take] = within(row).getAllByRole("listitem");
+    expect(row.querySelector(".take-meta")?.textContent).toContain("Met");
+    expect(take.textContent).toContain("Not met");
+    await userEvent.click(within(take).getByRole("button", { expanded: false }));
+    expect(within(take).getByText("First try")).toBeTruthy();
+  });
+
+  it("each take shows the machine it ran on, and memory changes", async () => {
     const ctx = (memory: string, capturedAt: string) => ({ machineId: "laptop", machine: "Laptop", memory, capturedAt });
     const first = await result(opus, review, { fileStem: "20260801T090000Z", recordedAt: "2026-08-01T09:00:00.000Z", context: ctx("aaaaaaaaaaaa", "2026-08-01T09:00:00.000Z") });
     const same = await result(opus, review, { fileStem: "20260802T090000Z", recordedAt: "2026-08-02T09:00:00.000Z", context: ctx("aaaaaaaaaaaa", "2026-08-02T09:00:00.000Z") });
@@ -92,10 +104,35 @@ describe("BadgeDetail", () => {
     const unknown = await result(opus, review, { fileStem: "20260805T090000Z", recordedAt: "2026-08-05T09:00:00.000Z" });
     const storage = storageWith({ credentials: [review], profiles: [opus], assessments: [first, same, changed, notRead, unknown] });
     renderApp(storage, badge);
-    await userEvent.click(await screen.findByRole("button", { name: /Opus agent/ }));
-    const history = screen.getByRole("region", { name: "Opus agent results" });
-    const lines = [...history.querySelectorAll(".detail-history-context")].map((p) => p.textContent);
+    const replies = await screen.findByRole("region", { name: "Replies" });
+    const lines = [...replies.querySelectorAll(".take-meta")].map((p) => p.textContent?.split(" · ").slice(2).join(" · "));
     expect(lines).toEqual(["context unknown", "Laptop · memory not read", "Laptop · memory changed", "Laptop", "Laptop"]);
+  });
+
+  it("opening a holder lights its reply on the same page while one handoff has run", async () => {
+    renderApp(storageWith({ credentials: [review], profiles: [opus, codex], assessments: [await result(opus, review), await result(codex, review)] }), badge);
+    await userEvent.click(await within(await screen.findByRole("region", { name: "Holders" })).findByRole("button", { name: /Codex agent/ }));
+    await waitFor(() => {
+      const replies = screen.getByRole("region", { name: "Replies" });
+      const lit = within(replies).getAllByRole("listitem").find((li) => li.getAttribute("aria-current") === "true");
+      expect(lit?.getAttribute("aria-label")).toBe("Codex agent");
+    });
+  });
+
+  it("a badge with no results shows no replies", async () => {
+    renderApp(storageWith({ credentials: [review], profiles: [opus] }), badge);
+    expect(await screen.findByText("Nobody holds it yet")).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Replies" })).toBeNull();
+  });
+
+  it("Escape in the compare closes it and keeps the badge open", async () => {
+    renderApp(storageWith({ credentials: [review], profiles: [opus, codex], assessments: [await result(opus, review), await result(codex, review)] }), badge);
+    await screen.findByRole("region", { name: "Replies" });
+    for (const box of screen.getAllByRole("checkbox")) await userEvent.click(box);
+    await userEvent.click(screen.getByRole("button", { name: "Compare" }));
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Compare replies" })).toBeNull());
+    expect(screen.getByRole("heading", { name: "Code review", level: 2 })).toBeTruthy();
   });
 
   describe("handoffs on results", () => {
@@ -116,31 +153,64 @@ describe("BadgeDetail", () => {
       expect(await latest(/Codex agent/)).toContain("Skeleton");
     });
 
-    it("the history names each result's handoff and keeps the text that ran under the reply", async () => {
-      const older = await result(opus, review, { fileStem: "20260801T090000Z", recordedAt: "2026-08-01T09:00:00.000Z", result: "not_met", handoff: { id: "20260901T090000Z", text: "First framing" } });
-      const latest = await result(opus, review, { handoff: { id: "20260902T090000Z", text: "Second framing" } });
-      renderApp(storageWith({ credentials: [review], profiles: [opus], handoffs, assessments: [older, latest] }), badge);
-      await userEvent.click(await screen.findByRole("button", { name: /Opus agent/ }));
-      const items = within(screen.getByRole("region", { name: "Opus agent results" })).getAllByRole("listitem");
-      const ran = items.map((li) => {
-        const [reply, ranWith] = li.querySelectorAll("details");
-        return [reply.querySelector("summary")?.textContent, ranWith.querySelector("summary")?.textContent, ranWith.querySelector("pre")?.textContent];
-      });
-      expect(ran).toEqual([
-        ["Reply", "Handoff B", "Second framing"],
-        ["Reply", "Handoff A", "First framing"],
-      ]);
-      // Collapsed until opened, like the reply.
-      expect(items[0].querySelectorAll("details")[1].open).toBe(false);
+    it("a reply keeps the text that ran, collapsed under it", async () => {
+      const ran = await result(opus, review, { handoff: { id: "20260902T090000Z", text: "Second framing" } });
+      renderApp(storageWith({ credentials: [review], profiles: [opus], handoffs, assessments: [ran] }), badge);
+      const [row] = within(await screen.findByRole("region", { name: "Replies" })).getAllByRole("listitem");
+      await userEvent.click(within(row).getByRole("button", { expanded: false }));
+      const ranWith = row.querySelector("details")!;
+      expect(ranWith.open).toBe(false);
+      expect(ranWith.querySelector("summary")?.textContent).toBe("Handoff B");
+      expect(ranWith.querySelector("pre")?.textContent).toBe("Second framing");
     });
 
-    it("Covers R14. A result recorded before handoffs shows the built-in prompt as the skeleton", async () => {
+    it("A result recorded before handoffs shows the built-in prompt as the skeleton", async () => {
       renderApp(storageWith({ credentials: [review], profiles: [opus], assessments: [await result(opus, review)] }), badge);
-      await userEvent.click(await screen.findByRole("button", { name: /Opus agent/ }));
-      const [item] = within(screen.getByRole("region", { name: "Opus agent results" })).getAllByRole("listitem");
-      const ranWith = item.querySelectorAll("details")[1];
+      const [row] = within(await screen.findByRole("region", { name: "Replies" })).getAllByRole("listitem");
+      await userEvent.click(within(row).getByRole("button", { expanded: false }));
+      const ranWith = row.querySelector("details")!;
       expect(ranWith.querySelector("summary")?.textContent).toBe("Skeleton");
       expect(ranWith.querySelector("pre")?.textContent).toBe(BUILT_IN_HANDOFF);
+    });
+
+    it("Covers AE2. A written handoff that has not run leaves the replies in place", async () => {
+      renderApp(storageWith({ credentials: [review], profiles: [opus], handoffs, assessments: [await result(opus, review)] }), badge);
+      const replies = await screen.findByRole("region", { name: "Replies" });
+      expect(within(replies).getAllByRole("listitem")).toHaveLength(1);
+    });
+
+    it("Covers AE3. Once two handoffs have run, the badge lists each with its agents and Met count, and no reply rows", async () => {
+      const own = { collectionSlug: "eng", credentialSlug: "review", id: "20260902T090000Z", text: BUILT_IN_HANDOFF.replace("## Task", "Be strict about tests.\n\n## Task") };
+      const storage = storageWith({
+        credentials: [review],
+        profiles: [opus, codex],
+        handoffs: [handoffs[0], own],
+        assessments: [await result(opus, review, { handoff: { id: own.id, text: "B" } }), await result(codex, review, { result: "not_met" })],
+      });
+      renderApp(storage, badge);
+      const replies = await screen.findByRole("region", { name: "Replies" });
+      const rows = within(replies).getAllByRole("button");
+      expect(rows.map((b) => [...b.children].map((c) => c.textContent))).toEqual([
+        ["S", "Skeleton", "1 agent · 0 met"],
+        ["B", "Handoff B", "Be strict about tests.", "1 agent · 1 met"],
+      ]);
+      expect(replies.querySelector(".reply")).toBeNull();
+      await userEvent.click(rows[1]);
+      expect(await screen.findByRole("heading", { name: "Handoff B" })).toBeTruthy();
+    });
+
+    it("Covers AE6. Once two handoffs have run, opening a holder opens the handoff that earned it with its row lit", async () => {
+      const storage = storageWith({
+        credentials: [review],
+        profiles: [opus, codex],
+        handoffs,
+        assessments: [await result(opus, review, { handoff: { id: "20260902T090000Z", text: "B" } }), await result(codex, review)],
+      });
+      renderApp(storage, badge);
+      await userEvent.click(await within(await screen.findByRole("region", { name: "Holders" })).findByRole("button", { name: /Opus agent/ }));
+      expect(await screen.findByRole("heading", { name: "Handoff B" })).toBeTruthy();
+      const lit = (await screen.findAllByRole("listitem")).find((li) => li.getAttribute("aria-current") === "true");
+      expect(lit?.getAttribute("aria-label")).toBe("Opus agent");
     });
   });
 

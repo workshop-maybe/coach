@@ -1654,10 +1654,6 @@ button:focus-visible {
   color: var(--ink-muted);
 }
 
-.detail-holder[aria-expanded="true"] {
-  box-shadow: var(--focus-ring);
-}
-
 .detail-holder-name {
   font-size: 14px;
   font-weight: 600;
@@ -1669,48 +1665,6 @@ button:focus-visible {
   font-size: 11.5px;
   letter-spacing: var(--value-tracking);
   color: var(--ink-muted);
-}
-
-.detail-history {
-  margin-top: var(--space-md);
-  padding: var(--space-base);
-  background: var(--surface);
-  border: var(--rule-width) solid var(--rule);
-}
-
-.detail-history ol,
-.detail-reasons {
-  list-style: none;
-  margin: 0 0 var(--space-md);
-  padding: 0;
-}
-
-.detail-history ol > li + li {
-  margin-top: var(--space-md);
-  padding-top: var(--space-md);
-  border-top: 1px solid var(--cell);
-}
-
-.detail-history-head {
-  margin: 0 0 var(--space-xs);
-}
-
-.detail-history-context {
-  margin: 0 0 var(--space-xs);
-  font-family: var(--font-mono);
-  font-size: 12.5px;
-}
-
-.detail-reasons li {
-  font-size: 13px;
-  color: var(--ink-muted);
-}
-
-.detail-history .handback {
-  max-height: 16rem;
-  overflow: auto;
-  white-space: pre-wrap;
-  font-size: 12.5px;
 }
 
 .earned {
@@ -1740,6 +1694,64 @@ button:focus-visible {
 .earned.flagged .badge-placeholder {
   opacity: 0.4;
   filter: grayscale(1);
+}
+
+/* A badge's handoffs that ran, once there are two or more (KTD5): a row each that opens
+   the handoff as its own item. */
+.handoff-runs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--surface);
+  border: var(--rule-width) solid var(--rule);
+}
+
+.handoff-runs > li + li {
+  border-top: 1px solid var(--cell);
+}
+
+.handoff-run {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: var(--space-md);
+  align-items: baseline;
+  width: 100%;
+  padding: var(--space-sm) var(--space-base);
+  border: none;
+  background: transparent;
+  text-align: left;
+  font-weight: 400;
+}
+
+.handoff-run:hover:not(:disabled) {
+  background: var(--data-wash);
+  opacity: 1;
+}
+
+.handoff-run-key {
+  grid-row: span 3;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.handoff-run-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.handoff-run-line,
+.handoff-run-count {
+  grid-column: 2;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: var(--value-tracking);
+  color: var(--ink-muted);
+}
+
+.handoff-run-line {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 /* One handoff's replies (U2): a record card with a row per agent, its latest take
@@ -2081,15 +2093,15 @@ button:focus-visible {
    clear, and a sketched frame (src/assets/sketch-frame.svg, its strokes running past
    the corners) is laid over it as a mask filled with the rule ink. */
 
-:is(.deck-card, .needs, .agent-card, .badge-card, .door, .part, .detail-holder, .detail-history, .earned, .reply-list, .compare-pane, .rich-menu) {
+:is(.deck-card, .needs, .agent-card, .badge-card, .door, .part, .detail-holder, .earned, .handoff-runs, .reply-list, .compare-pane, .rich-menu) {
   border-color: transparent;
 }
 
-:is(.deck-card, .needs, .agent-card, .badge-card, .door, .part, .detail-holder, .detail-history, .earned, .reply-list, .compare-pane) {
+:is(.deck-card, .needs, .agent-card, .badge-card, .door, .part, .detail-holder, .earned, .handoff-runs, .reply-list, .compare-pane) {
   position: relative;
 }
 
-:is(.deck-card, .needs, .agent-card, .badge-card, .door, .part, .detail-holder, .detail-history, .earned, .reply-list, .compare-pane, .rich-menu)::after {
+:is(.deck-card, .needs, .agent-card, .badge-card, .door, .part, .detail-holder, .earned, .handoff-runs, .reply-list, .compare-pane, .rich-menu)::after {
   content: "";
   position: absolute;
   inset: -5px;
