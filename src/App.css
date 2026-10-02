@@ -1742,6 +1742,177 @@ button:focus-visible {
   filter: grayscale(1);
 }
 
+/* One handoff's replies (U2): a record card with a row per agent, its latest take
+   leading and older takes below. The lit row is the one the view is about (KTD4). */
+.reply-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--surface);
+  border: var(--rule-width) solid var(--rule);
+}
+
+.reply {
+  padding: var(--space-sm) var(--space-base);
+  border-left: 3px solid transparent;
+}
+
+.reply + .reply {
+  border-top: 1px solid var(--cell);
+}
+
+.reply.lit {
+  border-left-color: var(--ink);
+  background: var(--data-wash);
+}
+
+.reply.lit .take-name {
+  color: var(--data);
+}
+
+.reply-older {
+  list-style: none;
+  margin: 0 0 0 var(--space-xl);
+  padding: 0;
+}
+
+.take {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: var(--space-sm);
+  align-items: start;
+}
+
+.take-pick {
+  margin-top: var(--space-sm);
+}
+
+.take-head {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: var(--space-md);
+  align-items: center;
+  padding: var(--space-xs) 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font-weight: 400;
+}
+
+.take-head .cast {
+  grid-row: span 3;
+}
+
+.take-older .take-head {
+  grid-template-columns: 1fr;
+}
+
+.take-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.take-meta {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: var(--value-tracking);
+  color: var(--ink-muted);
+}
+
+.take-preview {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+  color: var(--ink-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.take-body {
+  grid-column: 2;
+  padding-bottom: var(--space-sm);
+}
+
+.take-body .handback {
+  max-height: 24rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: 12.5px;
+}
+
+.verdict-met {
+  color: var(--good);
+}
+
+/* Two replies side by side (R10): the view takes the window's width, and each pane is a
+   record with a header bar whose reply scrolls on its own. */
+.content:has(.compare) {
+  max-width: none;
+}
+
+.content:has(.compare) .detail {
+  max-width: none;
+}
+
+.compare-panes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-base);
+}
+
+.compare-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: calc(100vh - 16rem);
+  min-height: 20rem;
+  background: var(--surface);
+  border: var(--rule-width) solid var(--rule);
+}
+
+.compare-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-md);
+  padding: var(--space-sm) var(--space-base);
+  border-bottom: var(--rule-width) solid var(--rule);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: var(--value-tracking);
+}
+
+.compare-name {
+  font-family: var(--font-sans);
+  font-weight: 600;
+}
+
+.compare-reply {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: var(--space-base);
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: 12.5px;
+}
+
+@media (max-width: 36rem) {
+  .compare-panes {
+    grid-template-columns: 1fr;
+  }
+
+  .compare-pane {
+    height: auto;
+    min-height: 0;
+  }
+
+  .compare-reply {
+    overflow: visible;
+  }
+}
+
 /* Edit decks: lines that settle above the next, a live badge preview, palette swatches. */
 .edit-lines li {
   display: flex;
@@ -1910,15 +2081,15 @@ button:focus-visible {
    clear, and a sketched frame (src/assets/sketch-frame.svg, its strokes running past
    the corners) is laid over it as a mask filled with the rule ink. */
 
-:is(.deck-card, .needs, .agent-card, .badge-card, .door, .part, .detail-holder, .detail-history, .earned, .rich-menu) {
+:is(.deck-card, .needs, .agent-card, .badge-card, .door, .part, .detail-holder, .detail-history, .earned, .reply-list, .compare-pane, .rich-menu) {
   border-color: transparent;
 }
 
-:is(.deck-card, .needs, .agent-card, .badge-card, .door, .part, .detail-holder, .detail-history, .earned) {
+:is(.deck-card, .needs, .agent-card, .badge-card, .door, .part, .detail-holder, .detail-history, .earned, .reply-list, .compare-pane) {
   position: relative;
 }
 
-:is(.deck-card, .needs, .agent-card, .badge-card, .door, .part, .detail-holder, .detail-history, .earned, .rich-menu)::after {
+:is(.deck-card, .needs, .agent-card, .badge-card, .door, .part, .detail-holder, .detail-history, .earned, .reply-list, .compare-pane, .rich-menu)::after {
   content: "";
   position: absolute;
   inset: -5px;
