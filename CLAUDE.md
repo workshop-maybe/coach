@@ -59,7 +59,7 @@ npm run tauri build   # build installers
 
 ## Repo
 
-Local only, no remote yet. It gets a remote when the prototype is ready to share with the team.
+Private GitHub repo `workshop-maybe/coach-desktop` (`origin`), on a personal account for now. It moves to the team when the prototype is ready to share. Work lands on `main` through branches and PRs.
 
 `docs/solutions/` holds documented solutions to past problems (bugs, best practices, workflow patterns), organized by category with YAML frontmatter (`module`, `tags`, `problem_type`). Relevant when implementing or debugging in a documented area.
 
