@@ -89,14 +89,35 @@ const needs = () => screen.findByRole("region", { name: "What needs you" });
 const rows = async () => within(await needs()).getAllByRole("button").filter((b) => b.textContent !== "More");
 
 describe("Home", () => {
-  it("Covers AE1. An empty folder shows only the two doors", async () => {
+  it("Covers AE1. An empty folder shows the first test, then the two doors", async () => {
     renderApp(storageWith());
-    expect(await screen.findByRole("button", { name: "Create an agent" })).toBeTruthy();
+    const first = await screen.findByRole("button", { name: "Try a first test" });
+    const agentDoor = screen.getByRole("button", { name: "Create an agent" });
     expect(screen.getByRole("button", { name: "Create a credential" })).toBeTruthy();
+    expect(first.classList.contains("primary")).toBe(true);
+    expect(first.compareDocumentPosition(agentDoor) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.queryByRole("region", { name: "What needs you" })).toBeNull();
     expect(screen.queryByRole("region", { name: "Agents" })).toBeNull();
     expect(screen.queryByRole("region", { name: "Badges" })).toBeNull();
     expect((screen.getByRole("button", { name: "Export" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("Try a first test opens the agent card", async () => {
+    renderApp(storageWith());
+    await userEvent.click(await screen.findByRole("button", { name: "Try a first test" }));
+    expect(await screen.findByRole("region", { name: "Create an agent" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Make the agent" })).toBeTruthy();
+  });
+
+  it("a folder with one agent, or one badge, offers no first test", async () => {
+    renderApp(storageWith({ profiles: [opus] }));
+    await screen.findByRole("region", { name: "Agents" });
+    expect(screen.queryByRole("button", { name: "Try a first test" })).toBeNull();
+    cleanup();
+    renderApp(storageWith({ credentials: [review] }));
+    await screen.findByRole("region", { name: "Badges" });
+    expect(screen.queryByRole("button", { name: "Try a first test" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Create an agent" })).toBeTruthy();
   });
 
   it("a populated folder never shows the empty layout while its matrix builds", async () => {

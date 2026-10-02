@@ -16,25 +16,23 @@ Work through these in order. Notice how each step feels as you go.
 
 1. **Pick your folder.** Click Choose folder and pick the empty folder you made.
 
-2. **Create an agent.** On home, click Create an agent. Turn the Harness, Model and Effort dials to match the assistant you use. If yours isn't listed, turn the dial to Other and type its name. Click Make the agent.
+2. **Run your first test.** Click Try a first test. Turn the Harness, Model and Effort dials to match the assistant you use. If yours isn't listed, turn the dial to Other and type its name. Click Make the agent. The app makes a badge called Name what matters next. Click Copy and paste the prompt into your assistant. It works best in an assistant open in a repo you know, such as Claude Code or Cursor. Copy the whole answer back into the app under What came back. Read the rubric and choose Met or Not yet. You are the only one who can judge this one, so check what it cites. Watch the badge slide in and out of the agent.
 
-3. **Create a credential from a preset.** Click Create a credential and pick Tighten a learning target. It works in any chat assistant. Click Make the badge.
+3. **Look at home.** Your agent and your badge are both there now. If you chose Met, the badge shows your agent as its holder.
 
-4. **Run your first test.** Click Test it on an agent and pick your agent. Click Copy, paste the prompt into your assistant and wait for its answer. Copy the whole answer back into the app under What came back. Read the rubric and choose Met or Not yet. Watch the badge slide in and out of the agent.
+4. **Try a preset.** Click Create a credential and pick another preset, such as Say how sure you are or Check an answer key. Click Make the badge, then Test it on an agent.
 
-5. **Look at home.** Your agent and your badge are both there now. If you chose Met, the badge shows your agent as its holder.
+5. **Leave a test half done.** Start another test, click Copy, then close it without pasting a reply. Check What needs you on home, then finish the test from there.
 
-6. **Leave a test half done.** Start another test, click Copy, then close it without pasting a reply. Check What needs you on home, then finish the test from there.
+6. **Build your own credential.** Click Create a credential, then Build your own. Pick something you know well, such as planning a week of dinners. When it asks for one thing its holder can do, try `I can plan a week of dinners by checking what's already in the fridge`. See what the app suggests. On the task card, Suggest a task copies a prompt you can give your assistant if you're stuck.
 
-7. **Build your own credential.** Click Create a credential, then Build your own. Pick something you know well, such as planning a week of dinners. When it asks for one thing its holder can do, try `I can plan a week of dinners by checking what's already in the fridge`. See what the app suggests. On the task card, Suggest a task copies a prompt you can give your assistant if you're stuck.
+7. **Change a badge.** Open a badge from home. Change its colors, art or title under Look. Edit its task, too. If an agent already holds the badge, notice what the app tells you.
 
-8. **Change a badge.** Open a badge from home. Change its colors, art or title under Look. Edit its task, too. If an agent already holds the badge, notice what the app tells you.
+8. **Compare two agents.** Create a second agent with a different model or effort level. Give it the same test. Open the badge and compare its holders.
 
-9. **Compare two agents.** Create a second agent with a different model or effort level. Give it the same test. Open the badge and compare its holders.
+9. **Fill in an agent.** Open an agent from home and add notes or a repo it works in.
 
-10. **Fill in an agent.** Open an agent from home and add notes or a repo it works in.
-
-11. **Look inside your folder.** Open the folder in Finder or your file manager. Everything you made is plain text. Try the Export button, too.
+10. **Look inside your folder.** Open the folder in Finder or your file manager. Everything you made is plain text. Try the Export button, too.
 
 ## What to tell James
 

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ChangedOnDiskError } from "../storage/storage";
 import { MemoryStorage } from "../storage/memory";
 import { assignmentVersion } from "./hash";
@@ -11,6 +11,7 @@ import {
   createCollection,
   createCredential,
   createHandoff,
+  createPresetCredential,
   createProfile,
   duplicateProfileDraft,
   importBadgeArt,
@@ -27,7 +28,8 @@ import {
   updateHandoff,
   updateProfile,
 } from "./operations";
-import type { AgentProfile, AssessmentResult, FolderState } from "./types";
+import { findPreset, presetCredential } from "./presets";
+import { credentialKey, type AgentProfile, type AssessmentResult, type FolderState } from "./types";
 
 const baseProfile: Omit<AgentProfile, "slug"> = {
   name: "Claude Opus",
@@ -169,6 +171,81 @@ describe("collections and credentials", () => {
     await expect(createCredential(storage, state, "go-basics", "New")).rejects.toBeInstanceOf(ChangedOnDiskError);
     expect(storage.writes.length).toBe(writes);
     expect(storage.file(credentialPath("go-basics", "new"))).toBeUndefined();
+  });
+});
+
+describe("making a badge from a preset", () => {
+  const preset = findPreset("name-what-matters-next")!;
+
+  it("an empty folder gets My credentials and the preset badge, written whole in one save", async () => {
+    const storage = new MemoryStorage();
+    const { state, key } = await createPresetCredential(storage, await loadFolder(storage), preset.id);
+    expect(state.collections.map((c) => c.name)).toEqual(["My credentials"]);
+    expect(key).toBe("my-credentials/name-what-matters-next");
+    expect(state.credentials).toEqual([presetCredential(preset, "my-credentials")]);
+    expect(storage.file(credentialPath("my-credentials", "name-what-matters-next"))).toBe(preset.markdown);
+    expect(storage.writes.filter((w) => w.path === credentialPath("my-credentials", "name-what-matters-next"))).toHaveLength(1);
+  });
+
+  it("lands in the first collection with the next module code", async () => {
+    const { storage, state } = await setup();
+    const { state: next, key } = await createPresetCredential(storage, state, preset.id);
+    expect(key).toBe("go-basics/name-what-matters-next");
+    expect(next.collections.map((c) => c.slug)).toEqual(["go-basics"]);
+    expect(next.collections[0].codes).toEqual({ "write-a-cli": 1, "name-what-matters-next": 2 });
+  });
+
+  it("making the same preset twice gives two badges", async () => {
+    const storage = new MemoryStorage();
+    const first = await createPresetCredential(storage, await loadFolder(storage), preset.id);
+    const second = await createPresetCredential(storage, first.state, preset.id);
+    expect(second.key).toBe("my-credentials/name-what-matters-next-2");
+    expect(second.state.credentials.map((c) => credentialKey(c))).toEqual([first.key, second.key]);
+  });
+
+  it("a failed collection write leaves no badge, and a retry makes exactly one", async () => {
+    const { storage, state } = await setup();
+    const real = storage.writeText.bind(storage);
+    let failed = false;
+    vi.spyOn(storage, "writeText").mockImplementation(async (root, path, text) => {
+      if (!failed && path === collectionPath("go-basics")) {
+        failed = true;
+        throw new Error("disk full");
+      }
+      return real(root, path, text);
+    });
+    await expect(createPresetCredential(storage, state, preset.id)).rejects.toThrow("disk full");
+    expect(storage.file(credentialPath("go-basics", "name-what-matters-next"))).toBeUndefined();
+    const retry = await createPresetCredential(storage, state, preset.id);
+    expect(retry.state.credentials.filter((c) => c.name === "Name what matters next")).toHaveLength(1);
+  });
+
+  it("an unknown preset id throws and writes nothing", async () => {
+    const storage = new MemoryStorage();
+    const state = await loadFolder(storage);
+    const writes = storage.writes.length;
+    await expect(createPresetCredential(storage, state, "no-such-preset")).rejects.toThrow();
+    expect(storage.writes.length).toBe(writes);
+  });
+
+  it("a failed credential write leaves no file, and a retry makes exactly one badge", async () => {
+    const storage = new MemoryStorage();
+    const state = await loadFolder(storage);
+    const real = storage.writeText.bind(storage);
+    let failed = false;
+    vi.spyOn(storage, "writeText").mockImplementation(async (root, path, text) => {
+      if (!failed && path.endsWith(".md")) {
+        failed = true;
+        throw new Error("disk full");
+      }
+      return real(root, path, text);
+    });
+    await expect(createPresetCredential(storage, state, preset.id)).rejects.toThrow("disk full");
+    expect(storage.file(credentialPath("my-credentials", "name-what-matters-next"))).toBeUndefined();
+    // The retry starts from the same state, which never saw the collection the first try made.
+    const retry = await createPresetCredential(storage, state, preset.id);
+    expect(retry.state.collections.map((c) => c.slug)).toEqual(["my-credentials"]);
+    expect(retry.state.credentials).toHaveLength(1);
   });
 });
 

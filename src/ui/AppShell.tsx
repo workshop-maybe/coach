@@ -108,7 +108,7 @@ function DeckView({ route }: { route: DeckRoute }) {
     case "credential":
       return <CredentialDeck returnTo={route.returnTo} />;
     case "agent":
-      return <PlayerCard returnTo={route.returnTo} likeSlug={route.likeSlug} />;
+      return <PlayerCard returnTo={route.returnTo} likeSlug={route.likeSlug} firstTest={route.firstTest} />;
     case "test":
       return <TestDeck profileSlug={route.profileSlug} credentialKey={route.credentialKey} resume={route.resume} handoffId={route.handoffId} returnTo={route.returnTo} />;
     case "edit-credential":

@@ -1,6 +1,7 @@
 // Home, the only room (KTD1). Top to bottom: what needs you, your agents (machines, each
 // lighting the keys it earned), your badges (cartridges, each showing who holds it), then
-// the two doors with dashed outlines of what they make (R9, R12). An agent holding a
+// the two doors with dashed outlines of what they make (R9, R12). An empty folder leads
+// with "Try a first test", which runs one preset on an agent made on the spot. An agent holding a
 // handoff shows it plugged in wherever it stands (R15). The cast is hidden from
 // assistive tech, so names and what each agent earned stay in text.
 
@@ -156,6 +157,14 @@ export function Home() {
             })}
           </ul>
         </section>
+      )}
+
+      {empty && (
+        <div className="first-test">
+          <button type="button" className="primary" onClick={() => navigate({ view: "deck", deck: "agent", firstTest: true })}>
+            Try a first test
+          </button>
+        </div>
       )}
 
       {doors}

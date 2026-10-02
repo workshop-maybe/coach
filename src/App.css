@@ -1007,6 +1007,17 @@ button:focus-visible {
   background: none;
 }
 
+/* The first test leads, and the doors sit under it as the quieter second path. */
+.home-empty .first-test {
+  display: flex;
+  justify-content: center;
+  margin-top: auto;
+}
+
+.home-empty .first-test + .doors {
+  margin: var(--space-lg) 0 auto;
+}
+
 .home-empty .door {
   flex-direction: column;
   gap: var(--space-lg);

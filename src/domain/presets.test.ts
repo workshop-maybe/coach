@@ -25,9 +25,9 @@ describe("PRESETS", () => {
         expect(credential.rubric).not.toBe("");
       });
 
-      it("names the coach file it came from", () => {
+      it("names where it came from: a coach file, or written for the app", () => {
         const source = credential.extraSections.find((e) => e.heading === "Source");
-        expect(source?.body).toMatch(/^Ported from coach, \S+\.(?:ya?ml|md)/);
+        expect(source?.body).toMatch(/^(?:Ported from coach, \S+\.(?:ya?ml|md)|Written for Andamio Desktop)/);
       });
 
       it("is saved exactly as written", () => {
@@ -44,7 +44,8 @@ describe("PRESETS", () => {
       it("keeps the rubric and source out of the test prompt", () => {
         const prompt = testPrompt(credential);
         for (const line of credential.rubric.split("\n").filter((l) => l.trim() !== "")) expect(prompt).not.toContain(line);
-        expect(prompt).not.toContain("Ported from coach");
+        const source = credential.extraSections.find((e) => e.heading === "Source");
+        expect(prompt).not.toContain(source!.body.trim());
       });
     });
   }

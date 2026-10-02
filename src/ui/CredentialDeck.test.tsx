@@ -4,7 +4,7 @@ import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { loadFolder } from "../domain/folder";
-import { PRESETS, presetCredential } from "../domain/presets";
+import { findPreset, presetCredential } from "../domain/presets";
 import { renderApp, review, snapshot, storageWith } from "./testFolder";
 
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ writeText: vi.fn() }));
@@ -141,7 +141,7 @@ describe("CredentialDeck", () => {
 
     expect(await screen.findByRole("button", { name: "Test it on an agent" })).toBeTruthy();
     const state = await loadFolder(storage);
-    const preset = presetCredential(PRESETS[0], state.collections[0].slug);
+    const preset = presetCredential(findPreset("tighten-a-learning-target")!, state.collections[0].slug);
     expect(state.collections.map((c) => c.name)).toEqual(["My credentials"]);
     expect(state.credentials).toEqual([preset]);
   });

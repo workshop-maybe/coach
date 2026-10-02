@@ -1,17 +1,17 @@
 ---
 name: Andamio Desktop
-last_updated: 2026-09-30
+last_updated: 2026-10-02
 ---
 
 # Andamio Desktop Strategy
 
 ## Purpose
 
-People who run agents can't tell which model and setup is good enough for which of their tasks. So they either pay for the expensive model everywhere or trust a cheaper one blindly. Public benchmarks don't settle it: the tests aren't the person's own work, and the tests and results often aren't public.
+People hand work to agents before deciding what it should accomplish. The output arrives faster than anyone reads it, wrong assumptions go undetected, and slop becomes someone else's work. Without criteria of their own, they can't tell which setup does their work well. Public benchmarks can't tell them either: the tests aren't their work, and even a well-built answer key can be wrong in ways nobody using the score can see.
 
 ## Positioning
 
-Testing your agents should feel like playing an Elektron box: start from a preset or build your own, tweak the settings and load a credential into an agent. An agent here is the whole setup (model, harness, effort, and the repo, machine and memory it runs with), not a model on a leaderboard. Every test, even a quick preset, runs on a full credential that an agent or a person could hold, so each comparison adds to a record of what your agents can and can't do.
+Andamio Desktop is hands-on software with no AI inside, the way an Elektron box is hands-on next to a DAW. You define what the work should accomplish before you hand it to an agent, turn the dials on the setup and judge each result yourself. Taking that time gets better results. Every test runs on a full credential that an agent or a person could hold, so the record shows what succeeds at the work that matters to you.
 
 ## Users
 
@@ -26,6 +26,8 @@ Testing your agents should feel like playing an Elektron box: start from a prese
 - The web version comes later, alongside sharing. It's a door to the download with presets only, never a second product.
 - Never say "machine" in the app. The Elektron box is how we think about it, not what we call it.
 - Badge and box visuals are placeholders. The hand-drawn line stays, and the specific drawings can change.
+- Third-party benchmark questions, such as HLE's, never ship inside the app. The user imports them.
+- No shots at named benchmarks. Their errors show why your own judgment matters, not that the benchmark is bad.
 
 _Resist a change when:_ it makes the box depend on anything beyond the user's own machine before the standalone box is delightful.
 
@@ -68,4 +70,4 @@ _Why it serves the approach:_ people can play quickly without skipping the crede
 
 **One-liner:** Credential your agents.
 
-**Key message:** Your tests, your agents, your record. Assess your agents and keep track of what they can do.
+**Key message:** Slow down and decide what good looks like. Your tests, your agents, your record. Assess your agents and keep track of what they can do.
