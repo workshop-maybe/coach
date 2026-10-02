@@ -26,7 +26,7 @@ Andamio Desktop is hands-on software with no AI inside, the way an Elektron box 
 - The web version comes later, alongside sharing. It's a door to the download with presets only, never a second product.
 - Never say "machine" in the app. The Elektron box is how we think about it, not what we call it.
 - Badge and box visuals are placeholders. The hand-drawn line stays, and the specific drawings can change.
-- Third-party benchmark questions, such as HLE's, never ship inside the app. The user imports them.
+- Third-party benchmark questions, such as HLE's, never ship inside the app. The user imports them. HLE's authors ask people not to redistribute the questions, and the dataset is gated.
 - No shots at named benchmarks. Their errors show why your own judgment matters, not that the benchmark is bad.
 
 _Resist a change when:_ it makes the box depend on anything beyond the user's own machine before the standalone box is delightful.
