@@ -31,17 +31,21 @@ export interface BadgeRuns {
 }
 
 /** The handoff a result ran, the skeleton for one recorded before handoffs (R2). */
-export function runIdOf(a: Assessment): string {
+function runIdOf(a: Assessment): string {
   return a.handoff?.id ?? SKELETON_ID;
 }
 
 export function handoffRuns(matrix: Matrix, state: FolderState, key: string): BadgeRuns {
-  const byRun = new Map<string, Map<Slug, Assessment[]>>();
+  // A cell's history is newest first, so each agent's results stay in that order here.
+  const byRun = new Map<string, Map<Slug, { profile: AgentProfile; results: Assessment[] }>>();
   for (const profile of matrix.rows) {
     for (const a of matrix.cells.get(cellKey(profile.slug, key))?.history ?? []) {
-      const agents = byRun.get(runIdOf(a)) ?? new Map<Slug, Assessment[]>();
-      agents.set(profile.slug, [...(agents.get(profile.slug) ?? []), a]);
-      byRun.set(runIdOf(a), agents);
+      const id = runIdOf(a);
+      const agents = byRun.get(id) ?? new Map();
+      const entry = agents.get(profile.slug) ?? { profile, results: [] };
+      entry.results.push(a);
+      agents.set(profile.slug, entry);
+      byRun.set(id, agents);
     }
   }
 
@@ -50,11 +54,8 @@ export function handoffRuns(matrix: Matrix, state: FolderState, key: string): Ba
   const runs = [...byRun.entries()]
     .sort(([a], [b]) => rank(a) - rank(b))
     .map(([id, agents]): HandoffRun => {
-      const entries = [...agents.entries()]
-        .map(([slug, results]) => {
-          const [latest, ...older] = results.slice().sort(newestFirst);
-          return { profile: matrix.rows.find((p) => p.slug === slug)!, latest, older };
-        })
+      const entries = [...agents.values()]
+        .map(({ profile, results: [latest, ...older] }) => ({ profile, latest, older }))
         .sort((x, y) => newestFirst(x.latest, y.latest));
       return { id, agents: entries, met: entries.filter((e) => e.latest.result === "met").length };
     });
