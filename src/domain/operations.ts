@@ -270,7 +270,9 @@ export async function createPresetCredential(
 ): Promise<{ state: FolderState; key: string }> {
   const preset = PRESETS.find((p) => p.id === presetId);
   if (!preset) throw new Error(`There is no preset "${presetId}".`);
-  let current = state;
+  // With no collection in hand, read the folder again: a try that failed after making My
+  // credentials left it on disk, and a retry should land there instead of conflicting.
+  let current = state.collections.length > 0 ? state : await loadFolder(storage);
   let collectionSlug = current.collections[0]?.slug;
   if (!collectionSlug) {
     const made = await createCollection(storage, current, DEFAULT_COLLECTION_NAME);

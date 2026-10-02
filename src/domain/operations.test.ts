@@ -225,7 +225,9 @@ describe("making a badge from a preset", () => {
     });
     await expect(createPresetCredential(storage, state, preset.id)).rejects.toThrow("disk full");
     expect(storage.file(credentialPath("my-credentials", "name-what-matters-next"))).toBeUndefined();
-    const retry = await createPresetCredential(storage, await loadFolder(storage), preset.id);
+    // The retry starts from the same state, which never saw the collection the first try made.
+    const retry = await createPresetCredential(storage, state, preset.id);
+    expect(retry.state.collections.map((c) => c.slug)).toEqual(["my-credentials"]);
     expect(retry.state.credentials).toHaveLength(1);
   });
 });

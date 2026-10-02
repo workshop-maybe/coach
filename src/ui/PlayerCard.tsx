@@ -4,12 +4,13 @@
 // R3). Dials are buttons, never selects: each is a radio group to assistive tech, with
 // arrow keys and previous/next controls moving through its values. "Other" turns a dial
 // into one line to type on the same card. An agent with results is locked (KTD10) and
-// offers a new agent like it instead.
+// offers a new agent like it instead. In first-test mode, making the agent also makes the
+// first badge from its preset and starts the test at "Hand it over".
 
 import { useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { loadFolder, profilePath } from "../domain/folder";
-import { createProfile, duplicateProfileDraft, isSetupLocked, updateProfile } from "../domain/operations";
+import { createPresetCredential, createProfile, duplicateProfileDraft, isSetupLocked, updateProfile } from "../domain/operations";
 import type { AgentProfile, AgentSetup, FolderState, Slug } from "../domain/types";
 import { Deck } from "./Deck";
 import { useNav } from "./nav";
@@ -20,6 +21,9 @@ import { useFolder } from "./useFolderState";
 import { EFFORTS, HARNESSES, LATEST, OTHER, joinModel, modelsFor, rememberedModels, splitModel, versionsFor } from "./dialLists";
 
 const FIRST: AgentSetup = { harness: "claude-code", model: "opus", effort: "high" };
+
+/** The preset the first test runs: only the person who knows the repo can judge it. */
+export const FIRST_TEST_PRESET = "name-what-matters-next";
 
 function harnessLabel(value: string): string {
   return HARNESSES.find((h) => h.value === value)?.label ?? value;
@@ -84,6 +88,8 @@ export interface PlayerCardProps {
   onKey?(key: MachineKey): void;
   /** The handoff plugged into an existing agent, drawn on its machine (R15). */
   plugged?: { label?: string } | null;
+  /** Making the agent also makes the first badge and starts its test. */
+  firstTest?: boolean;
 }
 
 type Mode = { kind: "create"; draft: Omit<AgentProfile, "slug"> | null } | { kind: "edit"; slug: Slug };
@@ -94,7 +100,7 @@ export function PlayerCard(props: PlayerCardProps) {
   return state ? <Player {...props} /> : null;
 }
 
-function Player({ profileSlug, returnTo, likeSlug, keys, onKey, plugged }: PlayerCardProps) {
+function Player({ profileSlug, returnTo, likeSlug, keys, onKey, plugged, firstTest = false }: PlayerCardProps) {
   const { storage, state, apply } = useFolder();
   const { navigate } = useNav();
   const [mode] = useState<Mode>(() =>
@@ -107,6 +113,8 @@ function Player({ profileSlug, returnTo, likeSlug, keys, onKey, plugged }: Playe
   const known = state?.profiles ?? [];
   const [dials, setDials] = useState<Dials>(() => dialsFor(start, known));
   const locked = mode.kind === "edit" && !!state && isSetupLocked(state, mode.slug);
+  // The agent a first test already made, so a retry after a failed badge never makes a second.
+  const madeAgent = useRef<{ slug: Slug; name: string } | null>(null);
 
   const harness = fromDial(dials.harness);
   // Versions belong to a listed model; a typed or remembered model has none.
@@ -114,7 +122,7 @@ function Player({ profileSlug, returnTo, likeSlug, keys, onKey, plugged }: Playe
   const model = versions.length > 0 ? joinModel(dials.model.choice, dials.version) : fromDial(dials.model);
   const setup: AgentSetup = { harness, model, effort: fromDial(dials.effort) };
   const taken = state?.profiles.map((p) => p.name) ?? [];
-  const name = mode.kind === "edit" && stored ? stored.name : setupName(setup, taken);
+  const name = mode.kind === "edit" && stored ? stored.name : setupName(setup, taken, madeAgent.current?.name);
   const complete = setup.harness !== "" && setup.model !== "" && setup.effort !== "";
 
   // Listed models, then any typed on an earlier agent with this harness, then Other.
@@ -159,6 +167,7 @@ function Player({ profileSlug, returnTo, likeSlug, keys, onKey, plugged }: Playe
       navigate({ view: "item", item: "agent", profileSlug: stored.slug });
       return;
     }
+    if (firstTest) return startFirstTest(keepMine);
     const draft = mode.kind === "create" ? mode.draft : null;
     const made = await createProfile(storage, state, {
       name,
@@ -171,6 +180,21 @@ function Player({ profileSlug, returnTo, likeSlug, keys, onKey, plugged }: Playe
     if (returnTo?.credentialKey) navigate({ view: "deck", deck: "test", profileSlug: made.slug, credentialKey: returnTo.credentialKey });
     else if (likeSlug) navigate({ view: "item", item: "agent", profileSlug: made.slug });
     else navigate({ view: "home" });
+  }
+
+  /** Makes the agent once and puts it in the folder, then the first badge, then the test (KTD3). */
+  async function startFirstTest(keepMine: boolean) {
+    if (!state) return;
+    let current: FolderState = keepMine ? await loadFolder(storage) : state;
+    if (!madeAgent.current) {
+      const made = await createProfile(storage, current, { name, ...setup, repo: "", notes: "", params: {} });
+      madeAgent.current = { slug: made.slug, name };
+      current = made.state;
+      apply(current);
+    }
+    const badge = await createPresetCredential(storage, current, FIRST_TEST_PRESET);
+    apply(badge.state);
+    navigate({ view: "deck", deck: "test", profileSlug: madeAgent.current.slug, credentialKey: badge.key });
   }
 
   const forward = locked ? "Make a new agent like this" : mode.kind === "edit" ? "Keep this setup" : "Make the agent";

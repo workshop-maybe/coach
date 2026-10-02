@@ -4,7 +4,7 @@ import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/re
 import userEvent from "@testing-library/user-event";
 import { loadFolder } from "../domain/folder";
 import { setupName } from "./PlayerCard";
-import { opus, renderApp, result, review, storageWith } from "./testFolder";
+import { opus, renderApp, result, review, snapshot, storageWith } from "./testFolder";
 
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ writeText: vi.fn() }));
 
@@ -205,5 +205,57 @@ describe("PlayerCard", () => {
     const state = await loadFolder(storage);
     expect(state.profiles.find((p) => p.slug !== "opus")).toMatchObject({ name: "Claude Code, opus, high", effort: "high", repo: "~/code/app", params: { temp: "0" } });
     expect(state.profiles.find((p) => p.slug === "opus")).toMatchObject({ effort: "medium" });
+  });
+});
+
+describe("PlayerCard in first-test mode", () => {
+  const firstTest = { view: "deck", deck: "agent", firstTest: true } as const;
+
+  it("Make the agent makes the agent and the first badge, then opens the test at Hand it over", async () => {
+    const storage = storageWith();
+    renderApp(storage, firstTest);
+    await screen.findByRole("heading", { name: "Claude Code, opus, high" });
+    await userEvent.click(screen.getByRole("button", { name: "Make the agent" }));
+
+    expect(await screen.findByRole("heading", { name: "Hand it over" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Copy" })).toBeTruthy();
+    const state = await loadFolder(storage);
+    expect(state.profiles.map((p) => p.name)).toEqual(["Claude Code, opus, high"]);
+    expect(state.credentials.map((c) => c.name)).toEqual(["Name what matters next"]);
+  });
+
+  it("Close before Make the agent writes nothing and goes home", async () => {
+    const storage = storageWith();
+    const before = await snapshot(storage);
+    renderApp(storage, firstTest);
+    await screen.findByRole("heading", { name: "Claude Code, opus, high" });
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(await screen.findByRole("heading", { name: "Home", level: 1 })).toBeTruthy();
+    expect(await snapshot(storage)).toEqual(before);
+  });
+
+  it("a failed badge save shows on the card, and a retry makes the badge without a second agent", async () => {
+    const storage = storageWith();
+    const real = storage.writeText.bind(storage);
+    let failed = false;
+    vi.spyOn(storage, "writeText").mockImplementation(async (root, path, text) => {
+      if (!failed && path.endsWith(".md")) {
+        failed = true;
+        throw new Error("disk full");
+      }
+      return real(root, path, text);
+    });
+    renderApp(storage, firstTest);
+    await screen.findByRole("heading", { name: "Claude Code, opus, high" });
+    await userEvent.click(screen.getByRole("button", { name: "Make the agent" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("disk full");
+    // The card keeps its title once the made agent is in the folder.
+    expect(heading()).toBe("Claude Code, opus, high");
+
+    await userEvent.click(screen.getByRole("button", { name: "Make the agent" }));
+    expect(await screen.findByRole("heading", { name: "Hand it over" })).toBeTruthy();
+    const state = await loadFolder(storage);
+    expect(state.profiles).toHaveLength(1);
+    expect(state.credentials.map((c) => c.name)).toEqual(["Name what matters next"]);
   });
 });

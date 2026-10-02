@@ -21,7 +21,8 @@ export type HandoffTarget = string;
 
 export type DeckRoute =
   | { view: "deck"; deck: "credential"; returnTo?: TestPick }
-  | { view: "deck"; deck: "agent"; returnTo?: TestPick; likeSlug?: Slug }
+  /** With `firstTest`, making the agent also makes the first badge and starts its test (R3). */
+  | { view: "deck"; deck: "agent"; returnTo?: TestPick; likeSlug?: Slug; firstTest?: true }
   | {
       view: "deck";
       deck: "test";
