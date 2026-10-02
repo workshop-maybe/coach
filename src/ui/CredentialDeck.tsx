@@ -7,7 +7,7 @@
 import { useRef, useState } from "react";
 import { credentialPath, loadFolder } from "../domain/folder";
 import { DEFAULT_COLLECTION_NAME, createCollection, createCredential, createPresetCredential, updateCredential } from "../domain/operations";
-import { PRESETS, presetCredential } from "../domain/presets";
+import { PRESETS, findPreset, presetCredential } from "../domain/presets";
 import { suggestAssignmentsPrompt } from "../domain/prompts";
 import { appendToRubric } from "../domain/target-check";
 import { credentialKey, parseCredentialKey, type Collection, type Credential } from "../domain/types";
@@ -39,7 +39,7 @@ export function CredentialDeck({ returnTo }: { returnTo?: TestPick }) {
 
   // A preset lands where your own would: the first collection, or a new My credentials.
   const landing: Collection = state?.collections[0] ?? { slug: "my-credentials", name: DEFAULT_COLLECTION_NAME, description: "", order: [], codes: {} };
-  const preset = PRESETS.find((p) => p.id === start);
+  const preset = start === null ? undefined : findPreset(start);
   const picked = preset ? presetCredential(preset, landing.slug) : null;
 
   const draft: Credential = picked ?? {
@@ -56,7 +56,7 @@ export function CredentialDeck({ returnTo }: { returnTo?: TestPick }) {
     if (!state) return;
     let current = keepMine ? await loadFolder(storage) : state;
     if (preset) {
-      // A preset is written whole in one save, so there is nothing half made to retry around.
+      // A preset is written whole in one save, so a failed try leaves no badge to retry around.
       const result = await createPresetCredential(storage, current, preset.id);
       apply(result.state);
       return landed(result.key);

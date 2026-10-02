@@ -28,7 +28,7 @@ import {
   updateHandoff,
   updateProfile,
 } from "./operations";
-import { PRESETS, presetCredential } from "./presets";
+import { findPreset, presetCredential } from "./presets";
 import { credentialKey, type AgentProfile, type AssessmentResult, type FolderState } from "./types";
 
 const baseProfile: Omit<AgentProfile, "slug"> = {
@@ -175,7 +175,7 @@ describe("collections and credentials", () => {
 });
 
 describe("making a badge from a preset", () => {
-  const preset = PRESETS.find((p) => p.id === "name-what-matters-next")!;
+  const preset = findPreset("name-what-matters-next")!;
 
   it("an empty folder gets My credentials and the preset badge, written whole in one save", async () => {
     const storage = new MemoryStorage();
@@ -201,6 +201,23 @@ describe("making a badge from a preset", () => {
     const second = await createPresetCredential(storage, first.state, preset.id);
     expect(second.key).toBe("my-credentials/name-what-matters-next-2");
     expect(second.state.credentials.map((c) => credentialKey(c))).toEqual([first.key, second.key]);
+  });
+
+  it("a failed collection write leaves no badge, and a retry makes exactly one", async () => {
+    const { storage, state } = await setup();
+    const real = storage.writeText.bind(storage);
+    let failed = false;
+    vi.spyOn(storage, "writeText").mockImplementation(async (root, path, text) => {
+      if (!failed && path === collectionPath("go-basics")) {
+        failed = true;
+        throw new Error("disk full");
+      }
+      return real(root, path, text);
+    });
+    await expect(createPresetCredential(storage, state, preset.id)).rejects.toThrow("disk full");
+    expect(storage.file(credentialPath("go-basics", "name-what-matters-next"))).toBeUndefined();
+    const retry = await createPresetCredential(storage, state, preset.id);
+    expect(retry.state.credentials.filter((c) => c.name === "Name what matters next")).toHaveLength(1);
   });
 
   it("an unknown preset id throws and writes nothing", async () => {

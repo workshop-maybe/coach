@@ -23,7 +23,7 @@ import { EFFORTS, HARNESSES, LATEST, OTHER, joinModel, modelsFor, rememberedMode
 const FIRST: AgentSetup = { harness: "claude-code", model: "opus", effort: "high" };
 
 /** The preset the first test runs: only the person who knows the repo can judge it. */
-export const FIRST_TEST_PRESET = "name-what-matters-next";
+const FIRST_TEST_PRESET = "name-what-matters-next";
 
 function harnessLabel(value: string): string {
   return HARNESSES.find((h) => h.value === value)?.label ?? value;
@@ -115,6 +115,8 @@ function Player({ profileSlug, returnTo, likeSlug, keys, onKey, plugged, firstTe
   const locked = mode.kind === "edit" && !!state && isSetupLocked(state, mode.slug);
   // The agent a first test already made, so a retry after a failed badge never makes a second.
   const madeAgent = useRef<{ slug: Slug; name: string } | null>(null);
+  // Once that agent is saved its setup is what the test runs on, so the dials hold still.
+  const frozen = locked || madeAgent.current !== null;
 
   const harness = fromDial(dials.harness);
   // Versions belong to a listed model; a typed or remembered model has none.
@@ -214,7 +216,7 @@ function Player({ profileSlug, returnTo, likeSlug, keys, onKey, plugged, firstTe
           body: (
             <div className={`player${locked ? " player-locked" : ""}`}>
               <div className="player-stage">
-                <KeyedMachine setup={setup} keys={keys} onKey={onKey} onStep={locked ? undefined : stepDial} plugged={plugged} width={300} />
+                <KeyedMachine setup={setup} keys={keys} onKey={onKey} onStep={frozen ? undefined : stepDial} plugged={plugged} width={300} />
               </div>
               <div className="dials">
                 <Dial
@@ -222,20 +224,20 @@ function Player({ profileSlug, returnTo, likeSlug, keys, onKey, plugged, firstTe
                   options={harnessOptions}
                   show={harnessLabel}
                   value={dials.harness}
-                  disabled={locked}
+                  disabled={frozen}
                   onChange={setHarness}
                 />
-                <Dial label="Model" options={models} value={dials.model} disabled={locked} onChange={setModel} />
+                <Dial label="Model" options={models} value={dials.model} disabled={frozen} onChange={setModel} />
                 {versions.length > 0 && (
                   <Dial
                     label="Version"
                     options={[LATEST, ...versions]}
                     value={{ choice: dials.version, other: "" }}
-                    disabled={locked}
+                    disabled={frozen}
                     onChange={(v) => setDials({ ...dials, version: v.choice })}
                   />
                 )}
-                <Dial label="Effort" options={effortOptions} value={dials.effort} disabled={locked} onChange={(effort) => setDials({ ...dials, effort })} />
+                <Dial label="Effort" options={effortOptions} value={dials.effort} disabled={frozen} onChange={(effort) => setDials({ ...dials, effort })} />
               </div>
             </div>
           ),

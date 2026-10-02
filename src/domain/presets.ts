@@ -250,6 +250,11 @@ export const PRESETS: readonly Preset[] = [
   { id: "rate-your-own-confidence", markdown: CONFIDENCE },
 ];
 
+/** The preset with this id, if there is one. */
+export function findPreset(id: string): Preset | undefined {
+  return PRESETS.find((p) => p.id === id);
+}
+
 /** The preset as a credential in the given collection. Its slug is only a starting point. */
 export function presetCredential(preset: Preset, collectionSlug: Slug): Credential {
   return parseCredentialMd(preset.markdown, { slug: preset.id, collectionSlug });

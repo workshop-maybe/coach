@@ -26,7 +26,7 @@ import {
 } from "./folder";
 import { checkHandoff, isHandoffLocked, type HandoffProblem } from "./handoffs";
 import { assignmentVersion } from "./hash";
-import { PRESETS, presetCredential } from "./presets";
+import { findPreset, presetCredential } from "./presets";
 import { uniqueSlug } from "./slug";
 import {
   credentialKey,
@@ -250,8 +250,10 @@ export async function createCredential(
     [colPath, colBase],
     [credentialPath(collectionSlug, slug), null],
   ]);
-  await saveCredential(storage, credential, null);
+  // The collection first: if the credential write then fails, the listed slug has no file
+  // and loads as nothing, so a retry never finds a stray badge (its code is skipped, KTD7).
   await saveCollection(storage, updated, colBase);
+  await saveCredential(storage, credential, null);
   return { state: await loadFolder(storage), key: credentialKey(credential) };
 }
 
@@ -268,7 +270,7 @@ export async function createPresetCredential(
   state: FolderState,
   presetId: string,
 ): Promise<{ state: FolderState; key: string }> {
-  const preset = PRESETS.find((p) => p.id === presetId);
+  const preset = findPreset(presetId);
   if (!preset) throw new Error(`There is no preset "${presetId}".`);
   // With no collection in hand, read the folder again: a try that failed after making My
   // credentials left it on disk, and a retry should land there instead of conflicting.

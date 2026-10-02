@@ -249,8 +249,10 @@ describe("PlayerCard in first-test mode", () => {
     await screen.findByRole("heading", { name: "Claude Code, opus, high" });
     await userEvent.click(screen.getByRole("button", { name: "Make the agent" }));
     expect((await screen.findByRole("alert")).textContent).toContain("disk full");
-    // The card keeps its title once the made agent is in the folder.
+    // The card keeps its title once the made agent is in the folder, and its dials hold still.
     expect(heading()).toBe("Claude Code, opus, high");
+    expect(dial("Harness").getAttribute("aria-disabled")).toBe("true");
+    expect((screen.getByRole("button", { name: "Next effort" }) as HTMLButtonElement).disabled).toBe(true);
 
     await userEvent.click(screen.getByRole("button", { name: "Make the agent" }));
     expect(await screen.findByRole("heading", { name: "Hand it over" })).toBeTruthy();
