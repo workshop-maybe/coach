@@ -141,7 +141,7 @@ describe("CredentialDeck", () => {
 
     expect(await screen.findByRole("button", { name: "Test it on an agent" })).toBeTruthy();
     const state = await loadFolder(storage);
-    const preset = presetCredential(PRESETS[0], state.collections[0].slug);
+    const preset = presetCredential(PRESETS.find((p) => p.id === "tighten-a-learning-target")!, state.collections[0].slug);
     expect(state.collections.map((c) => c.name)).toEqual(["My credentials"]);
     expect(state.credentials).toEqual([preset]);
   });

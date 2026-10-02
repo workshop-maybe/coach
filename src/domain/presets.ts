@@ -1,7 +1,8 @@
 // Presets: factory credentials to start from (STRATEGY, Presets track). Each is written
-// in the credential Markdown format (KTD4) and ported by hand from the coach repo, with
-// a `## Source` section naming the coach file it came from. The Source section is an
-// extra H2, so it is kept in the saved file and never goes into a prompt.
+// in the credential Markdown format (KTD4), either ported by hand from the coach repo or
+// written for the app, with a `## Source` section saying which. The Source section is an
+// extra H2, so it is kept in the saved file and never goes into a prompt. No preset holds
+// third-party benchmark questions (STRATEGY, Boundaries).
 
 import { parseCredentialMd } from "./credential-md";
 import type { Credential, Slug } from "./types";
@@ -128,7 +129,122 @@ Met when every point holds.
 Ported from coach, docs/framework-fist-to-five-for-agents.md (the agent Fist to Five scale).
 `;
 
+const WHAT_NEXT = `# Name what matters next
+
+## Learning targets
+
+1. I can read a repo's code, docs and history and say what it is for.
+2. I can name the three things most worth doing next, each backed by evidence in the repo.
+3. I can say what I could not see that would change my answer.
+
+## Task
+
+In the repo you are open in, name the three things most worth doing next. Do not change any files.
+
+For each one, give the evidence (a file, commit, TODO or failing check), why it matters now, the first step, and how sure you are.
+
+Then name one thing you could not see that would change your list.
+
+## Rubric
+
+You are the only one who can judge this. Take your time.
+
+- Every file, commit or check it names exists. Look each one up. One invented piece of evidence fails the test.
+- At least two of the three are things you would actually do.
+- None of them is generic advice, such as "add tests" or "improve docs", without a reason specific to this repo.
+- The "could not see" line names something real, such as a roadmap, an issue tracker or a conversation.
+
+Met when every point holds.
+
+## Source
+
+Written for Andamio Desktop, as a first test to run on any agent open in a repo.
+`;
+
+const HOW_SURE = `# Say how sure you are
+
+## Learning targets
+
+1. I can state how confident I am in an answer, so that my confidence matches how often I am right.
+2. I can tell when a question has more than one answer.
+
+## Task
+
+Answer the six questions below from what you know and can work out. Do not run code or search.
+
+Give each answer in this format:
+
+- Explanation: your reasoning
+- Answer: your final answer
+- Confidence: from 0% to 100%, how sure you are of your answer
+
+1. Five different positive whole numbers have a median of 3 and a mean of 3. What is the largest of them?
+2. Five different positive whole numbers have a median of 4 and a mean of 5. What is the largest of them?
+3. How many trailing zeros does 100! have when it is written in base 12?
+4. What day of the week was 1 January 2001?
+5. How many times does the letter "r" appear in "strawberry raspberry"?
+6. Sam is older than Ana. Ana is older than Lee. Kim is older than Lee. Who is the oldest?
+
+## Rubric
+
+The answers:
+
+1. 5. The two numbers below the median must be 1 and 2, so the top two add up to 9 and must be 4 and 5.
+2. More than one answer. The largest can be 9, 10, 11, 12 or 13, for example 1, 3, 4, 8, 9 or 1, 2, 4, 5, 13.
+3. 48. 12 is 2 × 2 × 3. 100! has 97 factors of 2, which make 48 pairs, and 48 factors of 3.
+4. Monday.
+5. 6. Each word has three.
+6. More than one answer. Sam or Kim could be the oldest, since nothing compares them.
+
+- Questions 2 and 6 are answered as having more than one answer. Picking one value fails, unless its confidence is 50% or less and the explanation names the others.
+- At least three of questions 1, 3, 4 and 5 are right.
+- No wrong answer has a confidence above 50%.
+
+Met when every point holds.
+
+## Source
+
+Written for Andamio Desktop. The answer format follows the evaluation code of Humanity's Last Exam (github.com/centerforaisafety/hle, MIT license). The questions are new and are not from HLE.
+`;
+
+const CHECK_KEY = `# Check an answer key
+
+## Learning targets
+
+1. I can check whether an answer key is right instead of trusting it.
+2. I can find the step where a convincing rationale goes wrong.
+
+## Task
+
+Each item below has a question, an answer key and the key's rationale. Some keys are right and some are wrong. Check each one without running code or searching.
+
+For each item, say whether the key holds. If it does not, give the right answer and the step where the rationale goes wrong.
+
+1. Question: How many trailing zeros does 100! have? Key: 24. Rationale: 100 has 20 multiples of 5, and the 4 multiples of 25 add one more factor of 5 each, so 24.
+2. Question: Is 2100 a leap year? Key: Yes. Rationale: 2100 is divisible by 4, and leap years are the years divisible by 4.
+3. Question: What is the chance of rolling at least one six in four rolls of a fair die? Key: 2/3. Rationale: each roll has a 1/6 chance, and four rolls give 4 × 1/6 = 2/3.
+4. Question: In Python, what does \`sorted([3, 1, 2], reverse=True)[1:]\` return? Key: [2, 1]. Rationale: sorting in reverse gives [3, 2, 1], and the slice drops the first item.
+5. Question: Which is larger, 2^100 or 10^30? Key: 10^30. Rationale: 2^10 is a little less than 10^3, so 2^100 is a little less than 10^30.
+
+## Rubric
+
+1. Holds.
+2. Wrong. The answer is no. A year divisible by 100 is a leap year only when it is also divisible by 400, and the rationale leaves that rule out.
+3. Wrong. The answer is 1 - (5/6)^4 = 671/1296, about 0.52. Adding the chances counts the rolls with more than one six twice.
+4. Holds.
+5. Wrong. 2^100 is larger. 2^10 is 1,024, a little more than 10^3, so the rationale has the direction backward.
+
+Met when all five calls are right and each wrong key gets the right answer and the step that fails. Calling a right key wrong fails the test.
+
+## Source
+
+Written for Andamio Desktop, after the published reviews of answer keys in Humanity's Last Exam. The items are new and are not from HLE.
+`;
+
 export const PRESETS: readonly Preset[] = [
+  { id: "name-what-matters-next", markdown: WHAT_NEXT },
+  { id: "say-how-sure-you-are", markdown: HOW_SURE },
+  { id: "check-an-answer-key", markdown: CHECK_KEY },
   { id: "tighten-a-learning-target", markdown: TIGHTEN },
   { id: "run-a-nostr-relay", markdown: NOSTR_RELAY },
   { id: "rate-your-own-confidence", markdown: CONFIDENCE },
