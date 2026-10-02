@@ -22,12 +22,15 @@ async function setup(assessments: Assessment[], lit?: string) {
   const matrix = await buildMatrix(state);
   const run = handoffRuns(matrix, state, "eng/review").runs[0];
   const navigate = vi.fn<(r: Route) => void>();
-  render(
+  const list = (r: typeof run) => (
     <NavContext.Provider value={{ route: { view: "home" }, navigate }}>
-      <ReplyList credentialKey="eng/review" run={run} state={state} matrix={matrix} lit={lit} />
-    </NavContext.Provider>,
+      <ReplyList credentialKey="eng/review" run={r} state={state} matrix={matrix} lit={lit} />
+    </NavContext.Provider>
   );
-  return { navigate };
+  const { rerender } = render(list(run));
+  /** Shows the list again as a folder reload would, with some agents' takes gone. */
+  const reload = (without: string) => rerender(list({ ...run, agents: run.agents.filter((e) => e.profile.slug !== without) }));
+  return { navigate, reload };
 }
 
 const day = (n: number) => ({ fileStem: `2026090${n}T090000Z`, recordedAt: `2026-09-0${n}T09:00:00.000Z` });
@@ -121,6 +124,22 @@ describe("ReplyList", () => {
     expect(seen).toEqual([true]);
     expect(screen.queryByRole("region", { name: "Compare replies" })).toBeNull();
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Compare" }));
+  });
+
+  it("a reload that drops a picked take closes the compare and asks for two again", async () => {
+    const { reload } = await setup(await twoAgents());
+    for (const box of screen.getAllByRole("checkbox")) await userEvent.click(box);
+    await userEvent.click(screen.getByRole("button", { name: "Compare" }));
+    reload("codex");
+    expect(screen.queryByRole("region", { name: "Compare replies" })).toBeNull();
+    expect((screen.getByRole("button", { name: "Pick two to compare" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("a reload that drops a picked take before Compare disables it", async () => {
+    const { reload } = await setup(await twoAgents());
+    for (const box of screen.getAllByRole("checkbox")) await userEvent.click(box);
+    reload("opus");
+    expect((screen.getByRole("button", { name: "Pick two to compare" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("Test again opens the test for that agent and badge", async () => {

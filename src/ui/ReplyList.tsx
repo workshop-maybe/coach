@@ -41,6 +41,12 @@ export function ReplyList({
   const [comparing, setComparing] = useState(false);
   const compareButton = useRef<HTMLButtonElement>(null);
   const backButton = useRef<HTMLButtonElement>(null);
+  const litRow = useRef<HTMLLIElement>(null);
+
+  // The lit row comes into view once, when the list first shows it, not on every render.
+  useEffect(() => {
+    litRow.current?.scrollIntoView?.({ block: "center" });
+  }, [lit]);
 
   // Escape closes the compare before the item's own Escape can leave the view (KTD3).
   // The capture phase runs ahead of every item's useEscape, which skips handled events.
@@ -63,10 +69,13 @@ export function ReplyList({
     wasComparing.current = comparing;
   }, [comparing]);
 
+  // A folder reload can drop a picked take (its file or agent gone), so picks count only
+  // while their take is still in the run.
   const takes = new Map<TakeId, { profile: AgentProfile; result: Assessment }>();
   for (const { profile, latest, older } of run.agents) {
     for (const a of [latest, ...older]) takes.set(takeId(profile, a), { profile, result: a });
   }
+  const live = picked.filter((id) => takes.has(id));
 
   const toggleOpen = (id: TakeId) =>
     setOpen((was) => {
@@ -77,7 +86,7 @@ export function ReplyList({
   // A third pick replaces the oldest one (KTD3).
   const togglePick = (id: TakeId) => setPicked((was) => (was.includes(id) ? was.filter((p) => p !== id) : [...was, id].slice(-2)));
 
-  if (comparing && picked.length === 2) {
+  if (comparing && live.length === 2) {
     return (
       <section className="compare" aria-label="Compare replies">
         <p className="helper">
@@ -86,7 +95,7 @@ export function ReplyList({
           </button>
         </p>
         <div className="compare-panes">
-          {picked.map((id) => {
+          {live.map((id) => {
             const { profile, result: a } = takes.get(id)!;
             return (
               <article key={id} className="compare-pane" aria-label={`${profile.name}, ${formatDate(a.recordedAt)}`}>
@@ -128,8 +137,8 @@ export function ReplyList({
   return (
     <div className="replies">
       <p className="helper">
-        <button type="button" ref={compareButton} disabled={picked.length < 2} onClick={() => setComparing(true)}>
-          {picked.length < 2 ? "Pick two to compare" : "Compare"}
+        <button type="button" ref={compareButton} disabled={live.length < 2} onClick={() => setComparing(true)}>
+          {live.length < 2 ? "Pick two to compare" : "Compare"}
         </button>
       </p>
       <ol className="reply-list">
@@ -141,7 +150,7 @@ export function ReplyList({
               className={`reply${isLit ? " lit" : ""}`}
               aria-label={entry.profile.name}
               aria-current={isLit || undefined}
-              ref={isLit ? (el) => el?.scrollIntoView?.({ block: "center" }) : undefined}
+              ref={isLit ? litRow : undefined}
             >
               {take(entry, entry.latest, true)}
               {entry.older.length > 0 && <ol className="reply-older">{entry.older.map((a) => <li key={a.fileStem}>{take(entry, a, false)}</li>)}</ol>}
