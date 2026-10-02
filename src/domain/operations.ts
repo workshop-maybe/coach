@@ -26,6 +26,7 @@ import {
 } from "./folder";
 import { checkHandoff, isHandoffLocked, type HandoffProblem } from "./handoffs";
 import { assignmentVersion } from "./hash";
+import { PRESETS, presetCredential } from "./presets";
 import { uniqueSlug } from "./slug";
 import {
   credentialKey,
@@ -209,12 +210,16 @@ export async function importBadgeArt(
 // ---------------------------------------------------------------------------
 // Credentials
 
+/** What a new credential can start with, written in its first save. */
+export type CredentialContent = Pick<Credential, "learningTargets" | "task" | "rubric" | "extraSections">;
+
 /** Adds a credential to a collection with the next unused module code (KTD7). */
 export async function createCredential(
   storage: Storage,
   state: FolderState,
   collectionSlug: Slug,
   name: string,
+  content?: CredentialContent,
 ): Promise<{ state: FolderState; key: string }> {
   const collection = findCollection(state, collectionSlug);
   const taken = [
@@ -230,6 +235,7 @@ export async function createCredential(
     task: "",
     rubric: "",
     extraSections: [],
+    ...content,
   };
   const code = Math.max(0, ...Object.values(collection.codes)) + 1;
   const updated: Collection = {
@@ -247,6 +253,32 @@ export async function createCredential(
   await saveCredential(storage, credential, null);
   await saveCollection(storage, updated, colBase);
   return { state: await loadFolder(storage), key: credentialKey(credential) };
+}
+
+/** The collection a credential lands in when the folder has none. */
+export const DEFAULT_COLLECTION_NAME = "My credentials";
+
+/**
+ * Makes a badge from a preset: in the first collection, or a new My credentials when there
+ * is none. The preset is written whole in the credential's first save, so no empty badge
+ * file is ever left behind.
+ */
+export async function createPresetCredential(
+  storage: Storage,
+  state: FolderState,
+  presetId: string,
+): Promise<{ state: FolderState; key: string }> {
+  const preset = PRESETS.find((p) => p.id === presetId);
+  if (!preset) throw new Error(`There is no preset "${presetId}".`);
+  let current = state;
+  let collectionSlug = current.collections[0]?.slug;
+  if (!collectionSlug) {
+    const made = await createCollection(storage, current, DEFAULT_COLLECTION_NAME);
+    current = made.state;
+    collectionSlug = made.slug;
+  }
+  const { name, learningTargets, task, rubric, extraSections } = presetCredential(preset, collectionSlug);
+  return createCredential(storage, current, collectionSlug, name, { learningTargets, task, rubric, extraSections });
 }
 
 export async function updateCredential(

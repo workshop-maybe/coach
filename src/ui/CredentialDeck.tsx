@@ -6,7 +6,7 @@
 
 import { useRef, useState } from "react";
 import { credentialPath, loadFolder } from "../domain/folder";
-import { createCollection, createCredential, updateCredential } from "../domain/operations";
+import { DEFAULT_COLLECTION_NAME, createCollection, createCredential, createPresetCredential, updateCredential } from "../domain/operations";
 import { PRESETS, presetCredential } from "../domain/presets";
 import { suggestAssignmentsPrompt } from "../domain/prompts";
 import { appendToRubric } from "../domain/target-check";
@@ -20,8 +20,6 @@ import type { TestPick } from "./routes";
 import { CopyHelper, TargetHint, focusOnMount } from "./shared";
 import { RichText } from "./RichText";
 import { useFolder } from "./useFolderState";
-
-export const DEFAULT_COLLECTION_NAME = "My credentials";
 
 /** The "Where to start" answer: your own, or a preset's id. */
 const OWN = "own";
@@ -57,6 +55,12 @@ export function CredentialDeck({ returnTo }: { returnTo?: TestPick }) {
   async function make({ keepMine }: { keepMine: boolean }) {
     if (!state) return;
     let current = keepMine ? await loadFolder(storage) : state;
+    if (preset) {
+      // A preset is written whole in one save, so there is nothing half made to retry around.
+      const result = await createPresetCredential(storage, current, preset.id);
+      apply(result.state);
+      return landed(result.key);
+    }
     let key = created.current;
     if (key === null) {
       let collectionSlug = current.collections[0]?.slug;
@@ -75,11 +79,14 @@ export function CredentialDeck({ returnTo }: { returnTo?: TestPick }) {
     const stored = current.credentials.find((c) => credentialKey(c) === key);
     if (!stored) throw new Error("The new credential could not be read back.");
     const base = current.raw[credentialPath(collectionSlug, slug)] ?? null;
-    const filled: Credential = picked
-      ? { ...stored, learningTargets: picked.learningTargets, task: picked.task, rubric: picked.rubric, extraSections: picked.extraSections }
-      : { ...stored, learningTargets: draft.learningTargets, task: task.trim(), rubric: rubric.trim() };
+    const filled: Credential = { ...stored, learningTargets: draft.learningTargets, task: task.trim(), rubric: rubric.trim() };
     const next = await updateCredential(storage, filled, base);
     apply(next);
+    landed(key);
+  }
+
+  /** A made badge goes straight back to the test that asked for it, or shows itself. */
+  function landed(key: string) {
     if (returnTo?.profileSlug) navigate({ view: "deck", deck: "test", profileSlug: returnTo.profileSlug, credentialKey: key });
     else setMade(key);
   }
