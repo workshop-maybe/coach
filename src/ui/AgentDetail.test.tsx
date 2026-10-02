@@ -27,6 +27,12 @@ const openPart = async (name: RegExp) => {
   await userEvent.click(within(parts).getByRole("button", { name }));
 };
 
+/** The agent whose reply row the opened view lights, once its replies have loaded. */
+async function litRow() {
+  const rows = await screen.findAllByRole("listitem", { current: true });
+  return rows[0].getAttribute("aria-label");
+}
+
 describe("AgentDetail", () => {
   it("shows the player card in edit mode with its parts", async () => {
     renderApp(storageWith({ profiles: [opus] }), agent);
@@ -197,16 +203,39 @@ describe("AgentDetail", () => {
     expect(stale.textContent).toContain(FLAG_REASONS.setup_mismatch);
     await userEvent.click(fresh);
     expect(await screen.findByRole("heading", { name: "Code review", level: 2 })).toBeTruthy();
+    expect(await litRow()).toBe("Opus agent");
   });
 
-  it("a not met result earns no badge", async () => {
-    renderApp(storageWith({ credentials: [review], profiles: [opus], assessments: [await result(opus, review, { result: "not_met" })] }), agent);
+  it("Covers AE7, F3. A Not met badge is listed as Not met and opens on its reply", async () => {
+    renderApp(storageWith({ credentials: [review], profiles: [opus], assessments: [await result(opus, review, { result: "not_met", handBack: "Not quite" })] }), agent);
     const badges = await screen.findByRole("region", { name: "Badges" });
-    expect(await within(badges).findByRole("button", { name: "Test it" })).toBeTruthy();
-    expect(within(badges).queryByRole("button", { name: /Code review/ })).toBeNull();
+    const tried = await within(badges).findByRole("button", { name: /Code review/ });
+    expect(tried.textContent).toContain("Not met");
+    expect(tried.className).toContain("not-met");
+    await userEvent.click(tried);
+    expect(await screen.findByRole("heading", { name: "Code review", level: 2 })).toBeTruthy();
+    expect(await litRow()).toBe("Opus agent");
+    expect(screen.getByText(/Not quite/)).toBeTruthy();
   });
 
-  it("an agent with no badges offers to test it", async () => {
+  it("once two handoffs have run on a badge, it opens on the handoff of the agent's latest result", async () => {
+    const a = { id: "a", collectionSlug: "eng", credentialSlug: "review", text: "# A\n\n{{task}}\n" };
+    const storage = storageWith({
+      credentials: [review],
+      profiles: [opus],
+      handoffs: [a],
+      assessments: [
+        await result(opus, review, { fileStem: "20260801T090000Z", recordedAt: "2026-08-01T09:00:00.000Z" }),
+        await result(opus, review, { result: "not_met", handoff: { id: "a", text: "A" } }),
+      ],
+    });
+    renderApp(storage, agent);
+    await userEvent.click(await within(await screen.findByRole("region", { name: "Badges" })).findByRole("button", { name: /Code review/ }));
+    expect(await screen.findByRole("heading", { name: "Handoff A" })).toBeTruthy();
+    expect(await litRow()).toBe("Opus agent");
+  });
+
+  it("an agent with no results offers to test it", async () => {
     renderApp(storageWith({ credentials: [review], profiles: [opus] }), agent);
     const badges = await screen.findByRole("region", { name: "Badges" });
     await userEvent.click(await within(badges).findByRole("button", { name: "Test it" }));
@@ -235,6 +264,7 @@ describe("AgentDetail", () => {
       renderApp(storageWith({ credentials: [review], profiles: [opus], assessments: [await result(opus, review)] }), agent);
       await userEvent.click(await screen.findByRole("button", { name: "Code review" }));
       expect(await screen.findByRole("heading", { name: "Code review", level: 2 })).toBeTruthy();
+      expect(await litRow()).toBe("Opus agent");
     });
 
     it("focusing a key names its credential", async () => {

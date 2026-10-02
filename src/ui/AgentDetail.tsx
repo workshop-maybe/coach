@@ -2,7 +2,8 @@
 // agent has results, offering a new agent like it) with the agent's whole machine: its
 // earned keys page in sixteens, each names its credential, a lit one opens its badge and a
 // half-raised one starts its re-test. Then its other parts as small cards that open
-// one-beat edits, and the badges it earned, dimmed with the reason when a re-test is due.
+// one-beat edits, and every badge it has tried: the ones it earned, dimmed with the reason
+// when a re-test is due, and the ones it has not met yet. Each opens on its reply (R13, R14).
 // An agent holding a handoff shows it plugged in, and pulling it opens the test at what
 // came back (R15, R16, KTD11).
 
@@ -10,10 +11,11 @@ import { machineKeys, type MachineKey } from "../cast/mappings";
 import { FLAG_REASONS, cellKey } from "../domain/matrix";
 import { credentialKey } from "../domain/types";
 import { Badge } from "./Badge";
-import { firstLine, plugMark } from "./format";
+import { firstLine, plugMark, resultLabel } from "./format";
 import { useNav } from "./nav";
 import { livePlugs, plugFor, usePendingTests } from "./pendingTests";
 import { PlayerCard } from "./PlayerCard";
+import { replyRoute } from "./replyRoute";
 import type { AgentPart } from "./routes";
 import { Missing, PartCard, useEscape } from "./shared";
 import { TrashLink } from "./TrashDeck";
@@ -34,13 +36,13 @@ export function AgentDetail({ profileSlug }: { profileSlug: string }) {
   const edit = (part: AgentPart) => navigate({ view: "deck", deck: "edit-agent", profileSlug, part });
   const params = Object.keys(profile.params);
   const keys = matrix ? machineKeys(matrix, profileSlug) : [];
-  const onKey = (key: MachineKey) =>
-    navigate(key.halfRaised ? { view: "deck", deck: "test", profileSlug, credentialKey: key.id } : { view: "item", item: "badge", credentialKey: key.id });
+  const toReply = (key: string) => navigate(matrix ? replyRoute(matrix, state, key, profileSlug) : { view: "item", item: "badge", credentialKey: key });
+  const onKey = (key: MachineKey) => (key.halfRaised ? navigate({ view: "deck", deck: "test", profileSlug, credentialKey: key.id }) : toReply(key.id));
   const plug = plugFor(livePlugs(pending, state), profileSlug);
-  const earned = (matrix?.columns ?? []).flatMap(({ collection, credentials }) =>
+  const tried = (matrix?.columns ?? []).flatMap(({ collection, credentials }) =>
     credentials.flatMap((credential) => {
       const cell = matrix?.cells.get(cellKey(profileSlug, credentialKey(credential)));
-      return cell?.status === "met" ? [{ collection, credential, cell }] : [];
+      return cell && cell.status !== "untested" ? [{ collection, credential, cell }] : [];
     }),
   );
 
@@ -72,29 +74,31 @@ export function AgentDetail({ profileSlug }: { profileSlug: string }) {
 
       <section className="detail-section" aria-labelledby="agent-badges">
         <h3 id="agent-badges">Badges</h3>
-        {matrix && earned.length === 0 ? (
+        {matrix && tried.length === 0 ? (
           <p className="muted">
-            No badges yet.{" "}
+            Not tested yet.{" "}
             <button type="button" className="link" onClick={() => navigate({ view: "deck", deck: "test", profileSlug })}>
               Test it
             </button>
           </p>
         ) : (
           <ul className="detail-earned">
-            {earned.map(({ collection, credential, cell }) => {
+            {tried.map(({ collection, credential, cell }) => {
               const key = credentialKey(credential);
-              const flagged = cell.flags.length > 0;
+              const met = cell.status === "met";
+              const flagged = met && cell.flags.length > 0;
               return (
                 <li key={key}>
                   <button
                     type="button"
-                    className={`earned${flagged ? " flagged" : ""}`}
+                    className={`earned${flagged ? " flagged" : ""}${met ? "" : " not-met"}`}
                     data-flagged={flagged || undefined}
-                    onClick={() => navigate({ view: "item", item: "badge", credentialKey: key })}
+                    onClick={() => toReply(key)}
                   >
                     <Badge collection={collection} credential={credential} size={72} />
                     <span className="earned-name">{credential.name}</span>
-                    {cell.flags.map((f) => (
+                    {!met && <span className="earned-reason">{resultLabel(cell.status)}</span>}
+                    {met && cell.flags.map((f) => (
                       <span key={f} className="earned-reason">
                         {FLAG_REASONS[f]}
                       </span>

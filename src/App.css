@@ -1691,7 +1691,9 @@ button:focus-visible {
 }
 
 .earned.flagged img,
-.earned.flagged .badge-placeholder {
+.earned.flagged .badge-placeholder,
+.earned.not-met img,
+.earned.not-met .badge-placeholder {
   opacity: 0.4;
   filter: grayscale(1);
 }
