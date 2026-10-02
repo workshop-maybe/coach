@@ -46,6 +46,13 @@ export type DeckRoute =
 /** An agent or a credential on its way to the trash. */
 export type TrashItem = { kind: "agent"; profileSlug: Slug } | { kind: "badge"; credentialKey: string };
 
-export type ItemRoute = { view: "item"; item: "badge"; credentialKey: string } | { view: "item"; item: "agent"; profileSlug: Slug };
+/**
+ * One item open: a badge, an agent, or one of a badge's handoffs once two or more have run
+ * (R12). `lit` names the agent whose reply the view is about (R4, R14).
+ */
+export type ItemRoute =
+  | { view: "item"; item: "badge"; credentialKey: string; lit?: Slug }
+  | { view: "item"; item: "agent"; profileSlug: Slug }
+  | { view: "item"; item: "handoff"; credentialKey: string; handoffId: string; lit?: Slug };
 
 export type Route = { view: "home" } | DeckRoute | ItemRoute;
