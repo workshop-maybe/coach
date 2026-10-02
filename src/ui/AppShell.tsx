@@ -9,6 +9,7 @@ import { BadgeDetail } from "./BadgeDetail";
 import { CredentialDeck } from "./CredentialDeck";
 import { EditAgentDeck, EditCredentialDeck } from "./EditDecks";
 import { EditHandoffDeck, HandoffsDeck } from "./HandoffDecks";
+import { HandoffDetail } from "./HandoffDetail";
 import { TrashDeck } from "./TrashDeck";
 import { WindowControls } from "./WindowControls";
 import { exportAll, exportMessage } from "./exportAll";
@@ -124,7 +125,14 @@ function DeckView({ route }: { route: DeckRoute }) {
   }
 }
 
-/** One item open: a badge or an agent. Keyed by route, so opening another starts fresh. */
+/** One item open: a badge, an agent or a handoff. Keyed by route, so opening another starts fresh. */
 function ItemView({ route }: { route: ItemRoute }) {
-  return route.item === "badge" ? <BadgeDetail credentialKey={route.credentialKey} /> : <AgentDetail profileSlug={route.profileSlug} />;
+  switch (route.item) {
+    case "badge":
+      return <BadgeDetail credentialKey={route.credentialKey} lit={route.lit} />;
+    case "agent":
+      return <AgentDetail profileSlug={route.profileSlug} />;
+    case "handoff":
+      return <HandoffDetail credentialKey={route.credentialKey} handoffId={route.handoffId} lit={route.lit} />;
+  }
 }

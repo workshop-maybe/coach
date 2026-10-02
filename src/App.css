@@ -1654,10 +1654,6 @@ button:focus-visible {
   color: var(--ink-muted);
 }
 
-.detail-holder[aria-expanded="true"] {
-  box-shadow: var(--focus-ring);
-}
-
 .detail-holder-name {
   font-size: 14px;
   font-weight: 600;
@@ -1669,48 +1665,6 @@ button:focus-visible {
   font-size: 11.5px;
   letter-spacing: var(--value-tracking);
   color: var(--ink-muted);
-}
-
-.detail-history {
-  margin-top: var(--space-md);
-  padding: var(--space-base);
-  background: var(--surface);
-  border: var(--rule-width) solid var(--rule);
-}
-
-.detail-history ol,
-.detail-reasons {
-  list-style: none;
-  margin: 0 0 var(--space-md);
-  padding: 0;
-}
-
-.detail-history ol > li + li {
-  margin-top: var(--space-md);
-  padding-top: var(--space-md);
-  border-top: 1px solid var(--cell);
-}
-
-.detail-history-head {
-  margin: 0 0 var(--space-xs);
-}
-
-.detail-history-context {
-  margin: 0 0 var(--space-xs);
-  font-family: var(--font-mono);
-  font-size: 12.5px;
-}
-
-.detail-reasons li {
-  font-size: 13px;
-  color: var(--ink-muted);
-}
-
-.detail-history .handback {
-  max-height: 16rem;
-  overflow: auto;
-  white-space: pre-wrap;
-  font-size: 12.5px;
 }
 
 .earned {
@@ -1737,9 +1691,240 @@ button:focus-visible {
 }
 
 .earned.flagged img,
-.earned.flagged .badge-placeholder {
+.earned.flagged .badge-placeholder,
+.earned.not-met img,
+.earned.not-met .badge-placeholder {
   opacity: 0.4;
   filter: grayscale(1);
+}
+
+/* A badge's handoffs that ran, once there are two or more (KTD5): a row each that opens
+   the handoff as its own item. */
+.handoff-runs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--surface);
+  border: var(--rule-width) solid var(--rule);
+}
+
+.handoff-runs > li + li {
+  border-top: 1px solid var(--cell);
+}
+
+.handoff-run {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: var(--space-md);
+  align-items: baseline;
+  width: 100%;
+  padding: var(--space-sm) var(--space-base);
+  border: none;
+  background: transparent;
+  text-align: left;
+  font-weight: 400;
+}
+
+.handoff-run:hover:not(:disabled) {
+  background: var(--data-wash);
+  opacity: 1;
+}
+
+.handoff-run-key {
+  grid-row: span 3;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.handoff-run-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.handoff-run-line,
+.handoff-run-count {
+  grid-column: 2;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: var(--value-tracking);
+  color: var(--ink-muted);
+}
+
+.handoff-run-line {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* One handoff's replies (U2): a record card with a row per agent, its latest take
+   leading and older takes below. The lit row is the one the view is about (KTD4). */
+.reply-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--surface);
+  border: var(--rule-width) solid var(--rule);
+}
+
+.reply {
+  padding: var(--space-sm) var(--space-base);
+  border-left: 3px solid transparent;
+}
+
+.reply + .reply {
+  border-top: 1px solid var(--cell);
+}
+
+.reply.lit {
+  border-left-color: var(--ink);
+  background: var(--data-wash);
+}
+
+.reply.lit .take-name {
+  color: var(--data);
+}
+
+.reply-older {
+  list-style: none;
+  margin: 0 0 0 var(--space-xl);
+  padding: 0;
+}
+
+.take {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: var(--space-sm);
+  align-items: start;
+}
+
+.take-pick {
+  margin-top: var(--space-sm);
+}
+
+.take-head {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: var(--space-md);
+  align-items: center;
+  padding: var(--space-xs) 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font-weight: 400;
+}
+
+.take-head .cast {
+  grid-row: span 3;
+}
+
+.take-older .take-head {
+  grid-template-columns: 1fr;
+}
+
+.take-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.take-meta {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: var(--value-tracking);
+  color: var(--ink-muted);
+}
+
+.take-preview {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+  color: var(--ink-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.take-body {
+  grid-column: 2;
+  padding-bottom: var(--space-sm);
+}
+
+.take-body .handback {
+  max-height: 24rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: 12.5px;
+}
+
+.verdict-met {
+  color: var(--good);
+}
+
+/* Two replies side by side (R10): the view takes the window's width, and each pane is a
+   record with a header bar whose reply scrolls on its own. */
+.content:has(.compare) {
+  max-width: none;
+}
+
+.content:has(.compare) .detail {
+  max-width: none;
+}
+
+.compare-panes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-base);
+}
+
+.compare-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: calc(100vh - 16rem);
+  min-height: 20rem;
+  background: var(--surface);
+  border: var(--rule-width) solid var(--rule);
+}
+
+.compare-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-md);
+  padding: var(--space-sm) var(--space-base);
+  border-bottom: var(--rule-width) solid var(--rule);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: var(--value-tracking);
+}
+
+.compare-name {
+  font-family: var(--font-sans);
+  font-weight: 600;
+}
+
+.compare-reply {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: var(--space-base);
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: 12.5px;
+}
+
+@media (max-width: 36rem) {
+  .compare-panes {
+    grid-template-columns: 1fr;
+  }
+
+  .compare-pane {
+    height: auto;
+    min-height: 0;
+  }
+
+  .compare-reply {
+    overflow: visible;
+  }
 }
 
 /* Edit decks: lines that settle above the next, a live badge preview, palette swatches. */
@@ -1910,15 +2095,15 @@ button:focus-visible {
    clear, and a sketched frame (src/assets/sketch-frame.svg, its strokes running past
    the corners) is laid over it as a mask filled with the rule ink. */
 
-:is(.deck-card, .needs, .agent-card, .badge-card, .door, .part, .detail-holder, .detail-history, .earned, .rich-menu) {
+:is(.deck-card, .needs, .agent-card, .badge-card, .door, .part, .detail-holder, .earned, .handoff-runs, .reply-list, .compare-pane, .rich-menu) {
   border-color: transparent;
 }
 
-:is(.deck-card, .needs, .agent-card, .badge-card, .door, .part, .detail-holder, .detail-history, .earned) {
+:is(.deck-card, .needs, .agent-card, .badge-card, .door, .part, .detail-holder, .earned, .handoff-runs, .reply-list, .compare-pane) {
   position: relative;
 }
 
-:is(.deck-card, .needs, .agent-card, .badge-card, .door, .part, .detail-holder, .detail-history, .earned, .rich-menu)::after {
+:is(.deck-card, .needs, .agent-card, .badge-card, .door, .part, .detail-holder, .earned, .handoff-runs, .reply-list, .compare-pane, .rich-menu)::after {
   content: "";
   position: absolute;
   inset: -5px;

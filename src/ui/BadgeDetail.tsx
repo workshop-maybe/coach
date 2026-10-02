@@ -1,33 +1,34 @@
 // A badge, opened (U6, R4, R7, R12, R18). The credential as its cartridge, its parts as
-// small cards (each opens a one-beat edit deck), and its holders as small machines: the
-// agents whose latest result met it, each naming the handoff that earned it (R20).
-// Opening a holder shows every result it has for this badge, newest first, each with the
-// handoff text that ran; one recorded before handoffs shows the built-in skeleton (R14).
+// small cards (each opens a one-beat edit deck), then its replies and its holders. While
+// one handoff has run, the replies are every agent's reply to it, in place; once two or
+// more have, each handoff that ran is a row that opens it as its own item (R1, R3, R5).
+// The holders are small machines, the agents whose latest result met it, each naming the
+// handoff that earned it; opening one goes to the reply that earned it (R4).
 
-import { useState } from "react";
 import { resolveBadgeSettings } from "../badge/settings";
-import { FLAG_REASONS, cellKey, type Cell } from "../domain/matrix";
+import { cellKey, type Cell } from "../domain/matrix";
 import { Cartridge } from "../cast/Cartridge";
 import { Machine } from "../cast/Machine";
 import { machineKeys } from "../cast/mappings";
-import { credentialKey, type AgentProfile, type Assessment } from "../domain/types";
-import { contextLine } from "../domain/context";
-import { BUILT_IN_HANDOFF, handoffsFor } from "../domain/handoffs";
-import { FLAG_SHORT, contextText, firstLine, formatDate, handoffText, plugMark, resultLabel } from "./format";
+import { credentialKey, type AgentProfile, type FolderState, type Slug } from "../domain/types";
+import { handoffRuns, type HandoffRun } from "../domain/handoffResults";
+import { SKELETON_ID, handoffsFor, skeletonOf } from "../domain/handoffs";
+import { FLAG_SHORT, firstLine, formatDate, handoffLabel, handoffText, plugMark, resultLabel } from "./format";
 import { useNav } from "./nav";
 import { livePlugs, plugFor, usePendingTests } from "./pendingTests";
+import { ReplyList } from "./ReplyList";
+import { replyRoute } from "./replyRoute";
 import type { CredentialPart } from "./routes";
 import { Missing, PartCard, fileName, focusOnMount, paletteName, useEscape } from "./shared";
 import { TrashLink } from "./TrashDeck";
 import { useFolder } from "./useFolderState";
 import { useMatrix } from "./useMatrix";
 
-export function BadgeDetail({ credentialKey: key }: { credentialKey: string }) {
+export function BadgeDetail({ credentialKey: key, lit }: { credentialKey: string; lit?: Slug }) {
   const { state, folder } = useFolder();
   const { navigate } = useNav();
   const { pending } = usePendingTests(folder);
   const matrix = useMatrix(state);
-  const [open, setOpen] = useState<string | null>(null);
   useEscape(() => navigate({ view: "home" }));
 
   if (!state) return null;
@@ -42,13 +43,12 @@ export function BadgeDetail({ credentialKey: key }: { credentialKey: string }) {
     const cell = matrix?.cells.get(cellKey(profile.slug, key));
     if (cell?.status === "met") holders.push({ profile, cell });
   }
-  const opened = holders.find((h) => h.profile.slug === open);
+  const runs = matrix ? handoffRuns(matrix, state, key) : null;
   const targets = credential.learningTargets.filter((t) => t.trim() !== "");
   const look = resolveBadgeSettings(collection, credential.slug);
   const handoffs = handoffsFor(state, key).length;
   const live = livePlugs(pending, state);
   const plugged = (slug: string) => plugMark(state, plugFor(live, slug));
-  const ranWith = (a: Assessment) => ({ name: handoffText(state, key, a.handoff?.id), text: a.handoff?.text ?? BUILT_IN_HANDOFF });
 
   return (
     <section className="detail" aria-label={credential.name}>
@@ -78,6 +78,26 @@ export function BadgeDetail({ credentialKey: key }: { credentialKey: string }) {
         />
       </ul>
 
+      {matrix && runs && runs.runs.length > 0 && (
+        <section className="detail-section" aria-labelledby="badge-replies">
+          <h3 id="badge-replies">Replies</h3>
+          {runs.mode === "single" ? (
+            <>
+              <p className="muted">{handoffText(state, key, runs.runs[0].id)}</p>
+              <ReplyList credentialKey={key} run={runs.runs[0]} state={state} matrix={matrix} lit={lit} />
+            </>
+          ) : (
+            <ul className="handoff-runs">
+              {runs.runs.map((run) => (
+                <li key={run.id}>
+                  <RunRow state={state} credentialKey={key} run={run} onOpen={() => navigate({ view: "item", item: "handoff", credentialKey: key, handoffId: run.id })} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
       <section className="detail-section" aria-labelledby="badge-holders">
         <h3 id="badge-holders">Holders</h3>
         {holders.length === 0 ? (
@@ -89,8 +109,7 @@ export function BadgeDetail({ credentialKey: key }: { credentialKey: string }) {
                 <button
                   type="button"
                   className={`detail-holder${cell.flags.length > 0 ? " flagged" : ""}`}
-                  aria-expanded={open === profile.slug}
-                  onClick={() => setOpen(open === profile.slug ? null : profile.slug)}
+                  onClick={() => matrix && navigate(replyRoute(matrix, state, key, profile.slug))}
                 >
                   {matrix && <Machine mini setup={profile} keys={machineKeys(matrix, profile.slug)} plugged={plugged(profile.slug)} width={64} />}
                   <span className="detail-holder-name">{profile.name}</span>
@@ -98,7 +117,7 @@ export function BadgeDetail({ credentialKey: key }: { credentialKey: string }) {
                     {[
                       resultLabel(cell.status),
                       cell.latest ? formatDate(cell.latest.recordedAt) : "",
-                      cell.latest ? ranWith(cell.latest).name : "",
+                      cell.latest ? handoffText(state, key, cell.latest.handoff?.id) : "",
                       ...cell.flags.map((f) => FLAG_SHORT[f]),
                     ]
                       .filter(Boolean)
@@ -109,7 +128,6 @@ export function BadgeDetail({ credentialKey: key }: { credentialKey: string }) {
             ))}
           </ul>
         )}
-        {opened && <History profile={opened.profile} cell={opened.cell} assessments={state.assessments} ranWith={ranWith} onTestAgain={() => navigate({ view: "deck", deck: "test", profileSlug: opened.profile.slug, credentialKey: key })} />}
       </section>
 
       <TrashLink onOpen={() => navigate({ view: "deck", deck: "trash", item: { kind: "badge", credentialKey: key } })} />
@@ -117,61 +135,29 @@ export function BadgeDetail({ credentialKey: key }: { credentialKey: string }) {
   );
 }
 
-function History({
-  profile,
-  cell,
-  assessments,
-  ranWith,
-  onTestAgain,
-}: {
-  profile: AgentProfile;
-  cell: Cell;
-  /** Every result in the folder, so memory compares across credentials (R7). */
-  assessments: readonly Assessment[];
-  /** The handoff a result ran with: its name and the text as copied (R13, R14). */
-  ranWith(a: Assessment): { name: string; text: string };
-  onTestAgain(): void;
-}) {
+/**
+ * A handoff that ran, as a row on its badge (KTD5): its key, its name, the first line it
+ * changed from the skeleton (a new handoff starts as a copy of it), and how its agents did.
+ */
+function RunRow({ state, credentialKey: key, run, onOpen }: { state: FolderState; credentialKey: string; run: HandoffRun; onOpen(): void }) {
+  const text = handoffsFor(state, key).find((h) => h.id === run.id)?.text;
+  const own = run.id === SKELETON_ID || text === undefined ? null : ownLine(text, skeletonOf(state).text);
+  const agents = run.agents.length;
   return (
-    <div className="detail-history" aria-label={`${profile.name} results`} role="region">
-      {cell.flags.length > 0 && (
-        <ul className="detail-reasons">
-          {cell.flags.map((f) => (
-            <li key={f}>{FLAG_REASONS[f]}</li>
-          ))}
-        </ul>
-      )}
-      <ol>
-        {cell.history.map((a) => (
-          <li key={a.fileStem}>
-            <p className="detail-history-head">
-              <strong>{resultLabel(a.result)}</strong> <span className="muted">{formatDate(a.recordedAt)}</span>
-            </p>
-            <p className="detail-history-context muted">{contextText(contextLine(assessments, a))}</p>
-            {a.note.trim() !== "" && <p>{a.note}</p>}
-            <details>
-              <summary>Reply</summary>
-              <pre className="handback">{a.handBack}</pre>
-            </details>
-            <RanWith {...ranWith(a)} />
-          </li>
-        ))}
-      </ol>
-      <p className="helper">
-        <button type="button" className="link" onClick={onTestAgain}>
-          Test again
-        </button>
-      </p>
-    </div>
+    <button type="button" className="handoff-run" onClick={onOpen}>
+      <span className="handoff-run-key">{handoffLabel(state, key, run.id) ?? "?"}</span>
+      <span className="handoff-run-name">{handoffText(state, key, run.id)}</span>
+      {own && <span className="handoff-run-line">{own}</span>}
+      <span className="handoff-run-count">
+        {agents === 1 ? "1 agent" : `${agents} agents`} · {run.met} met
+      </span>
+    </button>
   );
 }
 
-/** The handoff a result ran with, named and collapsed under its reply. */
-function RanWith({ name, text }: { name: string; text: string }) {
-  return (
-    <details>
-      <summary>{name}</summary>
-      <pre className="handback">{text}</pre>
-    </details>
-  );
+/** The first line a handoff wrote that the skeleton does not have, else its first line. */
+function ownLine(text: string, skeleton: string): string {
+  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  const theirs = new Set(skeleton.split("\n").map((l) => l.trim()));
+  return lines.find((l) => !theirs.has(l)) ?? lines[0] ?? "";
 }

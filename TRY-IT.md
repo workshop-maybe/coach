@@ -28,7 +28,7 @@ Work through these in order. Notice how each step feels as you go.
 
 7. **Change a badge.** Open a badge from home. Change its colors, art or title under Look. Edit its task, too. If an agent already holds the badge, notice what the app tells you.
 
-8. **Compare two agents.** Create a second agent with a different model or effort level. Give it the same test. Open the badge and compare its holders.
+8. **Compare two agents.** Create a second agent with a different model or effort level. Give it the same test. Open the badge, tick both replies under Replies and click Compare to read them side by side.
 
 9. **Fill in an agent.** Open an agent from home and add notes or a repo it works in.
 
