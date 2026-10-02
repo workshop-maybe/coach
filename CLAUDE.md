@@ -59,7 +59,9 @@ npm run tauri build   # build installers
 
 ## Repo
 
-Private GitHub repo `workshop-maybe/coach-desktop` (`origin`), on a personal account for now. It moves to the team when the prototype is ready to share. Work lands on `main` through branches and PRs.
+Private GitHub repo `workshop-maybe/coach-desktop` (`origin`), on a personal account for now. It moves to the team when the prototype is ready to share. Work lands on `main` through branches and PRs. Open product decisions and loose ends are GitHub issues.
+
+Everything for this project lives in this repo: strategy, brainstorms, plans, ideation, learnings and handoff notes, under `docs/` where the Compound Engineering skills write them. Nothing goes to a vault, Proof or another doc tool.
 
 `docs/solutions/` holds documented solutions to past problems (bugs, best practices, workflow patterns), organized by category with YAML frontmatter (`module`, `tags`, `problem_type`). Relevant when implementing or debugging in a documented area.
 
