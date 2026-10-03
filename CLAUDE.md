@@ -41,7 +41,7 @@ The question the app answers: **which of my agents can actually meet my acceptan
 
 ### Interaction rules
 
-- **Home is the only room.** Home shows what needs you, your agents, your badges and the two doors (Create an agent, Create a credential). Everything else is a deck in progress or one item open (a badge, an agent, or one of a badge's handoffs once two or more have run), and each one returns home. A handoff returns to its badge. No sidebar, no other views.
+- **Home is the only room.** Home shows what needs you, your agents, your badges and the two doors (Create an agent, Create a credential). Everything else is a deck in progress or one item open (a badge, an agent, one of a badge's handoffs once two or more have run, or one reply), and each one returns home. A handoff returns to its badge. A reply returns to the badge or handoff that lists it, with its row lit. No sidebar, no other views.
 - **Decks, not forms.** Every flow is a list of beats handed to `src/ui/Deck.tsx`. No screen shows a set of labeled fields to fill and submit. Editing an existing badge or agent opens one part at a time as a one-beat deck.
 - **One thing per card.** Each card asks one thing and offers one forward action named for what happens next ("Make the badge", "Copy"). Back is quiet.
 - **No eyebrows.** Nothing sits above a heading as a kicker or label.

@@ -27,6 +27,7 @@ import { Lockup } from "./Lockup";
 import { NavContext } from "./nav";
 import { PaneContext, usePaneClaims } from "./pane";
 import { PlayerCard } from "./PlayerCard";
+import { ReplyView } from "./ReplyView";
 import type { DeckRoute, ItemRoute, Route } from "./routes";
 import { TestDeck } from "./TestDeck";
 import { describeError, useFolder } from "./useFolderState";
@@ -143,14 +144,16 @@ function DeckView({ route }: { route: DeckRoute }) {
   }
 }
 
-/** One item open: a badge, an agent or a handoff. Keyed by route, so opening another starts fresh. */
+/** One item open: a badge, an agent, a handoff or a take's reply. Keyed by route, so opening another starts fresh. */
 function ItemView({ route }: { route: ItemRoute }) {
   switch (route.item) {
     case "badge":
-      return <BadgeDetail credentialKey={route.credentialKey} lit={route.lit} />;
+      return <BadgeDetail credentialKey={route.credentialKey} lit={route.lit} litTake={route.litTake} picks={route.picks} />;
     case "agent":
       return <AgentDetail profileSlug={route.profileSlug} />;
     case "handoff":
-      return <HandoffDetail credentialKey={route.credentialKey} handoffId={route.handoffId} lit={route.lit} />;
+      return <HandoffDetail credentialKey={route.credentialKey} handoffId={route.handoffId} lit={route.lit} litTake={route.litTake} picks={route.picks} />;
+    case "reply":
+      return <ReplyView credentialKey={route.credentialKey} take={route.take} picks={route.picks} />;
   }
 }

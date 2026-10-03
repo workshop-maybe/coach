@@ -46,13 +46,33 @@ export type DeckRoute =
 /** An agent or a credential on its way to the trash. */
 export type TrashItem = { kind: "agent"; profileSlug: Slug } | { kind: "badge"; credentialKey: string };
 
+/** One take: an agent's result on a badge, named by the agent and the result's file stem, since stems can repeat across agents (KTD7). */
+export interface TakeRef {
+  profileSlug: Slug;
+  fileStem: string;
+}
+
 /**
- * One item open: a badge, an agent, or one of a badge's handoffs once two or more have run
- * (R12). `lit` names the agent whose reply the view is about (R4, R14).
+ * What a badge or handoff route hands its reply list. `lit` names the agent whose reply
+ * the view is about (R4, R14). Back from an opened reply, `litTake` names the lit agent's
+ * take to focus and `picks` the list's picks, kept (R16, KTD7).
+ */
+export interface ReplyListState {
+  lit?: Slug;
+  /** The file stem of the lit agent's take. */
+  litTake?: string;
+  picks?: TakeRef[];
+}
+
+/**
+ * One item open: a badge, an agent, one of a badge's handoffs once two or more have run
+ * (R12), or one take's reply (R15, KTD7), which carries the list's picks so its way back
+ * can keep them.
  */
 export type ItemRoute =
-  | { view: "item"; item: "badge"; credentialKey: string; lit?: Slug }
+  | ({ view: "item"; item: "badge"; credentialKey: string } & ReplyListState)
   | { view: "item"; item: "agent"; profileSlug: Slug }
-  | { view: "item"; item: "handoff"; credentialKey: string; handoffId: string; lit?: Slug };
+  | ({ view: "item"; item: "handoff"; credentialKey: string; handoffId: string } & ReplyListState)
+  | { view: "item"; item: "reply"; credentialKey: string; take: TakeRef; picks?: TakeRef[] };
 
 export type Route = { view: "home" } | DeckRoute | ItemRoute;

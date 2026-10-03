@@ -1,6 +1,7 @@
 // A badge, opened (U6, R4, R7, R12, R18). The credential as its cartridge, its parts as
 // small cards (each opens a one-beat edit deck), then its replies and its holders. While
-// one handoff has run, the replies are every agent's reply to it, in place; once two or
+// one handoff has run, the replies are every agent's reply to it, each opening as its own
+// view and coming back here with its take lit and the picks kept (U5, R16); once two or
 // more have, each handoff that ran is a row that opens it as its own item (R1, R3, R5).
 // The holders are small machines, the agents whose latest result met it, each naming the
 // handoff that earned it; opening one goes to the reply that earned it (R4).
@@ -10,7 +11,7 @@ import { cellKey, type Cell } from "../domain/matrix";
 import { Cartridge } from "../cast/Cartridge";
 import { Machine } from "../cast/Machine";
 import { machineKeys } from "../cast/mappings";
-import { credentialKey, type AgentProfile, type FolderState, type Slug } from "../domain/types";
+import { credentialKey, type AgentProfile, type FolderState } from "../domain/types";
 import { handoffRuns, type HandoffRun } from "../domain/handoffResults";
 import { SKELETON_ID, handoffsFor, skeletonOf } from "../domain/handoffs";
 import { FLAG_SHORT, firstLine, formatDate, handoffLabel, handoffText, plugMark, resultLabel } from "./format";
@@ -18,13 +19,13 @@ import { useNav } from "./nav";
 import { livePlugs, plugFor, usePendingTests } from "./pendingTests";
 import { ReplyList } from "./ReplyList";
 import { replyRoute } from "./replyRoute";
-import type { CredentialPart } from "./routes";
+import type { CredentialPart, ReplyListState } from "./routes";
 import { Missing, PartCard, fileName, focusOnMount, paletteName, useEscape } from "./shared";
 import { TrashLink } from "./TrashDeck";
 import { useFolder } from "./useFolderState";
 import { useMatrix } from "./useMatrix";
 
-export function BadgeDetail({ credentialKey: key, lit }: { credentialKey: string; lit?: Slug }) {
+export function BadgeDetail({ credentialKey: key, lit, litTake, picks }: { credentialKey: string } & ReplyListState) {
   const { state, folder } = useFolder();
   const { navigate } = useNav();
   const { pending } = usePendingTests(folder);
@@ -84,7 +85,7 @@ export function BadgeDetail({ credentialKey: key, lit }: { credentialKey: string
           {runs.mode === "single" ? (
             <>
               <p className="muted">{handoffText(state, key, runs.runs[0].id)}</p>
-              <ReplyList credentialKey={key} run={runs.runs[0]} state={state} matrix={matrix} lit={lit} />
+              <ReplyList credentialKey={key} run={runs.runs[0]} state={state} matrix={matrix} lit={lit} litTake={litTake} picks={picks} />
             </>
           ) : (
             <ul className="handoff-runs">

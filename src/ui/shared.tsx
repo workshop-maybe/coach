@@ -1,11 +1,13 @@
 // Pieces shared by the decks and the opened items: focus on mount, the copy helper, the
-// target check's hint and line move, a part card, the not-found card, display names for a
-// palette and a file, and Escape.
+// target check's hint and line move, a part card, the not-found card, a result's verdict,
+// display names for a palette and a file, and Escape.
 
 import { useEffect, useRef, useState } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { PALETTES } from "../badge/palettes";
 import { checkTarget, type TargetMove } from "../domain/target-check";
+import type { Assessment } from "../domain/types";
+import { resultLabel } from "./format";
 import { describeError } from "./useFolderState";
 
 /** A stable ref callback that focuses a card's heading once, when it appears. */
@@ -99,8 +101,8 @@ export function PartCard({ name, value, onOpen }: { name: string; value: string;
   );
 }
 
-/** The card for a badge or agent that is no longer in the folder. */
-export function Missing({ onHome }: { onHome(): void }) {
+/** The card for a badge, agent or take that is no longer in the folder. `label` names where its button goes. */
+export function Missing({ onHome, label = "Home" }: { onHome(): void; label?: string }) {
   return (
     <section className="deck" aria-label="Not found">
       <div className="deck-card">
@@ -110,12 +112,17 @@ export function Missing({ onHome }: { onHome(): void }) {
         <p className="muted">It may have been moved or deleted outside the app.</p>
         <div className="deck-actions">
           <button type="button" className="ghost" onClick={onHome}>
-            Home
+            {label}
           </button>
         </div>
       </div>
     </section>
   );
+}
+
+/** A result's verdict in words, green when it met. */
+export function Verdict({ result: a }: { result: Assessment }) {
+  return <span className={`verdict verdict-${a.result}`}>{resultLabel(a.result)}</span>;
 }
 
 export function paletteName(slug: string | undefined | null): string {

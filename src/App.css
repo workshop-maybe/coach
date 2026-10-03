@@ -1963,7 +1963,8 @@ button:focus-visible {
 }
 
 /* One handoff's replies (U2): a record card with a row per agent, its latest take
-   leading and older takes below. The lit row is the one the view is about (KTD4). */
+   leading and older takes below. The lit row is the one the view is about (KTD4). A
+   take's head opens its reply view (U5). */
 .reply-list {
   list-style: none;
   margin: 0;
@@ -2050,20 +2051,97 @@ button:focus-visible {
   overflow: hidden;
 }
 
-.take-body {
-  grid-column: 2;
-  padding-bottom: var(--space-sm);
-}
-
-.take-body .handback {
-  max-height: 24rem;
-  overflow: auto;
-  white-space: pre-wrap;
-  font-size: 12.5px;
-}
-
 .verdict-met {
   color: var(--good);
+}
+
+/* One take, opened (U5, R15): a pane. The corner control takes its own row at the right,
+   then the take as a record like the judge card's texts: a mono header bar with the
+   agent, setup, verdict and date, the stored-text switch at its end and the note below,
+   over the reply, which scrolls on its own at the centered measure (R9, R10). The
+   handoff text that ran sits collapsed under the record, in the record mono. */
+.reply-view > .deck-close {
+  position: static;
+  flex: none;
+  align-self: flex-end;
+}
+
+.reply-record {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  border: 1px solid var(--cell);
+  background: var(--surface);
+}
+
+.reply-bar {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-xs) var(--space-md);
+  padding: var(--space-sm) var(--space-base);
+  border-bottom: 1px solid var(--cell);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: var(--value-tracking);
+}
+
+.reply-bar h2 {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 1.05rem;
+  letter-spacing: var(--heading-tracking);
+}
+
+.reply-bar h2:focus-visible {
+  box-shadow: none;
+  outline: none;
+}
+
+.reply-stored {
+  align-self: center;
+  margin-left: auto;
+  padding: 0 var(--space-sm);
+  font-family: var(--font-sans);
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--ink-muted);
+}
+
+.reply-note {
+  flex-basis: 100%;
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+
+.reply-ran {
+  flex: none;
+  margin-top: var(--space-md);
+}
+
+.reply-ran summary {
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: var(--value-tracking);
+  color: var(--ink-muted);
+}
+
+.reply-ran .handback {
+  max-height: 30vh;
+  margin: var(--space-sm) 0 0;
+  padding: var(--space-sm) var(--space-base);
+  overflow: auto;
+  border: 1px solid var(--cell);
+  background: var(--bg);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12.5px;
 }
 
 /* Two replies side by side (R10): the view takes the window's width, and each pane is a

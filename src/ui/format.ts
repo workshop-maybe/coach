@@ -1,10 +1,10 @@
-// Display text for a result, a flag, a handoff, a date and a part's first line.
+// Display text for a result, a flag, a handoff, a setup, a date and a part's first line.
 
 import { handoffKeys } from "../cast/mappings";
 import type { ContextLine } from "../domain/context";
 import { SKELETON_ID, handoffsFor } from "../domain/handoffs";
 import type { CellFlag, CellStatus } from "../domain/matrix";
-import type { FolderState } from "../domain/types";
+import type { AgentSetup, FolderState } from "../domain/types";
 import type { PendingTest } from "./pendingTests";
 
 const RESULT_LABELS: Record<CellStatus, string> = { met: "Met", not_met: "Not met", untested: "Untested" };
@@ -53,6 +53,9 @@ export function handoffText(state: FolderState, key: string, id: string | undefi
   const label = handoffLabel(state, key, id);
   return label ? `Handoff ${label}` : "Handoff";
 }
+
+/** The setup a result ran on: harness, model and effort. */
+export const setupText = (setup: AgentSetup) => [setup.harness, setup.model, setup.effort].filter(Boolean).join(" · ");
 
 /** A date as the person reads it, or the text itself when it is not a date. */
 export function formatDate(iso: string): string {

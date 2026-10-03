@@ -81,6 +81,25 @@ describe("HandoffDetail", () => {
     expect(lit?.getAttribute("aria-label")).toBe("Opus agent");
   });
 
+  it("Covers R16. A take opened on a handoff that is not its agent's latest closes back to that handoff, its row lit and focused, picks kept", async () => {
+    open(await multi(), { handoffId: "skeleton" });
+    await screen.findByRole("heading", { name: "Skeleton" });
+    const replies = screen.getByRole("region", { name: "Replies" });
+    const box = within(replies).getByRole("checkbox", { name: /Pick Opus agent/ });
+    await userEvent.click(box);
+    await userEvent.click(box.parentElement!.querySelector<HTMLButtonElement>("button.take-head")!);
+    expect(await screen.findByRole("heading", { name: "Opus agent", level: 2 })).toBeTruthy();
+    expect(within(screen.getByRole("region", { name: "Reply" })).getByText("Opus on the skeleton")).toBeTruthy();
+    await userEvent.keyboard("{Escape}");
+
+    expect(await screen.findByRole("heading", { name: "Skeleton", level: 2 })).toBeTruthy();
+    const back = screen.getByRole("region", { name: "Replies" });
+    const lit = within(back).getAllByRole("listitem").find((li) => li.getAttribute("aria-current") === "true")!;
+    expect(lit.getAttribute("aria-label")).toBe("Opus agent");
+    expect(document.activeElement).toBe(lit.querySelector("button.take-head"));
+    expect((within(back).getByRole("checkbox", { name: /Pick Opus agent/ }) as HTMLInputElement).checked).toBe(true);
+  });
+
   it("a handoff with no results on the badge is not found once the matrix loads", async () => {
     open([await result(opus, review, { ...day(1) })]);
     expect(await screen.findByRole("heading", { name: "Not in the folder" })).toBeTruthy();

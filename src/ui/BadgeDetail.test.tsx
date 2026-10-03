@@ -31,6 +31,8 @@ async function saved(storage: MemoryStorage, slug = "review") {
 }
 
 const parts = () => screen.getByRole("list", { name: "Parts" });
+/** The button that opens a take in a reply row: the row's latest, or an older take's. */
+const takeHead = (el: HTMLElement) => el.querySelector<HTMLButtonElement>("button.take-head")!;
 const openedPart = async (name: RegExp) => within(await screen.findByRole("list", { name: "Parts" })).getByRole("button", { name });
 const openPart = async (name: RegExp) => {
   await screen.findByRole("list", { name: "Parts" });
@@ -84,15 +86,41 @@ describe("BadgeDetail", () => {
     expect(within(replies).getByText(/Codex reply/)).toBeTruthy();
   });
 
-  it("an agent's older take sits under its latest one", async () => {
+  it("an agent's older take sits under its latest one and opens as its own view", async () => {
     const older = await result(opus, review, { fileStem: "20260801T090000Z", recordedAt: "2026-08-01T09:00:00.000Z", result: "not_met", handBack: "First try" });
     renderApp(storageWith({ credentials: [review], profiles: [opus], assessments: [older, await result(opus, review)] }), badge);
     const [row] = within(await screen.findByRole("region", { name: "Replies" })).getAllByRole("listitem");
     const [take] = within(row).getAllByRole("listitem");
     expect(row.querySelector(".take-meta")?.textContent).toContain("Met");
     expect(take.textContent).toContain("Not met");
-    await userEvent.click(within(take).getByRole("button", { expanded: false }));
-    expect(within(take).getByText("First try")).toBeTruthy();
+    expect(within(take).queryByText("First try")).toBeNull();
+    await userEvent.click(takeHead(take));
+    expect(await screen.findByRole("heading", { name: "Opus agent", level: 2 })).toBeTruthy();
+    expect(within(screen.getByRole("region", { name: "Reply" })).getByText("First try")).toBeTruthy();
+    expect(screen.queryByRole("list", { name: "Parts" })).toBeNull();
+  });
+
+  it("Covers R16. Closing a reply comes back to the badge with its agent lit, its take focused and the picks kept", async () => {
+    const storage = storageWith({
+      credentials: [review],
+      profiles: [opus, codex],
+      assessments: [await result(opus, review, { handBack: "Opus reply" }), await result(codex, review, { fileStem: "20260902T090000Z", recordedAt: "2026-09-02T09:00:00.000Z", handBack: "Codex reply" })],
+    });
+    renderApp(storage, badge);
+    const replies = await screen.findByRole("region", { name: "Replies" });
+    await userEvent.click(within(replies).getByRole("checkbox", { name: /Pick Opus agent/ }));
+    const codexRow = within(replies).getAllByRole("listitem").find((li) => li.getAttribute("aria-label") === "Codex agent")!;
+    await userEvent.click(takeHead(codexRow));
+    expect(await screen.findByRole("heading", { name: "Codex agent", level: 2 })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(await screen.findByRole("heading", { name: "Code review", level: 2 })).toBeTruthy();
+    const back = await screen.findByRole("region", { name: "Replies" });
+    const lit = within(back).getAllByRole("listitem").find((li) => li.getAttribute("aria-current") === "true")!;
+    expect(lit.getAttribute("aria-label")).toBe("Codex agent");
+    await waitFor(() => expect(document.activeElement).toBe(takeHead(lit)));
+    expect((within(back).getByRole("checkbox", { name: /Pick Opus agent/ }) as HTMLInputElement).checked).toBe(true);
+    expect((within(back).getByRole("checkbox", { name: /Pick Codex agent/ }) as HTMLInputElement).checked).toBe(false);
   });
 
   it("each take shows the machine it ran on, and memory changes", async () => {
@@ -153,23 +181,22 @@ describe("BadgeDetail", () => {
       expect(await latest(/Codex agent/)).toContain("Skeleton");
     });
 
-    it("a reply keeps the text that ran, collapsed under it", async () => {
+    it("an opened reply keeps the text that ran, collapsed under it", async () => {
       const ran = await result(opus, review, { handoff: { id: "20260902T090000Z", text: "Second framing" } });
       renderApp(storageWith({ credentials: [review], profiles: [opus], handoffs, assessments: [ran] }), badge);
       const [row] = within(await screen.findByRole("region", { name: "Replies" })).getAllByRole("listitem");
-      await userEvent.click(within(row).getByRole("button", { expanded: false }));
-      const ranWith = row.querySelector("details")!;
+      expect(row.querySelector("details")).toBeNull();
+      await userEvent.click(takeHead(row));
+      const ranWith = (await screen.findByText("Handoff B", { selector: "summary" })).closest("details")!;
       expect(ranWith.open).toBe(false);
-      expect(ranWith.querySelector("summary")?.textContent).toBe("Handoff B");
       expect(ranWith.querySelector("pre")?.textContent).toBe("Second framing");
     });
 
-    it("A result recorded before handoffs shows the built-in prompt as the skeleton", async () => {
+    it("A result recorded before handoffs shows the built-in prompt as the skeleton in its opened reply", async () => {
       renderApp(storageWith({ credentials: [review], profiles: [opus], assessments: [await result(opus, review)] }), badge);
       const [row] = within(await screen.findByRole("region", { name: "Replies" })).getAllByRole("listitem");
-      await userEvent.click(within(row).getByRole("button", { expanded: false }));
-      const ranWith = row.querySelector("details")!;
-      expect(ranWith.querySelector("summary")?.textContent).toBe("Skeleton");
+      await userEvent.click(takeHead(row));
+      const ranWith = (await screen.findByText("Skeleton", { selector: "summary" })).closest("details")!;
       expect(ranWith.querySelector("pre")?.textContent).toBe(BUILT_IN_HANDOFF);
     });
 
