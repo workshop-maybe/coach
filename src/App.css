@@ -259,11 +259,21 @@ button:focus-visible {
   gap: var(--space-sm);
 }
 
+/* The content area takes the height the bar and the banners leave (KTD4), so a view that
+   fills the window, such as an empty home, needs no height of its own. Its view spans the
+   column; a deck or an item keeps its own measure and centers in it. */
 .content {
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 auto;
   width: 100%;
   max-width: 62rem;
   margin: 0 auto;
   padding: var(--space-xl) var(--space-xl) var(--space-3xl);
+}
+
+.content > * {
+  width: 100%;
 }
 
 /* ---------------------------------------------------------------------------
@@ -467,11 +477,16 @@ button:focus-visible {
   background: var(--good);
 }
 
+/* The card's padding is named, so a short window can tighten it and the pieces placed at
+   its corner follow. Its foot padding belongs to the actions (.deck-actions). */
 .deck-card {
+  --card-pad-top: var(--space-xl);
+  --card-pad-side: var(--space-xl);
+  --card-pad-end: var(--space-lg);
   display: flex;
   flex-direction: column;
   gap: var(--space-base);
-  padding: var(--space-xl) var(--space-xl) var(--space-lg);
+  padding: var(--card-pad-top) var(--card-pad-side) 0;
   background: var(--surface);
   border: var(--rule-width) solid var(--rule);
   box-shadow: var(--shadow);
@@ -846,12 +861,17 @@ button:focus-visible {
   background: var(--error-wash);
 }
 
+/* A card taller than the window keeps Back and its forward action in view: they stick to
+   the window's foot, on the card's white, until the card's own end scrolls up to them (R6). */
 .deck-actions {
+  position: sticky;
+  bottom: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-md);
-  padding-top: var(--space-sm);
+  padding: var(--space-sm) 0 var(--card-pad-end);
+  background: var(--surface);
 }
 
 .deck-actions > :only-child {
@@ -864,27 +884,33 @@ button:focus-visible {
 }
 
 /* A pane beat (U8, R7, KTD4): the deck is the pane and spans the window below the bar.
-   The corner control takes its own row at the right, the answers above keep to one line
-   (clipped, so a screen reader still reads them whole), and the card takes the height
-   left. Its body is the column that grows and scrolls, so the heading and the actions
-   stay in view. Beats that are not panes keep the rules above. */
+   The answers above keep to one line (clipped, so a screen reader still reads them whole)
+   and share it with the corner control at the right, and the card takes the height left.
+   Its body is the column that grows and scrolls, so the heading and the actions stay in
+   view, with the normal small space between a field and the helpers under it. Beats that
+   are not panes keep the rules above. */
 
 .deck.pane {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-sm) var(--space-base);
   max-width: none;
   margin: 0;
 }
 
 .deck.pane > .deck-close {
+  grid-area: 1 / 2;
   position: static;
-  flex: none;
-  align-self: flex-end;
 }
 
 .deck.pane > .deck-settled {
-  flex: none;
+  grid-area: 1 / 1;
   flex-direction: row;
   gap: var(--space-base);
   min-width: 0;
+  margin: 0;
   overflow: hidden;
 }
 
@@ -897,7 +923,8 @@ button:focus-visible {
 }
 
 .deck.pane > .deck-card {
-  flex: 1 1 auto;
+  grid-area: 2 / 1 / 3 / 3;
+  align-self: stretch;
   min-height: 0;
 }
 
@@ -905,6 +932,7 @@ button:focus-visible {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
+  gap: var(--space-sm);
   min-height: 0;
   overflow: auto;
 }
@@ -912,10 +940,18 @@ button:focus-visible {
 /* A writing pane (U6, R9, R18): an editor's box and its scrollbar span the pane, and its
    text keeps the reply view's centered measure of about 70 characters (.rich-view-measure,
    the same type). The side padding grows as the pane widens past the measure, so a click
-   beside the text still lands in the editor. This covers the reply box on the paste card
-   (U4) and every rich editor on a pane; editors on ordinary cards keep their padding. */
+   beside the text still lands in the editor. The formatting bar sets the editor's type so
+   its 70ch is the same measure, and its keys start where the text starts. This covers the
+   reply box on the paste card (U4) and every rich editor on a pane; editors on ordinary
+   cards keep their padding. */
 .deck.pane .rich-input {
   padding-inline: max(14px, calc((100% - 70ch) / 2));
+}
+
+.deck.pane .rich-bar {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  padding-inline: max(6px, calc((100% - 70ch) / 2 - 6px));
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -948,8 +984,8 @@ button:focus-visible {
 .home {
   display: flex;
   flex-direction: column;
+  flex: 1 0 auto;
   gap: var(--space-2xl);
-  min-height: calc(100vh - 12rem);
 }
 
 .home-section h2 {
@@ -981,9 +1017,11 @@ button:focus-visible {
   border-top: 1px solid var(--cell);
 }
 
+/* The title keeps its line first; the detail takes the rest of the row, at its right edge,
+   and wraps when the window is narrow. */
 .need {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto auto 1fr;
   align-items: center;
   gap: var(--space-md);
   width: 100%;
@@ -1001,11 +1039,14 @@ button:focus-visible {
 }
 
 .need-title {
+  grid-column: 2;
   font-weight: 600;
   letter-spacing: var(--heading-tracking);
 }
 
 .need-detail {
+  grid-column: 3;
+  text-align: right;
   font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 400;
@@ -1097,14 +1138,14 @@ button:focus-visible {
   color: var(--ink-muted);
 }
 
-/* The two doors stay in view at the foot of home. */
+/* The two doors follow the shelves, and stay in view at the window's foot while home runs
+   past it. On a tall window they sit under the badges rather than far below them. */
 .doors {
   position: sticky;
   bottom: 0;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--space-base);
-  margin-top: auto;
   padding: var(--space-base) 0;
   background: var(--bg);
 }
@@ -1499,8 +1540,8 @@ button:focus-visible {
 
 .meet-stored {
   position: absolute;
-  top: var(--space-xl);
-  right: var(--space-xl);
+  top: var(--card-pad-top);
+  right: var(--card-pad-side);
   display: flex;
   align-items: center;
   height: calc(1.6rem * 1.15);
@@ -1544,10 +1585,13 @@ button:focus-visible {
   color: var(--ink-muted);
 }
 
+/* Met and Not yet share the row and stop at a comfortable width, centered, so a wide
+   window does not stretch them into bars. */
 .meet-choices {
   flex: none;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 16rem));
+  justify-content: center;
   gap: var(--space-md);
 }
 
@@ -1606,8 +1650,7 @@ button:focus-visible {
 }
 
 .test-strip .test-stage {
-  flex-wrap: nowrap;
-  padding: 0 0 var(--space-sm);
+  padding: 0;
 }
 
 .test-strip .cast {
@@ -1615,15 +1658,16 @@ button:focus-visible {
   height: 4.5rem;
 }
 
-.test-strip ~ .helper {
-  margin-top: var(--space-sm);
-}
-
 /* "Hand it over": the badge in the handoff box, the agent beside it (U6, KTD8). */
 .test-stage-handoff {
-  flex-wrap: wrap;
   align-items: flex-end;
   gap: var(--space-md);
+}
+
+/* The two drawings stay side by side and scale down together to fit the card. */
+.test-stage-handoff > .cast {
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 /* The box's keys as real buttons, one per handoff, the lit one in data blue. */
@@ -2455,4 +2499,65 @@ button:focus-visible {
 .gate-bar {
   display: flex;
   padding: var(--space-md) var(--space-xl);
+}
+
+/* ---------------------------------------------------------------------------
+   A short window, down to the minimum of 560 (R3, R6). The paper around the cards gets
+   thinner and the drawings scale with the window's height, so a card's heading, picks and
+   actions fit together; on a pane the chrome around the texts tightens, so the judge
+   card shows more of the rubric and the reply. */
+
+@media (max-height: 45rem) {
+  .topbar {
+    padding-block: var(--space-sm);
+  }
+
+  .content {
+    padding-top: var(--space-base);
+  }
+
+  :is(.deck, .detail) {
+    margin-top: var(--space-xl);
+  }
+
+  .deck-close {
+    top: calc(-1 * var(--space-xl));
+  }
+
+  .deck-card {
+    --card-pad-top: var(--space-lg);
+  }
+
+  :is(.test-stage, .player-stage) .cast,
+  .handoffs-box {
+    width: auto;
+    max-height: 24vh;
+  }
+
+  .player {
+    gap: var(--space-base);
+  }
+
+  .dial-step {
+    min-height: 2.25rem;
+  }
+
+  .pane {
+    padding-block: var(--space-md);
+  }
+
+  .deck.pane > .deck-card {
+    --card-pad-top: var(--space-lg);
+    --card-pad-side: var(--space-lg);
+    --card-pad-end: var(--space-base);
+    gap: var(--space-md);
+  }
+
+  .deck.pane .deck-actions {
+    padding-top: 0;
+  }
+
+  .meet-choices button {
+    min-height: 2.5rem;
+  }
 }
