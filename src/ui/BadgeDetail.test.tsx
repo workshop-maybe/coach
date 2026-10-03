@@ -31,6 +31,12 @@ async function saved(storage: MemoryStorage, slug = "review") {
 }
 
 const parts = () => screen.getByRole("list", { name: "Parts" });
+/** The folder's actions in the top bar: all three on a page, none on a pane (R8). */
+const FOLDER_ACTIONS = ["Change folder", "Reload", "Export"];
+const barActions = () => FOLDER_ACTIONS.filter((name) => within(screen.getByRole("banner")).queryByRole("button", { name }) !== null);
+const editDeck = () => screen.getByRole("region", { name: "Edit Code review" });
+/** The button that opens a take in a reply row: the row's latest, or an older take's. */
+const takeHead = (el: HTMLElement) => el.querySelector<HTMLButtonElement>("button.take-head")!;
 const openedPart = async (name: RegExp) => within(await screen.findByRole("list", { name: "Parts" })).getByRole("button", { name });
 const openPart = async (name: RegExp) => {
   await screen.findByRole("list", { name: "Parts" });
@@ -84,15 +90,41 @@ describe("BadgeDetail", () => {
     expect(within(replies).getByText(/Codex reply/)).toBeTruthy();
   });
 
-  it("an agent's older take sits under its latest one", async () => {
+  it("an agent's older take sits under its latest one and opens as its own view", async () => {
     const older = await result(opus, review, { fileStem: "20260801T090000Z", recordedAt: "2026-08-01T09:00:00.000Z", result: "not_met", handBack: "First try" });
     renderApp(storageWith({ credentials: [review], profiles: [opus], assessments: [older, await result(opus, review)] }), badge);
     const [row] = within(await screen.findByRole("region", { name: "Replies" })).getAllByRole("listitem");
     const [take] = within(row).getAllByRole("listitem");
     expect(row.querySelector(".take-meta")?.textContent).toContain("Met");
     expect(take.textContent).toContain("Not met");
-    await userEvent.click(within(take).getByRole("button", { expanded: false }));
-    expect(within(take).getByText("First try")).toBeTruthy();
+    expect(within(take).queryByText("First try")).toBeNull();
+    await userEvent.click(takeHead(take));
+    expect(await screen.findByRole("heading", { name: "Opus agent", level: 2 })).toBeTruthy();
+    expect(within(screen.getByRole("region", { name: "Reply" })).getByText("First try")).toBeTruthy();
+    expect(screen.queryByRole("list", { name: "Parts" })).toBeNull();
+  });
+
+  it("Covers R16. Closing a reply comes back to the badge with its agent lit, its take focused and the picks kept", async () => {
+    const storage = storageWith({
+      credentials: [review],
+      profiles: [opus, codex],
+      assessments: [await result(opus, review, { handBack: "Opus reply" }), await result(codex, review, { fileStem: "20260902T090000Z", recordedAt: "2026-09-02T09:00:00.000Z", handBack: "Codex reply" })],
+    });
+    renderApp(storage, badge);
+    const replies = await screen.findByRole("region", { name: "Replies" });
+    await userEvent.click(within(replies).getByRole("checkbox", { name: /Pick Opus agent/ }));
+    const codexRow = within(replies).getAllByRole("listitem").find((li) => li.getAttribute("aria-label") === "Codex agent")!;
+    await userEvent.click(takeHead(codexRow));
+    expect(await screen.findByRole("heading", { name: "Codex agent", level: 2 })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(await screen.findByRole("heading", { name: "Code review", level: 2 })).toBeTruthy();
+    const back = await screen.findByRole("region", { name: "Replies" });
+    const lit = within(back).getAllByRole("listitem").find((li) => li.getAttribute("aria-current") === "true")!;
+    expect(lit.getAttribute("aria-label")).toBe("Codex agent");
+    await waitFor(() => expect(document.activeElement).toBe(takeHead(lit)));
+    expect((within(back).getByRole("checkbox", { name: /Pick Opus agent/ }) as HTMLInputElement).checked).toBe(true);
+    expect((within(back).getByRole("checkbox", { name: /Pick Codex agent/ }) as HTMLInputElement).checked).toBe(false);
   });
 
   it("each take shows the machine it ran on, and memory changes", async () => {
@@ -125,14 +157,25 @@ describe("BadgeDetail", () => {
     expect(screen.queryByRole("region", { name: "Replies" })).toBeNull();
   });
 
-  it("Escape in the compare closes it and keeps the badge open", async () => {
-    renderApp(storageWith({ credentials: [review], profiles: [opus, codex], assessments: [await result(opus, review), await result(codex, review)] }), badge);
+  it("Covers R17. Compare opens the two picked replies in the full window, and Escape comes back to the badge with both picked and Compare focused", async () => {
+    renderApp(
+      storageWith({
+        credentials: [review],
+        profiles: [opus, codex],
+        assessments: [await result(opus, review, { handBack: "Opus reply" }), await result(codex, review, { handBack: "Codex reply" })],
+      }),
+      badge,
+    );
     await screen.findByRole("region", { name: "Replies" });
     for (const box of screen.getAllByRole("checkbox")) await userEvent.click(box);
     await userEvent.click(screen.getByRole("button", { name: "Compare" }));
+    const compare = await screen.findByRole("region", { name: "Compare replies" });
+    expect(within(compare).getAllByRole("article")).toHaveLength(2);
+    expect(screen.queryByRole("heading", { name: "Code review", level: 2 })).toBeNull();
     await userEvent.keyboard("{Escape}");
-    await waitFor(() => expect(screen.queryByRole("region", { name: "Compare replies" })).toBeNull());
-    expect(screen.getByRole("heading", { name: "Code review", level: 2 })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Code review", level: 2 })).toBeTruthy();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Compare" })));
+    expect(screen.getAllByRole("checkbox").map((b) => (b as HTMLInputElement).checked)).toEqual([true, true]);
   });
 
   describe("handoffs on results", () => {
@@ -153,23 +196,22 @@ describe("BadgeDetail", () => {
       expect(await latest(/Codex agent/)).toContain("Skeleton");
     });
 
-    it("a reply keeps the text that ran, collapsed under it", async () => {
+    it("an opened reply keeps the text that ran, collapsed under it", async () => {
       const ran = await result(opus, review, { handoff: { id: "20260902T090000Z", text: "Second framing" } });
       renderApp(storageWith({ credentials: [review], profiles: [opus], handoffs, assessments: [ran] }), badge);
       const [row] = within(await screen.findByRole("region", { name: "Replies" })).getAllByRole("listitem");
-      await userEvent.click(within(row).getByRole("button", { expanded: false }));
-      const ranWith = row.querySelector("details")!;
+      expect(row.querySelector("details")).toBeNull();
+      await userEvent.click(takeHead(row));
+      const ranWith = (await screen.findByText("Handoff B", { selector: "summary" })).closest("details")!;
       expect(ranWith.open).toBe(false);
-      expect(ranWith.querySelector("summary")?.textContent).toBe("Handoff B");
       expect(ranWith.querySelector("pre")?.textContent).toBe("Second framing");
     });
 
-    it("A result recorded before handoffs shows the built-in prompt as the skeleton", async () => {
+    it("A result recorded before handoffs shows the built-in prompt as the skeleton in its opened reply", async () => {
       renderApp(storageWith({ credentials: [review], profiles: [opus], assessments: [await result(opus, review)] }), badge);
       const [row] = within(await screen.findByRole("region", { name: "Replies" })).getAllByRole("listitem");
-      await userEvent.click(within(row).getByRole("button", { expanded: false }));
-      const ranWith = row.querySelector("details")!;
-      expect(ranWith.querySelector("summary")?.textContent).toBe("Skeleton");
+      await userEvent.click(takeHead(row));
+      const ranWith = (await screen.findByText("Skeleton", { selector: "summary" })).closest("details")!;
       expect(ranWith.querySelector("pre")?.textContent).toBe(BUILT_IN_HANDOFF);
     });
 
@@ -428,6 +470,100 @@ describe("BadgeDetail", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Save" }));
     const holders = await screen.findByRole("region", { name: "Holders" });
     await waitFor(() => expect(within(holders).getByRole("button", { name: /Opus agent/ }).textContent).toContain("task changed"));
+  });
+});
+
+// Writing the task and rubric in a pane (U6, R7, R18, R19, R20). The flows above still
+// save as before; these cover the pane, the first focus and Escape keeping changed text.
+describe("BadgeDetail's writing panes", () => {
+  it("Covers R18. Editing the task fills the window with focus in the box, and the re-test warning is a page again", async () => {
+    const storage = storageWith({ credentials: [review], profiles: [opus], assessments: [await result(opus, review)] });
+    renderApp(storage, badge);
+    await screen.findByRole("list", { name: "Parts" });
+    expect(barActions()).toEqual(FOLDER_ACTIONS);
+    await openPart(/^Task/);
+    const box = await screen.findByRole("textbox", { name: "Task" });
+    expect(editDeck().classList.contains("pane")).toBe(true);
+    expect(barActions()).toEqual([]);
+    await waitFor(() => expect(document.activeElement).toBe(box));
+
+    await userEvent.type(box, " Twice.");
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(await screen.findByRole("heading", { name: "Holders will re-test" })).toBeTruthy();
+    expect(editDeck().classList.contains("pane")).toBe(false);
+    expect(barActions()).toEqual(FOLDER_ACTIONS);
+  });
+
+  it("Covers R20. Escape on an edited task keeps the deck and the text, and Save still writes it", async () => {
+    const storage = storageWith({ credentials: [review] });
+    const before = await snapshot(storage);
+    renderApp(storage, badge);
+    await openPart(/^Task/);
+    const box = (await screen.findByRole("textbox", { name: "Task" })) as HTMLTextAreaElement;
+    await userEvent.type(box, " Twice.");
+    // The first Escape leaves the box (R19); the next would leave the deck, but the text changed.
+    await userEvent.keyboard("{Escape}");
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Save" }));
+    await userEvent.keyboard("{Escape}");
+    expect(screen.getByRole("heading", { name: "The task" })).toBeTruthy();
+    expect(box.value).toBe("Review the attached diff. Twice.");
+    expect(await snapshot(storage)).toEqual(before);
+
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByRole("list", { name: "Parts" })).toBeTruthy();
+    expect((await saved(storage)).task).toBe("Review the attached diff. Twice.");
+  });
+
+  it("with no change to the task, Escape out of the box and once more returns to the badge", async () => {
+    const storage = storageWith({ credentials: [review] });
+    const before = await snapshot(storage);
+    renderApp(storage, badge);
+    await openPart(/^Task/);
+    const box = await screen.findByRole("textbox", { name: "Task" });
+    await waitFor(() => expect(document.activeElement).toBe(box));
+    await userEvent.keyboard("{Escape}");
+    expect(screen.getByRole("heading", { name: "The task" })).toBeTruthy();
+    await userEvent.keyboard("{Escape}");
+    expect(await screen.findByRole("list", { name: "Parts" })).toBeTruthy();
+    expect(barActions()).toEqual(FOLDER_ACTIONS);
+    expect(await snapshot(storage)).toEqual(before);
+  });
+
+  it("Covers R20. Escape on the re-test warning after a change keeps the deck, and Back finds the text", async () => {
+    const storage = storageWith({ credentials: [review], profiles: [opus], assessments: [await result(opus, review)] });
+    const before = await snapshot(storage);
+    renderApp(storage, badge);
+    await openPart(/^Task/);
+    await userEvent.type(await screen.findByRole("textbox", { name: "Task" }), " Twice.");
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(await screen.findByRole("heading", { name: "Holders will re-test" })).toBeTruthy();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.getByRole("heading", { name: "Holders will re-test" })).toBeTruthy();
+    expect(await snapshot(storage)).toEqual(before);
+    await userEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect((screen.getByRole("textbox", { name: "Task" }) as HTMLTextAreaElement).value).toBe("Review the attached diff. Twice.");
+    // Back on the task card, the text is still a change: Next still warns, and Escape still keeps it.
+    expect((screen.getByRole("button", { name: "Next" }) as HTMLButtonElement).disabled).toBe(false);
+    await userEvent.keyboard("{Escape}{Escape}");
+    expect(screen.getByRole("heading", { name: "The task" })).toBeTruthy();
+    expect(await snapshot(storage)).toEqual(before);
+  });
+
+  it("Covers R18. Editing the rubric fills the window with focus in the box, and Save writes it as before", async () => {
+    const storage = storageWith({ credentials: [review] });
+    renderApp(storage, badge);
+    await openPart(/^Rubric/);
+    const box = await screen.findByRole("textbox", { name: "Rubric" });
+    expect(editDeck().classList.contains("pane")).toBe(true);
+    expect(barActions()).toEqual([]);
+    await waitFor(() => expect(document.activeElement).toBe(box));
+    await userEvent.type(box, "Finds the off-by-one.");
+    await userEvent.keyboard("{Escape}{Escape}");
+    expect(screen.getByRole("heading", { name: "What good looks like" })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByRole("list", { name: "Parts" })).toBeTruthy();
+    expect(barActions()).toEqual(FOLDER_ACTIONS);
+    expect((await saved(storage)).rubric).toBe("Finds the off-by-one.");
   });
 });
 

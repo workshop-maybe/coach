@@ -64,7 +64,8 @@
   --heading-tracking: -0.02em;
   --ui-tracking: -0.01em;
 
-  /* The window's own corners: the one exception to square geometry. */
+  /* The window's own corners: the one exception to square geometry. They square off
+     while the window is maximized or full screen (below). */
   --window-radius: 6px;
 
   /* Pieces. */
@@ -80,4 +81,11 @@
   --space-xl: 32px;
   --space-2xl: 40px;
   --space-3xl: 48px;
+}
+
+/* A maximized or full-screen window meets the screen's edges, so its corners square off
+   (R4). src/ui/windowFrame.tsx writes data-window from the native window (KTD1). */
+:root[data-window="maximized"],
+:root[data-window="fullscreen"] {
+  --window-radius: 0;
 }

@@ -17,6 +17,11 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+/** The folder's actions in the top bar: all three on a page, none on a pane (R8). */
+const FOLDER_ACTIONS = ["Change folder", "Reload", "Export"];
+const barActions = () => FOLDER_ACTIONS.filter((name) => within(screen.getByRole("banner")).queryByRole("button", { name }) !== null);
+const createDeck = () => screen.getByRole("region", { name: "Create a credential" });
+
 async function walk(name: string, target: string, task: string) {
   await userEvent.click(await screen.findByRole("button", { name: "Build your own" }));
   await userEvent.type(await screen.findByRole("textbox", { name: "Name" }), name);
@@ -108,6 +113,39 @@ describe("CredentialDeck", () => {
     await walk("Code review", "I can find bugs", "Review it");
     await userEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(await screen.findByRole("button", { name: "Create a credential" })).toBeTruthy();
+    expect(await snapshot(storage)).toEqual(before);
+  });
+
+  it("Covers R18. The task card fills the window with focus in the box, and the cards before it are pages", async () => {
+    renderApp(storageWith(), { view: "deck", deck: "credential" });
+    await userEvent.click(await screen.findByRole("button", { name: "Build your own" }));
+    await userEvent.type(await screen.findByRole("textbox", { name: "Name" }), "Code review");
+    expect(createDeck().classList.contains("pane")).toBe(false);
+    expect(barActions()).toEqual(FOLDER_ACTIONS);
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    await userEvent.type(screen.getByRole("textbox", { name: "Learning target" }), "I can find bugs");
+    expect(createDeck().classList.contains("pane")).toBe(false);
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByRole("heading", { name: "The task" })).toBeTruthy();
+    expect(createDeck().classList.contains("pane")).toBe(true);
+    expect(barActions()).toEqual([]);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("textbox", { name: "Task" })));
+  });
+
+  it("Covers R20. Once a task is written, Escape steps back a card but never leaves, and the task is kept", async () => {
+    const storage = storageWith();
+    const before = await snapshot(storage);
+    renderApp(storage, { view: "deck", deck: "credential" });
+    await walk("Code review", "I can find bugs", "Review the diff");
+    await userEvent.keyboard("{Escape}");
+    expect(screen.getByRole("heading", { name: "The task" })).toBeTruthy();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.getByRole("heading", { name: "One thing its holder can do" })).toBeTruthy();
+    expect(barActions()).toEqual(FOLDER_ACTIONS);
+    await userEvent.keyboard("{Escape}");
+    expect(screen.getByRole("heading", { name: "One thing its holder can do" })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect((screen.getByRole("textbox", { name: "Task" }) as HTMLTextAreaElement).value).toBe("Review the diff");
     expect(await snapshot(storage)).toEqual(before);
   });
 

@@ -30,8 +30,8 @@ export interface BadgeRuns {
   runs: HandoffRun[];
 }
 
-/** The handoff a result ran, the skeleton for one recorded before handoffs (R2). */
-function runIdOf(a: Assessment): string {
+/** The handoff a result ran, the skeleton for one recorded before handoffs (R2). A reply view goes back to its take's own run (KTD7). */
+export function runIdOf(a: Assessment): string {
   return a.handoff?.id ?? SKELETON_ID;
 }
 

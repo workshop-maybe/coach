@@ -27,6 +27,10 @@ const openPart = async (name: RegExp) => {
   await userEvent.click(within(parts).getByRole("button", { name }));
 };
 
+/** The folder's actions in the top bar: all three on a page, none on a pane (R8). */
+const FOLDER_ACTIONS = ["Change folder", "Reload", "Export"];
+const barActions = () => FOLDER_ACTIONS.filter((name) => within(screen.getByRole("banner")).queryByRole("button", { name }) !== null);
+
 /** The agent whose reply row the opened view lights, once its replies have loaded. */
 async function litRow() {
   const rows = await screen.findAllByRole("listitem", { current: true });
@@ -136,6 +140,33 @@ describe("AgentDetail", () => {
     const p = await saved(storage);
     expect(p.repo).toBe("~/code/app");
     expect(p.notes).toBe("Runs with tests on.");
+  });
+
+  it("Covers R18, R20. Editing notes fills the window with focus in the box, and Escape keeps changed notes", async () => {
+    const storage = storageWith({ profiles: [opus] });
+    renderApp(storage, agent);
+    await openPart(/^Notes/);
+    const box = await screen.findByRole("textbox", { name: "Notes" });
+    expect(screen.getByRole("region", { name: "Edit Opus agent" }).classList.contains("pane")).toBe(true);
+    expect(barActions()).toEqual([]);
+    await waitFor(() => expect(document.activeElement).toBe(box));
+    await userEvent.type(box, "Runs with tests on.");
+    // Out of the box, then once more: the notes changed, so the deck stays.
+    await userEvent.keyboard("{Escape}{Escape}");
+    expect(screen.getByRole("heading", { name: "Notes" })).toBeTruthy();
+    expect((box as HTMLTextAreaElement).value).toBe("Runs with tests on.");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await screen.findByRole("list", { name: "Parts" });
+    expect(barActions()).toEqual(FOLDER_ACTIONS);
+    expect((await saved(storage)).notes).toBe("Runs with tests on.");
+  });
+
+  it("with unchanged notes, Escape out of the box and once more returns to the agent", async () => {
+    renderApp(storageWith({ profiles: [opus] }), agent);
+    await openPart(/^Notes/);
+    await waitFor(async () => expect(document.activeElement).toBe(await screen.findByRole("textbox", { name: "Notes" })));
+    await userEvent.keyboard("{Escape}{Escape}");
+    expect(await screen.findByRole("list", { name: "Parts" })).toBeTruthy();
   });
 
   it("parameters add one line at a time, each settling above the next", async () => {

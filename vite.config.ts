@@ -13,6 +13,8 @@ export default defineConfig(() => ({
   test: {
     environment: "node",
     include: ["src/**/*.test.{ts,tsx}"],
+    // ProseMirror's jsdom stand-ins, a no-op in the node environment (KTD11).
+    setupFiles: ["src/test/setup.ts"],
     // Vitest stubs CSS imports as empty strings, even with `?raw`. The badge renderer
     // embeds its font CSS as a raw string, so let that one file through.
     css: { include: [/src\/badge\/fonts\.css/] },

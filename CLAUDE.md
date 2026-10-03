@@ -25,7 +25,7 @@ The question the app answers: **which of my agents can actually meet my acceptan
 
 ## Stack
 
-- **Tauri 2** shell (`src-tauri/`, Rust). Keep the native side small: file read/write and clipboard.
+- **Tauri 2** shell (`src-tauri/`, Rust). Keep the native side small: file read/write, clipboard, and the window's remembered size and position.
 - **React + TypeScript + Vite** UI (`src/`).
 - Identifier `io.andamio.desktop`.
 
@@ -36,12 +36,12 @@ The question the app answers: **which of my agents can actually meet my acceptan
 - **The cast and the records.** Agents are machines with settings (harness, model and effort on three encoders), named in Inter. Credentials are cartridges with the badge on the label, and a test loads a cartridge into a machine. Results and prompts are square record cards with a header bar, speaking in Fragment Mono. The cast (`src/cast/`) is hand-inked. The chrome stays crisp. Precise business logic in a hand-drawn chassis.
 - **Color.** Ink on paper. Data blue lights the value or row a view is about and links, never a fill for a piece. Good green marks a pass. Orange stays in the logo. The view's main action is the ink block (`button.primary`), one per view.
 - **Tokens.** `src/theme/tokens.css` and `src/theme/tokens.shared.ts` are synced copies of `landing-page-and-blog/src/ui/system/`. Never edit them except the provenance line. App values go in `src/theme/app-tokens.css`.
-- **Geometry.** Square. The one exception is the window's own corners (`--window-radius`), since the window is frameless. `src/theme/brand.test.ts` fails on color literals or any other rounded corner in component CSS.
+- **Geometry.** Square. The one exception is the window's own corners (`--window-radius`): the window is frameless, so they round like a native window's, and they square off while it is maximized or full screen. `src/theme/brand.test.ts` fails on color literals or any other rounded corner in component CSS.
 - **Fonts.** Inter and Fragment Mono are bundled from `@fontsource`, never fetched.
 
 ### Interaction rules
 
-- **Home is the only room.** Home shows what needs you, your agents, your badges and the two doors (Create an agent, Create a credential). Everything else is a deck in progress or one item open (a badge, an agent, or one of a badge's handoffs once two or more have run), and each one returns home. A handoff returns to its badge. No sidebar, no other views.
+- **Home is the only room.** Home shows what needs you, your agents, your badges and the two doors (Create an agent, Create a credential). Everything else is a deck in progress or one item open (a badge, an agent, one of a badge's handoffs once two or more have run, one reply, or two replies compared), and each one returns home. A handoff returns to its badge. A reply returns to the badge or handoff that lists it, with its row lit. A compare returns there too, with both still picked. No sidebar, no other views.
 - **Decks, not forms.** Every flow is a list of beats handed to `src/ui/Deck.tsx`. No screen shows a set of labeled fields to fill and submit. Editing an existing badge or agent opens one part at a time as a one-beat deck.
 - **One thing per card.** Each card asks one thing and offers one forward action named for what happens next ("Make the badge", "Copy"). Back is quiet.
 - **No eyebrows.** Nothing sits above a heading as a kicker or label.

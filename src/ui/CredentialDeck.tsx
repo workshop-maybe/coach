@@ -3,6 +3,10 @@
 // credential goes into the folder's first collection, or a new "My credentials" when
 // there is none (KTD6). Opened from a test that is missing its credential, it hands the
 // new one straight back to that test (AE2).
+//
+// The task card is a pane (U6 of the deep-work panes plan, R7, R18): the editor fills the
+// window and takes first focus, and once a task is written the deck holds unsaved work,
+// so Escape steps back a card but never leaves the deck (R19, R20, KTD8).
 
 import { useRef, useState } from "react";
 import { credentialPath, loadFolder } from "../domain/folder";
@@ -17,6 +21,7 @@ import { Badge } from "./Badge";
 import { Deck, type Beat } from "./Deck";
 import { useNav } from "./nav";
 import type { TestPick } from "./routes";
+import { useRichDraft } from "./richDraft";
 import { CopyHelper, TargetHint, focusOnMount } from "./shared";
 import { RichText } from "./RichText";
 import { useFolder } from "./useFolderState";
@@ -30,7 +35,8 @@ export function CredentialDeck({ returnTo }: { returnTo?: TestPick }) {
   const [start, setStart] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [target, setTarget] = useState("");
-  const [task, setTask] = useState("");
+  const taskDraft = useRichDraft("");
+  const task = taskDraft.value;
   // Detail the target check moved out of the target. There is no rubric card here, so it waits.
   const [rubric, setRubric] = useState("");
   const [made, setMade] = useState<string | null>(null);
@@ -207,14 +213,17 @@ export function CredentialDeck({ returnTo }: { returnTo?: TestPick }) {
           title: "The task",
           forward: "Make the badge",
           valid: task.trim() !== "",
+          pane: true,
+          focusBody: true,
           body: (
             <>
-              <RichText aria-label="Task" value={task} onChange={setTask} placeholder="What the agent is asked to do" />
+              <RichText aria-label="Task" value={task} onChange={taskDraft.setValue} onNormalized={taskDraft.onNormalized} placeholder="What the agent is asked to do" />
               <CopyHelper label="Suggest a task" text={() => suggestAssignmentsPrompt(draft)} />
             </>
           ),
         },
       ];
 
-  return <Deck label="Create a credential" beats={beats} onClose={() => navigate({ view: "home" })} onFinish={make} />;
+  // A task written for your own credential is the work Escape must not lose; a preset has no task card.
+  return <Deck label="Create a credential" beats={beats} unsaved={picked === null && taskDraft.changed} onClose={() => navigate({ view: "home" })} onFinish={make} />;
 }

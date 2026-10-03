@@ -259,11 +259,21 @@ button:focus-visible {
   gap: var(--space-sm);
 }
 
+/* The content area takes the height the bar and the banners leave (KTD4), so a view that
+   fills the window, such as an empty home, needs no height of its own. Its view spans the
+   column; a deck or an item keeps its own measure and centers in it. */
 .content {
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 auto;
   width: 100%;
   max-width: 62rem;
   margin: 0 auto;
   padding: var(--space-xl) var(--space-xl) var(--space-3xl);
+}
+
+.content > * {
+  width: 100%;
 }
 
 /* ---------------------------------------------------------------------------
@@ -308,6 +318,76 @@ button:focus-visible {
 }
 
 /* ---------------------------------------------------------------------------
+   Pane mode (KTD3, KTD4): a view has claimed the window (src/ui/pane.tsx) and the bar
+   holds only the window keys and the brand. The shell is exactly the window's height and
+   never scrolls, so the keys stay in view whatever shows above the pane (R10). Each banner
+   keeps to its first line, its list still readable to a screen reader, clipped rather
+   than unmounted so an alert is not announced again. The content area hands the view all
+   the height left. */
+
+.shell[data-pane] {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.shell[data-pane] > :is(.topbar, .banner) {
+  flex: none;
+}
+
+.shell[data-pane] > .banner {
+  position: relative;
+  margin-top: var(--space-sm);
+  padding-block: var(--space-xs);
+  overflow: hidden;
+}
+
+.shell[data-pane] > .banner :is(.banner-title, .banner-notice > span) {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.shell[data-pane] > .banner ul {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.shell[data-pane] > .content {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-width: none;
+  padding: 0;
+}
+
+/* A pane view's root (R7): it spans the window below the bar, fills the height left, and
+   scrolls only inside itself. A view pins its actions by giving the region that holds
+   its text the scroll (flex: 1, min-height: 0, overflow: auto) and the actions none. */
+.pane {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  overflow: auto;
+  padding: var(--space-lg) var(--space-xl);
+}
+
+@media (max-width: 36rem) {
+  .pane {
+    padding: var(--space-base);
+  }
+}
+
+/* ---------------------------------------------------------------------------
    Shared pieces. */
 
 .badge-placeholder {
@@ -336,34 +416,9 @@ button:focus-visible {
   margin: var(--space-2xl) auto 0;
 }
 
-/* A card that holds a rich-text editor takes the window: full width, the card as tall
-   as the view allows, and the editor filling the card and scrolling inside itself. */
-.content:has(.deck .rich) {
-  max-width: none;
-  padding-bottom: var(--space-xl);
-}
-
-.deck:has(.rich) {
-  display: flex;
-  flex-direction: column;
-  max-width: none;
-  height: calc(100vh - 12rem);
-  min-height: 24rem;
-}
-
-.deck:has(.rich) .deck-card {
-  flex: 1;
-  min-height: 0;
-}
-
-.deck:has(.rich) .deck-body {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  gap: var(--space-sm);
-}
-
+/* A rich-text editor in a deck card grows with its text from a roomy minimum. In a card
+   whose body is a flex column of fixed height, as on a pane, it fills the body and
+   scrolls inside itself. */
 .deck-body .rich {
   display: flex;
   flex-direction: column;
@@ -381,6 +436,7 @@ button:focus-visible {
 
 .deck-body .rich-input {
   flex: 1;
+  min-height: 12rem;
 }
 
 .deck-close {
@@ -421,11 +477,16 @@ button:focus-visible {
   background: var(--good);
 }
 
+/* The card's padding is named, so a short window can tighten it and the pieces placed at
+   its corner follow. Its foot padding belongs to the actions (.deck-actions). */
 .deck-card {
+  --card-pad-top: var(--space-xl);
+  --card-pad-side: var(--space-xl);
+  --card-pad-end: var(--space-lg);
   display: flex;
   flex-direction: column;
   gap: var(--space-base);
-  padding: var(--space-xl) var(--space-xl) var(--space-lg);
+  padding: var(--card-pad-top) var(--card-pad-side) 0;
   background: var(--surface);
   border: var(--rule-width) solid var(--rule);
   box-shadow: var(--shadow);
@@ -457,7 +518,9 @@ button:focus-visible {
 /* ---------------------------------------------------------------------------
    Rich text: a Markdown box on the white surface. Prose in Inter, code in the
    mono on a faint grid tint, square lists and task boxes. Formatting lives in a
-   bar on top of the box, and the inline tools float over a selection too. */
+   bar on top of the box, and the inline tools float over a selection too. The
+   prose rules are shared with the read-only reply view (.rich-prose, U3), so a
+   reply reads in the editor's type (R11). */
 
 .rich {
   position: relative;
@@ -484,18 +547,21 @@ button:focus-visible {
   background: var(--cell);
 }
 
-.rich-input {
-  min-height: 8rem;
-  padding: 10px 14px;
-  border: none;
-  border-radius: 0;
-  background: var(--surface);
+:is(.rich-input, .rich-prose) {
   font-family: var(--font-sans);
   font-size: 15px;
   line-height: 1.55;
   letter-spacing: var(--ui-tracking);
   color: var(--ink);
   overflow-wrap: anywhere;
+}
+
+.rich-input {
+  min-height: 8rem;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 0;
+  background: var(--surface);
   cursor: text;
 }
 
@@ -505,23 +571,23 @@ button:focus-visible {
   box-shadow: none;
 }
 
-.rich-input > * + * {
+:is(.rich-input, .rich-prose) > * + * {
   margin-top: 0.6em;
 }
 
-.rich-input :is(p, ul, ol, blockquote, pre, h1, h2, h3) {
+:is(.rich-input, .rich-prose) :is(p, ul, ol, blockquote, pre, h1, h2, h3) {
   margin-bottom: 0;
 }
 
-.rich-input > :first-child {
+:is(.rich-input, .rich-prose) > :first-child {
   margin-top: 0;
 }
 
-.rich-input p {
+:is(.rich-input, .rich-prose) p {
   margin: 0;
 }
 
-.rich-input :is(h1, h2, h3) {
+:is(.rich-input, .rich-prose) :is(h1, h2, h3) {
   margin-top: 0.9em;
   font-family: var(--font-sans);
   font-weight: 600;
@@ -529,69 +595,69 @@ button:focus-visible {
   letter-spacing: var(--heading-tracking);
 }
 
-.rich-input h1 {
+:is(.rich-input, .rich-prose) h1 {
   font-size: 1.45em;
 }
 
-.rich-input h2 {
+:is(.rich-input, .rich-prose) h2 {
   font-size: 1.22em;
 }
 
-.rich-input h3 {
+:is(.rich-input, .rich-prose) h3 {
   font-size: 1.05em;
 }
 
-.rich-input :is(ul, ol) {
+:is(.rich-input, .rich-prose) :is(ul, ol) {
   margin-top: 0.4em;
   padding-left: 1.4em;
 }
 
-.rich-input ul {
+:is(.rich-input, .rich-prose) ul {
   list-style-type: square;
 }
 
-.rich-input li > p + * {
+:is(.rich-input, .rich-prose) li > p + * {
   margin-top: 0.2em;
 }
 
-.rich-input li::marker {
+:is(.rich-input, .rich-prose) li::marker {
   color: var(--ink-muted);
 }
 
-.rich-input ol li::marker {
+:is(.rich-input, .rich-prose) ol li::marker {
   font-family: var(--font-mono);
   font-size: 0.85em;
 }
 
-.rich-input ul[data-type="taskList"] {
+:is(.rich-input, .rich-prose) ul[data-type="taskList"] {
   padding-left: 0;
   list-style: none;
 }
 
-.rich-input ul[data-type="taskList"] > li {
+:is(.rich-input, .rich-prose) ul[data-type="taskList"] > li {
   display: flex;
   align-items: flex-start;
   gap: var(--space-sm);
 }
 
-.rich-input ul[data-type="taskList"] > li > label {
+:is(.rich-input, .rich-prose) ul[data-type="taskList"] > li > label {
   flex: none;
   padding-top: 0.28em;
   user-select: none;
 }
 
-.rich-input ul[data-type="taskList"] > li > div {
+:is(.rich-input, .rich-prose) ul[data-type="taskList"] > li > div {
   flex: 1;
   min-width: 0;
 }
 
-.rich-input ul[data-type="taskList"] > li[data-checked="true"] > div {
+:is(.rich-input, .rich-prose) ul[data-type="taskList"] > li[data-checked="true"] > div {
   color: var(--ink-muted);
   text-decoration: line-through;
   text-decoration-color: var(--ink-ghost);
 }
 
-.rich-input input[type="checkbox"] {
+:is(.rich-input, .rich-prose) input[type="checkbox"] {
   appearance: none;
   display: block;
   width: 14px;
@@ -604,12 +670,12 @@ button:focus-visible {
   cursor: pointer;
 }
 
-.rich-input input[type="checkbox"]:checked {
+:is(.rich-input, .rich-prose) input[type="checkbox"]:checked {
   background: var(--ink);
   box-shadow: inset 0 0 0 2px var(--surface);
 }
 
-.rich-input blockquote {
+:is(.rich-input, .rich-prose) blockquote {
   margin-left: 0;
   margin-right: 0;
   padding-left: var(--space-md);
@@ -617,7 +683,7 @@ button:focus-visible {
   color: var(--ink-muted);
 }
 
-.rich-input code {
+:is(.rich-input, .rich-prose) code {
   padding: 1px 4px;
   background: var(--grid);
   font-family: var(--font-mono);
@@ -625,7 +691,7 @@ button:focus-visible {
   letter-spacing: 0;
 }
 
-.rich-input pre {
+:is(.rich-input, .rich-prose) pre {
   padding: var(--space-md);
   border: 1px solid var(--cell);
   background-color: var(--grid);
@@ -636,19 +702,19 @@ button:focus-visible {
   white-space: pre-wrap;
 }
 
-.rich-input pre code {
+:is(.rich-input, .rich-prose) pre code {
   padding: 0;
   background: none;
   font-size: inherit;
 }
 
-.rich-input a {
+:is(.rich-input, .rich-prose) a {
   color: var(--data);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
-.rich-input hr {
+:is(.rich-input, .rich-prose) hr {
   border: none;
   border-top: 1px solid var(--cell);
 }
@@ -659,6 +725,43 @@ button:focus-visible {
   height: 0;
   color: var(--ink-ghost);
   pointer-events: none;
+}
+
+/* The read-only reply view (U3): a region that scrolls on its own and spans its
+   container, its scrollbar at the container's edge, with the reply held to a centered
+   measure of about 70 characters of the prose type (R9). Stored, the reply is the exact
+   string in the record mono (R12). */
+.rich-view {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: var(--space-base) var(--space-lg);
+  overflow: auto;
+}
+
+.rich-view-measure {
+  max-width: 70ch;
+  margin: 0 auto;
+  font-family: var(--font-sans);
+  font-size: 15px;
+}
+
+/* A task box in a reply is read, not ticked. */
+.rich-prose input[type="checkbox"] {
+  cursor: default;
+  pointer-events: none;
+}
+
+.rich-stored {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.55;
+  letter-spacing: var(--value-tracking);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--ink);
 }
 
 .rich-menu {
@@ -758,12 +861,17 @@ button:focus-visible {
   background: var(--error-wash);
 }
 
+/* A card taller than the window keeps Back and its forward action in view: they stick to
+   the window's foot, on the card's white, until the card's own end scrolls up to them (R6). */
 .deck-actions {
+  position: sticky;
+  bottom: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-md);
-  padding-top: var(--space-sm);
+  padding: var(--space-sm) 0 var(--card-pad-end);
+  background: var(--surface);
 }
 
 .deck-actions > :only-child {
@@ -773,6 +881,77 @@ button:focus-visible {
 .deck-back {
   color: var(--ink-muted);
   font-weight: 500;
+}
+
+/* A pane beat (U8, R7, KTD4): the deck is the pane and spans the window below the bar.
+   The answers above keep to one line (clipped, so a screen reader still reads them whole)
+   and share it with the corner control at the right, and the card takes the height left.
+   Its body is the column that grows and scrolls, so the heading and the actions stay in
+   view, with the normal small space between a field and the helpers under it. Beats that
+   are not panes keep the rules above. */
+
+.deck.pane {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-sm) var(--space-base);
+  max-width: none;
+  margin: 0;
+}
+
+.deck.pane > .deck-close {
+  grid-area: 1 / 2;
+  position: static;
+}
+
+.deck.pane > .deck-settled {
+  grid-area: 1 / 1;
+  flex-direction: row;
+  gap: var(--space-base);
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+}
+
+.deck.pane > .deck-settled li {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.deck.pane > .deck-card {
+  grid-area: 2 / 1 / 3 / 3;
+  align-self: stretch;
+  min-height: 0;
+}
+
+.deck.pane .deck-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  gap: var(--space-sm);
+  min-height: 0;
+  overflow: auto;
+}
+
+/* A writing pane (U6, R9, R18): an editor's box and its scrollbar span the pane, and its
+   text keeps the reply view's centered measure of about 70 characters (.rich-view-measure,
+   the same type). The side padding grows as the pane widens past the measure, so a click
+   beside the text still lands in the editor. The formatting bar sets the editor's type so
+   its 70ch is the same measure, and its keys start where the text starts. This covers the
+   reply box on the paste card (U4) and every rich editor on a pane; editors on ordinary
+   cards keep their padding. */
+.deck.pane .rich-input {
+  padding-inline: max(14px, calc((100% - 70ch) / 2));
+}
+
+.deck.pane .rich-bar {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  padding-inline: max(6px, calc((100% - 70ch) / 2 - 6px));
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -805,8 +984,8 @@ button:focus-visible {
 .home {
   display: flex;
   flex-direction: column;
+  flex: 1 0 auto;
   gap: var(--space-2xl);
-  min-height: calc(100vh - 12rem);
 }
 
 .home-section h2 {
@@ -838,9 +1017,11 @@ button:focus-visible {
   border-top: 1px solid var(--cell);
 }
 
+/* The title keeps its line first; the detail takes the rest of the row, at its right edge,
+   and wraps when the window is narrow. */
 .need {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto auto 1fr;
   align-items: center;
   gap: var(--space-md);
   width: 100%;
@@ -858,11 +1039,14 @@ button:focus-visible {
 }
 
 .need-title {
+  grid-column: 2;
   font-weight: 600;
   letter-spacing: var(--heading-tracking);
 }
 
 .need-detail {
+  grid-column: 3;
+  text-align: right;
   font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 400;
@@ -954,14 +1138,14 @@ button:focus-visible {
   color: var(--ink-muted);
 }
 
-/* The two doors stay in view at the foot of home. */
+/* The two doors follow the shelves, and stay in view at the window's foot while home runs
+   past it. On a tall window they sit under the badges rather than far below them. */
 .doors {
   position: sticky;
   bottom: 0;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--space-base);
-  margin-top: auto;
   padding: var(--space-base) 0;
   background: var(--bg);
 }
@@ -1308,11 +1492,20 @@ button:focus-visible {
 
 /* A handoff is written as it is copied: plain mono text, slot braces and all. */
 .deck-body textarea.handoff-text {
-  min-height: 18rem;
   font-family: var(--font-mono);
   font-size: 13px;
   letter-spacing: var(--value-tracking);
   white-space: pre-wrap;
+}
+
+/* On its pane (U6, R9, R18) the field takes the height above the slots and holds its text
+   to a centered measure of about 70 of its characters, its scrollbar at the pane's edge.
+   Scoped to the textarea, so the handoff text folded on a handoff page is untouched. */
+.deck.pane textarea.handoff-text {
+  flex: 1 1 auto;
+  min-height: 8rem;
+  resize: none;
+  padding-inline: max(12px, calc((100% - 70ch) / 2));
 }
 
 .handoff-slots {
@@ -1332,20 +1525,58 @@ button:focus-visible {
   padding-left: var(--space-lg);
 }
 
-/* Did it meet it: the rubric beside the two answers when one exists. */
+/* Did it meet it (U4, R14): a pane. The rubric and the reply sit side by side, each a
+   record with a mono header bar and text that scrolls on its own (R10), and Met and Not
+   yet stay pinned below them. With no rubric the reply alone spans the card, its prose
+   at the centered measure (R9). The stored-text switch sits on the heading's line, at
+   the card's top right (R12). */
 .meet {
   display: flex;
   flex-direction: column;
-  gap: var(--space-base);
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: var(--space-md);
 }
 
-.meet-rubric {
+.meet-stored {
+  position: absolute;
+  top: var(--card-pad-top);
+  right: var(--card-pad-side);
+  display: flex;
+  align-items: center;
+  height: calc(1.6rem * 1.15);
+  padding: 0 var(--space-sm);
+  color: var(--ink-muted);
+  font-weight: 500;
+}
+
+.meet-texts {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: var(--space-md);
+}
+
+.meet-with-rubric .meet-texts {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+}
+
+.meet-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
   border: 1px solid var(--cell);
+  background: var(--surface);
+}
+
+.meet-text-rubric {
   background: var(--bg);
 }
 
-.meet-rubric-head {
-  display: block;
+.meet-text-head {
+  flex: none;
   padding: var(--space-xs) var(--space-md);
   border-bottom: 1px solid var(--cell);
   font-family: var(--font-mono);
@@ -1354,24 +1585,41 @@ button:focus-visible {
   color: var(--ink-muted);
 }
 
-.meet-rubric p {
-  margin: 0;
-  padding: var(--space-md);
-  font-family: var(--font-mono);
-  font-size: 13px;
-  letter-spacing: var(--value-tracking);
-  white-space: pre-wrap;
-}
-
+/* Met and Not yet share the row and stop at a comfortable width, centered, so a wide
+   window does not stretch them into bars. */
 .meet-choices {
+  flex: none;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 16rem));
+  justify-content: center;
   gap: var(--space-md);
 }
 
 .meet-choices button {
   min-height: 3rem;
   font-size: 15px;
+}
+
+/* Below the stacking width the rubric sits above the reply, takes at most about a third
+   of the height and scrolls on its own; the reply takes the rest. */
+@media (max-width: 56rem) {
+  .meet-with-rubric .meet-texts {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .meet-with-rubric .meet-text {
+    flex: 1 1 0;
+  }
+
+  .meet-with-rubric .meet-text-rubric {
+    flex: 0 1 auto;
+    max-height: 33%;
+  }
+
+  .meet-with-rubric .rich-view {
+    padding: var(--space-sm) var(--space-base);
+  }
 }
 
 /* The test on the agent's machine (R5-R7, KTD4). */
@@ -1395,11 +1643,31 @@ button:focus-visible {
   align-self: stretch;
 }
 
+/* "What came back" on a pane (U4, R22, KTD9): the drawing is a strip above the reply
+   box, the full machine and box at a small height, so the box keeps the height. */
+.test-strip {
+  flex: none;
+}
+
+.test-strip .test-stage {
+  padding: 0;
+}
+
+.test-strip .cast {
+  width: auto;
+  height: 4.5rem;
+}
+
 /* "Hand it over": the badge in the handoff box, the agent beside it (U6, KTD8). */
 .test-stage-handoff {
-  flex-wrap: wrap;
   align-items: flex-end;
   gap: var(--space-md);
+}
+
+/* The two drawings stay side by side and scale down together to fit the card. */
+.test-stage-handoff > .cast {
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 /* The box's keys as real buttons, one per handoff, the lit one in data blue. */
@@ -1757,7 +2025,8 @@ button:focus-visible {
 }
 
 /* One handoff's replies (U2): a record card with a row per agent, its latest take
-   leading and older takes below. The lit row is the one the view is about (KTD4). */
+   leading and older takes below. The lit row is the one the view is about (KTD4). A
+   take's head opens its reply view (U5). */
 .reply-list {
   list-style: none;
   margin: 0;
@@ -1844,86 +2113,130 @@ button:focus-visible {
   overflow: hidden;
 }
 
-.take-body {
-  grid-column: 2;
-  padding-bottom: var(--space-sm);
-}
-
-.take-body .handback {
-  max-height: 24rem;
-  overflow: auto;
-  white-space: pre-wrap;
-  font-size: 12.5px;
-}
-
 .verdict-met {
   color: var(--good);
 }
 
-/* Two replies side by side (R10): the view takes the window's width, and each pane is a
-   record with a header bar whose reply scrolls on its own. */
-.content:has(.compare) {
-  max-width: none;
+/* One take, opened (U5, R15): a pane. The corner control takes its own row at the right,
+   then the take as a record like the judge card's texts: a mono header bar with the
+   agent, setup, verdict and date, the stored-text switch at its end and the note below,
+   over the reply, which scrolls on its own at the centered measure (R9, R10). The
+   handoff text that ran sits collapsed under the record, in the record mono. */
+.reply-view > .deck-close {
+  position: static;
+  flex: none;
+  align-self: flex-end;
 }
 
-.content:has(.compare) .detail {
-  max-width: none;
-}
-
-.compare-panes {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-base);
-}
-
-.compare-pane {
+.reply-record {
   display: flex;
   flex-direction: column;
-  min-width: 0;
-  height: calc(100vh - 16rem);
-  min-height: 20rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  border: 1px solid var(--cell);
   background: var(--surface);
-  border: var(--rule-width) solid var(--rule);
 }
 
-.compare-bar {
+.reply-bar {
+  flex: none;
   display: flex;
   flex-wrap: wrap;
+  align-items: baseline;
   gap: var(--space-xs) var(--space-md);
   padding: var(--space-sm) var(--space-base);
-  border-bottom: var(--rule-width) solid var(--rule);
+  border-bottom: 1px solid var(--cell);
   font-family: var(--font-mono);
   font-size: 12px;
   letter-spacing: var(--value-tracking);
 }
 
-.compare-name {
+.reply-bar h2 {
+  margin: 0;
   font-family: var(--font-sans);
-  font-weight: 600;
+  font-size: 1.05rem;
+  letter-spacing: var(--heading-tracking);
 }
 
-.compare-reply {
-  flex: 1;
-  min-height: 0;
+.reply-bar h2:focus-visible {
+  box-shadow: none;
+  outline: none;
+}
+
+.reply-stored {
+  align-self: center;
+  margin-left: auto;
+  padding: 0 var(--space-sm);
+  font-family: var(--font-sans);
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--ink-muted);
+}
+
+.reply-note {
+  flex-basis: 100%;
   margin: 0;
-  padding: var(--space-base);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+
+.reply-ran {
+  flex: none;
+  margin-top: var(--space-md);
+}
+
+.reply-ran summary {
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: var(--value-tracking);
+  color: var(--ink-muted);
+}
+
+.reply-ran .handback {
+  max-height: 30vh;
+  margin: var(--space-sm) 0 0;
+  padding: var(--space-sm) var(--space-base);
   overflow: auto;
+  border: 1px solid var(--cell);
+  background: var(--bg);
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
   font-size: 12.5px;
 }
 
-@media (max-width: 36rem) {
+/* Two takes, side by side (U9, R17): a pane. The stored-text switch and the corner
+   control share the top row at the right, then the two takes as records like the reply
+   view's, each with its mono bar over a reply that scrolls on its own (R10). Below the
+   stacking width the records stack, each taking half the height left. */
+.compare-top {
+  flex: none;
+  display: flex;
+  align-items: center;
+}
+
+.compare-top > .deck-close {
+  position: static;
+}
+
+.compare-panes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr);
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: var(--space-base);
+}
+
+.compare-panes > .reply-record {
+  min-width: 0;
+}
+
+@media (max-width: 56rem) {
   .compare-panes {
-    grid-template-columns: 1fr;
-  }
-
-  .compare-pane {
-    height: auto;
-    min-height: 0;
-  }
-
-  .compare-reply {
-    overflow: visible;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -2095,15 +2408,15 @@ button:focus-visible {
    clear, and a sketched frame (src/assets/sketch-frame.svg, its strokes running past
    the corners) is laid over it as a mask filled with the rule ink. */
 
-:is(.deck-card, .needs, .agent-card, .badge-card, .door, .part, .detail-holder, .earned, .handoff-runs, .reply-list, .compare-pane, .rich-menu) {
+:is(.deck-card, .needs, .agent-card, .badge-card, .door, .part, .detail-holder, .earned, .handoff-runs, .reply-list, .rich-menu) {
   border-color: transparent;
 }
 
-:is(.deck-card, .needs, .agent-card, .badge-card, .door, .part, .detail-holder, .earned, .handoff-runs, .reply-list, .compare-pane) {
+:is(.deck-card, .needs, .agent-card, .badge-card, .door, .part, .detail-holder, .earned, .handoff-runs, .reply-list) {
   position: relative;
 }
 
-:is(.deck-card, .needs, .agent-card, .badge-card, .door, .part, .detail-holder, .earned, .handoff-runs, .reply-list, .compare-pane, .rich-menu)::after {
+:is(.deck-card, .needs, .agent-card, .badge-card, .door, .part, .detail-holder, .earned, .handoff-runs, .reply-list, .rich-menu)::after {
   content: "";
   position: absolute;
   inset: -5px;
@@ -2124,8 +2437,9 @@ button:focus-visible {
   padding-inline: 0;
 }
 
-/* The window's own keys (no system title bar): close and minimize, drawn like the
-   machine's keys. The bar they sit in is the window's drag region. */
+/* The window's own keys (no system title bar): close, minimize and full screen, drawn
+   like the machine's keys. The bar they sit in is the window's drag region, except in
+   full screen. */
 .window-keys {
   display: flex;
   gap: var(--space-xs);
@@ -2163,12 +2477,18 @@ button:focus-visible {
   stroke-width: 1.8;
 }
 
-.window-key:hover .window-key-fill {
+.window-key:hover:not(:disabled) .window-key-fill {
   fill: var(--ink);
 }
 
-.window-key:hover .window-key-icon {
+.window-key:hover:not(:disabled) .window-key-icon {
   stroke: var(--on-ink);
+}
+
+/* Minimize, while the window is full screen. */
+.window-key:disabled .window-key-edge,
+.window-key:disabled .window-key-icon {
+  stroke: var(--ink-ghost);
 }
 
 .window-key:focus-visible {
@@ -2179,4 +2499,65 @@ button:focus-visible {
 .gate-bar {
   display: flex;
   padding: var(--space-md) var(--space-xl);
+}
+
+/* ---------------------------------------------------------------------------
+   A short window, down to the minimum of 560 (R3, R6). The paper around the cards gets
+   thinner and the drawings scale with the window's height, so a card's heading, picks and
+   actions fit together; on a pane the chrome around the texts tightens, so the judge
+   card shows more of the rubric and the reply. */
+
+@media (max-height: 45rem) {
+  .topbar {
+    padding-block: var(--space-sm);
+  }
+
+  .content {
+    padding-top: var(--space-base);
+  }
+
+  :is(.deck, .detail) {
+    margin-top: var(--space-xl);
+  }
+
+  .deck-close {
+    top: calc(-1 * var(--space-xl));
+  }
+
+  .deck-card {
+    --card-pad-top: var(--space-lg);
+  }
+
+  :is(.test-stage, .player-stage) .cast,
+  .handoffs-box {
+    width: auto;
+    max-height: 24vh;
+  }
+
+  .player {
+    gap: var(--space-base);
+  }
+
+  .dial-step {
+    min-height: 2.25rem;
+  }
+
+  .pane {
+    padding-block: var(--space-md);
+  }
+
+  .deck.pane > .deck-card {
+    --card-pad-top: var(--space-lg);
+    --card-pad-side: var(--space-lg);
+    --card-pad-end: var(--space-base);
+    gap: var(--space-md);
+  }
+
+  .deck.pane .deck-actions {
+    padding-top: 0;
+  }
+
+  .meet-choices button {
+    min-height: 2.5rem;
+  }
 }

@@ -63,15 +63,37 @@ describe("HandoffDetail", () => {
     expect(await screen.findByRole("heading", { name: "Code review" })).toBeTruthy();
   });
 
-  it("Escape in the compare closes the compare and keeps the handoff open", async () => {
+  it("Covers R17. Compare on a handoff page opens the full window, and Escape comes back to that handoff with both picked and Compare focused", async () => {
     open(await multi());
     await screen.findByRole("heading", { name: "Handoff A" });
     for (const box of screen.getAllByRole("checkbox")) await userEvent.click(box);
     await userEvent.click(screen.getByRole("button", { name: "Compare" }));
-    expect(screen.getByRole("region", { name: "Compare replies" })).toBeTruthy();
+    const compare = await screen.findByRole("region", { name: "Compare replies" });
+    const panes = within(compare).getAllByRole("article");
+    expect(within(panes[0]).getByText("Codex on A")).toBeTruthy();
+    expect(within(panes[1]).getByText("Opus on A")).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Handoff A" })).toBeNull();
     await userEvent.keyboard("{Escape}");
-    await waitFor(() => expect(screen.queryByRole("region", { name: "Compare replies" })).toBeNull());
-    expect(screen.getByRole("heading", { name: "Handoff A" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Handoff A", level: 2 })).toBeTruthy();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Compare" })));
+    expect(screen.getAllByRole("checkbox").map((b) => (b as HTMLInputElement).checked)).toEqual([true, true]);
+  });
+
+  it("the compare of two takes on an older run comes back to that run's page, not the agents' latest", async () => {
+    const assessments = [
+      await result(opus, review, { ...day(1), handBack: "Opus on the skeleton" }),
+      await result(codex, review, { ...day(2), handBack: "Codex on the skeleton" }),
+      await result(opus, review, { ...day(3), handoff: { id: "a", text: "Filled A" }, handBack: "Opus on A" }),
+      await result(codex, review, { ...day(4), handoff: { id: "a", text: "Filled A" }, handBack: "Codex on A" }),
+    ];
+    open(assessments, { handoffId: "skeleton" });
+    await screen.findByRole("heading", { name: "Skeleton" });
+    for (const box of screen.getAllByRole("checkbox")) await userEvent.click(box);
+    await userEvent.click(screen.getByRole("button", { name: "Compare" }));
+    await screen.findByRole("region", { name: "Compare replies" });
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(await screen.findByRole("heading", { name: "Skeleton", level: 2 })).toBeTruthy();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Compare" })));
   });
 
   it("lights the agent the route names", async () => {
@@ -79,6 +101,25 @@ describe("HandoffDetail", () => {
     await screen.findByRole("heading", { name: "Handoff A" });
     const lit = screen.getAllByRole("listitem").find((li) => li.getAttribute("aria-current") === "true");
     expect(lit?.getAttribute("aria-label")).toBe("Opus agent");
+  });
+
+  it("Covers R16. A take opened on a handoff that is not its agent's latest closes back to that handoff, its row lit and focused, picks kept", async () => {
+    open(await multi(), { handoffId: "skeleton" });
+    await screen.findByRole("heading", { name: "Skeleton" });
+    const replies = screen.getByRole("region", { name: "Replies" });
+    const box = within(replies).getByRole("checkbox", { name: /Pick Opus agent/ });
+    await userEvent.click(box);
+    await userEvent.click(box.parentElement!.querySelector<HTMLButtonElement>("button.take-head")!);
+    expect(await screen.findByRole("heading", { name: "Opus agent", level: 2 })).toBeTruthy();
+    expect(within(screen.getByRole("region", { name: "Reply" })).getByText("Opus on the skeleton")).toBeTruthy();
+    await userEvent.keyboard("{Escape}");
+
+    expect(await screen.findByRole("heading", { name: "Skeleton", level: 2 })).toBeTruthy();
+    const back = screen.getByRole("region", { name: "Replies" });
+    const lit = within(back).getAllByRole("listitem").find((li) => li.getAttribute("aria-current") === "true")!;
+    expect(lit.getAttribute("aria-label")).toBe("Opus agent");
+    expect(document.activeElement).toBe(lit.querySelector("button.take-head"));
+    expect((within(back).getByRole("checkbox", { name: /Pick Opus agent/ }) as HTMLInputElement).checked).toBe(true);
   });
 
   it("a handoff with no results on the badge is not found once the matrix loads", async () => {

@@ -189,10 +189,25 @@ async fn read_context(state: State<'_, AppState>, repo: String, harness: String)
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_clipboard_manager::init());
+    // The window reopens at its last size and position (R5), and nothing else (KTD2). On
+    // macOS the plugin reads an undecorated window as never maximized, so restoring that
+    // flag would misplace a screen-sized window. Full screen would open a new Space, and a
+    // stale file must not bring back a title bar or hide the window. Registered on the
+    // builder, not in setup, so it is in place before the window in tauri.conf.json opens.
+    #[cfg(desktop)]
+    let builder = {
+        use tauri_plugin_window_state::StateFlags;
+        builder.plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(StateFlags::SIZE | StateFlags::POSITION)
+                .build(),
+        )
+    };
+    builder
         .setup(|app| {
             let settings_path = app.path().app_config_dir()?.join(settings::FILE_NAME);
             let mut saved = settings::load(&settings_path);

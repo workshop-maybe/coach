@@ -1,24 +1,13 @@
 // @vitest-environment jsdom
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { useState } from "react";
 import type { Editor } from "@tiptap/react";
 import { TextSelection } from "@tiptap/pm/state";
 import { RichText, looksLikeMarkdown } from "./RichText";
 import { useRichDraft } from "./richDraft";
 
-// jsdom has no layout. ProseMirror asks for rects when it scrolls a selection into view.
-beforeAll(() => {
-  const rect = () => ({ x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0, toJSON: () => ({}) });
-  const list = () => Object.assign([rect()], { item: () => rect() });
-  Range.prototype.getBoundingClientRect = rect as never;
-  Range.prototype.getClientRects = list as never;
-  Element.prototype.getClientRects = list as never;
-  document.elementFromPoint = () => null;
-  // jsdom has no ClipboardEvent; ProseMirror builds one for a text paste.
-  globalThis.ClipboardEvent ??= class extends Event {
-    clipboardData = null;
-  } as never;
-});
+// The ProseMirror jsdom shims live in src/test/setup.ts (KTD11).
 afterEach(cleanup);
 
 function box(name = "Task") {
@@ -156,6 +145,15 @@ describe("RichText", () => {
     expect(onChange).toHaveBeenLastCalledWith("make **this** bold");
   });
 
+  it("leaves Escape unhandled, so the deck around the box can step out of it (U6, R19)", () => {
+    setup("Keep the diff small");
+    box().focus();
+    // fireEvent returns false when a handler called preventDefault. ProseMirror marks every
+    // Escape as handled, though it does nothing with it, which would hide it from the deck.
+    expect(fireEvent.keyDown(box(), { key: "Escape", code: "Escape", keyCode: 27 })).toBe(true);
+    expect(fireEvent.keyDown(box(), { key: "Enter", code: "Enter", keyCode: 13 })).toBe(false);
+  });
+
   it("takes a new value from outside without echoing it back", () => {
     const onChange = vi.fn();
     const { rerender } = render(<RichText aria-label="Task" value="One" onChange={onChange} />);
@@ -193,6 +191,33 @@ describe("useRichDraft", () => {
       ed.commands.deleteRange({ from: ed.state.selection.from - 1, to: ed.state.selection.from });
     });
     expect(screen.getByRole("status").textContent).toBe("same");
+  });
+
+  it("stays changed when the box mounts again with the edited text, as on Back to its card (U6)", () => {
+    function Remount() {
+      const d = useRichDraft("* star");
+      const [shown, setShown] = useState(true);
+      return (
+        <>
+          {shown && <RichText aria-label="Task" value={d.value} onChange={d.setValue} onNormalized={d.onNormalized} />}
+          <button type="button" onClick={() => setShown((s) => !s)}>
+            Toggle
+          </button>
+          <output>{d.changed ? "changed" : "same"}</output>
+        </>
+      );
+    }
+    render(<Remount />);
+    const ed = editorOf(box());
+    act(() => {
+      ed.commands.focus("end");
+    });
+    typeInto(ed, "s");
+    expect(screen.getByRole("status").textContent).toBe("changed");
+    fireEvent.click(screen.getByRole("button", { name: "Toggle" }));
+    fireEvent.click(screen.getByRole("button", { name: "Toggle" }));
+    expect(box().textContent).toBe("stars");
+    expect(screen.getByRole("status").textContent).toBe("changed");
   });
 
   it("stands a formatting bar on top of the box, whose tools change the text", () => {

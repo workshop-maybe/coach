@@ -1,17 +1,20 @@
 // A handoff, opened (U3, R12): one of a badge's handoffs once two or more have run. Its
-// name and text, then every agent's reply to it. Close and Escape go back to its badge.
+// name and text, then every agent's reply to it, each opening as its own view and coming
+// back here with its take lit and the picks kept (U5, R16). Close and Escape go back to its
+// badge.
 
 import { handoffRuns } from "../domain/handoffResults";
 import { SKELETON_ID, handoffsFor, skeletonOf } from "../domain/handoffs";
-import { credentialKey, type Slug } from "../domain/types";
+import { credentialKey } from "../domain/types";
 import { handoffText } from "./format";
 import { useNav } from "./nav";
 import { ReplyList } from "./ReplyList";
+import type { ReplyListState } from "./routes";
 import { Missing, focusOnMount, useEscape } from "./shared";
 import { useFolder } from "./useFolderState";
 import { useMatrix } from "./useMatrix";
 
-export function HandoffDetail({ credentialKey: key, handoffId, lit }: { credentialKey: string; handoffId: string; lit?: Slug }) {
+export function HandoffDetail({ credentialKey: key, handoffId, lit, litTake, picks, focusCompare }: { credentialKey: string; handoffId: string } & ReplyListState) {
   const { state } = useFolder();
   const { navigate } = useNav();
   const matrix = useMatrix(state);
@@ -53,7 +56,7 @@ export function HandoffDetail({ credentialKey: key, handoffId, lit }: { credenti
 
       <section className="detail-section" aria-labelledby="handoff-replies">
         <h3 id="handoff-replies">Replies</h3>
-        <ReplyList credentialKey={key} run={run} state={state} matrix={matrix} lit={lit} />
+        <ReplyList credentialKey={key} run={run} state={state} matrix={matrix} lit={lit} litTake={litTake} picks={picks} focusCompare={focusCompare} />
       </section>
     </section>
   );

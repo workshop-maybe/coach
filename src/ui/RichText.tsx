@@ -7,12 +7,9 @@ import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
-import StarterKit from "@tiptap/starter-kit";
-import { Markdown } from "@tiptap/markdown";
-import { TaskItem, TaskList } from "@tiptap/extension-list";
-import { Placeholder } from "@tiptap/extensions";
 import { Node as PMNode, Slice } from "@tiptap/pm/model";
 import { ToolKey, type ToolName } from "../cast/ToolKey";
+import { richExtensions } from "./richExtensions";
 
 export interface RichTextProps {
   /** The text as Markdown. */
@@ -24,21 +21,6 @@ export interface RichTextProps {
   "aria-label": string;
   placeholder?: string;
   autoFocus?: boolean;
-}
-
-/** The extensions every rich box uses. Exported for tests that parse and render Markdown. */
-export function richExtensions(placeholder = "") {
-  return [
-    StarterKit.configure({
-      heading: { levels: [1, 2, 3] },
-      link: { openOnClick: false, autolink: true, defaultProtocol: "https" },
-      underline: false,
-    }),
-    TaskList,
-    TaskItem.configure({ nested: true }),
-    Placeholder.configure({ placeholder }),
-    Markdown.configure({ indentation: { style: "space", size: 2 } }),
-  ];
 }
 
 /** True when a pasted string carries Markdown structure worth parsing. */
@@ -71,6 +53,12 @@ export function RichText({ value, onChange, onNormalized, placeholder, autoFocus
         "aria-label": label,
         class: "rich-input",
         spellcheck: "true",
+      },
+      // ProseMirror marks every Escape as handled, though it does nothing with it, which
+      // would hide it from the deck around the box. Escape passes through untouched, so on a
+      // pane it steps out of the box (U6, R19, KTD8).
+      handleDOMEvents: {
+        keydown: (_view, event) => event.key === "Escape",
       },
       // Plain text that reads as Markdown (an agent's reply) comes in as structure.
       clipboardTextParser(text, _context, _plain, view) {

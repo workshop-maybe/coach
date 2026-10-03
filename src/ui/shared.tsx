@@ -1,23 +1,25 @@
 // Pieces shared by the decks and the opened items: focus on mount, the copy helper, the
-// target check's hint and line move, a part card, the not-found card, display names for a
-// palette and a file, and Escape.
+// target check's hint and line move, a part card, the not-found card, a result's verdict,
+// display names for a palette and a file, and Escape.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { PALETTES } from "../badge/palettes";
 import { checkTarget, type TargetMove } from "../domain/target-check";
+import type { Assessment } from "../domain/types";
+import { formatDate, resultLabel, setupText } from "./format";
 import { describeError } from "./useFolderState";
 
 /** A stable ref callback that focuses a card's heading once, when it appears. */
 export const focusOnMount = (el: HTMLElement | null) => el?.focus();
 
-/** Runs the latest `handler` on Escape, unless something already handled the key. */
-export function useEscape(handler: () => void) {
+/** Runs the latest `handler` on Escape, unless something already handled the key. The handler gets the event, to look at its target or claim it. */
+export function useEscape(handler: (e: KeyboardEvent) => void) {
   const latest = useRef(handler);
   latest.current = handler;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !e.defaultPrevented) latest.current();
+      if (e.key === "Escape" && !e.defaultPrevented) latest.current(e);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -99,8 +101,8 @@ export function PartCard({ name, value, onOpen }: { name: string; value: string;
   );
 }
 
-/** The card for a badge or agent that is no longer in the folder. */
-export function Missing({ onHome }: { onHome(): void }) {
+/** The card for a badge, agent or take that is no longer in the folder. `label` names where its button goes. */
+export function Missing({ onHome, label = "Home" }: { onHome(): void; label?: string }) {
   return (
     <section className="deck" aria-label="Not found">
       <div className="deck-card">
@@ -110,7 +112,7 @@ export function Missing({ onHome }: { onHome(): void }) {
         <p className="muted">It may have been moved or deleted outside the app.</p>
         <div className="deck-actions">
           <button type="button" className="ghost" onClick={onHome}>
-            Home
+            {label}
           </button>
         </div>
       </div>
@@ -118,8 +120,38 @@ export function Missing({ onHome }: { onHome(): void }) {
   );
 }
 
+/** A result's verdict in words, green when it met. */
+export function Verdict({ result: a }: { result: Assessment }) {
+  return <span className={`verdict verdict-${a.result}`}>{resultLabel(a.result)}</span>;
+}
+
 export function paletteName(slug: string | undefined | null): string {
   return PALETTES.find((p) => p.slug === slug)?.name ?? "Default colors";
 }
 
 export const fileName = (path: string) => path.slice(path.lastIndexOf("/") + 1);
+
+/** The switch between replies rendered and as stored (R12), worded the same wherever a reply shows. */
+export function StoredSwitch({ asStored, onToggle, className = "reply-stored" }: { asStored: boolean; onToggle(): void; className?: string }) {
+  return (
+    <button type="button" className={`ghost ${className}`} onClick={onToggle}>
+      {asStored ? "Show formatted" : "Show as stored"}
+    </button>
+  );
+}
+
+/** A take's record bar: the agent, its setup, the verdict and the date, then what the view adds (R15, R17). */
+export function TakeBar({ name, result: a, focus = false, children }: { name: string; result: Assessment; focus?: boolean; children?: ReactNode }) {
+  return (
+    <div className="reply-bar">
+      <h2 tabIndex={-1} ref={focus ? focusOnMount : undefined}>
+        {name}
+      </h2>
+      <span>{setupText(a.setup)}</span>
+      <span>
+        <Verdict result={a} /> · {formatDate(a.recordedAt)}
+      </span>
+      {children}
+    </div>
+  );
+}

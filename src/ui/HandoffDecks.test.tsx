@@ -24,6 +24,10 @@ const handoffB = handoff(B, "Handoff B\n\n{{task}}\n");
 const box = { view: "deck", deck: "handoffs", credentialKey: KEY } as const;
 
 const field = () => screen.getByRole("textbox", { name: "Handoff" }) as HTMLTextAreaElement;
+/** The folder's actions in the top bar: all three on a page, none on a pane (R8). */
+const FOLDER_ACTIONS = ["Change folder", "Reload", "Export"];
+const barActions = () => FOLDER_ACTIONS.filter((name) => within(screen.getByRole("banner")).queryByRole("button", { name }) !== null);
+const editDeck = () => screen.getByRole("region", { name: "Edit a handoff for Code review" });
 
 async function retype(text: string) {
   await userEvent.clear(field());
@@ -63,7 +67,7 @@ describe("the handoffs deck", () => {
 });
 
 describe("the handoff editor", () => {
-  it("is a plain mono text field naming the three slots", async () => {
+  it("Covers R18. is a plain mono text field naming the three slots, on a pane with focus in the field", async () => {
     renderApp(storageWith({ credentials: [review], handoffs: [handoffA] }), box);
     await userEvent.click(await screen.findByRole("button", { name: "A · default" }));
     expect(await screen.findByRole("heading", { name: "Handoff A" })).toBeTruthy();
@@ -72,6 +76,49 @@ describe("the handoff editor", () => {
     expect(field().value).toBe(handoffA.text);
     const slots = document.querySelector(".handoff-slots")!.textContent!;
     for (const slot of ["{{name}}", "{{learning_targets}}", "{{task}}"]) expect(slots).toContain(slot);
+    expect(editDeck().classList.contains("pane")).toBe(true);
+    expect(barActions()).toEqual([]);
+    expect(document.activeElement).toBe(field());
+  });
+
+  it("Covers R20. Escape on a changed handoff keeps the deck and the text; unchanged, it returns to the box", async () => {
+    const storage = storageWith({ credentials: [review], handoffs: [handoffA] });
+    const before = await snapshot(storage);
+    renderApp(storage, box);
+    await userEvent.click(await screen.findByRole("button", { name: "A · default" }));
+    await retype("Edited A\n\n{{task}}\n");
+    // Out of the field (R19), then once more: the text changed, so the deck stays.
+    await userEvent.keyboard("{Escape}");
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Save" }));
+    await userEvent.keyboard("{Escape}");
+    expect(screen.getByRole("heading", { name: "Handoff A" })).toBeTruthy();
+    expect(field().value).toBe("Edited A\n\n{{task}}\n");
+    expect(await snapshot(storage)).toEqual(before);
+
+    // Put back as it opened, the text is no longer a change, and Escape leaves.
+    await retype(handoffA.text);
+    await userEvent.keyboard("{Escape}{Escape}");
+    expect(await screen.findByRole("heading", { name: "Handoffs" })).toBeTruthy();
+    expect(barActions()).toEqual(FOLDER_ACTIONS);
+    expect(await snapshot(storage)).toEqual(before);
+  });
+
+  it("Covers R20. This handoff has results is a page, and Escape there keeps the changed text", async () => {
+    const ran = await result(opus, review, { handoff: { id: A, text: "filled A" } });
+    const storage = storageWith({ credentials: [review], profiles: [opus], assessments: [ran], handoffs: [handoffA] });
+    const before = await snapshot(storage);
+    renderApp(storage, box);
+    await userEvent.click(await screen.findByRole("button", { name: "A · default" }));
+    await retype("Better A\n\n{{task}}\n");
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(await screen.findByRole("heading", { name: "This handoff has results" })).toBeTruthy();
+    expect(editDeck().classList.contains("pane")).toBe(false);
+    expect(barActions()).toEqual(FOLDER_ACTIONS);
+    await userEvent.keyboard("{Escape}");
+    expect(screen.getByRole("heading", { name: "This handoff has results" })).toBeTruthy();
+    expect(await snapshot(storage)).toEqual(before);
+    await userEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(field().value).toBe("Better A\n\n{{task}}\n");
   });
 
   it("saves a handoff with no result in place, with no warning, and returns to the box", async () => {

@@ -4,6 +4,11 @@
 // save, so a file changed on disk meanwhile turns into the deck's conflict card (KTD2, KTD3).
 // A task or rubric change on a badge with holders warns first that they will re-test (R18),
 // including detail the targets card moves from a target into the rubric.
+//
+// Writing the bar happens in panes (U6 of the deep-work panes plan, R7, R18): the task,
+// rubric and notes cards fill the window with focus in the editor, and while their text
+// has changed the deck holds unsaved work, so Escape never throws it away (R19, R20, KTD8).
+// The re-test warning stays an ordinary card under that same signal.
 
 import { useState } from "react";
 import type { KeyboardEvent } from "react";
@@ -238,7 +243,8 @@ function EditCredential({ credentialKey: key, part, credential: atOpen, collecti
   // Detail moved out of a target changes the rubric too.
   const rubricAdded = part === "rubric" ? rubric.trim() !== "" : part === "targets" && moved.length > 0;
   const firstRubric = c.rubric.trim() === "" && rubricAdded;
-  const changed = (part === "task" && taskDraft.changed) || (part === "rubric" && rubricDraft.changed) || (part === "targets" && moved.length > 0);
+  const unsaved = (part === "task" && taskDraft.changed) || (part === "rubric" && rubricDraft.changed);
+  const changed = unsaved || (part === "targets" && moved.length > 0);
   const warn = changed && opened.holders.length > 0;
   const warnBeat: Beat = {
     id: "warn",
@@ -321,6 +327,8 @@ function EditCredential({ credentialKey: key, part, credential: atOpen, collecti
           forward: warn ? "Next" : "Save",
           valid: task.trim() !== "" && taskDraft.changed,
           settled: "Task changed",
+          pane: true,
+          focusBody: true,
           body: (
             <>
               <RichText aria-label="Task" placeholder="What the agent is asked to do" value={task} onChange={taskDraft.setValue} onNormalized={taskDraft.onNormalized} />
@@ -340,6 +348,8 @@ function EditCredential({ credentialKey: key, part, credential: atOpen, collecti
           forward: warn ? "Next" : "Save",
           valid: rubricDraft.changed,
           settled: firstRubric ? "Rubric added" : "Rubric changed",
+          pane: true,
+          focusBody: true,
           body: (
             <>
               <RichText aria-label="Rubric" placeholder="How you will judge it" value={rubric} onChange={rubricDraft.setValue} onNormalized={rubricDraft.onNormalized} />
@@ -424,7 +434,7 @@ function EditCredential({ credentialKey: key, part, credential: atOpen, collecti
       break;
   }
 
-  return <Deck label={`Edit ${c.name}`} beats={beats} onClose={badgeHome} onFinish={finish} onUseTheirs={() => void useTheirs()} />;
+  return <Deck label={`Edit ${c.name}`} beats={beats} unsaved={unsaved} onClose={badgeHome} onFinish={finish} onUseTheirs={() => void useTheirs()} />;
 }
 
 // ---------------------------------------------------------------------------
@@ -522,6 +532,8 @@ function EditAgent({ profileSlug, part, profile: atOpen, state: stateAtOpen }: E
         title: "Notes",
         forward: "Save",
         valid: notesDraft.changed,
+        pane: true,
+        focusBody: true,
         body: <RichText aria-label="Notes" placeholder="Anything worth remembering" value={notes} onChange={notesDraft.setValue} onNormalized={notesDraft.onNormalized} />,
       };
       break;
@@ -535,5 +547,5 @@ function EditAgent({ profileSlug, part, profile: atOpen, state: stateAtOpen }: E
       break;
   }
 
-  return <Deck label={`Edit ${p.name}`} beats={[beat]} onClose={agentHome} onFinish={finish} onUseTheirs={() => void useTheirs()} />;
+  return <Deck label={`Edit ${p.name}`} beats={[beat]} unsaved={part === "notes" && notesDraft.changed} onClose={agentHome} onFinish={finish} onUseTheirs={() => void useTheirs()} />;
 }
