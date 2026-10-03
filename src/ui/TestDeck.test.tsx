@@ -42,8 +42,8 @@ const machine = () => document.querySelector<SVGSVGElement>(".deck svg.cast-mach
 const box = () => document.querySelector<SVGSVGElement>(".deck svg.cast-handoff-box")!;
 const badgeCard = async () => within(await screen.findByRole("region", { name: "Badges" })).getByRole("button", { name: /Code review/ });
 
-/** The folder's actions in the top bar: all three on a page, none on a pane (R8). */
-const FOLDER_ACTIONS = ["Change folder", "Reload", "Export"];
+/** The folder's actions in the top bar: all four on a page, none on a pane (R8). */
+const FOLDER_ACTIONS = ["Change folder", "Reload", "Export", "Jev Mode"];
 const barActions = () => FOLDER_ACTIONS.filter((name) => within(screen.getByRole("banner")).queryByRole("button", { name }) !== null);
 const replyBox = () => screen.getByRole("textbox", { name: "Reply" }) as HTMLTextAreaElement;
 const testDeck = () => screen.getByRole("region", { name: "Test an agent" });

@@ -41,7 +41,9 @@ export type DeckRoute =
   | { view: "deck"; deck: "handoffs"; credentialKey: string; returnTo?: TestPick }
   /** One handoff, a new one or the skeleton, as a one-beat edit (R3, R4, R5). */
   | { view: "deck"; deck: "edit-handoff"; credentialKey: string; handoff: HandoffTarget; returnTo?: TestPick }
-  | { view: "deck"; deck: "trash"; item: TrashItem };
+  | { view: "deck"; deck: "trash"; item: TrashItem }
+  /** Jev Mode: turn it on with a key, turn it off, use a new key or remove it (KTD6). Opened from the top bar. */
+  | { view: "deck"; deck: "jev" };
 
 /** An agent or a credential on its way to the trash. */
 export type TrashItem = { kind: "agent"; profileSlug: Slug } | { kind: "badge"; credentialKey: string };
