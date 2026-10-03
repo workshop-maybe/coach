@@ -16,6 +16,8 @@ import type {
   Credential,
   FolderState,
   Handoff,
+  JevPoint,
+  JevReading,
   LoadError,
   Slug,
   TestContext,
@@ -262,6 +264,7 @@ export function serializeAssessment(a: Assessment): string {
         }
       : {}),
     ...(a.handoff ? { handoff: { id: a.handoff.id, text: a.handoff.text } } : {}),
+    ...(a.jev ? { jev: serializeJev(a.jev) } : {}),
   });
   const note = a.note.replace(/\r\n?/g, "\n").trim();
   return [
@@ -274,6 +277,19 @@ export function serializeAssessment(a: Assessment): string {
     a.handBack,
     "\n",
   ].join("");
+}
+
+/** The `jev` mapping. The verdict fields are written only for a reading seen after the verdict. */
+function serializeJev(r: JevReading): Json {
+  return {
+    model: r.model,
+    assignment_version: r.assignmentVersion,
+    asked_at: r.askedAt,
+    seen: r.seen,
+    ...(r.seen === "after" ? { verdict_when_seen: r.verdictWhenSeen, verdict_changed: r.verdictChanged } : {}),
+    overall: r.overall,
+    points: r.points.map((p) => ({ text: p.text, probability: p.probability })),
+  };
 }
 
 function setupString(obj: Json, key: string): string {
@@ -311,6 +327,46 @@ function parseHandoff(raw: unknown): Assessment["handoff"] {
   const idText = typeof id === "number" ? String(id) : id;
   if (typeof idText !== "string" || idText === "" || typeof text !== "string") return undefined;
   return { id: idText, text };
+}
+
+function isProbability(v: unknown): v is number {
+  return typeof v === "number" && v >= 0 && v <= 1;
+}
+
+/** Non-empty text, with a YAML number read as text. Anything else is null. */
+function jevText(v: unknown): string | null {
+  const text = typeof v === "number" ? String(v) : v;
+  return typeof text === "string" && text !== "" ? text : null;
+}
+
+/**
+ * The optional `jev` mapping. Anything malformed reads as no reading rather than failing
+ * the file (KTD12). Verdict fields on a reading seen before the verdict are ignored.
+ */
+function parseJev(raw: unknown): JevReading | undefined {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return undefined;
+  const obj = raw as Json;
+  const model = jevText(obj.model);
+  const version = jevText(obj.assignment_version);
+  const asked = obj.asked_at;
+  const askedAt = asked instanceof Date ? asked.toISOString() : asked;
+  if (model === null || version === null || typeof askedAt !== "string" || askedAt === "") return undefined;
+  if (!isProbability(obj.overall) || !Array.isArray(obj.points)) return undefined;
+
+  const points: JevPoint[] = [];
+  for (const p of obj.points as unknown[]) {
+    if (typeof p !== "object" || p === null || Array.isArray(p)) return undefined;
+    const { text, probability } = p as Json;
+    if (typeof text !== "string" || !isProbability(probability)) return undefined;
+    points.push({ text, probability });
+  }
+
+  const base = { model, assignmentVersion: version, askedAt, overall: obj.overall, points };
+  if (obj.seen === "before") return { ...base, seen: "before" };
+  if (obj.seen !== "after") return undefined;
+  const verdict = obj.verdict_when_seen;
+  if ((verdict !== "met" && verdict !== "not_met") || typeof obj.verdict_changed !== "boolean") return undefined;
+  return { ...base, seen: "after", verdictWhenSeen: verdict, verdictChanged: obj.verdict_changed };
 }
 
 export function parseAssessment(text: string, ids: AssessmentIds): Assessment {
@@ -368,6 +424,7 @@ export function parseAssessment(text: string, ids: AssessmentIds): Assessment {
 
   const context = parseContext(fm.context);
   const handoff = parseHandoff(fm.handoff);
+  const jev = parseJev(fm.jev);
   return {
     ...ids,
     result: result as AssessmentResult,
@@ -378,6 +435,7 @@ export function parseAssessment(text: string, ids: AssessmentIds): Assessment {
     handBack,
     ...(context ? { context } : {}),
     ...(handoff ? { handoff } : {}),
+    ...(jev ? { jev } : {}),
   };
 }
 

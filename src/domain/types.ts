@@ -101,6 +101,8 @@ export interface Assessment {
   context?: TestContext;
   /** The handoff that ran: its id and the filled text as copied (KTD4). Absent means the skeleton. */
   handoff?: HandoffTemplate;
+  /** Jev's second opinion on this reply (KTD12). Absent when none was asked or it was dropped. */
+  jev?: JevReading;
 }
 
 /** A handoff's identity and template text. The skeleton's id is SKELETON_ID (KTD3). */
@@ -109,6 +111,32 @@ export interface HandoffTemplate {
   id: string;
   /** The template, verbatim from its file. */
   text: string;
+}
+
+/** One rubric point as Jev read it. The text is stored so the reading outlives rubric edits. */
+export interface JevPoint {
+  text: string;
+  /** From 0 to 1. */
+  probability: number;
+}
+
+/** Jev's reading of one reply against one assignment version (KTD11, KTD12). */
+export interface JevReading {
+  model: string;
+  /** The assignment version the reading was taken against. */
+  assignmentVersion: string;
+  /** Full ISO 8601 time of the ask. */
+  askedAt: string;
+  /** Whether the user saw the reading before or after picking a verdict (R13). */
+  seen: "before" | "after";
+  /** The verdict picked when the reading arrived. Only when seen "after". */
+  verdictWhenSeen?: AssessmentResult;
+  /** Whether the saved verdict differs from verdictWhenSeen. Only when seen "after". */
+  verdictChanged?: boolean;
+  /** The reading for the whole rubric, from 0 to 1. */
+  overall: number;
+  /** One per rubric point, in rubric order. Empty when the rubric has no list. */
+  points: JevPoint[];
 }
 
 /** One of a badge's handoffs, read from collections/<collection>/handoffs/<credential>/<stem>.md (KTD1). */

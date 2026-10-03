@@ -29,7 +29,7 @@ import {
 import { buildExport } from "./export";
 import { reorderCredentials } from "./operations";
 import { resolveBadgeSettings } from "../badge/settings";
-import type { AgentProfile, Assessment, Collection, Credential } from "./types";
+import type { AgentProfile, Assessment, Collection, Credential, JevReading } from "./types";
 
 function cred(slug: string, name: string, collectionSlug = "eng"): Credential {
   return {
@@ -266,6 +266,169 @@ describe("assessment Markdown", () => {
     expect(parseAssessment(plain.replace("  text: hi\n", ""), assessment)).not.toHaveProperty("handoff");
     expect(parseAssessment(plain.replace("  text: hi\n", "  text: { a: 1 }\n"), assessment)).not.toHaveProperty("handoff");
     expect(parseAssessment(plain.replace(/handoff:\n.*\n.*\n/, "handoff: [x, hi]\n"), assessment)).not.toHaveProperty("handoff");
+  });
+
+  const jev: JevReading = {
+    model: "jev-1",
+    assignmentVersion: "12e456789012",
+    askedAt: "2026-09-29T08:45:00.000Z",
+    seen: "after",
+    verdictWhenSeen: "not_met",
+    verdictChanged: true,
+    overall: 0.82,
+    points: [
+      { text: "Flags parse.", probability: 0.91 },
+      { text: "Help prints: usage\n---\n## Handback", probability: 0 },
+      { text: "Errors exit non-zero.", probability: 1 },
+    ],
+  };
+
+  const seenBefore: JevReading = {
+    model: "jev-1",
+    assignmentVersion: "12e456789012",
+    askedAt: "2026-09-29T08:45:00.000Z",
+    seen: "before",
+    overall: 0.52,
+    points: [],
+  };
+
+  it("round-trips Jev's reading seen after the verdict, after the handoff, even when a point holds ---, ## Handback and a colon", () => {
+    const withJev = { ...assessment, handoff: { id: "x", text: "hi" }, jev };
+    const text = serializeAssessment(withJev);
+    expect(text).toContain("jev:");
+    expect(text).toContain("  assignment_version: \"12e456789012\"\n  asked_at: 2026-09-29T08:45:00.000Z\n  seen: after\n");
+    expect(text).toContain("  verdict_when_seen: not_met\n  verdict_changed: true\n  overall: 0.82\n");
+    expect(text.indexOf("handoff:")).toBeLessThan(text.indexOf("jev:"));
+    const parsed = parseAssessment(text, withJev);
+    expect(parsed).toEqual(withJev);
+    expect(parsed.note).toBe(assessment.note);
+    expect(parsed.handBack).toBe(handBack);
+  });
+
+  it("round-trips a reading seen before the verdict with no verdict-when-seen or changed fields, and no points", () => {
+    const withJev = { ...assessment, jev: seenBefore };
+    const text = serializeAssessment(withJev);
+    expect(text).toContain("  seen: before\n");
+    expect(text).not.toContain("verdict_");
+    const parsed = parseAssessment(text, withJev);
+    expect(parsed).toEqual(withJev);
+    expect(parsed.jev).not.toHaveProperty("verdictWhenSeen");
+    expect(parsed.jev).not.toHaveProperty("verdictChanged");
+  });
+
+  it("never writes or reads verdict-when-seen or changed on a reading seen before the verdict", () => {
+    const stray = { ...seenBefore, verdictWhenSeen: "met", verdictChanged: false } as const;
+    expect(serializeAssessment({ ...assessment, jev: stray })).toBe(serializeAssessment({ ...assessment, jev: seenBefore }));
+    const handAdded = serializeAssessment({ ...assessment, jev: seenBefore }).replace(
+      "  seen: before\n",
+      "  seen: before\n  verdict_when_seen: met\n  verdict_changed: true\n",
+    );
+    expect(handAdded).toContain("verdict_changed: true");
+    expect(parseAssessment(handAdded, assessment).jev).toEqual(seenBefore);
+  });
+
+  it("writes a result without a Jev reading byte for byte as before", () => {
+    const plain: Assessment = { ...assessment, note: "Fine.", handBack: "Done.\n---\n" };
+    expect(serializeAssessment(plain)).toBe(
+      [
+        "---",
+        "result: met",
+        "recorded_at: 2026-09-29T08:49:00.123Z",
+        'assignment_version: "12e456789012"',
+        "setup:",
+        "  harness: claude-code",
+        "  model: opus",
+        "  effort: high",
+        "---",
+        "",
+        "## Note",
+        "",
+        "Fine.",
+        "",
+        "## Handback",
+        "",
+        "Done.",
+        "---",
+        "",
+        "",
+      ].join("\n"),
+    );
+    expect(serializeAssessment(plain)).not.toContain("jev");
+    expect(parseAssessment(serializeAssessment(plain), plain)).not.toHaveProperty("jev");
+  });
+
+  it("reads an asked time written as a YAML date as the same instant", () => {
+    const text = serializeAssessment({ ...assessment, jev: seenBefore }).replace(
+      "  asked_at: 2026-09-29T08:45:00.000Z\n",
+      "  asked_at: !!timestamp 2026-09-29T10:45:00+02:00\n",
+    );
+    expect(text).toContain("!!timestamp");
+    expect(parseAssessment(text, assessment).jev).toEqual(seenBefore);
+  });
+
+  it("reads a Jev model or assignment version YAML takes as a number as text", () => {
+    const text = serializeAssessment({ ...assessment, jev: seenBefore })
+      .replace("  model: jev-1\n", "  model: 2\n")
+      .replace('  assignment_version: "12e456789012"\n  asked_at', "  assignment_version: 123456789012\n  asked_at");
+    expect(parseAssessment(text, assessment).jev).toEqual({ ...seenBefore, model: "2", assignmentVersion: "123456789012" });
+  });
+
+  it("reads a malformed Jev reading as none instead of failing the file", () => {
+    const text = serializeAssessment({ ...assessment, jev });
+    const variants = [
+      text.replace(/jev:\n(?:  .*\n|\n)+?(?=---\n)/, "jev: nonsense\n"),
+      text.replace(/jev:\n(?:  .*\n|\n)+?(?=---\n)/, "jev: [0.82]\n"),
+      // A non-numeric, missing, NaN or out-of-range overall probability.
+      text.replace("  overall: 0.82\n", "  overall: high\n"),
+      text.replace("  overall: 0.82\n", ""),
+      text.replace("  overall: 0.82\n", "  overall: .nan\n"),
+      text.replace("  overall: 0.82\n", "  overall: 1.5\n"),
+      text.replace("  overall: 0.82\n", '  overall: "0.82"\n'),
+      // A missing points list, or points that are not a list of text and probability.
+      text.replace(/  points:\n(?:    .*\n)+/, ""),
+      text.replace(/  points:\n(?:    .*\n)+/, "  points: nonsense\n"),
+      text.replace(/  points:\n(?:    .*\n)+/, "  points: [0.5]\n"),
+      text.replace("      probability: 0.91\n", "      probability: likely\n"),
+      text.replace("      probability: 0.91\n", "      probability: -0.1\n"),
+      text.replace("      probability: 0.91\n", ""),
+      text.replace("    - text: Flags parse.\n", "    - text: [1, 2]\n"),
+      // An unknown "seen" value, or a reading seen after the verdict without both of its fields.
+      text.replace("  seen: after\n", "  seen: maybe\n"),
+      text.replace("  seen: after\n", ""),
+      text.replace("  verdict_when_seen: not_met\n", ""),
+      text.replace("  verdict_when_seen: not_met\n", "  verdict_when_seen: maybe\n"),
+      text.replace("  verdict_changed: true\n", ""),
+      text.replace("  verdict_changed: true\n", '  verdict_changed: "yes"\n'),
+      // A missing or empty model, version or asked time.
+      text.replace("  model: jev-1\n", ""),
+      text.replace("  model: jev-1\n", '  model: ""\n'),
+      text.replace(/  assignment_version: .*\n(?=  asked_at)/, ""),
+      text.replace("  asked_at: 2026-09-29T08:45:00.000Z\n", ""),
+      text.replace("  asked_at: 2026-09-29T08:45:00.000Z\n", "  asked_at: [1]\n"),
+    ];
+    for (const variant of variants) {
+      expect(variant).not.toBe(text);
+      expect(parseAssessment(variant, assessment)).toEqual(assessment);
+    }
+    // A reading seen after the verdict but missing its verdict fields saves as one that reads as none.
+    const incomplete = { ...jev, verdictWhenSeen: undefined, verdictChanged: undefined };
+    expect(parseAssessment(serializeAssessment({ ...assessment, jev: incomplete }), assessment)).toEqual(assessment);
+  });
+
+  it("loads a folder whose results hold a reading, a malformed one or none, with no errors and nothing rewritten", async () => {
+    const storage = fixture();
+    const good = assessmentPath("claude-high", "eng", "review", "20260930T090000Z");
+    const bad = assessmentPath("claude-high", "eng", "review", "20260930T100000Z");
+    const goodText = serializeAssessment({ ...assessment, fileStem: "20260930T090000Z", jev });
+    const badText = serializeAssessment({ ...assessment, fileStem: "20260930T100000Z", jev }).replace("  seen: after\n", "  seen: maybe\n");
+    storage.seed({ [good]: goodText, [bad]: badText });
+    const writes = storage.writes.length;
+    const state = await loadFolder(storage);
+    expect(state.errors).toEqual([]);
+    expect(state.assessments.map((a) => a.jev)).toEqual([undefined, jev, undefined]);
+    expect(state.raw[good]).toBe(goodText);
+    expect(state.raw[bad]).toBe(badText);
+    expect(storage.writes.length).toBe(writes);
   });
 
   it("rejects missing frontmatter or an invalid result", () => {
