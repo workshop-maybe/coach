@@ -1466,20 +1466,58 @@ button:focus-visible {
   padding-left: var(--space-lg);
 }
 
-/* Did it meet it: the rubric beside the two answers when one exists. */
+/* Did it meet it (U4, R14): a pane. The rubric and the reply sit side by side, each a
+   record with a mono header bar and text that scrolls on its own (R10), and Met and Not
+   yet stay pinned below them. With no rubric the reply alone spans the card, its prose
+   at the centered measure (R9). The stored-text switch sits on the heading's line, at
+   the card's top right (R12). */
 .meet {
   display: flex;
   flex-direction: column;
-  gap: var(--space-base);
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: var(--space-md);
 }
 
-.meet-rubric {
+.meet-stored {
+  position: absolute;
+  top: var(--space-xl);
+  right: var(--space-xl);
+  display: flex;
+  align-items: center;
+  height: calc(1.6rem * 1.15);
+  padding: 0 var(--space-sm);
+  color: var(--ink-muted);
+  font-weight: 500;
+}
+
+.meet-texts {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: var(--space-md);
+}
+
+.meet-with-rubric .meet-texts {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+}
+
+.meet-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
   border: 1px solid var(--cell);
+  background: var(--surface);
+}
+
+.meet-text-rubric {
   background: var(--bg);
 }
 
-.meet-rubric-head {
-  display: block;
+.meet-text-head {
+  flex: none;
   padding: var(--space-xs) var(--space-md);
   border-bottom: 1px solid var(--cell);
   font-family: var(--font-mono);
@@ -1488,16 +1526,8 @@ button:focus-visible {
   color: var(--ink-muted);
 }
 
-.meet-rubric p {
-  margin: 0;
-  padding: var(--space-md);
-  font-family: var(--font-mono);
-  font-size: 13px;
-  letter-spacing: var(--value-tracking);
-  white-space: pre-wrap;
-}
-
 .meet-choices {
+  flex: none;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--space-md);
@@ -1506,6 +1536,28 @@ button:focus-visible {
 .meet-choices button {
   min-height: 3rem;
   font-size: 15px;
+}
+
+/* Below the stacking width the rubric sits above the reply, takes at most about a third
+   of the height and scrolls on its own; the reply takes the rest. */
+@media (max-width: 56rem) {
+  .meet-with-rubric .meet-texts {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .meet-with-rubric .meet-text {
+    flex: 1 1 0;
+  }
+
+  .meet-with-rubric .meet-text-rubric {
+    flex: 0 1 auto;
+    max-height: 33%;
+  }
+
+  .meet-with-rubric .rich-view {
+    padding: var(--space-sm) var(--space-base);
+  }
 }
 
 /* The test on the agent's machine (R5-R7, KTD4). */
@@ -1527,6 +1579,26 @@ button:focus-visible {
 
 .landing .deck-actions {
   align-self: stretch;
+}
+
+/* "What came back" on a pane (U4, R22, KTD9): the drawing is a strip above the reply
+   box, the full machine and box at a small height, so the box keeps the height. */
+.test-strip {
+  flex: none;
+}
+
+.test-strip .test-stage {
+  flex-wrap: nowrap;
+  padding: 0 0 var(--space-sm);
+}
+
+.test-strip .cast {
+  width: auto;
+  height: 4.5rem;
+}
+
+.test-strip ~ .helper {
+  margin-top: var(--space-sm);
 }
 
 /* "Hand it over": the badge in the handoff box, the agent beside it (U6, KTD8). */

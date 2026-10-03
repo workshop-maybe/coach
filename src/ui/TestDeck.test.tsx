@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { loadFolder } from "../domain/folder";
+import { serializeCredentialMd } from "../domain/credential-md";
+import { credentialPath, loadFolder } from "../domain/folder";
 import { BUILT_IN_HANDOFF, fillHandoff } from "../domain/handoffs";
 import { assignmentVersion } from "../domain/hash";
 import type { Credential, Handoff } from "../domain/types";
@@ -40,6 +41,12 @@ async function pasteAndJudge(reply: string, answer: "Met" | "Not yet") {
 const machine = () => document.querySelector<SVGSVGElement>(".deck svg.cast-machine:not(.cast-machine-mini)")!;
 const box = () => document.querySelector<SVGSVGElement>(".deck svg.cast-handoff-box")!;
 const badgeCard = async () => within(await screen.findByRole("region", { name: "Badges" })).getByRole("button", { name: /Code review/ });
+
+/** The folder's actions in the top bar: all three on a page, none on a pane (R8). */
+const FOLDER_ACTIONS = ["Change folder", "Reload", "Export"];
+const barActions = () => FOLDER_ACTIONS.filter((name) => within(screen.getByRole("banner")).queryByRole("button", { name }) !== null);
+const replyBox = () => screen.getByRole("textbox", { name: "Reply" }) as HTMLTextAreaElement;
+const testDeck = () => screen.getByRole("region", { name: "Test an agent" });
 
 describe("the first test", () => {
   it("runs from an empty home to one agent, one badge and one result", async () => {
@@ -402,7 +409,7 @@ describe("TestDeck", () => {
     await takeAndCopy();
     await userEvent.type(screen.getByRole("textbox", { name: "Reply" }), "Done");
     await userEvent.click(screen.getByRole("button", { name: "Next" }));
-    expect(await screen.findByText("Finds the off-by-one.")).toBeTruthy();
+    expect(within(await screen.findByRole("region", { name: "Rubric" })).getByText("Finds the off-by-one.")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Met" })).toBeTruthy();
   });
 
@@ -638,5 +645,198 @@ describe("TestDeck with the handoff box", () => {
     await userEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(await screen.findByRole("heading", { name: "Hand it over" })).toBeTruthy();
     expect(pressed()).toEqual(["A"]);
+  });
+});
+
+// The paste and judge cards as panes (U4, R7, R10, R12, R14, R19-R22, KTD9).
+describe("TestDeck's paste and judge panes", () => {
+  const withRubric: Credential = { ...review, rubric: "Finds the **off-by-one**." };
+  const markdownReply = "# Findings{Enter}{Enter}- one{Enter}- two";
+  const storedReply = "# Findings\n\n- one\n- two";
+
+  async function toJudge(reply: string) {
+    await userEvent.type(replyBox(), reply);
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(await screen.findByRole("heading", { name: "Did it meet it" })).toBeTruthy();
+  }
+
+  it("on What came back the reply box has focus and the top bar keeps only the window keys and the brand", async () => {
+    renderApp(storageWith({ credentials: [review], profiles: [opus] }), fromBadge);
+    await screen.findByRole("heading", { name: "Who takes it" });
+    expect(barActions()).toEqual(FOLDER_ACTIONS);
+    await takeAndCopy();
+    await waitFor(() => expect(document.activeElement).toBe(replyBox()));
+    expect(testDeck().classList.contains("pane")).toBe(true);
+    expect(barActions()).toEqual([]);
+    expect(within(screen.getByRole("banner")).getByRole("button", { name: "Andamio Desktop, go home" })).toBeTruthy();
+    expect(within(screen.getByRole("banner")).getByRole("button", { name: "Close window" })).toBeTruthy();
+  });
+
+  it("a test resumed at What came back opens with focus in the reply box", async () => {
+    addPending(FOLDER, {
+      profileSlug: "opus",
+      credentialKey: "eng/review",
+      copiedAt: "2026-09-29T10:00:00.000Z",
+      assignmentVersion: await assignmentVersion(review.task, review.rubric),
+      setup: { harness: "claude-code", model: "opus", effort: "high" },
+    });
+    renderApp(storageWith({ credentials: [review], profiles: [opus] }), { ...fromBadge, profileSlug: "opus", resume: true });
+    await screen.findByRole("heading", { name: "What came back" });
+    await waitFor(() => expect(document.activeElement).toBe(replyBox()));
+    expect(barActions()).toEqual([]);
+  });
+
+  it("the drawing above the reply box is a strip of the full machine and the handoff box, the reply's first lines on its screen", async () => {
+    renderApp(storageWith({ credentials: [review], profiles: [opus] }), fromBadge);
+    await takeAndCopy();
+    const strip = machine().closest(".test-strip");
+    expect(strip).not.toBeNull();
+    expect(box().closest(".test-strip")).toBe(strip);
+    // The strip sits above the reply box.
+    expect(strip!.compareDocumentPosition(replyBox()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    await userEvent.type(replyBox(), "First line{Enter}second{Enter}third{Enter}fourth");
+    // The dots run out first (SENDING_MS), then the screen shows the reply.
+    await waitFor(() => expect([...machine().querySelectorAll(".cast-screen-reply text")].map((t) => t.textContent)).toEqual(["First line", "second", "third"]), {
+      timeout: SENDING_MS + 1000,
+    });
+  });
+
+  it("on Did it meet it the pasted reply shows rendered next to the rendered rubric, with Met the one main action", async () => {
+    renderApp(storageWith({ credentials: [withRubric], profiles: [opus] }), fromBadge);
+    await takeAndCopy();
+    await toJudge(markdownReply);
+
+    expect(testDeck().classList.contains("pane")).toBe(true);
+    expect(barActions()).toEqual([]);
+    const reply = screen.getByRole("region", { name: "Reply" });
+    const rubric = screen.getByRole("region", { name: "Rubric" });
+    expect(within(reply).getByRole("heading", { name: "Findings" })).toBeTruthy();
+    expect(within(reply).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["one", "two"]);
+    expect(within(rubric).getByText("off-by-one").tagName).toBe("STRONG");
+    // Side by side in one place, each scrolling on its own and reachable by keyboard.
+    expect(reply.parentElement?.parentElement).toBe(rubric.parentElement?.parentElement);
+    expect(reply.getAttribute("tabindex")).toBe("0");
+    expect(rubric.getAttribute("tabindex")).toBe("0");
+    // The reply no longer settles as a cut line above the card.
+    expect(screen.getByRole("list", { name: "Answered" }).textContent).not.toContain("Findings");
+    const main = testDeck().querySelectorAll("button.primary");
+    expect([...main].map((b) => b.textContent)).toEqual(["Met"]);
+    expect(screen.getByRole("button", { name: "Not yet" })).toBeTruthy();
+  });
+
+  it("with an empty rubric the judge card shows the reply and no rubric region", async () => {
+    renderApp(storageWith({ credentials: [review], profiles: [opus] }), fromBadge);
+    await takeAndCopy();
+    await toJudge("Reviewed it.");
+    expect(within(screen.getByRole("region", { name: "Reply" })).getByText("Reviewed it.")).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Rubric" })).toBeNull();
+  });
+
+  it("the stored-text switch shows the reply and the rubric exactly as stored, and back", async () => {
+    const storage = storageWith({ credentials: [withRubric], profiles: [opus] });
+    renderApp(storage, fromBadge);
+    await takeAndCopy();
+    await toJudge(markdownReply);
+
+    await userEvent.click(screen.getByRole("button", { name: "Show as stored" }));
+    const reply = screen.getByRole("region", { name: "Reply" });
+    expect(within(reply).queryByRole("heading")).toBeNull();
+    expect(reply.querySelector("pre")?.textContent).toBe(storedReply);
+    expect(screen.getByRole("region", { name: "Rubric" }).querySelector("pre")?.textContent).toBe("Finds the **off-by-one**.");
+
+    await userEvent.click(screen.getByRole("button", { name: "Show formatted" }));
+    expect(within(screen.getByRole("region", { name: "Reply" })).getByRole("heading", { name: "Findings" })).toBeTruthy();
+
+    // What the switch showed is what the result keeps.
+    await userEvent.click(screen.getByRole("button", { name: "Met" }));
+    await screen.findByTestId("landing");
+    expect((await loadFolder(storage)).assessments[0].handBack).toBe(storedReply);
+  });
+
+  it("Escape on Did it meet it goes back to What came back with the pasted reply still in the box", async () => {
+    renderApp(storageWith({ credentials: [withRubric], profiles: [opus] }), fromBadge);
+    await takeAndCopy();
+    await toJudge("Kept through Escape");
+    await userEvent.keyboard("{Escape}");
+    expect(await screen.findByRole("heading", { name: "What came back" })).toBeTruthy();
+    expect(replyBox().value).toBe("Kept through Escape");
+    await waitFor(() => expect(document.activeElement).toBe(replyBox()));
+  });
+
+  it("two more Escapes after a pasted reply leave the test deck open, and so does one more", async () => {
+    renderApp(storageWith({ credentials: [review], profiles: [opus] }), fromBadge);
+    await takeAndCopy();
+    await toJudge("Do not lose me");
+    await userEvent.keyboard("{Escape}");
+    await screen.findByRole("heading", { name: "What came back" });
+    await waitFor(() => expect(document.activeElement).toBe(replyBox()));
+
+    await userEvent.keyboard("{Escape}");
+    await userEvent.keyboard("{Escape}");
+    expect(testDeck()).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Hand it over" })).toBeTruthy();
+    await userEvent.keyboard("{Escape}");
+    expect(testDeck()).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "What needs you" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Agents" })).toBeNull();
+  });
+
+  it("with nothing pasted, Escape still leaves the test as before", async () => {
+    renderApp(storageWith({ credentials: [review], profiles: [opus] }), fromBadge);
+    await screen.findByRole("heading", { name: "Who takes it" });
+    await userEvent.keyboard("{Escape}");
+    expect(await screen.findByRole("region", { name: "Agents" })).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Test an agent" })).toBeNull();
+  });
+
+  it("Escape in the reply box moves focus out of it and keeps the deck and the reply", async () => {
+    renderApp(storageWith({ credentials: [review], profiles: [opus] }), fromBadge);
+    await takeAndCopy();
+    await userEvent.type(replyBox(), "Half a thought");
+    await userEvent.keyboard("{Escape}");
+    expect(screen.getByRole("heading", { name: "What came back" })).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Next" }));
+    expect(replyBox().value).toBe("Half a thought");
+  });
+
+  it("Met records the result as before, and the landing card brings back the full top bar", async () => {
+    const storage = storageWith({ credentials: [review], profiles: [opus] });
+    renderApp(storage, fromBadge);
+    await takeAndCopy();
+    await pasteAndJudge("I reviewed it.", "Met");
+    expect(await screen.findByTestId("landing")).toBeTruthy();
+    expect(barActions()).toEqual(FOLDER_ACTIONS);
+    expect((await loadFolder(storage)).assessments).toEqual([expect.objectContaining({ profileSlug: "opus", result: "met", handBack: "I reviewed it." })]);
+  });
+
+  it("a reload that makes the waiting test stale still offers Copy again, on a page, and keeps the pasted reply for after", async () => {
+    addPending(FOLDER, {
+      profileSlug: "opus",
+      credentialKey: "eng/review",
+      copiedAt: "2026-09-29T10:00:00.000Z",
+      assignmentVersion: await assignmentVersion(review.task, review.rubric),
+      setup: { harness: "claude-code", model: "opus", effort: "high" },
+    });
+    const storage = storageWith({ credentials: [review], profiles: [opus] });
+    renderApp(storage, { ...fromBadge, profileSlug: "opus", resume: true });
+    await screen.findByRole("heading", { name: "What came back" });
+    await userEvent.type(replyBox(), "Kept for after");
+
+    await storage.writeText("data", credentialPath("eng", "review"), serializeCredentialMd({ ...review, task: "Review the diff twice." }));
+    fireEvent.focus(window);
+    expect(await screen.findByText("The task changed since you copied it")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Copy again" })).toBeTruthy();
+    expect(screen.queryByRole("textbox", { name: "Reply" })).toBeNull();
+    expect(testDeck().classList.contains("pane")).toBe(false);
+    expect(barActions()).toEqual(FOLDER_ACTIONS);
+
+    // The reply is held, so Escape does not throw it away.
+    await userEvent.keyboard("{Escape}");
+    expect(screen.getByRole("heading", { name: "What came back" })).toBeTruthy();
+
+    await userEvent.click(screen.getByRole("button", { name: "Copy again" }));
+    expect((await screen.findByRole("textbox", { name: "Reply" }) as HTMLTextAreaElement).value).toBe("Kept for after");
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(within(await screen.findByRole("region", { name: "Reply" })).getByText("Kept for after")).toBeTruthy();
   });
 });

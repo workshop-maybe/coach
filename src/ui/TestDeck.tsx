@@ -8,6 +8,12 @@
 // until a result is recorded with the handoff that ran, or it is pulled without a result.
 // An agent holds one plug: a plug on this badge opens at "What came back", and a plug on
 // another badge must be pulled first, as a detour that comes back to this test (R18).
+//
+// Pasting and judging are panes (U4, R7, R14, R22): "What came back" gives the reply box
+// the window under a strip of the drawing (KTD9) and takes first focus (R21), and "Did it
+// meet it" shows the reply and the rubric rendered side by side (R11), with a switch to
+// both as stored (R12) and Met and Not yet pinned below. Once a reply is pasted the deck
+// holds unsaved work, so Escape never throws it away (R19, R20, KTD8).
 
 import { useEffect, useRef, useState } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
@@ -27,6 +33,7 @@ import { handoffLabel } from "./format";
 import { useNav } from "./nav";
 import { livePlugs, plugFor, usePendingTests, type PendingTest } from "./pendingTests";
 import { RichText } from "./RichText";
+import { RichView } from "./RichView";
 import type { TestPick } from "./routes";
 import { focusOnMount } from "./shared";
 import { describeError, useFolder } from "./useFolderState";
@@ -71,6 +78,8 @@ export function TestDeck(props: TestDeckProps) {
   }));
   const [round, setRound] = useState(0);
   const [reply, setReply] = useState("");
+  // The judge card shows the reply and the rubric as stored rather than rendered (R12).
+  const [asStored, setAsStored] = useState(false);
   const [outcome, setOutcome] = useState<Outcome>({ kind: "open" });
   const result = useRef<AssessmentResult>("met");
   const [version, setVersion] = useState<string | null>(null);
@@ -479,7 +488,9 @@ export function TestDeck(props: TestDeckProps) {
     forward: stale ? undefined : "Next",
     // A waiting test is checked for a changed task before its reply can be recorded.
     valid: reply.trim() !== "" && !(waiting && version === null),
-    settled: reply.trim() ? `${reply.trim().slice(0, 80)}${reply.trim().length > 80 ? "…" : ""}` : undefined,
+    // The reply box takes the window and the first focus; a stale test asks for Copy again on a page.
+    pane: !stale,
+    focusBody: !stale,
     body: stale ? (
       <>
         {replyStage}
@@ -498,7 +509,7 @@ export function TestDeck(props: TestDeckProps) {
       </>
     ) : (
       <>
-        {replyStage}
+        <div className="test-strip">{replyStage}</div>
         <RichText aria-label="Reply" value={reply} onChange={setReply} placeholder="Paste the reply" />
         {waiting && <PullLink onPull={pull} />}
       </>
@@ -509,14 +520,28 @@ export function TestDeck(props: TestDeckProps) {
   beats.push({
     id: "meet",
     title: "Did it meet it",
+    pane: true,
     body: ({ advance }) => (
       <div className={rubric ? "meet meet-with-rubric" : "meet"}>
-        {rubric && (
-          <div className="meet-rubric">
-            <span className="meet-rubric-head">Rubric</span>
-            <p>{rubric}</p>
+        <button type="button" className="ghost meet-stored" onClick={() => setAsStored((s) => !s)}>
+          {asStored ? "Show formatted" : "Show as stored"}
+        </button>
+        <div className="meet-texts">
+          {rubric && (
+            <div className="meet-text meet-text-rubric">
+              <span className="meet-text-head" aria-hidden="true">
+                Rubric
+              </span>
+              <RichView aria-label="Rubric" value={rubric} stored={asStored} />
+            </div>
+          )}
+          <div className="meet-text">
+            <span className="meet-text-head" aria-hidden="true">
+              Reply
+            </span>
+            <RichView aria-label="Reply" value={reply} stored={asStored} />
           </div>
-        )}
+        </div>
         <div className="meet-choices">
           <button
             type="button"
@@ -554,7 +579,7 @@ export function TestDeck(props: TestDeckProps) {
   const bothKnown = !!props.credentialKey && !!props.profileSlug && round === 0;
   const startAt = waiting && (bothKnown || props.resume) ? replyAt : bothKnown ? replyAt - 1 : 0;
 
-  return <Deck key={round} label="Test an agent" beats={beats} startAt={startAt} onClose={home} onFinish={record} />;
+  return <Deck key={round} label="Test an agent" beats={beats} startAt={startAt} unsaved={reply.trim() !== ""} onClose={home} onFinish={record} />;
 }
 
 /** The motion for each phase of the test: the handoff card going in, or ejecting. */
