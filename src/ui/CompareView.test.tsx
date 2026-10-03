@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 // The compare (U9, R11, R12, R17, KTD10): two takes opened side by side in the full window,
-// each a record with its reply rendered, one switch to show both as stored, and the way back
-// to the page that lists them, with both still picked and Compare focused.
+// each a record with its reply rendered and its saved reading from Jev (U7, R14), one switch
+// to show both as stored, and the way back to the page that lists them, with both still
+// picked and Compare focused.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { assessmentPath, profilePath } from "../domain/folder";
-import type { Assessment, FolderState, Handoff } from "../domain/types";
+import type { Assessment, FolderState, Handoff, JevReading } from "../domain/types";
 import type { MemoryStorage } from "../storage/memory";
 import { formatDate } from "./format";
 import type { TakeRef } from "./routes";
@@ -118,6 +119,45 @@ describe("CompareView", () => {
     await userEvent.click(screen.getByRole("button", { name: "Show formatted" }));
     expect(within(panes()[0]).getByRole("region", { name: "Reply" }).querySelector("h1")?.textContent).toBe("Opus findings");
     expect(within(panes()[1]).getByRole("region", { name: "Reply" }).querySelector("pre")).toBeNull();
+  });
+
+  it("shows each take's saved reading in its own pane, and none for a take without one", async () => {
+    const reading = (overall: number, text: string): JevReading => ({
+      model: "jev-1.13.0",
+      assignmentVersion: "v1",
+      askedAt: "2026-09-01T09:05:00.000Z",
+      seen: "before",
+      overall,
+      points: [{ text, probability: overall }],
+    });
+    open(
+      folder([
+        await result(opus, review, { ...day(1), jev: reading(0.94, "Names the off-by-one") }),
+        await result(codex, review, { ...day(2), jev: reading(0.12, "Suggests a fix") }),
+        await result(opus, review, day(3)),
+      ]),
+      [take("opus", 1), take("codex", 2)],
+    );
+    await screen.findByRole("region", { name: "Compare replies" });
+    const [left, right] = panes();
+    const leftReading = within(left).getByText("Jev's reading, 94% overall", { selector: "summary" }).closest("details")!;
+    expect(leftReading.open).toBe(false);
+    expect(leftReading.querySelector("li .jev-point-text")?.textContent).toBe("Names the off-by-one");
+    expect(leftReading.querySelector("li .jev-p")?.textContent).toBe("94%");
+    const rightReading = within(right).getByText("Jev's reading, 12% overall", { selector: "summary" }).closest("details")!;
+    expect(rightReading.querySelector("li .jev-point-text")?.textContent).toBe("Suggests a fix");
+    expect(within(left).queryByText("Suggests a fix")).toBeNull();
+    expect(within(right).queryByText("Names the off-by-one")).toBeNull();
+    cleanup();
+
+    open(
+      folder([await result(opus, review, { ...day(1), jev: reading(0.94, "Names the off-by-one") }), await result(codex, review, day(2))]),
+      [take("opus", 1), take("codex", 2)],
+    );
+    await screen.findByRole("region", { name: "Compare replies" });
+    expect(within(panes()[0]).getByText("Jev's reading, 94% overall", { selector: "summary" })).toBeTruthy();
+    expect(within(panes()[1]).queryByText(/Jev's reading/)).toBeNull();
+    expect(panes()[1].querySelector(".jev-reading")).toBeNull();
   });
 
   it("two takes from the same agent each show their own verdict and date", async () => {
