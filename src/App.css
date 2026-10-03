@@ -457,7 +457,9 @@ button:focus-visible {
 /* ---------------------------------------------------------------------------
    Rich text: a Markdown box on the white surface. Prose in Inter, code in the
    mono on a faint grid tint, square lists and task boxes. Formatting lives in a
-   bar on top of the box, and the inline tools float over a selection too. */
+   bar on top of the box, and the inline tools float over a selection too. The
+   prose rules are shared with the read-only reply view (.rich-prose, U3), so a
+   reply reads in the editor's type (R11). */
 
 .rich {
   position: relative;
@@ -484,18 +486,21 @@ button:focus-visible {
   background: var(--cell);
 }
 
-.rich-input {
-  min-height: 8rem;
-  padding: 10px 14px;
-  border: none;
-  border-radius: 0;
-  background: var(--surface);
+:is(.rich-input, .rich-prose) {
   font-family: var(--font-sans);
   font-size: 15px;
   line-height: 1.55;
   letter-spacing: var(--ui-tracking);
   color: var(--ink);
   overflow-wrap: anywhere;
+}
+
+.rich-input {
+  min-height: 8rem;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 0;
+  background: var(--surface);
   cursor: text;
 }
 
@@ -505,23 +510,23 @@ button:focus-visible {
   box-shadow: none;
 }
 
-.rich-input > * + * {
+:is(.rich-input, .rich-prose) > * + * {
   margin-top: 0.6em;
 }
 
-.rich-input :is(p, ul, ol, blockquote, pre, h1, h2, h3) {
+:is(.rich-input, .rich-prose) :is(p, ul, ol, blockquote, pre, h1, h2, h3) {
   margin-bottom: 0;
 }
 
-.rich-input > :first-child {
+:is(.rich-input, .rich-prose) > :first-child {
   margin-top: 0;
 }
 
-.rich-input p {
+:is(.rich-input, .rich-prose) p {
   margin: 0;
 }
 
-.rich-input :is(h1, h2, h3) {
+:is(.rich-input, .rich-prose) :is(h1, h2, h3) {
   margin-top: 0.9em;
   font-family: var(--font-sans);
   font-weight: 600;
@@ -529,69 +534,69 @@ button:focus-visible {
   letter-spacing: var(--heading-tracking);
 }
 
-.rich-input h1 {
+:is(.rich-input, .rich-prose) h1 {
   font-size: 1.45em;
 }
 
-.rich-input h2 {
+:is(.rich-input, .rich-prose) h2 {
   font-size: 1.22em;
 }
 
-.rich-input h3 {
+:is(.rich-input, .rich-prose) h3 {
   font-size: 1.05em;
 }
 
-.rich-input :is(ul, ol) {
+:is(.rich-input, .rich-prose) :is(ul, ol) {
   margin-top: 0.4em;
   padding-left: 1.4em;
 }
 
-.rich-input ul {
+:is(.rich-input, .rich-prose) ul {
   list-style-type: square;
 }
 
-.rich-input li > p + * {
+:is(.rich-input, .rich-prose) li > p + * {
   margin-top: 0.2em;
 }
 
-.rich-input li::marker {
+:is(.rich-input, .rich-prose) li::marker {
   color: var(--ink-muted);
 }
 
-.rich-input ol li::marker {
+:is(.rich-input, .rich-prose) ol li::marker {
   font-family: var(--font-mono);
   font-size: 0.85em;
 }
 
-.rich-input ul[data-type="taskList"] {
+:is(.rich-input, .rich-prose) ul[data-type="taskList"] {
   padding-left: 0;
   list-style: none;
 }
 
-.rich-input ul[data-type="taskList"] > li {
+:is(.rich-input, .rich-prose) ul[data-type="taskList"] > li {
   display: flex;
   align-items: flex-start;
   gap: var(--space-sm);
 }
 
-.rich-input ul[data-type="taskList"] > li > label {
+:is(.rich-input, .rich-prose) ul[data-type="taskList"] > li > label {
   flex: none;
   padding-top: 0.28em;
   user-select: none;
 }
 
-.rich-input ul[data-type="taskList"] > li > div {
+:is(.rich-input, .rich-prose) ul[data-type="taskList"] > li > div {
   flex: 1;
   min-width: 0;
 }
 
-.rich-input ul[data-type="taskList"] > li[data-checked="true"] > div {
+:is(.rich-input, .rich-prose) ul[data-type="taskList"] > li[data-checked="true"] > div {
   color: var(--ink-muted);
   text-decoration: line-through;
   text-decoration-color: var(--ink-ghost);
 }
 
-.rich-input input[type="checkbox"] {
+:is(.rich-input, .rich-prose) input[type="checkbox"] {
   appearance: none;
   display: block;
   width: 14px;
@@ -604,12 +609,12 @@ button:focus-visible {
   cursor: pointer;
 }
 
-.rich-input input[type="checkbox"]:checked {
+:is(.rich-input, .rich-prose) input[type="checkbox"]:checked {
   background: var(--ink);
   box-shadow: inset 0 0 0 2px var(--surface);
 }
 
-.rich-input blockquote {
+:is(.rich-input, .rich-prose) blockquote {
   margin-left: 0;
   margin-right: 0;
   padding-left: var(--space-md);
@@ -617,7 +622,7 @@ button:focus-visible {
   color: var(--ink-muted);
 }
 
-.rich-input code {
+:is(.rich-input, .rich-prose) code {
   padding: 1px 4px;
   background: var(--grid);
   font-family: var(--font-mono);
@@ -625,7 +630,7 @@ button:focus-visible {
   letter-spacing: 0;
 }
 
-.rich-input pre {
+:is(.rich-input, .rich-prose) pre {
   padding: var(--space-md);
   border: 1px solid var(--cell);
   background-color: var(--grid);
@@ -636,19 +641,19 @@ button:focus-visible {
   white-space: pre-wrap;
 }
 
-.rich-input pre code {
+:is(.rich-input, .rich-prose) pre code {
   padding: 0;
   background: none;
   font-size: inherit;
 }
 
-.rich-input a {
+:is(.rich-input, .rich-prose) a {
   color: var(--data);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
-.rich-input hr {
+:is(.rich-input, .rich-prose) hr {
   border: none;
   border-top: 1px solid var(--cell);
 }
@@ -659,6 +664,43 @@ button:focus-visible {
   height: 0;
   color: var(--ink-ghost);
   pointer-events: none;
+}
+
+/* The read-only reply view (U3): a region that scrolls on its own and spans its
+   container, its scrollbar at the container's edge, with the reply held to a centered
+   measure of about 70 characters of the prose type (R9). Stored, the reply is the exact
+   string in the record mono (R12). */
+.rich-view {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: var(--space-base) var(--space-lg);
+  overflow: auto;
+}
+
+.rich-view-measure {
+  max-width: 70ch;
+  margin: 0 auto;
+  font-family: var(--font-sans);
+  font-size: 15px;
+}
+
+/* A task box in a reply is read, not ticked. */
+.rich-prose input[type="checkbox"] {
+  cursor: default;
+  pointer-events: none;
+}
+
+.rich-stored {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.55;
+  letter-spacing: var(--value-tracking);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--ink);
 }
 
 .rich-menu {

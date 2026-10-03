@@ -1,18 +1,19 @@
 // A rich-text box that reads and writes Markdown. Files on disk stay plain Markdown:
 // the editor parses `value` once, turns Markdown typed or pasted into structure, and
-// hands back Markdown only when the person edits. Opening it changes nothing.
+// hands back Markdown only when the person edits. Opening it changes nothing. Its
+// extensions live in richExtensions.ts, shared with the read-only reply view (U3, KTD5).
 
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
-import StarterKit from "@tiptap/starter-kit";
-import { Markdown } from "@tiptap/markdown";
-import { TaskItem, TaskList } from "@tiptap/extension-list";
-import { Placeholder } from "@tiptap/extensions";
 import { Node as PMNode, Slice } from "@tiptap/pm/model";
 import { ToolKey, type ToolName } from "../cast/ToolKey";
+import { richExtensions } from "./richExtensions";
+
+// Re-exported for the tests that parse and render Markdown through this module (U3).
+export { richExtensions };
 
 export interface RichTextProps {
   /** The text as Markdown. */
@@ -24,21 +25,6 @@ export interface RichTextProps {
   "aria-label": string;
   placeholder?: string;
   autoFocus?: boolean;
-}
-
-/** The extensions every rich box uses. Exported for tests that parse and render Markdown. */
-export function richExtensions(placeholder = "") {
-  return [
-    StarterKit.configure({
-      heading: { levels: [1, 2, 3] },
-      link: { openOnClick: false, autolink: true, defaultProtocol: "https" },
-      underline: false,
-    }),
-    TaskList,
-    TaskItem.configure({ nested: true }),
-    Placeholder.configure({ placeholder }),
-    Markdown.configure({ indentation: { style: "space", size: 2 } }),
-  ];
 }
 
 /** True when a pasted string carries Markdown structure worth parsing. */
