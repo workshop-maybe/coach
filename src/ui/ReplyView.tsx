@@ -35,9 +35,9 @@ export function SavedReading({ reading }: { reading: JevReading }) {
   const changed = reading.seen === "after" && reading.verdictChanged === true;
   const summary = `Jev's reading, ${Math.round(reading.overall * 100)}% overall${changed ? " · verdict changed after it" : ""}`;
   return (
-    <details className="reply-ran">
+    <details className="reply-ran reply-jev">
       <summary>{summary}</summary>
-      <div className="handback">
+      <div className="reply-jev-body">
         <JevReadingPanel reading={reading} readOnly />
       </div>
     </details>
