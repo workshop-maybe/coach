@@ -2,12 +2,12 @@
 // target check's hint and line move, a part card, the not-found card, a result's verdict,
 // display names for a palette and a file, and Escape.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { PALETTES } from "../badge/palettes";
 import { checkTarget, type TargetMove } from "../domain/target-check";
 import type { Assessment } from "../domain/types";
-import { resultLabel } from "./format";
+import { formatDate, resultLabel, setupText } from "./format";
 import { describeError } from "./useFolderState";
 
 /** A stable ref callback that focuses a card's heading once, when it appears. */
@@ -130,3 +130,28 @@ export function paletteName(slug: string | undefined | null): string {
 }
 
 export const fileName = (path: string) => path.slice(path.lastIndexOf("/") + 1);
+
+/** The switch between replies rendered and as stored (R12), worded the same wherever a reply shows. */
+export function StoredSwitch({ asStored, onToggle, className = "reply-stored" }: { asStored: boolean; onToggle(): void; className?: string }) {
+  return (
+    <button type="button" className={`ghost ${className}`} onClick={onToggle}>
+      {asStored ? "Show formatted" : "Show as stored"}
+    </button>
+  );
+}
+
+/** A take's record bar: the agent, its setup, the verdict and the date, then what the view adds (R15, R17). */
+export function TakeBar({ name, result: a, focus = false, children }: { name: string; result: Assessment; focus?: boolean; children?: ReactNode }) {
+  return (
+    <div className="reply-bar">
+      <h2 tabIndex={-1} ref={focus ? focusOnMount : undefined}>
+        {name}
+      </h2>
+      <span>{setupText(a.setup)}</span>
+      <span>
+        <Verdict result={a} /> · {formatDate(a.recordedAt)}
+      </span>
+      {children}
+    </div>
+  );
+}

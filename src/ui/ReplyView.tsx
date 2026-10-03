@@ -14,13 +14,13 @@
 import { useState } from "react";
 import { BUILT_IN_HANDOFF } from "../domain/handoffs";
 import { credentialKey } from "../domain/types";
-import { formatDate, handoffText, setupText } from "./format";
+import { formatDate, handoffText } from "./format";
 import { useNav } from "./nav";
 import { usePane } from "./pane";
 import { backFromReply, takeOf } from "./replyRoute";
 import { RichView } from "./RichView";
 import type { TakeRef } from "./routes";
-import { Missing, Verdict, focusOnMount, useEscape } from "./shared";
+import { Missing, StoredSwitch, TakeBar, useEscape } from "./shared";
 import { useFolder } from "./useFolderState";
 import { useMatrix } from "./useMatrix";
 
@@ -53,19 +53,10 @@ export function ReplyView({ credentialKey: key, take, picks }: { credentialKey: 
         ×
       </button>
       <article className="reply-record">
-        <div className="reply-bar">
-          <h2 tabIndex={-1} ref={focusOnMount}>
-            {profile.name}
-          </h2>
-          <span>{setupText(a.setup)}</span>
-          <span>
-            <Verdict result={a} /> · {date}
-          </span>
-          <button type="button" className="ghost reply-stored" onClick={() => setAsStored((s) => !s)}>
-            {asStored ? "Show formatted" : "Show as stored"}
-          </button>
+        <TakeBar name={profile.name} result={a} focus>
+          <StoredSwitch asStored={asStored} onToggle={() => setAsStored((s) => !s)} />
           {note !== "" && <p className="reply-note">{note}</p>}
-        </div>
+        </TakeBar>
         <RichView aria-label="Reply" value={a.handBack} stored={asStored} />
       </article>
       <details className="reply-ran">

@@ -1,7 +1,6 @@
 // A rich-text box that reads and writes Markdown. Files on disk stay plain Markdown:
 // the editor parses `value` once, turns Markdown typed or pasted into structure, and
-// hands back Markdown only when the person edits. Opening it changes nothing. Its
-// extensions live in richExtensions.ts, shared with the read-only reply view (U3, KTD5).
+// hands back Markdown only when the person edits. Opening it changes nothing.
 
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
@@ -11,9 +10,6 @@ import { BubbleMenu } from "@tiptap/react/menus";
 import { Node as PMNode, Slice } from "@tiptap/pm/model";
 import { ToolKey, type ToolName } from "../cast/ToolKey";
 import { richExtensions } from "./richExtensions";
-
-// Re-exported for the tests that parse and render Markdown through this module (U3).
-export { richExtensions };
 
 export interface RichTextProps {
   /** The text as Markdown. */

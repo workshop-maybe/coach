@@ -22,7 +22,6 @@ import { Verdict } from "./shared";
 type TakeId = string;
 const idOf = (take: TakeRef): TakeId => `${take.profileSlug}/${take.fileStem}`;
 const refOf = (profile: AgentProfile, a: Assessment): TakeRef => ({ profileSlug: profile.slug, fileStem: a.fileStem });
-const takeId = (profile: AgentProfile, a: Assessment): TakeId => idOf(refOf(profile, a));
 
 /** The opening lines of a reply, for its row. */
 const PREVIEW_LINES = 3;
@@ -62,7 +61,7 @@ export function ReplyList({
   // while their take is still in the run.
   const takes = new Map<TakeId, { profile: AgentProfile; result: Assessment }>();
   for (const { profile, latest, older } of run.agents) {
-    for (const a of [latest, ...older]) takes.set(takeId(profile, a), { profile, result: a });
+    for (const a of [latest, ...older]) takes.set(idOf(refOf(profile, a)), { profile, result: a });
   }
   const live = picked.filter((id) => takes.has(id));
 
@@ -80,7 +79,8 @@ export function ReplyList({
   const compare = () => navigate({ view: "item", item: "compare", credentialKey: key, takes: [pickedRefs[0], pickedRefs[1]], ...kept });
 
   const take = (entry: AgentReplies, a: Assessment, latest: boolean) => {
-    const id = takeId(entry.profile, a);
+    const ref = refOf(entry.profile, a);
+    const id = idOf(ref);
     const isLitTake = entry.profile.slug === lit && a.fileStem === litTake;
     return (
       <Take
@@ -89,7 +89,7 @@ export function ReplyList({
         result={a}
         latest={latest}
         picked={picked.includes(id)}
-        onOpen={() => openTake(refOf(entry.profile, a))}
+        onOpen={() => openTake(ref)}
         onPick={() => togglePick(id)}
         headRef={isLitTake ? litHead : undefined}
         context={contextText(contextLine(state.assessments, a))}

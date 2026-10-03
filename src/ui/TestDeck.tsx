@@ -35,7 +35,7 @@ import { livePlugs, plugFor, usePendingTests, type PendingTest } from "./pending
 import { RichText } from "./RichText";
 import { RichView } from "./RichView";
 import type { TestPick } from "./routes";
-import { focusOnMount } from "./shared";
+import { StoredSwitch, focusOnMount } from "./shared";
 import { describeError, useFolder } from "./useFolderState";
 import { useMatrix } from "./useMatrix";
 
@@ -523,9 +523,7 @@ export function TestDeck(props: TestDeckProps) {
     pane: true,
     body: ({ advance }) => (
       <div className={rubric ? "meet meet-with-rubric" : "meet"}>
-        <button type="button" className="ghost meet-stored" onClick={() => setAsStored((s) => !s)}>
-          {asStored ? "Show formatted" : "Show as stored"}
-        </button>
+        <StoredSwitch className="meet-stored" asStored={asStored} onToggle={() => setAsStored((s) => !s)} />
         <div className="meet-texts">
           {rubric && (
             <div className="meet-text meet-text-rubric">

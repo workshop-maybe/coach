@@ -12,13 +12,13 @@
 
 import { useState } from "react";
 import { credentialKey } from "../domain/types";
-import { formatDate, setupText } from "./format";
+import { formatDate } from "./format";
 import { useNav } from "./nav";
 import { usePane } from "./pane";
 import { backFromCompare, takeOf } from "./replyRoute";
 import { RichView } from "./RichView";
 import type { TakeRef } from "./routes";
-import { Missing, Verdict, focusOnMount, useEscape } from "./shared";
+import { Missing, StoredSwitch, TakeBar, useEscape } from "./shared";
 import { useFolder } from "./useFolderState";
 import { useMatrix } from "./useMatrix";
 
@@ -49,9 +49,7 @@ export function CompareView({ credentialKey: key, takes, picks }: { credentialKe
   return (
     <section className="pane compare-view" aria-label="Compare replies">
       <div className="compare-top">
-        <button type="button" className="ghost reply-stored" onClick={() => setAsStored((s) => !s)}>
-          {asStored ? "Show formatted" : "Show as stored"}
-        </button>
+        <StoredSwitch asStored={asStored} onToggle={() => setAsStored((s) => !s)} />
         <button type="button" className="deck-close ghost" aria-label="Close" onClick={close}>
           ×
         </button>
@@ -61,15 +59,7 @@ export function CompareView({ credentialKey: key, takes, picks }: { credentialKe
           const date = formatDate(a.recordedAt);
           return (
             <article key={i} className="reply-record" aria-label={`${profile.name}, ${date}`}>
-              <div className="reply-bar">
-                <h2 tabIndex={-1} ref={i === 0 ? focusOnMount : undefined}>
-                  {profile.name}
-                </h2>
-                <span>{setupText(a.setup)}</span>
-                <span>
-                  <Verdict result={a} /> · {date}
-                </span>
-              </div>
+              <TakeBar name={profile.name} result={a} focus={i === 0} />
               <RichView aria-label="Reply" value={a.handBack} stored={asStored} />
             </article>
           );
