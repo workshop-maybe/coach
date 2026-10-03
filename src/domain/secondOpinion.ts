@@ -8,7 +8,7 @@
 // an unindented line right after an item ends the list instead of continuing the item, so
 // a closing line with no blank line before it still reads as a note.
 
-import type { JevAnswers, JevCriteria, SecondOpinionRequest } from "./jevRequest";
+import { isProbability, type JevAnswers, type JevCriteria, type SecondOpinionRequest } from "./jevRequest";
 import { scanLines } from "./markdownLines";
 import type { JevPoint, JevReading } from "./types";
 
@@ -160,6 +160,3 @@ function finish(item: { parts: string[] } | null, points: string[]): null {
   return null;
 }
 
-function isProbability(value: unknown): value is number {
-  return typeof value === "number" && value >= 0 && value <= 1;
-}

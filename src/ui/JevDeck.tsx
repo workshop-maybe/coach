@@ -94,12 +94,12 @@ export function JevDeck() {
    * Runs one change: home when it lands, or one line and the deck as it was when it fails.
    * A key the app can hold only for this session keeps the deck open, so its line is read.
    */
-  async function change(run: () => Promise<unknown>) {
+  async function change(run: () => Promise<JevStatus>) {
     setLine(null);
     setWorking(true);
     try {
       const next = await run();
-      if ((next as JevStatus | undefined)?.storage === "session") {
+      if (next.storage === "session") {
         setReplacing(false);
         setWorking(false);
         return;

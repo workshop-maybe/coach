@@ -18,7 +18,7 @@ import { useNav } from "./nav";
 import { usePane } from "./pane";
 import { backFromCompare, takeOf } from "./replyRoute";
 import { RichView } from "./RichView";
-import { SavedReading } from "./ReplyView";
+import { SavedReading } from "./JevReading";
 import type { TakeRef } from "./routes";
 import { Missing, StoredSwitch, TakeBar, useEscape } from "./shared";
 import { useFolder } from "./useFolderState";

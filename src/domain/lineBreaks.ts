@@ -9,7 +9,7 @@
 
 import { JevError, toJevError } from "../jev/jev";
 import { fitsTokens, jevTokens } from "./jevBudget";
-import type { JevAnswers, JevCriteria, LineBreaksRequest } from "./jevRequest";
+import { isProbability, type JevAnswers, type JevCriteria, type LineBreaksRequest } from "./jevRequest";
 import { scanLines } from "./markdownLines";
 import { findJoinCandidates } from "./pasteText";
 
@@ -128,7 +128,7 @@ export async function askLineBreaks(
       if (cancelled()) return null;
       for (const id of Object.keys(batch.questions)) {
         const p = (got?.answers as Record<string, unknown> | undefined)?.[id];
-        if (typeof p !== "number" || !(p >= 0 && p <= 1)) throw new JevError("other");
+        if (!isProbability(p)) throw new JevError("other");
         answers[id] = p;
       }
       break;

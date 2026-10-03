@@ -13,9 +13,9 @@
 
 import { useState } from "react";
 import { BUILT_IN_HANDOFF } from "../domain/handoffs";
-import { credentialKey, type JevReading } from "../domain/types";
+import { credentialKey } from "../domain/types";
 import { formatDate, handoffText } from "./format";
-import { JevReadingPanel } from "./JevReading";
+import { SavedReading } from "./JevReading";
 import { useNav } from "./nav";
 import { usePane } from "./pane";
 import { backFromReply, takeOf } from "./replyRoute";
@@ -24,25 +24,6 @@ import type { TakeRef } from "./routes";
 import { Missing, StoredSwitch, TakeBar, useEscape } from "./shared";
 import { useFolder } from "./useFolderState";
 import { useMatrix } from "./useMatrix";
-
-/**
- * Jev's reading saved on a result, collapsed, read-only (U7, R14, KTD12). It shows the
- * points as Jev read them, whatever the rubric says now, and whether or not Jev Mode is on.
- * The summary gives the overall reading and, for one seen after the verdict, whether the
- * verdict changed after it. The compare shows one in each take's record.
- */
-export function SavedReading({ reading }: { reading: JevReading }) {
-  const changed = reading.seen === "after" && reading.verdictChanged === true;
-  const summary = `Jev's reading, ${Math.round(reading.overall * 100)}% overall${changed ? " · verdict changed after it" : ""}`;
-  return (
-    <details className="reply-ran reply-jev">
-      <summary>{summary}</summary>
-      <div className="reply-jev-body">
-        <JevReadingPanel reading={reading} readOnly />
-      </div>
-    </details>
-  );
-}
 
 export function ReplyView({ credentialKey: key, take, picks }: { credentialKey: string; take: TakeRef; picks?: TakeRef[] }) {
   const { state } = useFolder();

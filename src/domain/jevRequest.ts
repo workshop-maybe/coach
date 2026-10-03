@@ -44,6 +44,11 @@ export interface JevAnswers {
   answers: Record<string, number>;
 }
 
+/** A probability as Jev gives one: a number from 0 to 1 (NaN is not one). */
+export function isProbability(value: unknown): value is number {
+  return typeof value === "number" && value >= 0 && value <= 1;
+}
+
 /** Jev 1.13's per-request limits, as the native side enforces them (KTD19). */
 export const JEV_LIMITS = {
   maxQuestions: 256,

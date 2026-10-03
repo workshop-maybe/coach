@@ -7,6 +7,7 @@ import { parseBadgeSettings, type BadgeSettings } from "../badge/settings";
 import { ChangedOnDiskError, type Storage } from "../storage/storage";
 import { parseCredentialMd, serializeCredentialMd } from "./credential-md";
 import { isTestContext } from "./context";
+import { isProbability } from "./jevRequest";
 import type {
   AgentProfile,
   AgentSetup,
@@ -327,10 +328,6 @@ function parseHandoff(raw: unknown): Assessment["handoff"] {
   const idText = typeof id === "number" ? String(id) : id;
   if (typeof idText !== "string" || idText === "" || typeof text !== "string") return undefined;
   return { id: idText, text };
-}
-
-function isProbability(v: unknown): v is number {
-  return typeof v === "number" && v >= 0 && v <= 1;
 }
 
 /** Non-empty text, with a YAML number read as text. Anything else is null. */

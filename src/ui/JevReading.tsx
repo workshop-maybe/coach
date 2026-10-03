@@ -5,7 +5,7 @@
 // since both raise acceptance whether or not the model is right.
 //
 // The judge pane shows the reading in hand below the rubric, under its own head. The
-// reply and compare views show a saved one read-only, inside their own labeled part (R14).
+// reply and compare views show a saved one read-only, collapsed under the reply (R14).
 
 import { isVague } from "../domain/secondOpinion";
 import type { JevReading } from "../domain/types";
@@ -18,7 +18,7 @@ export interface JevReadingPanelProps {
 }
 
 /** A probability as a whole percentage, such as "52%". */
-function percent(probability: number): string {
+export function percent(probability: number): string {
   return `${Math.round(probability * 100)}%`;
 }
 
@@ -55,5 +55,24 @@ export function JevReadingPanel({ reading, readOnly = false }: JevReadingPanelPr
         {isVague(reading.overall) && <span className="jev-vague">Jev can't call the whole bar</span>}
       </p>
     </section>
+  );
+}
+
+/**
+ * Jev's reading saved on a result, collapsed, read-only (U7, R14, KTD12). It shows the
+ * points as Jev read them, whatever the rubric says now, and whether or not Jev Mode is on.
+ * The summary gives the overall reading and, for one seen after the verdict, whether the
+ * verdict changed after it. The compare shows one in each take's record.
+ */
+export function SavedReading({ reading }: { reading: JevReading }) {
+  const changed = reading.seen === "after" && reading.verdictChanged === true;
+  const summary = `Jev's reading, ${percent(reading.overall)} overall${changed ? " · verdict changed after it" : ""}`;
+  return (
+    <details className="reply-ran reply-jev">
+      <summary>{summary}</summary>
+      <div className="reply-jev-body">
+        <JevReadingPanel reading={reading} readOnly />
+      </div>
+    </details>
   );
 }
