@@ -28,7 +28,7 @@ One agent's verdict on one badge, Met or Not met, recorded by the user with the 
 
 ### Reply
 
-The text an agent sent back for a test, pasted into the app and kept as written on its result. Also called the handback.
+The text an agent sent back for a test, pasted into the app and saved on its result as it stands in the reply box after any cleanup. Also called the handback.
 
 ### Run
 
@@ -37,3 +37,13 @@ A handoff that has at least one result on a badge. A badge with zero or one run 
 ### Take
 
 One of an agent's results within a run. The reply list shows each agent's latest take with its older takes below, and any two takes can be compared side by side.
+
+## Jev Mode
+
+### Jev Mode
+
+The optional setting, off by default, that connects the app to TypeSafe's Jev model with the user's own API key. It is the app's only network connection, and Jev acts only when the user asks.
+
+### Second opinion
+
+Jev's reading of a reply against a badge's rubric, given only when the user asks: a probability for each rubric point, one overall reading, and a flag on any point it can't call with confidence. The user still records the verdict, and the reading is saved with the result.
