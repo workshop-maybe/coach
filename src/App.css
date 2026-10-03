@@ -2124,8 +2124,9 @@ button:focus-visible {
   padding-inline: 0;
 }
 
-/* The window's own keys (no system title bar): close and minimize, drawn like the
-   machine's keys. The bar they sit in is the window's drag region. */
+/* The window's own keys (no system title bar): close, minimize and full screen, drawn
+   like the machine's keys. The bar they sit in is the window's drag region, except in
+   full screen. */
 .window-keys {
   display: flex;
   gap: var(--space-xs);
@@ -2163,12 +2164,18 @@ button:focus-visible {
   stroke-width: 1.8;
 }
 
-.window-key:hover .window-key-fill {
+.window-key:hover:not(:disabled) .window-key-fill {
   fill: var(--ink);
 }
 
-.window-key:hover .window-key-icon {
+.window-key:hover:not(:disabled) .window-key-icon {
   stroke: var(--on-ink);
+}
+
+/* Minimize, while the window is full screen. */
+.window-key:disabled .window-key-edge,
+.window-key:disabled .window-key-icon {
+  stroke: var(--ink-ghost);
 }
 
 .window-key:focus-visible {

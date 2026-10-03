@@ -12,6 +12,7 @@ import { EditHandoffDeck, HandoffsDeck } from "./HandoffDecks";
 import { HandoffDetail } from "./HandoffDetail";
 import { TrashDeck } from "./TrashDeck";
 import { WindowControls } from "./WindowControls";
+import { useWindowFrame } from "./windowFrame";
 import { exportAll, exportMessage } from "./exportAll";
 import { pickExportFolder } from "./exportFolder";
 import { Home } from "./Home";
@@ -36,6 +37,9 @@ export function AppShell({ onChangeFolder, initialRoute = { view: "home" } }: Ap
   const [route, navigate] = useState<Route>(initialRoute);
   const [exporting, setExporting] = useState(false);
   const nav = useMemo(() => ({ route, navigate }), [route]);
+  // Tauri's drag script toggles maximize on a double press, before any handler here could
+  // stop it, so in full screen the bar is no drag region at all (R2).
+  const dragRegion = useWindowFrame() === "fullscreen" ? undefined : true;
 
   async function runExport() {
     if (!state) return;
@@ -57,12 +61,12 @@ export function AppShell({ onChangeFolder, initialRoute = { view: "home" } }: Ap
     <NavContext.Provider value={nav}>
       <div className="shell">
         <InkDefs />
-        <header className="topbar" data-tauri-drag-region>
+        <header className="topbar" data-tauri-drag-region={dragRegion}>
           <WindowControls />
           <button type="button" className="brand" aria-label="Andamio Desktop, go home" onClick={() => navigate({ view: "home" })}>
             <Lockup />
           </button>
-          <span className="folder-path" title={folder} data-tauri-drag-region>
+          <span className="folder-path" title={folder} data-tauri-drag-region={dragRegion}>
             {folder}
           </span>
           <div className="topbar-actions">

@@ -7,6 +7,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { InkDefs } from "../cast/InkDefs";
 import { Lockup } from "./Lockup";
 import { WindowControls } from "./WindowControls";
+import { useWindowFrame } from "./windowFrame";
 import { describeError } from "./useFolderState";
 
 export interface FolderGateProps {
@@ -26,6 +27,8 @@ type GateState = { status: "checking" } | { status: "none" } | { status: "ready"
 export function FolderGate({ getFolder = defaultGetFolder, pickFolder = defaultPickFolder, children }: FolderGateProps) {
   const [gate, setGate] = useState<GateState>({ status: "checking" });
   const [error, setError] = useState<string | null>(null);
+  // No drag region in full screen, where a double-click would maximize (R2, as in AppShell).
+  const fullscreen = useWindowFrame() === "fullscreen";
 
   useEffect(() => {
     let live = true;
@@ -62,7 +65,7 @@ export function FolderGate({ getFolder = defaultGetFolder, pickFolder = defaultP
   return (
     <>
       <InkDefs />
-      <div className="gate-bar" data-tauri-drag-region>
+      <div className="gate-bar" data-tauri-drag-region={fullscreen ? undefined : true}>
         <WindowControls />
       </div>
       <main className="gate">
