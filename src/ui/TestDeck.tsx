@@ -14,14 +14,34 @@
 // meet it" shows the reply and the rubric rendered side by side (R11), with a switch to
 // both as stored (R12) and Met and Not yet pinned below. Once a reply is pasted the deck
 // holds unsaved work, so Escape never throws it away (R19, R20, KTD8).
+//
+// Jev's second opinion (U6, R6-R13, KTD10, KTD11). When the judge pane first shows, the
+// round settles whether it offers one: Jev Mode usable, a rubric, and a reply within
+// Jev's budget. In such a round Met and Not yet become choices, Save records the pick, and
+// a quiet "Ask Jev" ("Check with Jev" after a pick) puts Jev's reading below the rubric.
+// A reading belongs to this round, this reply and this assignment version, and a request
+// generation drops any answer that lands after a newer ask, an edit, a save or a new round.
+// Every other round judges exactly as before: Met and Not yet save at once.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { SKELETON_ID, defaultHandoff, fillHandoff, handoffsFor, skeletonOf, winnerFor } from "../domain/handoffs";
 import { assignmentVersion } from "../domain/hash";
 import { sameSetup } from "../domain/matrix";
+import { fitsJev } from "../domain/jevBudget";
 import { recordAssessment } from "../domain/operations";
-import { credentialKey, type AgentProfile, type AssessmentResult, type Credential, type HandoffTemplate, type Slug, type TestContext } from "../domain/types";
+import { readingParts, secondOpinionRequest, type JevReadingParts } from "../domain/secondOpinion";
+import {
+  credentialKey,
+  type AgentProfile,
+  type AssessmentResult,
+  type Credential,
+  type HandoffTemplate,
+  type JevReading,
+  type Slug,
+  type TestContext,
+} from "../domain/types";
+import { JevError, toJevError } from "../jev/jev";
 import { Cartridge } from "../cast/Cartridge";
 import { HandoffBox } from "../cast/HandoffBox";
 import { Machine } from "../cast/Machine";
@@ -30,6 +50,8 @@ import { handoffKeys, machineKeys, openingChoice, replyScreen, trigPages, type H
 import { Deck, type Beat } from "./Deck";
 import { backToTest } from "./HandoffDecks";
 import { handoffLabel } from "./format";
+import { useJev } from "./jevContext";
+import { JevReadingPanel } from "./JevReading";
 import { useNav } from "./nav";
 import { livePlugs, plugFor, usePendingTests, type PendingTest } from "./pendingTests";
 import { RichText } from "./RichText";
@@ -44,6 +66,9 @@ export const LANDING_MS = 1400;
 
 /** How long the dots run across the screen after Copy before the cursor waits. */
 export const SENDING_MS = 700;
+
+/** The Jev model a reading records. The native side pins it (MODEL in src-tauri/src/jev.rs) and does not return it. */
+const JEV_MODEL = "jev-1.13.0";
 
 function reducedMotion(): boolean {
   return typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -65,6 +90,17 @@ type Copied = HandoffTemplate;
 
 type Outcome = { kind: "open" } | { kind: "met"; plugId: string } | { kind: "not-yet"; plugId: string };
 
+/** Jev's reading in hand, with what it was asked about (KTD11). */
+interface HeldReading {
+  round: number;
+  reply: string;
+  assignmentVersion: string;
+  askedAt: string;
+  parts: JevReadingParts;
+  /** The pick when the reading arrived, or null when it came before one (R13). */
+  verdictWhenSeen: AssessmentResult | null;
+}
+
 export function TestDeck(props: TestDeckProps) {
   const { storage, state, folder, apply } = useFolder();
   const { navigate } = useNav();
@@ -81,7 +117,12 @@ export function TestDeck(props: TestDeckProps) {
   // The judge card shows the reply and the rubric as stored rather than rendered (R12).
   const [asStored, setAsStored] = useState(false);
   const [outcome, setOutcome] = useState<Outcome>({ kind: "open" });
-  const result = useRef<AssessmentResult>("met");
+  // The verdict a Met or Not yet press saves at once, outside a Jev round.
+  const pressed = useRef<AssessmentResult>("met");
+  // The pick a Jev round's Save records (KTD10). The ref is the pick when an answer lands.
+  const [verdict, setVerdict] = useState<AssessmentResult | null>(null);
+  const verdictNow = useRef<AssessmentResult | null>(null);
+  const [recording, setRecording] = useState(false);
   const [version, setVersion] = useState<string | null>(null);
   // The machine's screen through Copy: dots out, then the cursor waits.
   const [sending, setSending] = useState(false);
@@ -92,11 +133,38 @@ export function TestDeck(props: TestDeckProps) {
   // What this visit put on the clipboard. `fromHand` keeps "Hand it over" in the deck after its own Copy.
   const [copied, setCopied] = useState<(Copied & { profileSlug: Slug; key: string; fromHand: boolean }) | null>(null);
   const matrix = useMatrix(state);
+  const jev = useJev();
+  // Whether this round offers a second opinion, settled when the judge pane first shows (KTD10).
+  const [decision, setDecision] = useState<{ round: number; offered: boolean; tooLong: boolean } | null>(null);
+  const [held, setHeld] = useState<HeldReading | null>(null);
+  const [asking, setAsking] = useState(false);
+  // The last ask's failure. One that can't be retried takes the ask away for the round (KTD20).
+  const [jevTrouble, setJevTrouble] = useState<{ round: number; line: string; retry: boolean } | null>(null);
+  // The request generation: an answer lands only while its ask is still the latest (KTD11).
+  const askGen = useRef(0);
+  const inFlight = useRef(false);
 
   const profile = state?.profiles.find((p) => p.slug === profileSlug);
   const credential = state?.credentials.find((c) => credentialKey(c) === key);
   const collectionOf = (c: Credential) => state?.collections.find((x) => x.slug === c.collectionSlug);
   const waiting = pending.find((p) => p.profileSlug === profileSlug && p.credentialKey === key);
+
+  // The second opinion this reply would ask for, and whether it fits Jev's budget (KTD19).
+  const request = useMemo(
+    () => (credential && jev.usable && credential.rubric.trim() !== "" ? secondOpinionRequest({ task: credential.task, rubric: credential.rubric, reply }) : null),
+    [credential?.task, credential?.rubric, reply, jev.usable], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const fits = useMemo(() => request !== null && fitsJev(request), [request]);
+  // The reading counts only for the round, reply and assignment version it was asked about.
+  const shown = held && held.round === round && held.reply === reply && held.assignmentVersion === version ? held : null;
+
+  // Leaving the deck drops any ask in flight.
+  useEffect(
+    () => () => {
+      askGen.current++;
+    },
+    [],
+  );
 
   // The credential's current assignment version, to tell whether a copied prompt is stale.
   useEffect(() => {
@@ -192,24 +260,79 @@ export function TestDeck(props: TestDeckProps) {
     return here ? { id: here.id, text: here.text } : fill(def) ?? undefined;
   }
 
-  async function record() {
+  /** Records the verdict, captured when the save starts, with the reading in hand (R13). */
+  async function record(verdict: AssessmentResult) {
     if (!state || !credential || !profile) return;
     const handoff = ran();
-    const next = await recordAssessment(storage, state, {
-      profileSlug: profile.slug,
-      collectionSlug: credential.collectionSlug,
-      credentialSlug: credential.slug,
-      result: result.current,
-      note: "",
-      handBack: reply,
-      ...(waiting?.context ? { context: waiting.context } : {}),
-      ...(handoff ? { handoff } : {}),
-    });
-    // The plug comes out only once the result is written.
-    remove(profile.slug, credentialKey(credential));
-    apply(next);
-    const plugId = handoff?.id ?? SKELETON_ID;
-    setOutcome(result.current === "met" ? { kind: "met", plugId } : { kind: "not-yet", plugId });
+    // An ask still in flight is dropped: the result saves without it (KTD11).
+    const jevReading = shown ? savedReading(shown, verdict) : undefined;
+    dropAsk();
+    setRecording(true);
+    try {
+      const next = await recordAssessment(storage, state, {
+        profileSlug: profile.slug,
+        collectionSlug: credential.collectionSlug,
+        credentialSlug: credential.slug,
+        result: verdict,
+        note: "",
+        handBack: reply,
+        ...(waiting?.context ? { context: waiting.context } : {}),
+        ...(handoff ? { handoff } : {}),
+        ...(jevReading ? { jev: jevReading } : {}),
+      });
+      // The plug comes out only once the result is written.
+      remove(profile.slug, credentialKey(credential));
+      apply(next);
+      const plugId = handoff?.id ?? SKELETON_ID;
+      setOutcome(verdict === "met" ? { kind: "met", plugId } : { kind: "not-yet", plugId });
+    } finally {
+      setRecording(false);
+    }
+  }
+
+  /** Forgets any ask in flight, so its answer or failure lands nowhere. */
+  function dropAsk() {
+    askGen.current++;
+    inFlight.current = false;
+    setAsking(false);
+  }
+
+  /** A changed reply drops the reading and any ask about the old one (KTD11). */
+  function editReply(next: string) {
+    setReply(next);
+    if (next !== reply && (held || inFlight.current)) {
+      dropAsk();
+      setHeld(null);
+    }
+  }
+
+  function choose(v: AssessmentResult) {
+    verdictNow.current = v;
+    setVerdict(v);
+  }
+
+  /** Asks Jev about this reply once; the same inputs keep the reading in hand (KTD11). */
+  async function askJev() {
+    if (!request || version === null || inFlight.current || shown) return;
+    const gen = ++askGen.current;
+    inFlight.current = true;
+    setAsking(true);
+    setJevTrouble(null);
+    const asked = { round, reply, assignmentVersion: version, askedAt: new Date().toISOString() };
+    try {
+      const parts = readingParts(request.state.rubric_points, await jev.ask(request));
+      if (gen !== askGen.current) return;
+      // An answer that isn't a full reading fails like any other ask.
+      if (!parts) throw new JevError("other");
+      setHeld({ ...asked, parts, verdictWhenSeen: verdictNow.current });
+    } catch (e) {
+      if (gen === askGen.current) setJevTrouble({ round, ...jevFailure(e) });
+    } finally {
+      if (gen === askGen.current) {
+        inFlight.current = false;
+        setAsking(false);
+      }
+    }
   }
 
   /** Copies the plugged handoff again, refilled from the badge as it is now (KTD11). */
@@ -231,6 +354,13 @@ export function TestDeck(props: TestDeckProps) {
     setSending(false);
     setCopied(null);
     setPicked(null);
+    // The next round decides Jev afresh, with no pick, no reading and nothing in flight.
+    dropAsk();
+    setDecision(null);
+    setVerdict(null);
+    verdictNow.current = null;
+    setHeld(null);
+    setJevTrouble(null);
     setRound((r) => r + 1);
   }
 
@@ -510,27 +640,54 @@ export function TestDeck(props: TestDeckProps) {
     ) : (
       <>
         <div className="test-strip">{replyStage}</div>
-        <RichText aria-label="Reply" value={reply} onChange={setReply} placeholder="Paste the reply" />
+        <RichText aria-label="Reply" value={reply} onChange={editReply} placeholder="Paste the reply" />
         {waiting && <PullLink onPull={pull} />}
       </>
     ),
   });
 
   const rubric = credential?.rubric.trim() ?? "";
+  // The round's Jev decision, or what it would be if the judge pane showed now (KTD10).
+  const live = { offered: jev.usable && rubric !== "" && fits, tooLong: jev.usable && rubric !== "" && !fits };
+  const decided = decision?.round === round ? decision : null;
+  const jevRound = (decided ?? live).offered;
+  const decide = () => setDecision((d) => (d?.round === round ? d : { round, ...live }));
+  const trouble = jevTrouble?.round === round ? jevTrouble : null;
+  const tooLong = live.tooLong && (jevRound || !!decided?.tooLong);
+  const canAsk = jevRound && live.offered && version !== null && !shown && (trouble?.retry ?? true);
+  const jevPart =
+    jevRound || tooLong ? (
+      <div className="meet-jev" aria-live="polite">
+        {tooLong && <p className="muted">This reply is too long for Jev</p>}
+        {trouble && <p className="deck-error">{trouble.line}</p>}
+        {(canAsk || asking) && (
+          <p className="helper">
+            <button type="button" className="link" disabled={asking || recording} onClick={() => void askJev()}>
+              {asking ? "Asking Jev…" : verdict ? "Check with Jev" : "Ask Jev"}
+            </button>
+          </p>
+        )}
+        {shown && <JevReadingPanel reading={shown.parts} />}
+      </div>
+    ) : null;
   beats.push({
     id: "meet",
     title: "Did it meet it",
     pane: true,
+    // In a Jev round the pick waits for Save, so the user can check with Jev first (R8, R9).
+    ...(jevRound ? { forward: "Save", valid: verdict !== null } : {}),
     body: ({ advance }) => (
       <div className={rubric ? "meet meet-with-rubric" : "meet"}>
+        {!decided && <OnShow run={decide} />}
         <StoredSwitch className="meet-stored" asStored={asStored} onToggle={() => setAsStored((s) => !s)} />
         <div className="meet-texts">
           {rubric && (
-            <div className="meet-text meet-text-rubric">
+            <div className={shown || trouble || tooLong ? "meet-text meet-text-rubric meet-text-jev" : "meet-text meet-text-rubric"}>
               <span className="meet-text-head" aria-hidden="true">
                 Rubric
               </span>
               <RichView aria-label="Rubric" value={rubric} stored={asStored} />
+              {jevPart}
             </div>
           )}
           <div className="meet-text">
@@ -541,25 +698,40 @@ export function TestDeck(props: TestDeckProps) {
           </div>
         </div>
         <div className="meet-choices">
-          <button
-            type="button"
-            className="primary"
-            onClick={() => {
-              result.current = "met";
-              advance();
-            }}
-          >
-            Met
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              result.current = "not_met";
-              advance();
-            }}
-          >
-            Not yet
-          </button>
+          {jevRound ? (
+            <>
+              <button type="button" aria-pressed={verdict === "met"} disabled={recording} onClick={() => choose("met")}>
+                Met
+              </button>
+              <button type="button" aria-pressed={verdict === "not_met"} disabled={recording} onClick={() => choose("not_met")}>
+                Not yet
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                className="primary"
+                disabled={recording}
+                onClick={() => {
+                  pressed.current = "met";
+                  advance();
+                }}
+              >
+                Met
+              </button>
+              <button
+                type="button"
+                disabled={recording}
+                onClick={() => {
+                  pressed.current = "not_met";
+                  advance();
+                }}
+              >
+                Not yet
+              </button>
+            </>
+          )}
         </div>
       </div>
     ),
@@ -577,7 +749,67 @@ export function TestDeck(props: TestDeckProps) {
   const bothKnown = !!props.credentialKey && !!props.profileSlug && round === 0;
   const startAt = waiting && (bothKnown || props.resume) ? replyAt : bothKnown ? replyAt - 1 : 0;
 
-  return <Deck key={round} label="Test an agent" beats={beats} startAt={startAt} unsaved={reply.trim() !== ""} onClose={home} onFinish={record} />;
+  return (
+    <Deck
+      key={round}
+      label="Test an agent"
+      beats={beats}
+      startAt={startAt}
+      unsaved={reply.trim() !== ""}
+      onClose={home}
+      onFinish={() => record(jevRound && verdict ? verdict : pressed.current)}
+    />
+  );
+}
+
+/** Runs `run` before the first paint each time it mounts: a decision taken when a card first shows. */
+function OnShow({ run }: { run(): void }) {
+  useLayoutEffect(run, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
+}
+
+/** The reading as the result keeps it. One seen after a pick says whether the saved verdict differs (R13). */
+function savedReading(held: HeldReading, verdict: AssessmentResult): JevReading {
+  const base = { model: JEV_MODEL, assignmentVersion: held.assignmentVersion, askedAt: held.askedAt, overall: held.parts.overall, points: held.parts.points };
+  return held.verdictWhenSeen === null
+    ? { ...base, seen: "before" }
+    : { ...base, seen: "after", verdictWhenSeen: held.verdictWhenSeen, verdictChanged: verdict !== held.verdictWhenSeen };
+}
+
+/** Where a key problem is fixed (KTD20). */
+const FIX_THE_KEY = "Jev Mode in the top bar, on home";
+
+/**
+ * One line for a failed ask, and whether asking again can help (KTD20). Nothing from the
+ * error's own text: "other" carries at most its status number. A key problem, Jev Mode off
+ * or a reply too long can't succeed on a retry, so those take the ask away for the round.
+ */
+export function jevFailure(e: unknown): { line: string; retry: boolean } {
+  const error = toJevError(e);
+  switch (error.kind) {
+    case "keyRefused":
+      return { line: `TypeSafe refused the key. Change it in ${FIX_THE_KEY}.`, retry: false };
+    case "keyMissing":
+      return { line: `Jev has no key. Add one in ${FIX_THE_KEY}.`, retry: false };
+    case "invalidKey":
+      return { line: `The key doesn't look right. Change it in ${FIX_THE_KEY}.`, retry: false };
+    case "off":
+      return { line: `Jev Mode is off. Turn it on in ${FIX_THE_KEY}.`, retry: false };
+    case "tooLong":
+      return { line: "This reply is too long for Jev.", retry: false };
+    case "rateLimited":
+      return { line: "Jev has had too many asks. Try again in a moment.", retry: true };
+    case "overloaded":
+      return { line: "Jev is overloaded. Try again shortly.", retry: true };
+    case "unreachable":
+      return { line: "Jev couldn't be reached.", retry: true };
+    case "keychain":
+      return { line: "The keychain didn't give up the key.", retry: true };
+    case "settings":
+      return { line: "Jev Mode's settings couldn't be read.", retry: true };
+    case "other":
+      return { line: error.status === null ? "Jev couldn't answer." : `Jev couldn't answer (${error.status}).`, retry: true };
+  }
 }
 
 /** The motion for each phase of the test: the handoff card going in, or ejecting. */

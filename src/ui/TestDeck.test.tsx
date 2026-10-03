@@ -1,16 +1,23 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { serializeCredentialMd } from "../domain/credential-md";
 import { credentialPath, loadFolder } from "../domain/folder";
 import { BUILT_IN_HANDOFF, fillHandoff } from "../domain/handoffs";
 import { assignmentVersion } from "../domain/hash";
+import type { JevAnswers } from "../domain/jevRequest";
 import type { Credential, Handoff } from "../domain/types";
+import { FAKE_ON, FakeJev } from "../jev/fakeJev";
+import { JEV_ERROR_KINDS, JevError } from "../jev/jev";
+import type { MemoryStorage } from "../storage/memory";
+import { AppShell, type Route } from "./AppShell";
+import { JevProvider } from "./jevContext";
 import { addPending, readPending, type PendingTest } from "./pendingTests";
-import { LANDING_MS, SENDING_MS } from "./TestDeck";
+import { LANDING_MS, SENDING_MS, jevFailure } from "./TestDeck";
 import { FOLDER, opus, renderApp, result, review, snapshot, storageWith } from "./testFolder";
+import { FolderProvider } from "./useFolderState";
 
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ writeText: vi.fn() }));
 // ProseMirror typing does not run in jsdom; these flows type into a textarea stand-in.
@@ -838,5 +845,449 @@ describe("TestDeck's paste and judge panes", () => {
     expect((await screen.findByRole("textbox", { name: "Reply" }) as HTMLTextAreaElement).value).toBe("Kept for after");
     await userEvent.click(screen.getByRole("button", { name: "Next" }));
     expect(within(await screen.findByRole("region", { name: "Reply" })).getByText("Kept for after")).toBeTruthy();
+  });
+});
+
+// Jev's second opinion on the judge pane (U6, R6-R11, R13, KTD10, KTD11, KTD13, KTD19, KTD20).
+describe("TestDeck's second opinion", () => {
+  const graded: Credential = { ...review, rubric: "- Names the off-by-one\n- Points to the line\n- Suggests a fix" };
+  const POINTS = ["Names the off-by-one", "Points to the line", "Suggests a fix"];
+  const ANSWERS: JevAnswers = { answers: { p1: 0.94, p2: 0.52, p3: 0.12, overall: 0.38 } };
+  const ALL_HIGH: JevAnswers = { answers: { p1: 0.95, p2: 0.92, p3: 0.97, overall: 0.93 } };
+  const REPLY = "I found it on line 12.";
+  const FIX_THE_KEY = "Jev Mode in the top bar, on home";
+  const codex = { ...opus, slug: "codex", name: "Codex agent", harness: "codex", model: "gpt-5" };
+
+  function renderWithJev(storage: MemoryStorage, fake: FakeJev, route: Route = fromBadge) {
+    return render(
+      <JevProvider jev={fake}>
+        <FolderProvider storage={storage} folder={FOLDER}>
+          <AppShell onChangeFolder={() => {}} initialRoute={route} />
+        </FolderProvider>
+      </JevProvider>,
+    );
+  }
+
+  async function toJudge(reply = REPLY) {
+    await userEvent.type(replyBox(), reply);
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    await screen.findByRole("heading", { name: "Did it meet it" });
+  }
+
+  /** Opus takes the badge from its page, and the reply reaches the judge pane. */
+  async function judge(fake: FakeJev, { credential = graded, reply = REPLY, profiles = [opus] }: { credential?: Credential; reply?: string; profiles?: typeof opus[] } = {}) {
+    const storage = storageWith({ credentials: [credential], profiles });
+    renderWithJev(storage, fake);
+    await takeAndCopy();
+    await toJudge(reply);
+    return storage;
+  }
+
+  /** An ask that waits until the test answers it. */
+  function held(fake: FakeJev) {
+    let answer!: (a: JevAnswers) => void;
+    let fail!: (e: JevError) => void;
+    fake.queue("ask", new Promise<JevAnswers>((resolve, reject) => ((answer = resolve), (fail = reject))));
+    return { answer, fail };
+  }
+
+  const choice = (name: "Met" | "Not yet") => screen.getByRole("button", { name }) as HTMLButtonElement;
+  const save = () => screen.getByRole("button", { name: "Save" }) as HTMLButtonElement;
+  const button = (name: string) => screen.getByRole("button", { name }) as HTMLButtonElement;
+  const askAction = () => screen.queryByRole("button", { name: /^(Ask Jev|Check with Jev|Asking Jev…)$/ });
+  const reading = () => screen.queryByRole("region", { name: "Jev's reading" });
+  const readingRows = () => within(reading()!).getAllByRole("listitem");
+  const saved = async (storage: MemoryStorage) => (await loadFolder(storage)).assessments;
+  const settle = () => act(async () => {});
+
+  it("Covers AE1. With Jev Mode off, Met saves at once, no ask or check renders, and nothing is asked", async () => {
+    const fake = new FakeJev();
+    const storage = await judge(fake);
+    expect(askAction()).toBeNull();
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+    expect(choice("Met").classList.contains("primary")).toBe(true);
+    expect(choice("Met").hasAttribute("aria-pressed")).toBe(false);
+
+    await userEvent.click(choice("Met"));
+    expect(await screen.findByTestId("landing")).toBeTruthy();
+    const [a] = await saved(storage);
+    expect(a.result).toBe("met");
+    expect(a.jev).toBeUndefined();
+    expect(fake.asks).toEqual([]);
+  });
+
+  it("Covers AE2. With Jev Mode on and an empty rubric, there is no Ask Jev and Met saves at once", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    const storage = await judge(fake, { credential: review });
+    expect(askAction()).toBeNull();
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+    await userEvent.click(choice("Met"));
+    expect(await screen.findByTestId("landing")).toBeTruthy();
+    expect((await saved(storage))[0]).toMatchObject({ result: "met" });
+    expect(fake.asks).toEqual([]);
+  });
+
+  it("in a Jev round Met and Not yet are choices, only Save is an ink block, and Save waits for a pick", async () => {
+    await judge(new FakeJev(FAKE_ON));
+    expect([...testDeck().querySelectorAll("button.primary")].map((b) => b.textContent)).toEqual(["Save"]);
+    expect(choice("Met").getAttribute("aria-pressed")).toBe("false");
+    expect(choice("Not yet").getAttribute("aria-pressed")).toBe("false");
+    expect(save().disabled).toBe(true);
+    expect(button("Ask Jev")).toBeTruthy();
+
+    await userEvent.click(choice("Met"));
+    expect(screen.queryByTestId("landing")).toBeNull();
+    expect(choice("Met").getAttribute("aria-pressed")).toBe("true");
+    expect(save().disabled).toBe(false);
+    expect(button("Check with Jev")).toBeTruthy();
+    expect([...testDeck().querySelectorAll("button.primary")].map((b) => b.textContent)).toEqual(["Save"]);
+  });
+
+  it("Covers AE3. Not yet, Check with Jev reading every point above 0.9, then Met and Save records Met with the reading seen after and changed", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", ALL_HIGH);
+    const storage = await judge(fake);
+    await userEvent.click(choice("Not yet"));
+    await userEvent.click(button("Check with Jev"));
+    expect(await screen.findByRole("region", { name: "Jev's reading" })).toBeTruthy();
+    expect(askAction()).toBeNull();
+    await userEvent.click(choice("Met"));
+    await userEvent.click(save());
+
+    expect(await screen.findByTestId("landing")).toBeTruthy();
+    const [a] = await saved(storage);
+    expect(a.result).toBe("met");
+    expect(a.jev).toEqual({
+      model: "jev-1.13.0",
+      assignmentVersion: await assignmentVersion(graded.task, graded.rubric),
+      askedAt: expect.any(String),
+      seen: "after",
+      verdictWhenSeen: "not_met",
+      verdictChanged: true,
+      overall: 0.93,
+      points: [
+        { text: POINTS[0], probability: 0.95 },
+        { text: POINTS[1], probability: 0.92 },
+        { text: POINTS[2], probability: 0.97 },
+      ],
+    });
+    expect(new Date(a.jev!.askedAt).toISOString()).toBe(a.jev!.askedAt);
+    expect(fake.asks).toEqual([expect.objectContaining({ kind: "secondOpinion", state: expect.objectContaining({ reply: REPLY, rubric_points: POINTS }) })]);
+  });
+
+  it("a verdict kept after the check saves as seen after and unchanged", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", ANSWERS);
+    const storage = await judge(fake);
+    await userEvent.click(choice("Not yet"));
+    await userEvent.click(button("Check with Jev"));
+    await screen.findByRole("region", { name: "Jev's reading" });
+    await userEvent.click(save());
+    await screen.findByRole("heading", { name: "Not yet" });
+    expect((await saved(storage))[0]).toMatchObject({ result: "not_met", jev: { seen: "after", verdictWhenSeen: "not_met", verdictChanged: false } });
+  });
+
+  it("asked before a pick, then picked and saved, the reading is seen before with no change fields", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", ANSWERS);
+    const storage = await judge(fake);
+    await userEvent.click(button("Ask Jev"));
+    await screen.findByRole("region", { name: "Jev's reading" });
+    await userEvent.click(choice("Met"));
+    expect(askAction()).toBeNull();
+    await userEvent.click(save());
+    await screen.findByTestId("landing");
+    const [a] = await saved(storage);
+    expect(a.jev).toMatchObject({ seen: "before", overall: 0.38 });
+    expect(a.jev).not.toHaveProperty("verdictWhenSeen");
+    expect(a.jev).not.toHaveProperty("verdictChanged");
+  });
+
+  it("Covers AE4. The reading shows three points as percentages and the overall, marks the 0.52 point to sharpen, and sits in the rubric column in a polite live region", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", ANSWERS);
+    await judge(fake);
+    await userEvent.click(button("Ask Jev"));
+    const panel = await screen.findByRole("region", { name: "Jev's reading" });
+    expect(readingRows().map((li) => li.querySelector(".jev-point-text")?.textContent)).toEqual(POINTS);
+    expect(readingRows().map((li) => li.querySelector(".jev-p")?.textContent)).toEqual(["94%", "52%", "12%"]);
+    expect(readingRows().map((li) => within(li).queryByText("Can't call: sharpen this point") !== null)).toEqual([false, true, false]);
+    expect(panel.querySelector(".jev-overall .jev-p")?.textContent).toBe("38%");
+    expect(within(panel).getByText("Jev can't call the whole bar")).toBeTruthy();
+
+    // Below the rubric, in its column, and announced politely.
+    const rubric = screen.getByRole("region", { name: "Rubric" });
+    expect(panel.closest(".meet-text-rubric")).toBe(rubric.closest(".meet-text-rubric"));
+    expect(rubric.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(panel.closest('[aria-live="polite"]')).not.toBeNull();
+  });
+
+  it("Covers AE5. An unreachable Jev shows one line, the ask can be tried again, and Save records the result without a reading", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    const ask = held(fake);
+    const storage = await judge(fake);
+    await userEvent.click(button("Ask Jev"));
+    expect(button("Asking Jev…").disabled).toBe(true);
+    await act(async () => ask.fail(new JevError("unreachable")));
+
+    const line = await screen.findByText("Jev couldn't be reached.");
+    expect(line.closest('[aria-live="polite"]')).not.toBeNull();
+    expect(line.getAttribute("role")).toBeNull();
+    expect(screen.queryAllByText(/Jev/, { selector: ".deck-error" })).toHaveLength(1);
+    expect(reading()).toBeNull();
+    expect(button("Ask Jev").disabled).toBe(false);
+
+    await userEvent.click(choice("Not yet"));
+    await userEvent.click(save());
+    await screen.findByRole("heading", { name: "Not yet" });
+    const [a] = await saved(storage);
+    expect(a).toMatchObject({ result: "not_met", handBack: REPLY });
+    expect(a.jev).toBeUndefined();
+  });
+
+  it("a key refused names where to fix it, hides the ask for the rest of the round, and Save still records without a reading", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", new JevError("keyRefused"));
+    const storage = await judge(fake);
+    await userEvent.click(button("Ask Jev"));
+    const line = await screen.findByText((text, el) => el?.classList.contains("deck-error") === true && text.includes(FIX_THE_KEY));
+    expect(line.textContent).toContain("refused");
+    expect(askAction()).toBeNull();
+
+    // Still hidden after going back to the reply and returning.
+    await userEvent.click(button("Back"));
+    await userEvent.click(await screen.findByRole("button", { name: "Next" }));
+    await screen.findByRole("heading", { name: "Did it meet it" });
+    expect(askAction()).toBeNull();
+    await userEvent.click(choice("Met"));
+    expect(askAction()).toBeNull();
+    await userEvent.click(save());
+    await screen.findByTestId("landing");
+    expect((await saved(storage))[0].jev).toBeUndefined();
+    expect(fake.asks).toHaveLength(1);
+  });
+
+  it("a key missing during Check with Jev keeps Save and the choices as they were", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", new JevError("keyMissing"));
+    const storage = await judge(fake);
+    await userEvent.click(choice("Not yet"));
+    await userEvent.click(button("Check with Jev"));
+    const line = await screen.findByText((text, el) => el?.classList.contains("deck-error") === true && text.includes(FIX_THE_KEY));
+    expect(line.textContent).not.toContain("refused");
+    expect(askAction()).toBeNull();
+    expect(choice("Not yet").getAttribute("aria-pressed")).toBe("true");
+    expect(choice("Met").getAttribute("aria-pressed")).toBe("false");
+    expect(choice("Met").classList.contains("primary")).toBe(false);
+    expect(save().disabled).toBe(false);
+    await userEvent.click(save());
+    await screen.findByRole("heading", { name: "Not yet" });
+    expect((await saved(storage))[0]).toMatchObject({ result: "not_met" });
+  });
+
+  it("an answer that is not a full reading fails like any other ask, and a retry can land", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", { answers: { p1: 0.9, p2: 0.8, p3: 0.7 } });
+    fake.queue("ask", ANSWERS);
+    await judge(fake);
+    await userEvent.click(button("Ask Jev"));
+    expect(await screen.findByText("Jev couldn't answer.")).toBeTruthy();
+    expect(reading()).toBeNull();
+    await userEvent.click(button("Ask Jev"));
+    expect(await screen.findByRole("region", { name: "Jev's reading" })).toBeTruthy();
+    expect(screen.queryByText("Jev couldn't answer.")).toBeNull();
+  });
+
+  it("a folder reload that empties the rubric after a pick keeps Save and the pick", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    const storage = await judge(fake);
+    await userEvent.click(choice("Met"));
+    await storage.writeText("data", credentialPath("eng", "review"), serializeCredentialMd({ ...graded, rubric: "" }));
+    fireEvent.focus(window);
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Rubric" })).toBeNull());
+    expect(askAction()).toBeNull();
+    expect(choice("Met").getAttribute("aria-pressed")).toBe("true");
+    expect(save().disabled).toBe(false);
+    await userEvent.click(save());
+    await screen.findByTestId("landing");
+    expect((await saved(storage))[0]).toMatchObject({ result: "met" });
+  });
+
+  it("a reload that changes the assignment drops the reading, and the result saves without it", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", ANSWERS);
+    const storage = await judge(fake);
+    await userEvent.click(button("Ask Jev"));
+    await screen.findByRole("region", { name: "Jev's reading" });
+    await storage.writeText("data", credentialPath("eng", "review"), serializeCredentialMd({ ...graded, rubric: `${graded.rubric}\n- Adds a test` }));
+    fireEvent.focus(window);
+    await waitFor(() => expect(reading()).toBeNull());
+    expect(await screen.findByRole("button", { name: "Ask Jev" })).toBeTruthy();
+    await userEvent.click(choice("Met"));
+    await userEvent.click(save());
+    await screen.findByTestId("landing");
+    expect((await saved(storage))[0].jev).toBeUndefined();
+  });
+
+  it("Save pressed while a check is in flight saves without the reading, and the late answer changes nothing", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    const ask = held(fake);
+    const storage = await judge(fake);
+    await userEvent.click(choice("Not yet"));
+    await userEvent.click(button("Check with Jev"));
+    expect(button("Asking Jev…").disabled).toBe(true);
+    expect(save().disabled).toBe(false);
+    await userEvent.click(save());
+    await screen.findByRole("heading", { name: "Not yet" });
+    const before = await snapshot(storage);
+    expect((await saved(storage))[0].jev).toBeUndefined();
+
+    await act(async () => ask.answer(ALL_HIGH));
+    await settle();
+    expect(await snapshot(storage)).toEqual(before);
+    expect(reading()).toBeNull();
+    expect(screen.getByRole("heading", { name: "Not yet" })).toBeTruthy();
+  });
+
+  it("a double click on Ask Jev sends one request, and the action reads Asking Jev… until the answer arrives", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    const ask = held(fake);
+    await judge(fake);
+    await userEvent.dblClick(button("Ask Jev"));
+    expect(fake.asks).toHaveLength(1);
+    expect(button("Asking Jev…").disabled).toBe(true);
+    await act(async () => ask.answer(ANSWERS));
+    expect(await screen.findByRole("region", { name: "Jev's reading" })).toBeTruthy();
+    expect(askAction()).toBeNull();
+    expect(fake.asks).toHaveLength(1);
+  });
+
+  it("going Back and returning without an edit keeps the reading, and an edit to the reply drops it", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", ANSWERS);
+    await judge(fake);
+    await userEvent.click(button("Ask Jev"));
+    await screen.findByRole("region", { name: "Jev's reading" });
+
+    await userEvent.click(button("Back"));
+    await userEvent.click(await screen.findByRole("button", { name: "Next" }));
+    await screen.findByRole("heading", { name: "Did it meet it" });
+    expect(reading()).not.toBeNull();
+    expect(askAction()).toBeNull();
+    expect(fake.asks).toHaveLength(1);
+
+    await userEvent.click(button("Back"));
+    await userEvent.type(await screen.findByRole("textbox", { name: "Reply" }), " And a fix.");
+    await userEvent.click(button("Next"));
+    await screen.findByRole("heading", { name: "Did it meet it" });
+    expect(reading()).toBeNull();
+    expect(button("Ask Jev")).toBeTruthy();
+  });
+
+  it("an edit while a check is in flight drops it, so its answer never shows against the new reply", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    const ask = held(fake);
+    await judge(fake);
+    await userEvent.click(button("Ask Jev"));
+    await userEvent.click(button("Back"));
+    await userEvent.type(await screen.findByRole("textbox", { name: "Reply" }), " And a fix.");
+    await act(async () => ask.answer(ANSWERS));
+    await userEvent.click(button("Next"));
+    await screen.findByRole("heading", { name: "Did it meet it" });
+    expect(reading()).toBeNull();
+    expect(button("Ask Jev").disabled).toBe(false);
+  });
+
+  it("Try another starts the next round with no verdict and no reading", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", ANSWERS);
+    await judge(fake, { profiles: [opus, codex] });
+    await userEvent.click(button("Ask Jev"));
+    await screen.findByRole("region", { name: "Jev's reading" });
+    await userEvent.click(choice("Not yet"));
+    await userEvent.click(save());
+    await userEvent.click(await screen.findByRole("button", { name: "Try another agent" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Codex agent" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Copy" }));
+    await screen.findByRole("heading", { name: "What came back" });
+    await toJudge(REPLY);
+
+    expect(reading()).toBeNull();
+    expect(choice("Met").getAttribute("aria-pressed")).toBe("false");
+    expect(choice("Not yet").getAttribute("aria-pressed")).toBe("false");
+    expect(save().disabled).toBe(true);
+    expect(button("Ask Jev").disabled).toBe(false);
+  });
+
+  it("a check still in flight when the round ends never lands in the next one", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    const ask = held(fake);
+    await judge(fake, { profiles: [opus, codex] });
+    await userEvent.click(choice("Not yet"));
+    await userEvent.click(button("Check with Jev"));
+    await userEvent.click(save());
+    await userEvent.click(await screen.findByRole("button", { name: "Try another agent" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Codex agent" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Copy" }));
+    await screen.findByRole("heading", { name: "What came back" });
+    await toJudge(REPLY);
+    expect(button("Ask Jev").disabled).toBe(false);
+
+    await act(async () => ask.answer(ALL_HIGH));
+    await settle();
+    expect(reading()).toBeNull();
+    expect(button("Ask Jev").disabled).toBe(false);
+  });
+
+  it("a reply over Jev's budget says so, offers no ask, and Met saves at once", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    const storage = storageWith({ credentials: [graded], profiles: [opus] });
+    renderWithJev(storage, fake);
+    await takeAndCopy();
+    fireEvent.change(replyBox(), { target: { value: "x".repeat(130_000) } });
+    await userEvent.click(button("Next"));
+    await screen.findByRole("heading", { name: "Did it meet it" });
+
+    expect(screen.getByText("This reply is too long for Jev")).toBeTruthy();
+    expect(askAction()).toBeNull();
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+    expect(choice("Met").classList.contains("primary")).toBe(true);
+    await userEvent.click(choice("Met"));
+    expect(await screen.findByTestId("landing")).toBeTruthy();
+    expect((await saved(storage))[0]).toMatchObject({ result: "met" });
+    expect(fake.asks).toEqual([]);
+  });
+
+  it("the choices and the ask are disabled while the save runs", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    const storage = await judge(fake);
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const real = storage.writeText.bind(storage);
+    vi.spyOn(storage, "writeText").mockImplementation(async (...args) => {
+      await gate;
+      return real(...args);
+    });
+    await userEvent.click(choice("Met"));
+    await userEvent.click(save());
+    expect(choice("Met").disabled).toBe(true);
+    expect(choice("Not yet").disabled).toBe(true);
+    expect(button("Check with Jev").disabled).toBe(true);
+    release();
+    expect(await screen.findByTestId("landing")).toBeTruthy();
+  });
+
+  it("each failure kind has its own line, carries no outside text, and only what a retry can't fix takes the ask away", () => {
+    const lines = JEV_ERROR_KINDS.map((kind) => jevFailure(new JevError(kind)));
+    expect(new Set(lines.map((l) => l.line)).size).toBe(lines.length);
+    for (const { line } of lines) expect(line).not.toContain("Jev: ");
+    const byKind = Object.fromEntries(JEV_ERROR_KINDS.map((kind, i) => [kind, lines[i]]));
+    expect(byKind.keyRefused.line).toContain(FIX_THE_KEY);
+    expect(byKind.keyMissing.line).toContain(FIX_THE_KEY);
+    expect(byKind.rateLimited.line).toContain("Try again in a moment");
+    expect(byKind.unreachable.line).toBe("Jev couldn't be reached.");
+    expect(JEV_ERROR_KINDS.filter((kind) => !byKind[kind].retry)).toEqual(["off", "keyMissing", "keyRefused", "tooLong", "invalidKey"]);
+    expect(jevFailure(new JevError("other", { status: 502 })).line).toBe("Jev couldn't answer (502).");
+    expect(jevFailure(new JevError("rateLimited", { retryAfter: 30 })).line).toBe(byKind.rateLimited.line);
   });
 });

@@ -1600,6 +1600,96 @@ button:focus-visible {
   font-size: 15px;
 }
 
+/* In a Jev round Met and Not yet are choices that wait for Save (U6, KTD10): the picked
+   one is lit in data blue, as a handoff key is, and Save stays the one ink block. */
+.meet-choices button[aria-pressed="true"] {
+  box-shadow: var(--focus-ring);
+  color: var(--data);
+}
+
+/* Jev's part of the rubric column, below the rubric (U6, KTD13): the quiet ask, a failure
+   or the too-long line, and the reading once it is in hand. It scrolls on its own when
+   the column is short. */
+.meet-jev {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-top: 1px solid var(--cell);
+}
+
+/* Empty, it takes no room but stays rendered, so a screen reader hears its first update. */
+.meet-jev:empty {
+  padding: 0;
+  border-top: 0;
+}
+
+.meet-jev > p {
+  margin: 0;
+}
+
+.meet-jev .deck-error {
+  font-size: 13px;
+}
+
+/* Jev's reading: each point with its probability in the mono, then the whole rubric.
+   Numbers and words only, never a fill. */
+.jev-reading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  font-size: 13px;
+}
+
+.jev-reading-head {
+  font-family: var(--font-mono);
+  font-size: var(--label);
+  letter-spacing: var(--label-tracking);
+  color: var(--ink-muted);
+}
+
+.jev-points {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.jev-point {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--space-md);
+  align-items: baseline;
+  margin: 0;
+}
+
+.jev-p {
+  font-family: var(--font-mono);
+  letter-spacing: var(--value-tracking);
+  text-align: right;
+}
+
+.jev-vague {
+  grid-column: 1 / -1;
+  color: var(--ink-muted);
+  font-size: 12px;
+}
+
+.jev-overall {
+  padding-top: var(--space-xs);
+  border-top: 1px solid var(--cell);
+  font-weight: 600;
+}
+
+.jev-overall .jev-vague {
+  font-weight: 400;
+}
+
 /* Below the stacking width the rubric sits above the reply, takes at most about a third
    of the height and scrolls on its own; the reply takes the rest. */
 @media (max-width: 56rem) {
@@ -1615,6 +1705,16 @@ button:focus-visible {
   .meet-with-rubric .meet-text-rubric {
     flex: 0 1 auto;
     max-height: 33%;
+  }
+
+  /* With Jev's reading or a line from Jev below it, the rubric column takes more of the
+     height, and the rubric keeps a couple of lines in view while Jev's part scrolls. */
+  .meet-with-rubric .meet-text-jev {
+    max-height: 60%;
+  }
+
+  .meet-with-rubric .meet-text-jev .rich-view {
+    min-height: 3.5rem;
   }
 
   .meet-with-rubric .rich-view {
