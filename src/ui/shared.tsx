@@ -11,13 +11,13 @@ import { describeError } from "./useFolderState";
 /** A stable ref callback that focuses a card's heading once, when it appears. */
 export const focusOnMount = (el: HTMLElement | null) => el?.focus();
 
-/** Runs the latest `handler` on Escape, unless something already handled the key. */
-export function useEscape(handler: () => void) {
+/** Runs the latest `handler` on Escape, unless something already handled the key. The handler gets the event, to look at its target or claim it. */
+export function useEscape(handler: (e: KeyboardEvent) => void) {
   const latest = useRef(handler);
   latest.current = handler;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !e.defaultPrevented) latest.current();
+      if (e.key === "Escape" && !e.defaultPrevented) latest.current(e);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

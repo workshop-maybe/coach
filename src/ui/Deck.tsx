@@ -3,10 +3,18 @@
 // next, Back is quiet, and answers already given settle above the card as plain text.
 // Leaving (Escape, the corner control, Back on the first beat) discards the answers.
 // Nothing is written until the last beat's forward action runs `onFinish`.
+//
+// A beat can be a pane (R7, KTD3): it claims the window, its card fills the height with
+// the actions in view, and the answers above it keep to one line. Escape follows KTD8
+// (R19, R20): in a text field or editor on a pane it only steps out of the field, on a
+// pane it goes back a card, and while the deck holds unsaved work it never closes the
+// deck. The corner control and Back still leave on a click. A beat can also send first
+// focus into its body (R21), so a paste lands in the reply box.
 
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
 import { ChangedOnDiskError } from "../storage/storage";
+import { usePane } from "./pane";
 import { useEscape } from "./shared";
 import { describeError } from "./useFolderState";
 
@@ -29,6 +37,10 @@ export interface Beat {
   settled?: ReactNode;
   /** A side effect of moving on from this beat (never a write to the data folder). */
   onForward?(): void | Promise<void>;
+  /** The beat claims the window as a pane (R7): its card fills the height and Escape steps back rather than out (KTD8). */
+  pane?: boolean;
+  /** Arriving puts focus on the body's first text field or editor instead of the heading (R21). */
+  focusBody?: boolean;
 }
 
 export interface DeckProps {
@@ -42,26 +54,66 @@ export interface DeckProps {
   onFinish(opts: { keepMine: boolean }): Promise<void>;
   /** The person chose the file on disk over their answers. Defaults to closing. */
   onUseTheirs?(): void;
+  /** The deck holds work that leaving would lose, such as a pasted reply or changed text. Escape never closes it then (R20). */
+  unsaved?: boolean;
 }
 
 type Trouble = { kind: "none" } | { kind: "error"; message: string } | { kind: "conflict" };
 
-export function Deck({ label, beats, startAt = 0, onClose, onFinish, onUseTheirs }: DeckProps) {
+/** Input types that take no typing, so Escape on them is not Escape out of a field. */
+const NOT_TEXT = new Set(["button", "checkbox", "color", "file", "hidden", "image", "radio", "range", "reset", "submit"]);
+
+/** An editor: ProseMirror renders its editor as contenteditable. */
+const EDITOR = '[contenteditable]:not([contenteditable="false"])';
+
+/** Whether `t` is in a text field or editor, where typing happens. */
+function inField(t: EventTarget | null): boolean {
+  if (!(t instanceof HTMLElement)) return false;
+  if (t instanceof HTMLInputElement) return !NOT_TEXT.has(t.type);
+  return t instanceof HTMLTextAreaElement || t.closest(EDITOR) !== null;
+}
+
+/** The first enabled text field or editor in `body`, for a beat that takes focus there. */
+function firstField(body: HTMLElement | null): HTMLElement | undefined {
+  const all = body ? Array.from(body.querySelectorAll<HTMLElement>(`input, textarea, ${EDITOR}`)) : [];
+  return all.find((el) => inField(el) && !(el as { disabled?: boolean }).disabled);
+}
+
+export function Deck({ label, beats, startAt = 0, onClose, onFinish, onUseTheirs, unsaved = false }: DeckProps) {
   const [index, setIndex] = useState(() => Math.min(startAt, beats.length - 1));
   const [busy, setBusy] = useState(false);
   const [trouble, setTrouble] = useState<Trouble>({ kind: "none" });
   const heading = useRef<HTMLHeadingElement>(null);
+  const body = useRef<HTMLDivElement>(null);
+  const forwardButton = useRef<HTMLButtonElement>(null);
   const beat = beats[Math.min(index, beats.length - 1)];
   const last = index >= beats.length - 1;
   const conflict = trouble.kind === "conflict";
+  const pane = beat.pane === true && !conflict;
 
-  // Focus follows the card, so a keyboard or screen reader lands on the new question.
+  usePane(pane);
+
+  // Focus follows the card, so a keyboard or screen reader lands on the new question, or
+  // in its field when the beat asks for that.
   useEffect(() => {
-    heading.current?.focus();
-  }, [index, conflict]);
+    const field = !conflict && beat.focusBody ? firstField(body.current) : undefined;
+    (field ?? heading.current)?.focus();
+  }, [index, conflict]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Escape is the quiet way out from anywhere in the deck.
-  useEscape(onClose);
+  // Escape is the quiet way out, unless it would lose work (KTD8). Every Escape the deck
+  // keeps for itself is marked handled, so nothing behind the deck acts on it.
+  useEscape((e) => {
+    if (pane && inField(e.target)) {
+      e.preventDefault();
+      const go = forwardButton.current;
+      (go && !go.disabled ? go : heading.current)?.focus();
+    } else if (pane && index > 0) {
+      e.preventDefault();
+      back();
+    } else if (unsaved) {
+      e.preventDefault();
+    } else onClose();
+  });
 
   async function finish(keepMine: boolean) {
     setBusy(true);
@@ -118,7 +170,7 @@ export function Deck({ label, beats, startAt = 0, onClose, onFinish, onUseTheirs
   const settled = beats.slice(0, index).filter((b) => b.settled !== undefined && b.settled !== "");
 
   return (
-    <section className="deck" aria-label={label}>
+    <section className={pane ? "deck pane" : "deck"} aria-label={label}>
       <button type="button" className="deck-close ghost" aria-label="Close" onClick={onClose}>
         ×
       </button>
@@ -149,7 +201,7 @@ export function Deck({ label, beats, startAt = 0, onClose, onFinish, onUseTheirs
           <h2 ref={heading} tabIndex={-1}>
             {beat.title}
           </h2>
-          <div className="deck-body">
+          <div className="deck-body" ref={body}>
             {typeof beat.body === "function" ? beat.body({ advance: () => void forward() }) : beat.body}
           </div>
           {trouble.kind === "error" && (
@@ -162,7 +214,13 @@ export function Deck({ label, beats, startAt = 0, onClose, onFinish, onUseTheirs
               Back
             </button>
             {beat.forward && (
-              <button type="button" className="primary" onClick={() => void forward()} disabled={busy || beat.valid === false}>
+              <button
+                type="button"
+                className="primary"
+                ref={forwardButton}
+                onClick={() => void forward()}
+                disabled={busy || beat.valid === false}
+              >
                 {beat.forward}
               </button>
             )}

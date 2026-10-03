@@ -863,6 +863,52 @@ button:focus-visible {
   font-weight: 500;
 }
 
+/* A pane beat (U8, R7, KTD4): the deck is the pane and spans the window below the bar.
+   The corner control takes its own row at the right, the answers above keep to one line
+   (clipped, so a screen reader still reads them whole), and the card takes the height
+   left. Its body is the column that grows and scrolls, so the heading and the actions
+   stay in view. Beats that are not panes keep the rules above. */
+
+.deck.pane {
+  max-width: none;
+  margin: 0;
+}
+
+.deck.pane > .deck-close {
+  position: static;
+  flex: none;
+  align-self: flex-end;
+}
+
+.deck.pane > .deck-settled {
+  flex: none;
+  flex-direction: row;
+  gap: var(--space-base);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.deck.pane > .deck-settled li {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.deck.pane > .deck-card {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.deck.pane .deck-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .deck-card {
     animation: deck-card-in 220ms ease-out;
