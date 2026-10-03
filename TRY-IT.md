@@ -8,7 +8,7 @@ A first run takes about 30 minutes. You need an AI assistant you already use, su
 
 - **Install the app** from the file James sends you. If your Mac says it can't open the app, go to System Settings > Privacy & Security and click Open Anyway.
 - **Make an empty folder** somewhere easy to find, such as `Documents/Andamio`. The app keeps everything there.
-- **Nothing leaves your computer.** There is no account, and the app never talks to your assistant. You copy prompts out and paste replies back in.
+- **Nothing leaves your computer** unless you turn on Jev Mode, which is off by default. There is no account, and the app never talks to your assistant. You copy prompts out and paste replies back in. Jev Mode takes your own TypeSafe key and sends a reply to TypeSafe only when you ask it for a second opinion or a cleanup.
 
 ## Things to try
 

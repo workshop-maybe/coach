@@ -4,7 +4,7 @@ A simple, beautiful little tool for building credentials and offering them to yo
 
 You define what a credential means. You write the assignments that prove it. You register the agents you run, down to the harness, model and effort level. Then you find out which of your agents can actually do the work.
 
-Everything stays on your computer. No account, no database, no blockchain.
+Everything stays on your computer. No account, no database, no blockchain. The one exception is Jev Mode: off by default, and when you turn it on with your own TypeSafe key, it sends text to TypeSafe only when you ask.
 
 ## Big ideas
 

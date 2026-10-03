@@ -16,7 +16,7 @@ The question the app answers: **which of my agents can actually meet my acceptan
 
 ## Constraints
 
-- **Local only.** No account, no external database, no blockchain, no network calls in the prototype.
+- **Local only.** No account, no external database, no blockchain, no network calls in the prototype, with one exception: Jev Mode, off by default, calls TypeSafe's API with the user's own key, from Rust only, and only when the user asks for a second opinion or a paste cleanup.
 - **The app never talks to agents.** It produces text the user copies and pastes.
 - **No marketplace in the prototype.**
 - **Useful first.** The tool has to be worth using on its own. The link to Andamio is a consequence, never the pitch. No hype, no sales language in the UI.
@@ -25,7 +25,7 @@ The question the app answers: **which of my agents can actually meet my acceptan
 
 ## Stack
 
-- **Tauri 2** shell (`src-tauri/`, Rust). Keep the native side small: file read/write, clipboard, and the window's remembered size and position.
+- **Tauri 2** shell (`src-tauri/`, Rust). Keep the native side small: file read/write, clipboard, the window's remembered size and position, and Jev Mode's key store and its one TypeSafe request (`src-tauri/src/jev.rs`).
 - **React + TypeScript + Vite** UI (`src/`).
 - Identifier `io.andamio.desktop`.
 
