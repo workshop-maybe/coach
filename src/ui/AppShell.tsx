@@ -1,6 +1,12 @@
 // The app frame (KTD1). Home is the only room: a top bar with the folder and its three
 // single actions (Change folder, Reload, Export), the load-error banner, the badge-warning
 // notice and the notice banner, then home, a deck in progress, or one item open.
+//
+// A view can claim the window as a pane (KTD3, pane.tsx). While one does, the bar keeps
+// only the window keys and the brand (R8), and the shell turns into a full-height column
+// whose content area gives the pane all the height below the bar and the banners (KTD4).
+// The banners stay mounted and compact to a line each in CSS, so an alert is not announced
+// again, and nothing above the pane scrolls, so the window keys stay in view (R10).
 
 import { useMemo, useState } from "react";
 import { InkDefs } from "../cast/InkDefs";
@@ -19,6 +25,7 @@ import { Home } from "./Home";
 import { LoadErrors, LoadWarnings } from "./LoadErrors";
 import { Lockup } from "./Lockup";
 import { NavContext } from "./nav";
+import { PaneContext, usePaneClaims } from "./pane";
 import { PlayerCard } from "./PlayerCard";
 import type { DeckRoute, ItemRoute, Route } from "./routes";
 import { TestDeck } from "./TestDeck";
@@ -37,6 +44,7 @@ export function AppShell({ onChangeFolder, initialRoute = { view: "home" } }: Ap
   const [route, navigate] = useState<Route>(initialRoute);
   const [exporting, setExporting] = useState(false);
   const nav = useMemo(() => ({ route, navigate }), [route]);
+  const { pane, claims } = usePaneClaims();
   // Tauri's drag script toggles maximize on a double press, before any handler here could
   // stop it, so in full screen the bar is no drag region at all (R2).
   const dragRegion = useWindowFrame() === "fullscreen" ? undefined : true;
@@ -59,50 +67,56 @@ export function AppShell({ onChangeFolder, initialRoute = { view: "home" } }: Ap
 
   return (
     <NavContext.Provider value={nav}>
-      <div className="shell">
-        <InkDefs />
-        <header className="topbar" data-tauri-drag-region={dragRegion}>
-          <WindowControls />
-          <button type="button" className="brand" aria-label="Andamio Desktop, go home" onClick={() => navigate({ view: "home" })}>
-            <Lockup />
-          </button>
-          <span className="folder-path" title={folder} data-tauri-drag-region={dragRegion}>
-            {folder}
-          </span>
-          <div className="topbar-actions">
-            <button type="button" onClick={onChangeFolder}>
-              Change folder
+      <PaneContext.Provider value={claims}>
+        <div className="shell" data-pane={pane || undefined}>
+          <InkDefs />
+          <header className="topbar" data-tauri-drag-region={dragRegion}>
+            <WindowControls />
+            <button type="button" className="brand" aria-label="Andamio Desktop, go home" onClick={() => navigate({ view: "home" })}>
+              <Lockup />
             </button>
-            <button type="button" onClick={() => void reload()} disabled={loading}>
-              Reload
-            </button>
-            <button type="button" onClick={() => void runExport()} disabled={exporting || !state || state.credentials.length === 0}>
-              Export
-            </button>
-          </div>
-        </header>
-        {notice && (
-          <div className="banner banner-notice" role="status">
-            <span>{notice}</span>
-            <button type="button" className="link" onClick={() => setNotice(null)}>
-              Dismiss
-            </button>
-          </div>
-        )}
-        <LoadErrors errors={state?.errors ?? []} />
-        <LoadWarnings warnings={state?.warnings ?? []} />
-        <main className="content">
-          {state === null ? (
-            <p className="muted">{loading ? "Loading…" : "The folder could not be loaded."}</p>
-          ) : route.view === "home" ? (
-            <Home />
-          ) : route.view === "deck" ? (
-            <DeckView key={JSON.stringify(route)} route={route} />
-          ) : (
-            <ItemView key={JSON.stringify(route)} route={route} />
+            {!pane && (
+              <>
+                <span className="folder-path" title={folder} data-tauri-drag-region={dragRegion}>
+                  {folder}
+                </span>
+                <div className="topbar-actions">
+                  <button type="button" onClick={onChangeFolder}>
+                    Change folder
+                  </button>
+                  <button type="button" onClick={() => void reload()} disabled={loading}>
+                    Reload
+                  </button>
+                  <button type="button" onClick={() => void runExport()} disabled={exporting || !state || state.credentials.length === 0}>
+                    Export
+                  </button>
+                </div>
+              </>
+            )}
+          </header>
+          {notice && (
+            <div className="banner banner-notice" role="status">
+              <span>{notice}</span>
+              <button type="button" className="link" onClick={() => setNotice(null)}>
+                Dismiss
+              </button>
+            </div>
           )}
-        </main>
-      </div>
+          <LoadErrors errors={state?.errors ?? []} />
+          <LoadWarnings warnings={state?.warnings ?? []} />
+          <main className="content">
+            {state === null ? (
+              <p className="muted">{loading ? "Loading…" : "The folder could not be loaded."}</p>
+            ) : route.view === "home" ? (
+              <Home />
+            ) : route.view === "deck" ? (
+              <DeckView key={JSON.stringify(route)} route={route} />
+            ) : (
+              <ItemView key={JSON.stringify(route)} route={route} />
+            )}
+          </main>
+        </div>
+      </PaneContext.Provider>
     </NavContext.Provider>
   );
 }
