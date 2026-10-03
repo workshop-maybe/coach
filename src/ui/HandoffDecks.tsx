@@ -5,6 +5,11 @@
 // A handoff with results is locked, so its edit adds a beat that saves it as a new one.
 // Both decks take the test's detour pick; an edit opened from the test goes back to it
 // with the id it saved, so the box lights the handoff the operator was working on.
+//
+// The edit's text card is a pane (U6 of the deep-work panes plan, R7, R18): the mono field
+// fills the window at the reading measure with focus in it, and once its text differs from
+// what opened the deck holds unsaved work, so Escape never throws it away (R19, R20, KTD8),
+// on the "This handoff has results" card as well.
 
 import { useState } from "react";
 import { HandoffBox } from "../cast/HandoffBox";
@@ -179,6 +184,8 @@ function EditHandoff({ credentialKey: key, returnTo, credential, atOpen }: EditH
       forward: locked ? "Next" : "Save",
       // A new handoff may keep the skeleton as it is; an edit, or the skeleton, saves only once changed.
       valid: text.trim() !== "" && (o.kind === "new" || text !== o.text),
+      pane: true,
+      focusBody: true,
       // The save check runs here, so its error shows on this card even when a warning follows (KTD2, R7).
       onForward() {
         const problem = checkHandoff(text, o.kind === "skeleton" ? undefined : credential.rubric);
@@ -203,5 +210,7 @@ function EditHandoff({ credentialKey: key, returnTo, credential, atOpen }: EditH
     });
   }
 
-  return <Deck label={`Edit a handoff for ${credential.name}`} beats={beats} onClose={close} onFinish={finish} onUseTheirs={() => void useTheirs()} />;
+  return (
+    <Deck label={`Edit a handoff for ${credential.name}`} beats={beats} unsaved={text !== o.text} onClose={close} onFinish={finish} onUseTheirs={() => void useTheirs()} />
+  );
 }

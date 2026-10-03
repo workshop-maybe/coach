@@ -96,8 +96,20 @@ export function Deck({ label, beats, startAt = 0, onClose, onFinish, onUseTheirs
   // Focus follows the card, so a keyboard or screen reader lands on the new question, or
   // in its field when the beat asks for that.
   useEffect(() => {
-    const field = !conflict && beat.focusBody ? firstField(body.current) : undefined;
+    const wantsField = !conflict && beat.focusBody === true;
+    const field = wantsField ? firstField(body.current) : undefined;
     (field ?? heading.current)?.focus();
+    if (!wantsField) return;
+    // In development, StrictMode mounts a newly shown editor twice after this effect, and
+    // Tiptap moves its DOM out and back, which drops the focus (R21, U6). Once that has
+    // settled, a field that lost focus to nothing takes it back; focus the person has moved
+    // elsewhere is left alone.
+    const frame = requestAnimationFrame(() => {
+      const active = document.activeElement;
+      if (active !== null && active !== document.body) return;
+      firstField(body.current)?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
   }, [index, conflict]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Escape is the quiet way out, unless it would lose work (KTD8). Every Escape the deck

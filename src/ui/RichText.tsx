@@ -58,6 +58,12 @@ export function RichText({ value, onChange, onNormalized, placeholder, autoFocus
         class: "rich-input",
         spellcheck: "true",
       },
+      // ProseMirror marks every Escape as handled, though it does nothing with it, which
+      // would hide it from the deck around the box. Escape passes through untouched, so on a
+      // pane it steps out of the box (U6, R19, KTD8).
+      handleDOMEvents: {
+        keydown: (_view, event) => event.key === "Escape",
+      },
       // Plain text that reads as Markdown (an agent's reply) comes in as structure.
       clipboardTextParser(text, _context, _plain, view) {
         const md = editorRef.current?.markdown;

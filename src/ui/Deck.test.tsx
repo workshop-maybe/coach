@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { useState, type ReactNode } from "react";
+import { StrictMode, useState, type ReactNode } from "react";
 import { Deck, type Beat } from "./Deck";
 import { PaneContext, usePaneClaims } from "./pane";
+import { RichText } from "./RichText";
 import { ChangedOnDiskError } from "../storage/storage";
 
 afterEach(cleanup);
@@ -349,6 +350,78 @@ describe("Deck focus on arrival", () => {
     }
     render(<NoField />);
     expect(document.activeElement).toBe(heading("Nothing to type"));
+  });
+});
+
+// The real editor in a deck (U6, R19, R21). In development, React mounts a newly shown
+// editor twice under StrictMode, and the second mount moves Tiptap's DOM after the deck has
+// focused it, so the deck takes focus back once the editor has settled. ProseMirror marks
+// every Escape as handled, so the editor leaves Escape to the deck. The flow suites replace
+// RichText with a textarea, so this is where the real editor meets the deck's focus and keys.
+describe("Deck with the real editor, under StrictMode", () => {
+  function WithEditor({ startAt }: { startAt?: number }) {
+    const [reply, setReply] = useState("");
+    const beats: Beat[] = [
+      { id: "who", title: "Who takes it", forward: "Next", body: <p>Opus</p> },
+      {
+        id: "paste",
+        title: "Paste the reply",
+        forward: "Judge it",
+        valid: reply.trim() !== "",
+        pane: true,
+        focusBody: true,
+        body: <RichText aria-label="Reply" value={reply} onChange={setReply} placeholder="Paste the reply" />,
+      },
+    ];
+    return <Deck label="Test an agent" beats={beats} startAt={startAt} onClose={() => {}} onFinish={async () => {}} />;
+  }
+
+  /** Lets Tiptap's own deferred work (its destroy check runs on a timer) and a few frames pass. */
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 60));
+
+  it("arriving at an editor beat leaves focus in the editor", async () => {
+    render(
+      <StrictMode>
+        <WithEditor />
+      </StrictMode>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    const editor = screen.getByRole("textbox", { name: "Reply" });
+    await waitFor(() => expect(document.activeElement).toBe(editor));
+    await settle();
+    expect(document.activeElement).toBe(editor);
+  });
+
+  it("Escape in the editor moves focus to the forward action, and the next Escape goes back a card", async () => {
+    render(
+      <StrictMode>
+        <WithEditor startAt={1} />
+      </StrictMode>,
+    );
+    const editor = screen.getByRole("textbox", { name: "Reply" });
+    await waitFor(() => expect(document.activeElement).toBe(editor));
+    const ed = (editor as HTMLElement & { editor?: { commands: { insertContent(text: string): boolean } } }).editor!;
+    act(() => {
+      ed.commands.insertContent("Looks good");
+    });
+    // With the key code a browser sends, which is what ProseMirror reads.
+    fireEvent.keyDown(editor, { key: "Escape", code: "Escape", keyCode: 27 });
+    expect(heading("Paste the reply")).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Judge it" }));
+    await userEvent.keyboard("{Escape}");
+    expect(heading("Who takes it")).toBeTruthy();
+  });
+
+  it("a deck that opens on an editor beat leaves focus in the editor", async () => {
+    render(
+      <StrictMode>
+        <WithEditor startAt={1} />
+      </StrictMode>,
+    );
+    const editor = screen.getByRole("textbox", { name: "Reply" });
+    await waitFor(() => expect(document.activeElement).toBe(editor));
+    await settle();
+    expect(document.activeElement).toBe(editor);
   });
 });
 

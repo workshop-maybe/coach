@@ -909,6 +909,15 @@ button:focus-visible {
   overflow: auto;
 }
 
+/* A writing pane (U6, R9, R18): an editor's box and its scrollbar span the pane, and its
+   text keeps the reply view's centered measure of about 70 characters (.rich-view-measure,
+   the same type). The side padding grows as the pane widens past the measure, so a click
+   beside the text still lands in the editor. This covers the reply box on the paste card
+   (U4) and every rich editor on a pane; editors on ordinary cards keep their padding. */
+.deck.pane .rich-input {
+  padding-inline: max(14px, calc((100% - 70ch) / 2));
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .deck-card {
     animation: deck-card-in 220ms ease-out;
@@ -1442,11 +1451,20 @@ button:focus-visible {
 
 /* A handoff is written as it is copied: plain mono text, slot braces and all. */
 .deck-body textarea.handoff-text {
-  min-height: 18rem;
   font-family: var(--font-mono);
   font-size: 13px;
   letter-spacing: var(--value-tracking);
   white-space: pre-wrap;
+}
+
+/* On its pane (U6, R9, R18) the field takes the height above the slots and holds its text
+   to a centered measure of about 70 of its characters, its scrollbar at the pane's edge.
+   Scoped to the textarea, so the handoff text folded on a handoff page is untouched. */
+.deck.pane textarea.handoff-text {
+  flex: 1 1 auto;
+  min-height: 8rem;
+  resize: none;
+  padding-inline: max(12px, calc((100% - 70ch) / 2));
 }
 
 .handoff-slots {

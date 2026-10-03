@@ -31,6 +31,10 @@ async function saved(storage: MemoryStorage, slug = "review") {
 }
 
 const parts = () => screen.getByRole("list", { name: "Parts" });
+/** The folder's actions in the top bar: all three on a page, none on a pane (R8). */
+const FOLDER_ACTIONS = ["Change folder", "Reload", "Export"];
+const barActions = () => FOLDER_ACTIONS.filter((name) => within(screen.getByRole("banner")).queryByRole("button", { name }) !== null);
+const editDeck = () => screen.getByRole("region", { name: "Edit Code review" });
 /** The button that opens a take in a reply row: the row's latest, or an older take's. */
 const takeHead = (el: HTMLElement) => el.querySelector<HTMLButtonElement>("button.take-head")!;
 const openedPart = async (name: RegExp) => within(await screen.findByRole("list", { name: "Parts" })).getByRole("button", { name });
@@ -466,6 +470,100 @@ describe("BadgeDetail", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Save" }));
     const holders = await screen.findByRole("region", { name: "Holders" });
     await waitFor(() => expect(within(holders).getByRole("button", { name: /Opus agent/ }).textContent).toContain("task changed"));
+  });
+});
+
+// Writing the task and rubric in a pane (U6, R7, R18, R19, R20). The flows above still
+// save as before; these cover the pane, the first focus and Escape keeping changed text.
+describe("BadgeDetail's writing panes", () => {
+  it("Covers R18. Editing the task fills the window with focus in the box, and the re-test warning is a page again", async () => {
+    const storage = storageWith({ credentials: [review], profiles: [opus], assessments: [await result(opus, review)] });
+    renderApp(storage, badge);
+    await screen.findByRole("list", { name: "Parts" });
+    expect(barActions()).toEqual(FOLDER_ACTIONS);
+    await openPart(/^Task/);
+    const box = await screen.findByRole("textbox", { name: "Task" });
+    expect(editDeck().classList.contains("pane")).toBe(true);
+    expect(barActions()).toEqual([]);
+    await waitFor(() => expect(document.activeElement).toBe(box));
+
+    await userEvent.type(box, " Twice.");
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(await screen.findByRole("heading", { name: "Holders will re-test" })).toBeTruthy();
+    expect(editDeck().classList.contains("pane")).toBe(false);
+    expect(barActions()).toEqual(FOLDER_ACTIONS);
+  });
+
+  it("Covers R20. Escape on an edited task keeps the deck and the text, and Save still writes it", async () => {
+    const storage = storageWith({ credentials: [review] });
+    const before = await snapshot(storage);
+    renderApp(storage, badge);
+    await openPart(/^Task/);
+    const box = (await screen.findByRole("textbox", { name: "Task" })) as HTMLTextAreaElement;
+    await userEvent.type(box, " Twice.");
+    // The first Escape leaves the box (R19); the next would leave the deck, but the text changed.
+    await userEvent.keyboard("{Escape}");
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Save" }));
+    await userEvent.keyboard("{Escape}");
+    expect(screen.getByRole("heading", { name: "The task" })).toBeTruthy();
+    expect(box.value).toBe("Review the attached diff. Twice.");
+    expect(await snapshot(storage)).toEqual(before);
+
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByRole("list", { name: "Parts" })).toBeTruthy();
+    expect((await saved(storage)).task).toBe("Review the attached diff. Twice.");
+  });
+
+  it("with no change to the task, Escape out of the box and once more returns to the badge", async () => {
+    const storage = storageWith({ credentials: [review] });
+    const before = await snapshot(storage);
+    renderApp(storage, badge);
+    await openPart(/^Task/);
+    const box = await screen.findByRole("textbox", { name: "Task" });
+    await waitFor(() => expect(document.activeElement).toBe(box));
+    await userEvent.keyboard("{Escape}");
+    expect(screen.getByRole("heading", { name: "The task" })).toBeTruthy();
+    await userEvent.keyboard("{Escape}");
+    expect(await screen.findByRole("list", { name: "Parts" })).toBeTruthy();
+    expect(barActions()).toEqual(FOLDER_ACTIONS);
+    expect(await snapshot(storage)).toEqual(before);
+  });
+
+  it("Covers R20. Escape on the re-test warning after a change keeps the deck, and Back finds the text", async () => {
+    const storage = storageWith({ credentials: [review], profiles: [opus], assessments: [await result(opus, review)] });
+    const before = await snapshot(storage);
+    renderApp(storage, badge);
+    await openPart(/^Task/);
+    await userEvent.type(await screen.findByRole("textbox", { name: "Task" }), " Twice.");
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(await screen.findByRole("heading", { name: "Holders will re-test" })).toBeTruthy();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.getByRole("heading", { name: "Holders will re-test" })).toBeTruthy();
+    expect(await snapshot(storage)).toEqual(before);
+    await userEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect((screen.getByRole("textbox", { name: "Task" }) as HTMLTextAreaElement).value).toBe("Review the attached diff. Twice.");
+    // Back on the task card, the text is still a change: Next still warns, and Escape still keeps it.
+    expect((screen.getByRole("button", { name: "Next" }) as HTMLButtonElement).disabled).toBe(false);
+    await userEvent.keyboard("{Escape}{Escape}");
+    expect(screen.getByRole("heading", { name: "The task" })).toBeTruthy();
+    expect(await snapshot(storage)).toEqual(before);
+  });
+
+  it("Covers R18. Editing the rubric fills the window with focus in the box, and Save writes it as before", async () => {
+    const storage = storageWith({ credentials: [review] });
+    renderApp(storage, badge);
+    await openPart(/^Rubric/);
+    const box = await screen.findByRole("textbox", { name: "Rubric" });
+    expect(editDeck().classList.contains("pane")).toBe(true);
+    expect(barActions()).toEqual([]);
+    await waitFor(() => expect(document.activeElement).toBe(box));
+    await userEvent.type(box, "Finds the off-by-one.");
+    await userEvent.keyboard("{Escape}{Escape}");
+    expect(screen.getByRole("heading", { name: "What good looks like" })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByRole("list", { name: "Parts" })).toBeTruthy();
+    expect(barActions()).toEqual(FOLDER_ACTIONS);
+    expect((await saved(storage)).rubric).toBe("Finds the off-by-one.");
   });
 });
 
