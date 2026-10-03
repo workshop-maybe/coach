@@ -7,6 +7,7 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MARKER_PATH, collectionPath, profilePath } from "../domain/folder";
 import { MemoryStorage } from "../storage/memory";
+import { useNav } from "./nav";
 import { PaneContext, usePane, usePaneClaims } from "./pane";
 import { FOLDER, renderApp, storageWith } from "./testFolder";
 
@@ -23,6 +24,7 @@ function Claimer({ name, active = true }: { name: string; active?: boolean }) {
 
 /** Two views that claim pane mode, each mounted and unmounted by a button, and B switched on and off. */
 function Probe() {
+  const { navigate } = useNav();
   const [a, setA] = useState(false);
   const [b, setB] = useState(false);
   const [bActive, setBActive] = useState(true);
@@ -36,6 +38,9 @@ function Probe() {
       </button>
       <button type="button" onClick={() => setBActive((v) => !v)}>
         Switch B
+      </button>
+      <button type="button" onClick={() => navigate({ view: "home" })}>
+        Open again
       </button>
       {a && <Claimer name="A" />}
       {b && <Claimer name="B" active={bActive} />}
@@ -143,6 +148,43 @@ describe("pane mode in the shell", () => {
     expect(warning?.isConnected).toBe(true);
     await press("Toggle A");
     expect(screen.getByRole("alert")).toBe(alert);
+  });
+});
+
+describe("a view the shell opens", () => {
+  // #root is the page scroller (App.css) and keeps its offset across views, so without a reset a
+  // page opened from a scrolled one arrives with its top bar out of view (R6, R10).
+  function pageScroller() {
+    const root = document.createElement("div");
+    root.id = "root";
+    document.body.append(root);
+    const scrolledTo = vi.fn();
+    Object.defineProperty(root, "scrollTop", { configurable: true, get: () => 120, set: scrolledTo });
+    return { scrolledTo, remove: () => root.remove() };
+  }
+
+  it("starts at the top of the page when the route changes", async () => {
+    const { scrolledTo, remove } = pageScroller();
+    try {
+      const { press } = await openShell();
+      scrolledTo.mockClear();
+      await press("Open again");
+      expect(scrolledTo).toHaveBeenCalledWith(0);
+    } finally {
+      remove();
+    }
+  });
+
+  it("leaves the page alone when nothing navigates", async () => {
+    const { scrolledTo, remove } = pageScroller();
+    try {
+      const { press } = await openShell();
+      scrolledTo.mockClear();
+      await press("Toggle A");
+      expect(scrolledTo).not.toHaveBeenCalled();
+    } finally {
+      remove();
+    }
   });
 });
 

@@ -8,7 +8,7 @@
 // The banners stay mounted and compact to a line each in CSS, so an alert is not announced
 // again, and nothing above the pane scrolls, so the window keys stay in view (R10).
 
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useState } from "react";
 import { InkDefs } from "../cast/InkDefs";
 import { AgentDetail } from "./AgentDetail";
 import { BadgeDetail } from "./BadgeDetail";
@@ -46,6 +46,13 @@ export function AppShell({ onChangeFolder, initialRoute = { view: "home" } }: Ap
   const [route, navigate] = useState<Route>(initialRoute);
   const [exporting, setExporting] = useState(false);
   const nav = useMemo(() => ({ route, navigate }), [route]);
+  // Each view opens at its top. #root is the page scroller and keeps its offset across views,
+  // so a page opened from a scrolled one would arrive with its top bar out of view (R6, R10).
+  // A layout effect, so it lands before ReplyList's effect scrolls a lit row into view.
+  useLayoutEffect(() => {
+    const root = document.getElementById("root");
+    if (root) root.scrollTop = 0;
+  }, [route]);
   const { pane, claims } = usePaneClaims();
   // Tauri's drag script toggles maximize on a double press, before any handler here could
   // stop it, so in full screen the bar is no drag region at all (R2).
