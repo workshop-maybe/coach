@@ -22,6 +22,11 @@ export const JOIN_AFTER_STOP = 0.5;
 export const LINE_BREAK_RETRIES = 3;
 /** The first wait before a retry without a Retry-After; each later wait doubles it. */
 export const BACKOFF_MS = 1000;
+/**
+ * The longest a batch waits before a retry. Next is disabled while a cleanup runs, so a
+ * longer Retry-After fails the cleanup at once with its retryable line instead. Tunable.
+ */
+export const MAX_WAIT_MS = 30_000;
 
 /** Every question's criteria, as TypeSafe's autoformat cookbook words them. */
 export const LINE_BREAK_CRITERIA: JevCriteria = Object.freeze({
@@ -103,7 +108,7 @@ export interface LineBreakOptions {
 /**
  * Sends the batches one at a time and gathers every answer. A rate-limited or overloaded
  * batch waits for its Retry-After, or backs off exponentially without one, and is tried
- * again up to `LINE_BREAK_RETRIES` times. Rejects with the JevError that ends it, or with
+ * again up to `LINE_BREAK_RETRIES` times; a wait past `MAX_WAIT_MS` fails at once. Rejects with the JevError that ends it, or with
  * kind "other" for an answer that misses an id or is not a probability. Null once cancelled.
  */
 export async function askLineBreaks(
@@ -121,8 +126,9 @@ export async function askLineBreaks(
       } catch (e) {
         const error = toJevError(e);
         const busy = error.kind === "rateLimited" || error.kind === "overloaded";
-        if (!busy || retry >= LINE_BREAK_RETRIES) throw error;
-        await wait(error.retryAfter !== null ? error.retryAfter * 1000 : BACKOFF_MS * 2 ** retry);
+        const ms = error.retryAfter !== null ? error.retryAfter * 1000 : BACKOFF_MS * 2 ** retry;
+        if (!busy || retry >= LINE_BREAK_RETRIES || ms > MAX_WAIT_MS) throw error;
+        await wait(ms);
         continue;
       }
       if (cancelled()) return null;

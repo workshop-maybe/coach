@@ -228,6 +228,15 @@ describe("askLineBreaks", () => {
     expect(wait.mock.calls).toEqual([[2000]]);
   });
 
+  it("fails at once on a Retry-After past the cap, rather than holding Next for it", async () => {
+    const [batch] = lineBreakBatches(AE6)!;
+    const ask = vi.fn().mockRejectedValue(new JevError("rateLimited", { retryAfter: 120 }));
+    const wait = vi.fn(noWait);
+    await expect(askLineBreaks([batch], ask, { wait })).rejects.toMatchObject({ kind: "rateLimited", retryAfter: 120 });
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(wait).not.toHaveBeenCalled();
+  });
+
   it("honors a Retry-After of zero rather than backing off", async () => {
     const [batch] = lineBreakBatches(AE6)!;
     const ask = vi.fn().mockRejectedValueOnce(new JevError("overloaded", { retryAfter: 0 })).mockResolvedValueOnce({ answers: { L003: 0.9 } });

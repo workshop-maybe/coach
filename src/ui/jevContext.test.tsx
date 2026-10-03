@@ -276,6 +276,15 @@ describe("JevProvider ask", () => {
     expect(result.current.usable).toBe(true);
   });
 
+  it("an ask that finds the key gone re-reads status, so Jev is no longer offered and the deck asks for the key", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    const { result } = await loaded(fake);
+    fake.queue("ask", new JevError("keyMissing"));
+    await act(() => expect(result.current.ask(pasteCleanup)).rejects.toMatchObject({ kind: "keyMissing" }));
+    await waitFor(() => expect(result.current.usable).toBe(false));
+    expect(result.current.status).toMatchObject({ on: true, hasKey: false, storage: null, hint: null });
+  });
+
   it("the fake refuses an ask while off or with no key, as the native side does", async () => {
     const off = new FakeJev();
     const offHook = await loaded(off);

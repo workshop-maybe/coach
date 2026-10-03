@@ -112,9 +112,18 @@ export class FakeJev implements Jev {
     this.calls.push({ method: "ask", request });
     if (!this.#state.on) throw new JevError("off");
     if (!this.#state.hasKey) throw new JevError("keyMissing");
-    return this.#serve("ask", () => ({
-      answers: Object.fromEntries(Object.keys(request.questions).map((id) => [id, FAKE_ANSWER])),
-    }));
+    try {
+      return await this.#serve("ask", () => ({
+        answers: Object.fromEntries(Object.keys(request.questions).map((id) => [id, FAKE_ANSWER])),
+      }));
+    } catch (e) {
+      // As natively: an ask that finds no key clears the stored key from settings.
+      if (e instanceof JevError && e.kind === "keyMissing") {
+        this.#state = { ...this.#state, hasKey: false, storage: null, hint: null };
+        this.#key = null;
+      }
+      throw e;
+    }
   }
 
   /** The next queued outcome for `method`, or the native rule when nothing is queued. */

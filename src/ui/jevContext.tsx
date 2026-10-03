@@ -28,7 +28,7 @@ export interface JevContextValue {
   clearKey(): Promise<JevStatus>;
   /** Turns Jev Mode on or off. Off keeps the key. */
   setOn(on: boolean): Promise<JevStatus>;
-  /** Sends one request. Rejects with a JevError; status is left as it was. */
+  /** Sends one request. Rejects with a JevError; a key found missing, or Jev Mode off, re-reads status. */
   ask(request: JevRequest): Promise<JevAnswers>;
 }
 
@@ -116,9 +116,13 @@ export function JevProvider({ jev, children }: JevProviderProps) {
   const ask = useCallback(
     (request: JevRequest) =>
       jev.ask(request).catch((e: unknown) => {
-        throw toJevError(e);
+        const error = toJevError(e);
+        // The native side has already updated settings for these, so read them again:
+        // a key found missing, or Jev Mode turned off elsewhere, stops Jev being offered.
+        if (error.kind === "keyMissing" || error.kind === "off") void refresh();
+        throw error;
       }),
-    [jev],
+    [jev, refresh],
   );
 
   const value = useMemo<JevContextValue>(

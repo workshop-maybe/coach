@@ -88,12 +88,17 @@ impl SettingsFile {
     }
 
     /// Remembers the approved data folder.
+    /// Remembers the data folder. When the file can't be read it is left as it is and
+    /// the folder holds for this session only, as `ensure_machine_id` does for the
+    /// machine id: refusing the pick would lock the app at the folder gate.
     pub fn remember_data_folder(&self, folder: &str) -> Result<(), String> {
-        self.update(|s| {
+        match self.update(|s| {
             s.data_folder = Some(folder.to_string());
             Ok::<_, UpdateError>(())
-        })
-        .map_err(String::from)
+        }) {
+            Ok(()) | Err(UpdateError::Unreadable) => Ok(()),
+            Err(e) => Err(String::from(e)),
+        }
     }
 }
 
@@ -219,7 +224,9 @@ mod tests {
         });
         assert_eq!(out, Err(UpdateError::Unreadable));
         assert!(!called, "the change never runs");
-        assert!(file.remember_data_folder("/data").is_err());
+        // A folder pick still goes through: the folder holds for this session, like the
+        // machine id, and the file is left as it is.
+        assert_eq!(file.remember_data_folder("/data"), Ok(()));
         assert_eq!(std::fs::read_to_string(&file.path).unwrap(), "{ not json");
     }
 
