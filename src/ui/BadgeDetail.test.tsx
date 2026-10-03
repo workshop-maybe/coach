@@ -153,14 +153,25 @@ describe("BadgeDetail", () => {
     expect(screen.queryByRole("region", { name: "Replies" })).toBeNull();
   });
 
-  it("Escape in the compare closes it and keeps the badge open", async () => {
-    renderApp(storageWith({ credentials: [review], profiles: [opus, codex], assessments: [await result(opus, review), await result(codex, review)] }), badge);
+  it("Covers R17. Compare opens the two picked replies in the full window, and Escape comes back to the badge with both picked and Compare focused", async () => {
+    renderApp(
+      storageWith({
+        credentials: [review],
+        profiles: [opus, codex],
+        assessments: [await result(opus, review, { handBack: "Opus reply" }), await result(codex, review, { handBack: "Codex reply" })],
+      }),
+      badge,
+    );
     await screen.findByRole("region", { name: "Replies" });
     for (const box of screen.getAllByRole("checkbox")) await userEvent.click(box);
     await userEvent.click(screen.getByRole("button", { name: "Compare" }));
+    const compare = await screen.findByRole("region", { name: "Compare replies" });
+    expect(within(compare).getAllByRole("article")).toHaveLength(2);
+    expect(screen.queryByRole("heading", { name: "Code review", level: 2 })).toBeNull();
     await userEvent.keyboard("{Escape}");
-    await waitFor(() => expect(screen.queryByRole("region", { name: "Compare replies" })).toBeNull());
-    expect(screen.getByRole("heading", { name: "Code review", level: 2 })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Code review", level: 2 })).toBeTruthy();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Compare" })));
+    expect(screen.getAllByRole("checkbox").map((b) => (b as HTMLInputElement).checked)).toEqual([true, true]);
   });
 
   describe("handoffs on results", () => {

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { loadFolder } from "../domain/folder";
 import { buildMatrix } from "../domain/matrix";
 import type { Assessment, Handoff } from "../domain/types";
-import { backFromReply, replyRoute } from "./replyRoute";
+import { backFromCompare, backFromReply, replyRoute } from "./replyRoute";
 import type { TakeRef } from "./routes";
 import { opus, result, review, storageWith } from "./testFolder";
 
@@ -97,5 +97,65 @@ describe("backFromReply", () => {
     expect(backFromReply(matrix, state, "eng/review", take("opus", 3), [take("codex", 2)])).toEqual(plain);
     const agentGone = await load(both, [codex]);
     expect(backFromReply(agentGone.matrix, agentGone.state, "eng/review", take("opus", 1), [take("codex", 2)])).toEqual(plain);
+  });
+});
+
+// The way back from the compare of two takes (U9, R17, KTD10): the page that lists them now,
+// the picks kept and Compare to take the focus.
+describe("backFromCompare", () => {
+  it("goes to the badge while one handoff has run, keeping the picks and asking for Compare's focus", async () => {
+    const { state, matrix } = await load([await result(opus, review, day(1)), await result(codex, review, day(2))]);
+    const takes = [take("opus", 1), take("codex", 2)];
+    expect(backFromCompare(matrix, state, "eng/review", takes, takes)).toEqual({
+      view: "item",
+      item: "badge",
+      credentialKey: "eng/review",
+      picks: takes,
+      focusCompare: true,
+    });
+  });
+
+  it("goes to the handoff page of the takes' run once two have run", async () => {
+    const { state, matrix } = await load([
+      await result(opus, review, day(1)),
+      await result(opus, review, { ...day(2), handoff: { id: "a", text: "x" } }),
+      await result(codex, review, { ...day(3), handoff: { id: "a", text: "x" } }),
+    ]);
+    const takes = [take("opus", 2), take("codex", 3)];
+    expect(backFromCompare(matrix, state, "eng/review", takes, takes)).toEqual({
+      view: "item",
+      item: "handoff",
+      credentialKey: "eng/review",
+      handoffId: "a",
+      picks: takes,
+      focusCompare: true,
+    });
+  });
+
+  it("goes to the badge while the matrix is still building", async () => {
+    const { state } = await load([await result(opus, review, day(1)), await result(opus, review, { ...day(2), handoff: { id: "a", text: "x" } })]);
+    expect(backFromCompare(null, state, "eng/review", [take("opus", 1), take("opus", 2)])).toEqual({
+      view: "item",
+      item: "badge",
+      credentialKey: "eng/review",
+      focusCompare: true,
+    });
+  });
+
+  it("lets the take still in the folder name the page when the other is gone, and the badge when both are", async () => {
+    const { state, matrix } = await load([
+      await result(opus, review, day(1)),
+      await result(codex, review, { ...day(2), handoff: { id: "a", text: "x" } }),
+    ]);
+    const kept = [take("opus", 9), take("codex", 2)];
+    expect(backFromCompare(matrix, state, "eng/review", kept, kept)).toMatchObject({ item: "handoff", handoffId: "a", picks: kept });
+    const gone = [take("opus", 8), take("codex", 9)];
+    expect(backFromCompare(matrix, state, "eng/review", gone, gone)).toEqual({
+      view: "item",
+      item: "badge",
+      credentialKey: "eng/review",
+      picks: gone,
+      focusCompare: true,
+    });
   });
 });

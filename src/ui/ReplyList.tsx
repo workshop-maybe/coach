@@ -1,10 +1,10 @@
 // One handoff's replies (U2, R6-R11): a row per agent that ran it, Met and Not met alike,
 // its latest reply first with its older takes below. Opening a take goes to its reply view,
-// a full-window item of its own, carrying the list's picks (U5, R15, KTD7). That view comes
-// back with the take to light and focus and the picks to restore (R16), and both are
+// a full-window item of its own, carrying the list's picks (U5, R15, KTD7). Any two takes
+// can be picked, and Compare opens the two side by side as another full-window item
+// carrying the picks (U9, R17, KTD10). Each comes back with the picks to restore (R16),
+// the reply with its take to light and focus, the compare with Compare focused. Picks are
 // resolved against the run on every render, since a focus reload can take a take away.
-// Any two takes can be picked and read side by side; picks and the compare stay in this
-// component between those trips (KTD3, KTD4).
 
 import { useEffect, useRef, useState } from "react";
 import { Machine } from "../cast/Machine";
@@ -13,7 +13,7 @@ import { contextLine } from "../domain/context";
 import type { AgentReplies, HandoffRun } from "../domain/handoffResults";
 import type { Matrix } from "../domain/matrix";
 import type { AgentProfile, Assessment, FolderState } from "../domain/types";
-import { contextText, formatDate, setupText } from "./format";
+import { contextText, formatDate } from "./format";
 import { useNav } from "./nav";
 import type { ReplyListState, TakeRef } from "./routes";
 import { Verdict } from "./shared";
@@ -36,6 +36,7 @@ export function ReplyList({
   lit,
   litTake,
   picks,
+  focusCompare,
 }: {
   credentialKey: string;
   run: HandoffRun;
@@ -44,39 +45,18 @@ export function ReplyList({
 } & ReplyListState) {
   const { navigate } = useNav();
   const [picked, setPicked] = useState<TakeId[]>(() => (picks ?? []).map(idOf));
-  const [comparing, setComparing] = useState(false);
   const compareButton = useRef<HTMLButtonElement>(null);
-  const backButton = useRef<HTMLButtonElement>(null);
   const litRow = useRef<HTMLLIElement>(null);
   const litHead = useRef<HTMLButtonElement>(null);
 
   // The lit row comes into view once, when the list first shows it, not on every render.
-  // Back from a reply, that take's button gets the focus (R16).
+  // Back from a reply, that take's button gets the focus (R16); back from the compare,
+  // Compare does, while both its takes are still here to compare (R17).
   useEffect(() => {
     litRow.current?.scrollIntoView?.({ block: "center" });
     litHead.current?.focus();
-  }, [lit, litTake]);
-
-  // Escape closes the compare before the item's own Escape can leave the view (KTD3).
-  // The capture phase runs ahead of every item's useEscape, which skips handled events.
-  useEffect(() => {
-    if (!comparing) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || e.defaultPrevented) return;
-      e.preventDefault();
-      setComparing(false);
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [comparing]);
-
-  // Focus follows the swap: into the compare on open, back to Compare on close.
-  const wasComparing = useRef(false);
-  useEffect(() => {
-    if (comparing) backButton.current?.focus();
-    else if (wasComparing.current) compareButton.current?.focus();
-    wasComparing.current = comparing;
-  }, [comparing]);
+    if (focusCompare && compareButton.current && !compareButton.current.disabled) compareButton.current.focus();
+  }, [lit, litTake, focusCompare]);
 
   // A folder reload can drop a picked take (its file or agent gone), so picks count only
   // while their take is still in the run.
@@ -89,43 +69,15 @@ export function ReplyList({
   // A third pick replaces the oldest one (KTD3).
   const togglePick = (id: TakeId) => setPicked((was) => (was.includes(id) ? was.filter((p) => p !== id) : [...was, id].slice(-2)));
 
-  if (comparing && live.length === 2) {
-    return (
-      <section className="compare" aria-label="Compare replies">
-        <p className="helper">
-          <button type="button" className="link" ref={backButton} onClick={() => setComparing(false)}>
-            Back to replies
-          </button>
-        </p>
-        <div className="compare-panes">
-          {live.map((id) => {
-            const { profile, result: a } = takes.get(id)!;
-            return (
-              <article key={id} className="compare-pane" aria-label={`${profile.name}, ${formatDate(a.recordedAt)}`}>
-                <header className="compare-bar">
-                  <span className="compare-name">{profile.name}</span>
-                  <span>{setupText(a.setup)}</span>
-                  <span>
-                    <Verdict result={a} /> · {formatDate(a.recordedAt)}
-                  </span>
-                </header>
-                <pre className="handback compare-reply">{a.handBack}</pre>
-              </article>
-            );
-          })}
-        </div>
-      </section>
-    );
-  }
-
-  // The picks go with the opened take, so its way back can keep them (R16).
-  const openTake = (ref: TakeRef) => {
-    const kept = live.flatMap((id) => {
-      const t = takes.get(id);
-      return t ? [refOf(t.profile, t.result)] : [];
-    });
-    navigate({ view: "item", item: "reply", credentialKey: key, take: ref, ...(kept.length > 0 ? { picks: kept } : {}) });
-  };
+  // The picks go with an opened take or the compare, so its way back can keep them (R16).
+  const pickedRefs = live.flatMap((id) => {
+    const t = takes.get(id);
+    return t ? [refOf(t.profile, t.result)] : [];
+  });
+  const kept = pickedRefs.length > 0 ? { picks: pickedRefs } : {};
+  const openTake = (ref: TakeRef) => navigate({ view: "item", item: "reply", credentialKey: key, take: ref, ...kept });
+  // Compare is enabled only with two picks, so both takes are there.
+  const compare = () => navigate({ view: "item", item: "compare", credentialKey: key, takes: [pickedRefs[0], pickedRefs[1]], ...kept });
 
   const take = (entry: AgentReplies, a: Assessment, latest: boolean) => {
     const id = takeId(entry.profile, a);
@@ -149,7 +101,7 @@ export function ReplyList({
   return (
     <div className="replies">
       <p className="helper">
-        <button type="button" ref={compareButton} disabled={live.length < 2} onClick={() => setComparing(true)}>
+        <button type="button" ref={compareButton} disabled={live.length < 2} onClick={compare}>
           {live.length < 2 ? "Pick two to compare" : "Compare"}
         </button>
       </p>

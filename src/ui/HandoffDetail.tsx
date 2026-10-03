@@ -14,7 +14,7 @@ import { Missing, focusOnMount, useEscape } from "./shared";
 import { useFolder } from "./useFolderState";
 import { useMatrix } from "./useMatrix";
 
-export function HandoffDetail({ credentialKey: key, handoffId, lit, litTake, picks }: { credentialKey: string; handoffId: string } & ReplyListState) {
+export function HandoffDetail({ credentialKey: key, handoffId, lit, litTake, picks, focusCompare }: { credentialKey: string; handoffId: string } & ReplyListState) {
   const { state } = useFolder();
   const { navigate } = useNav();
   const matrix = useMatrix(state);
@@ -56,7 +56,7 @@ export function HandoffDetail({ credentialKey: key, handoffId, lit, litTake, pic
 
       <section className="detail-section" aria-labelledby="handoff-replies">
         <h3 id="handoff-replies">Replies</h3>
-        <ReplyList credentialKey={key} run={run} state={state} matrix={matrix} lit={lit} litTake={litTake} picks={picks} />
+        <ReplyList credentialKey={key} run={run} state={state} matrix={matrix} lit={lit} litTake={litTake} picks={picks} focusCompare={focusCompare} />
       </section>
     </section>
   );

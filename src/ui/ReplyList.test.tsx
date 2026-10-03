@@ -121,43 +121,54 @@ describe("ReplyList", () => {
     expect(boxes.map((b) => (b as HTMLInputElement).checked)).toEqual([false, true, true]);
   });
 
-  it("Covers AE5. Two takes from one agent open side by side, each pane naming agent, setup, verdict and date", async () => {
-    await setup([
+  it("Covers AE5. Compare goes to the compare of the two picked takes, carrying them as the picks", async () => {
+    const { navigate } = await setup(await twoAgents());
+    await userEvent.click(screen.getByRole("checkbox", { name: /Pick Opus agent/ }));
+    await userEvent.click(screen.getByRole("checkbox", { name: /Pick Codex agent/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Compare" }));
+    const both = [take("opus", 1), take("codex", 2)];
+    expect(navigate).toHaveBeenCalledWith({ view: "item", item: "compare", credentialKey: "eng/review", takes: both, picks: both });
+    // Nothing opens in place: the two replies are the compare view's.
+    expect(screen.queryByRole("region", { name: "Compare replies" })).toBeNull();
+    expect(screen.queryByText(/Line 4 hidden/)).toBeNull();
+  });
+
+  it("two takes from one agent go to the compare in the order they were picked", async () => {
+    const { navigate } = await setup([
       await result(opus, review, { ...day(1), handoff: ran, result: "not_met", handBack: "First try" }),
       await result(opus, review, { ...day(2), handoff: ran, handBack: "Second try" }),
     ]);
     for (const box of screen.getAllByRole("checkbox")) await userEvent.click(box);
     await userEvent.click(screen.getByRole("button", { name: "Compare" }));
-    const panes = within(screen.getByRole("region", { name: "Compare replies" })).getAllByRole("article");
-    expect(panes).toHaveLength(2);
-    expect(within(panes[0]).getByText("Second try")).toBeTruthy();
-    expect(within(panes[1]).getByText("First try")).toBeTruthy();
-    expect(within(panes[1]).getByText("claude-code · opus · high")).toBeTruthy();
-    expect(within(panes[1]).getByText("Not met")).toBeTruthy();
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Back to replies" }));
+    const both = [take("opus", 2), take("opus", 1)];
+    expect(navigate).toHaveBeenCalledWith({ view: "item", item: "compare", credentialKey: "eng/review", takes: both, picks: both });
   });
 
-  it("Escape in the compare goes back to the list and is handled there", async () => {
-    await setup(await twoAgents());
-    for (const box of screen.getAllByRole("checkbox")) await userEvent.click(box);
-    await userEvent.click(screen.getByRole("button", { name: "Compare" }));
+  it("back from the compare, both takes are still picked and Compare has focus", async () => {
+    const both = [take("opus", 1), take("codex", 2)];
+    await setup(await twoAgents(), { picks: both, focusCompare: true });
+    const compare = screen.getByRole("button", { name: "Compare" });
+    expect(document.activeElement).toBe(compare);
+    expect(screen.getAllByRole("checkbox").map((b) => (b as HTMLInputElement).checked)).toEqual([true, true]);
+    expect(screen.queryAllByRole("listitem").some((li) => li.getAttribute("aria-current") === "true")).toBe(false);
+  });
+
+  it("back from the compare with one take gone, the other stays picked, Compare asks for two again and takes no focus", async () => {
+    await setup(await twoAgents(), { picks: [take("opus", 9), take("codex", 2)], focusCompare: true });
+    const button = screen.getByRole("button", { name: "Pick two to compare" }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(document.activeElement).not.toBe(button);
+    expect((screen.getByRole("checkbox", { name: /Pick Codex agent/ }) as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("Escape is not the list's: it passes to the item that holds it", async () => {
+    await setup(await twoAgents(), { picks: [take("opus", 1), take("codex", 2)], focusCompare: true });
     const seen: boolean[] = [];
     const after = (e: KeyboardEvent) => seen.push(e.defaultPrevented);
     window.addEventListener("keydown", after);
     await userEvent.keyboard("{Escape}");
     window.removeEventListener("keydown", after);
-    expect(seen).toEqual([true]);
-    expect(screen.queryByRole("region", { name: "Compare replies" })).toBeNull();
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Compare" }));
-  });
-
-  it("a reload that drops a picked take closes the compare and asks for two again", async () => {
-    const { reload } = await setup(await twoAgents());
-    for (const box of screen.getAllByRole("checkbox")) await userEvent.click(box);
-    await userEvent.click(screen.getByRole("button", { name: "Compare" }));
-    reload("codex");
-    expect(screen.queryByRole("region", { name: "Compare replies" })).toBeNull();
-    expect((screen.getByRole("button", { name: "Pick two to compare" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(seen).toEqual([false]);
   });
 
   it("a reload that drops a picked take before Compare disables it", async () => {

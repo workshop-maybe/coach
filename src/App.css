@@ -2144,70 +2144,37 @@ button:focus-visible {
   font-size: 12.5px;
 }
 
-/* Two replies side by side (R10): the view takes the window's width, and each pane is a
-   record with a header bar whose reply scrolls on its own. */
-.content:has(.compare) {
-  max-width: none;
+/* Two takes, side by side (U9, R17): a pane. The stored-text switch and the corner
+   control share the top row at the right, then the two takes as records like the reply
+   view's, each with its mono bar over a reply that scrolls on its own (R10). Below the
+   stacking width the records stack, each taking half the height left. */
+.compare-top {
+  flex: none;
+  display: flex;
+  align-items: center;
 }
 
-.content:has(.compare) .detail {
-  max-width: none;
+.compare-top > .deck-close {
+  position: static;
 }
 
 .compare-panes {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr);
+  flex: 1 1 auto;
+  min-height: 0;
   gap: var(--space-base);
 }
 
-.compare-pane {
-  display: flex;
-  flex-direction: column;
+.compare-panes > .reply-record {
   min-width: 0;
-  height: calc(100vh - 16rem);
-  min-height: 20rem;
-  background: var(--surface);
-  border: var(--rule-width) solid var(--rule);
 }
 
-.compare-bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-xs) var(--space-md);
-  padding: var(--space-sm) var(--space-base);
-  border-bottom: var(--rule-width) solid var(--rule);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  letter-spacing: var(--value-tracking);
-}
-
-.compare-name {
-  font-family: var(--font-sans);
-  font-weight: 600;
-}
-
-.compare-reply {
-  flex: 1;
-  min-height: 0;
-  margin: 0;
-  padding: var(--space-base);
-  overflow: auto;
-  white-space: pre-wrap;
-  font-size: 12.5px;
-}
-
-@media (max-width: 36rem) {
+@media (max-width: 56rem) {
   .compare-panes {
-    grid-template-columns: 1fr;
-  }
-
-  .compare-pane {
-    height: auto;
-    min-height: 0;
-  }
-
-  .compare-reply {
-    overflow: visible;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -2379,15 +2346,15 @@ button:focus-visible {
    clear, and a sketched frame (src/assets/sketch-frame.svg, its strokes running past
    the corners) is laid over it as a mask filled with the rule ink. */
 
-:is(.deck-card, .needs, .agent-card, .badge-card, .door, .part, .detail-holder, .earned, .handoff-runs, .reply-list, .compare-pane, .rich-menu) {
+:is(.deck-card, .needs, .agent-card, .badge-card, .door, .part, .detail-holder, .earned, .handoff-runs, .reply-list, .rich-menu) {
   border-color: transparent;
 }
 
-:is(.deck-card, .needs, .agent-card, .badge-card, .door, .part, .detail-holder, .earned, .handoff-runs, .reply-list, .compare-pane) {
+:is(.deck-card, .needs, .agent-card, .badge-card, .door, .part, .detail-holder, .earned, .handoff-runs, .reply-list) {
   position: relative;
 }
 
-:is(.deck-card, .needs, .agent-card, .badge-card, .door, .part, .detail-holder, .earned, .handoff-runs, .reply-list, .compare-pane, .rich-menu)::after {
+:is(.deck-card, .needs, .agent-card, .badge-card, .door, .part, .detail-holder, .earned, .handoff-runs, .reply-list, .rich-menu)::after {
   content: "";
   position: absolute;
   inset: -5px;

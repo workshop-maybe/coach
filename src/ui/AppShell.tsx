@@ -12,6 +12,7 @@ import { useMemo, useState } from "react";
 import { InkDefs } from "../cast/InkDefs";
 import { AgentDetail } from "./AgentDetail";
 import { BadgeDetail } from "./BadgeDetail";
+import { CompareView } from "./CompareView";
 import { CredentialDeck } from "./CredentialDeck";
 import { EditAgentDeck, EditCredentialDeck } from "./EditDecks";
 import { EditHandoffDeck, HandoffsDeck } from "./HandoffDecks";
@@ -144,16 +145,27 @@ function DeckView({ route }: { route: DeckRoute }) {
   }
 }
 
-/** One item open: a badge, an agent, a handoff or a take's reply. Keyed by route, so opening another starts fresh. */
+/** One item open: a badge, an agent, a handoff, a take's reply or two takes compared. Keyed by route, so opening another starts fresh. */
 function ItemView({ route }: { route: ItemRoute }) {
   switch (route.item) {
     case "badge":
-      return <BadgeDetail credentialKey={route.credentialKey} lit={route.lit} litTake={route.litTake} picks={route.picks} />;
+      return <BadgeDetail credentialKey={route.credentialKey} lit={route.lit} litTake={route.litTake} picks={route.picks} focusCompare={route.focusCompare} />;
     case "agent":
       return <AgentDetail profileSlug={route.profileSlug} />;
     case "handoff":
-      return <HandoffDetail credentialKey={route.credentialKey} handoffId={route.handoffId} lit={route.lit} litTake={route.litTake} picks={route.picks} />;
+      return (
+        <HandoffDetail
+          credentialKey={route.credentialKey}
+          handoffId={route.handoffId}
+          lit={route.lit}
+          litTake={route.litTake}
+          picks={route.picks}
+          focusCompare={route.focusCompare}
+        />
+      );
     case "reply":
       return <ReplyView credentialKey={route.credentialKey} take={route.take} picks={route.picks} />;
+    case "compare":
+      return <CompareView credentialKey={route.credentialKey} takes={route.takes} picks={route.picks} />;
   }
 }

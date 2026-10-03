@@ -25,7 +25,7 @@ import { TrashLink } from "./TrashDeck";
 import { useFolder } from "./useFolderState";
 import { useMatrix } from "./useMatrix";
 
-export function BadgeDetail({ credentialKey: key, lit, litTake, picks }: { credentialKey: string } & ReplyListState) {
+export function BadgeDetail({ credentialKey: key, lit, litTake, picks, focusCompare }: { credentialKey: string } & ReplyListState) {
   const { state, folder } = useFolder();
   const { navigate } = useNav();
   const { pending } = usePendingTests(folder);
@@ -85,7 +85,7 @@ export function BadgeDetail({ credentialKey: key, lit, litTake, picks }: { crede
           {runs.mode === "single" ? (
             <>
               <p className="muted">{handoffText(state, key, runs.runs[0].id)}</p>
-              <ReplyList credentialKey={key} run={runs.runs[0]} state={state} matrix={matrix} lit={lit} litTake={litTake} picks={picks} />
+              <ReplyList credentialKey={key} run={runs.runs[0]} state={state} matrix={matrix} lit={lit} litTake={litTake} picks={picks} focusCompare={focusCompare} />
             </>
           ) : (
             <ul className="handoff-runs">
