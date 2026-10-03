@@ -1,14 +1,21 @@
 // A rich-text box that reads and writes Markdown. Files on disk stay plain Markdown:
 // the editor parses `value` once, turns Markdown typed or pasted into structure, and
 // hands back Markdown only when the person edits. Opening it changes nothing.
+//
+// The reply box also cleans what is pasted into it (KTD14): the meaning-safe fixes run on
+// every text paste, a terminal copy that comes with rich text takes the text path, and the
+// box reports each paste to its owner, which can later write a cleaned-up text back the
+// same way (KTD18). Every other box pastes as it always has.
 
-import { useEffect, useRef, useState } from "react";
-import type { KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useImperativeHandle, useRef, useState } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent, Ref } from "react";
 import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
 import { Node as PMNode, Slice } from "@tiptap/pm/model";
+import type { EditorState } from "@tiptap/pm/state";
 import { ToolKey, type ToolName } from "../cast/ToolKey";
+import { findJoinCandidates, fixPastedText, looksTerminalCopied } from "../domain/pasteText";
 import { richExtensions } from "./richExtensions";
 
 export interface RichTextProps {
@@ -21,6 +28,37 @@ export interface RichTextProps {
   "aria-label": string;
   placeholder?: string;
   autoFocus?: boolean;
+  /** The reply box's paste handling (KTD14). Only the reply box sets it. */
+  cleanPaste?: boolean;
+  /** With `cleanPaste`, called once after each paste, before that paste's `onChange`. */
+  onPaste?(paste: PastePayload): void;
+  /** Writes text into the box the way a paste would (KTD18). */
+  ref?: Ref<RichTextHandle>;
+}
+
+/** What a paste into the reply box did, reported once its transaction has run. */
+export interface PastePayload {
+  /** The clipboard's plain text, as it came. */
+  raw: string;
+  /** The text after the meaning-safe fixes, which is what the box parsed. Inside a code block, the raw text. */
+  fixed: string;
+  /** The whole box's Markdown after the paste. */
+  markdown: string;
+  /** Whether the paste replaced everything in the box: it was empty, or the selection held all of it. */
+  whole: boolean;
+  /** Whether any join candidates remain in the fixed text (KTD16, KTD17). */
+  candidates: boolean;
+  /** Whether the raw text looked terminal-copied (KTD16). */
+  terminal: boolean;
+}
+
+export interface RichTextHandle {
+  /**
+   * Replaces the whole box with `text` through the same path as a paste into the emptied
+   * box, so with `cleanPaste` the fixes and paste rules apply, and returns the Markdown that
+   * produced. The change goes to `onChange` like an edit; `onPaste` is not called.
+   */
+  replaceAsPaste(text: string): string;
 }
 
 /** True when a pasted string carries Markdown structure worth parsing. */
@@ -33,11 +71,26 @@ function markdownOf(editor: Editor): string {
   return editor.getMarkdown().replace(/\n+$/, "");
 }
 
-export function RichText({ value, onChange, onNormalized, placeholder, autoFocus, "aria-label": label }: RichTextProps) {
-  const latest = useRef({ onChange, onNormalized });
-  latest.current = { onChange, onNormalized };
+/** Whether a paste now would replace everything in the box: nothing but blanks lies outside the selection. */
+function replacesWholeBox(state: EditorState): boolean {
+  const { doc, selection } = state;
+  // A leaf such as a rule counts as content.
+  const outside = doc.textBetween(0, selection.from, "", "\uFFFC") + doc.textBetween(selection.to, doc.content.size, "", "\uFFFC");
+  return outside.trim() === "";
+}
+
+/** A paste on its way in: what `transformPastedText` saw, until the paste's transaction lands. */
+type PendingPaste = Omit<PastePayload, "markdown" | "candidates">;
+
+export function RichText({ value, onChange, onNormalized, placeholder, autoFocus, cleanPaste = false, onPaste, ref, "aria-label": label }: RichTextProps) {
+  const latest = useRef({ onChange, onNormalized, onPaste, cleanPaste });
+  latest.current = { onChange, onNormalized, onPaste, cleanPaste };
   // The Markdown the editor last showed or sent, so a value that comes back unchanged is not re-parsed.
   const shown = useRef(value);
+  const pending = useRef<PendingPaste | null>(null);
+  // Set while a terminal copy re-enters the paste as text, and while `replaceAsPaste` writes.
+  const rerouting = useRef(false);
+  const writing = useRef(false);
 
   const editor = useEditor({
     extensions: richExtensions(placeholder),
@@ -60,6 +113,41 @@ export function RichText({ value, onChange, onNormalized, placeholder, autoFocus
       handleDOMEvents: {
         keydown: (_view, event) => event.key === "Escape",
       },
+      // The reply box's fixes see every text paste, Shift-pastes and external text drops
+      // included, and leave the dispatch to ProseMirror, so paste rules, a link pasted over a
+      // selection and the code block's raw insert all still run. In a code block the text
+      // goes in raw. The paste is reported once its transaction lands, in onUpdate.
+      transformPastedText(text, _plain, view) {
+        if (!latest.current.cleanPaste) return text;
+        const inCode = !!view.state.selection.$from.parent.type.spec.code;
+        const fixed = inCode ? { text, terminal: false } : fixPastedText(text);
+        pending.current = { raw: text, fixed: fixed.text, terminal: fixed.terminal, whole: replacesWholeBox(view.state) };
+        // A paste a plugin takes without a transaction leaves nothing to report.
+        queueMicrotask(() => {
+          pending.current = null;
+        });
+        return fixed.text;
+      },
+      // A terminal can copy rich text alongside the plain text, which ProseMirror would parse
+      // as HTML. When the plain text looks terminal-copied, it goes through the text path
+      // instead. Any other HTML paste keeps the HTML path, whose parsing collapses whitespace.
+      handlePaste(view, event) {
+        const data = event.clipboardData;
+        if (!latest.current.cleanPaste || rerouting.current || !data) return false;
+        // A VS Code copy is the code block's to take.
+        if (Array.from(data.types ?? []).includes("vscode-editor-data")) return false;
+        const text = data.getData("text/plain");
+        const html = data.getData("text/html");
+        if (!text || !html || view.state.selection.$from.parent.type.spec.code) return false;
+        // A copy from a ProseMirror editor, this box included, carries its structure.
+        if (html.includes("data-pm-slice") || !looksTerminalCopied(text)) return false;
+        rerouting.current = true;
+        try {
+          return view.pasteText(text, event);
+        } finally {
+          rerouting.current = false;
+        }
+      },
       // Plain text that reads as Markdown (an agent's reply) comes in as structure.
       clipboardTextParser(text, _context, _plain, view) {
         const md = editorRef.current?.markdown;
@@ -72,11 +160,41 @@ export function RichText({ value, onChange, onNormalized, placeholder, autoFocus
     onUpdate({ editor }) {
       const md = markdownOf(editor);
       shown.current = md;
+      const paste = pending.current;
+      pending.current = null;
+      if (paste && !writing.current) {
+        latest.current.onPaste?.({ ...paste, markdown: md, candidates: findJoinCandidates(paste.fixed).length > 0 });
+      }
       latest.current.onChange(md);
     },
   });
   const editorRef = useRef<Editor | null>(editor);
   editorRef.current = editor;
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      replaceAsPaste(text) {
+        if (!editor) return shown.current;
+        // Emptied first, so a lone URL replaces the text instead of linking it.
+        writing.current = true;
+        try {
+          editor.commands.clearContent(false);
+          editor.view.pasteText(text);
+        } finally {
+          writing.current = false;
+        }
+        // An empty text dispatches nothing after the quiet clear, so the change is sent here.
+        const md = markdownOf(editor);
+        if (md !== shown.current) {
+          shown.current = md;
+          latest.current.onChange(md);
+        }
+        return md;
+      },
+    }),
+    [editor],
+  );
 
   // Reported after render, since the editor is built during it.
   useEffect(() => {
