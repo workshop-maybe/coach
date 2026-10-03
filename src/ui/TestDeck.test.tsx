@@ -12,6 +12,7 @@ import type { Credential, Handoff } from "../domain/types";
 import { FAKE_ON, FakeJev } from "../jev/fakeJev";
 import { JEV_ERROR_KINDS, JevError } from "../jev/jev";
 import type { MemoryStorage } from "../storage/memory";
+import { firePaste } from "../test/paste";
 import { AppShell, type Route } from "./AppShell";
 import { JevProvider } from "./jevContext";
 import { addPending, readPending, type PendingTest } from "./pendingTests";
@@ -1289,5 +1290,277 @@ describe("TestDeck's second opinion", () => {
     expect(JEV_ERROR_KINDS.filter((kind) => !byKind[kind].retry)).toEqual(["off", "keyMissing", "keyRefused", "tooLong", "invalidKey"]);
     expect(jevFailure(new JevError("other", { status: 502 })).line).toBe("Jev couldn't answer (502).");
     expect(jevFailure(new JevError("rateLimited", { retryAfter: 30 })).line).toBe(byKind.rateLimited.line);
+  });
+});
+
+// Jev's cleanup of a terminal paste on the paste pane (U9, R15, R18-R21, F3, KTD17, KTD18, KTD20).
+describe("TestDeck's paste cleanup", () => {
+  /** A Claude Code copy: a marker, a two-space gutter, and a list item the terminal tore. */
+  const TERMINAL = "⏺ Fixed two things:\n  - the stale flag on the\n    badge page\n  - the next item";
+  /** What the paste puts in the box: the marker and the gutter gone, the torn line kept. */
+  const FIXED = "Fixed two things:\n- the stale flag on the\n  badge page\n- the next item";
+  const JOINED = "Fixed two things:\n- the stale flag on the badge page\n- the next item";
+  const JOIN: JevAnswers = { answers: { L003: 0.9 } };
+  const KEEP: JevAnswers = { answers: { L003: 0.1 } };
+  const FIX_THE_KEY = "Jev Mode in the top bar, on home";
+  const codex = { ...opus, slug: "codex", name: "Codex agent", harness: "codex", model: "gpt-5" };
+
+  function renderWithJev(storage: MemoryStorage, fake: FakeJev) {
+    return render(
+      <JevProvider jev={fake}>
+        <FolderProvider storage={storage} folder={FOLDER}>
+          <AppShell onChangeFolder={() => {}} initialRoute={fromBadge} />
+        </FolderProvider>
+      </JevProvider>,
+    );
+  }
+
+  /** Opus takes the badge, and the deck waits at What came back. */
+  async function toPaste(fake: FakeJev, profiles = [opus]) {
+    const storage = storageWith({ credentials: [review], profiles });
+    renderWithJev(storage, fake);
+    await takeAndCopy();
+    return storage;
+  }
+
+  function held(fake: FakeJev) {
+    let answer!: (a: JevAnswers) => void;
+    fake.queue("ask", new Promise<JevAnswers>((resolve) => (answer = resolve)));
+    return { answer };
+  }
+
+  const paste = (text: string) => firePaste(replyBox(), { "text/plain": text });
+  const button = (name: string) => screen.getByRole("button", { name }) as HTMLButtonElement;
+  const cleanUp = () => screen.queryByRole("button", { name: /^(Clean up with Jev|Cleaning up…)$/ }) as HTMLButtonElement | null;
+  const putBack = () => screen.queryByRole("button", { name: "Put back the paste" });
+  const next = () => button("Next");
+  const settle = () => act(async () => {});
+
+  it("Covers AE6. With Jev usable, a terminal paste into an empty box offers the cleanup, which joins the torn line and is what saves", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", JOIN);
+    const storage = await toPaste(fake);
+    paste(TERMINAL);
+    expect(replyBox().value).toBe(FIXED);
+    expect(fake.asks).toEqual([]);
+
+    await userEvent.click(cleanUp()!);
+    expect(await screen.findByRole("button", { name: "Put back the paste" })).toBeTruthy();
+    expect(replyBox().value).toBe(JOINED);
+    expect(cleanUp()).toBeNull();
+    expect(fake.asks).toEqual([
+      {
+        kind: "lineBreaks",
+        state: "L001| Fixed two things:\nL002| - the stale flag on the\nL003|   badge page\nL004| - the next item",
+        questions: { L003: expect.objectContaining({ type: "noul", instructions: expect.stringContaining("Does line L003 pick up mid-sentence") }) },
+      },
+    ]);
+
+    await userEvent.click(next());
+    await screen.findByRole("heading", { name: "Did it meet it" });
+    await userEvent.click(button("Met"));
+    expect(await screen.findByTestId("landing")).toBeTruthy();
+    expect((await loadFolder(storage)).assessments[0].handBack).toBe(JOINED);
+  });
+
+  it("Put back the paste stays offered until the user types, restores what the paste first produced, and the cleanup is offered again", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", JOIN);
+    fake.queue("ask", JOIN);
+    await toPaste(fake);
+    paste(TERMINAL);
+    await userEvent.click(cleanUp()!);
+    await screen.findByRole("button", { name: "Put back the paste" });
+
+    // Judging and coming back is no edit.
+    await userEvent.click(next());
+    await userEvent.click(await screen.findByRole("button", { name: "Back" }));
+    await screen.findByRole("heading", { name: "What came back" });
+    expect(replyBox().value).toBe(JOINED);
+    await userEvent.click(button("Put back the paste"));
+    expect(replyBox().value).toBe(FIXED);
+    expect(putBack()).toBeNull();
+    expect(cleanUp()?.textContent).toBe("Clean up with Jev");
+
+    await userEvent.click(cleanUp()!);
+    await screen.findByRole("button", { name: "Put back the paste" });
+    expect(replyBox().value).toBe(JOINED);
+
+    // Typing ends both offers.
+    await userEvent.type(replyBox(), " Done.");
+    expect(replyBox().value).toBe(`${JOINED} Done.`);
+    expect(putBack()).toBeNull();
+    expect(cleanUp()).toBeNull();
+  });
+
+  it("a Claude Code paste with no candidates left after the fixes offers no cleanup", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    await toPaste(fake);
+    paste("⏺ Done.\n\n⏺ Saved the result.\n\n  ⎿  Wrote 3 lines");
+    expect(replyBox().value).toBe("Done.\n\nSaved the result.\n\n   Wrote 3 lines");
+    expect(cleanUp()).toBeNull();
+  });
+
+  it("a cleanup that joins nothing says Nothing to join and offers no put-back", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", KEEP);
+    await toPaste(fake);
+    paste(TERMINAL);
+    await userEvent.click(cleanUp()!);
+    expect(await screen.findByText("Nothing to join")).toBeTruthy();
+    expect(replyBox().value).toBe(FIXED);
+    expect(putBack()).toBeNull();
+    expect(cleanUp()).toBeNull();
+  });
+
+  it("while a cleanup runs, its action reads Cleaning up…, Next is disabled, and the line beside Next says why", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    const ask = held(fake);
+    await toPaste(fake);
+    paste(TERMINAL);
+    expect(next().disabled).toBe(false);
+    await userEvent.dblClick(cleanUp()!);
+    expect(fake.asks).toHaveLength(1);
+    expect(cleanUp()?.textContent).toBe("Cleaning up…");
+    expect(cleanUp()?.disabled).toBe(true);
+    expect(next().disabled).toBe(true);
+    const why = screen.getByText("Waiting for Jev");
+    // The body's last line, so it sits just above Next.
+    expect(why.parentElement?.lastElementChild).toBe(why);
+    expect(why.closest(".deck-body")).not.toBeNull();
+
+    await act(async () => ask.answer(JOIN));
+    expect(await screen.findByRole("button", { name: "Put back the paste" })).toBeTruthy();
+    expect(next().disabled).toBe(false);
+    expect(screen.queryByText("Waiting for Jev")).toBeNull();
+  });
+
+  it("an answer that lands after the user typed changes nothing", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    const ask = held(fake);
+    await toPaste(fake);
+    paste(TERMINAL);
+    await userEvent.click(cleanUp()!);
+    await userEvent.type(replyBox(), " More.");
+    expect(next().disabled).toBe(false);
+    await act(async () => ask.answer(JOIN));
+    await settle();
+    expect(replyBox().value).toBe(`${FIXED} More.`);
+    expect(putBack()).toBeNull();
+    expect(cleanUp()).toBeNull();
+  });
+
+  it("an answer that lands after Back unmounted the editor changes nothing, and the cleanup is offered again on return", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    const ask = held(fake);
+    await toPaste(fake);
+    paste(TERMINAL);
+    await userEvent.click(cleanUp()!);
+    await userEvent.click(button("Back"));
+    await screen.findByRole("heading", { name: "Hand it over" });
+    await act(async () => ask.answer(JOIN));
+    await settle();
+
+    await userEvent.click(button("Copy"));
+    await screen.findByRole("heading", { name: "What came back" });
+    expect(replyBox().value).toBe(FIXED);
+    expect(putBack()).toBeNull();
+    expect(cleanUp()?.textContent).toBe("Clean up with Jev");
+    expect(cleanUp()?.disabled).toBe(false);
+    expect(next().disabled).toBe(false);
+    expect(fake.asks).toHaveLength(1);
+  });
+
+  it("a 429 on the batch waits, retries and then the cleanup applies", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", new JevError("rateLimited", { retryAfter: 0 }));
+    fake.queue("ask", JOIN);
+    await toPaste(fake);
+    paste(TERMINAL);
+    await userEvent.click(cleanUp()!);
+    expect(await screen.findByRole("button", { name: "Put back the paste" })).toBeTruthy();
+    expect(replyBox().value).toBe(JOINED);
+    expect(fake.asks).toHaveLength(2);
+  });
+
+  it("a batch that still fails after its retries shows one line, applies nothing, and can be tried again", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    for (let i = 0; i < 4; i++) fake.queue("ask", new JevError("overloaded", { retryAfter: 0 }));
+    fake.queue("ask", JOIN);
+    await toPaste(fake);
+    paste(TERMINAL);
+    await userEvent.click(cleanUp()!);
+    const line = jevFailure(new JevError("overloaded")).line;
+    expect(await screen.findByText(line)).toBeTruthy();
+    expect(fake.asks).toHaveLength(4);
+    expect(replyBox().value).toBe(FIXED);
+    expect(putBack()).toBeNull();
+    expect(next().disabled).toBe(false);
+
+    await userEvent.click(cleanUp()!);
+    await screen.findByRole("button", { name: "Put back the paste" });
+    expect(screen.queryByText(line)).toBeNull();
+    expect(replyBox().value).toBe(JOINED);
+  });
+
+  it("a key refused names where to fix it and takes the cleanup away, leaving the paste as it was", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", new JevError("keyRefused"));
+    await toPaste(fake);
+    paste(TERMINAL);
+    await userEvent.click(cleanUp()!);
+    expect((await screen.findByText(/TypeSafe refused the key/)).textContent).toContain(FIX_THE_KEY);
+    expect(cleanUp()).toBeNull();
+    // The line stands alone, with no empty helper row under it.
+    expect(testDeck().querySelector(".deck-body .helper-status")).toBeNull();
+    expect(replyBox().value).toBe(FIXED);
+    expect(fake.asks).toHaveLength(1);
+  });
+
+  it("with Jev Mode off, a terminal paste still gets the fixes and offers no cleanup", async () => {
+    const fake = new FakeJev();
+    await toPaste(fake);
+    paste(TERMINAL);
+    expect(replyBox().value).toBe(FIXED);
+    expect(cleanUp()).toBeNull();
+    expect(fake.asks).toEqual([]);
+  });
+
+  it("a paste into a box that already held text offers no cleanup", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    await toPaste(fake);
+    await userEvent.type(replyBox(), "Notes: ");
+    paste(TERMINAL);
+    expect(replyBox().value).toBe(`Notes: ${FIXED}`);
+    expect(cleanUp()).toBeNull();
+  });
+
+  it("a paste too long for Jev says so and offers no cleanup", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    await toPaste(fake);
+    const line = "  the badge page kept showing the stale flag after a result was";
+    paste(Array.from({ length: 2500 }, () => line).join("\n"));
+    expect(screen.getByText("This reply is too long for Jev")).toBeTruthy();
+    expect(cleanUp()).toBeNull();
+    expect(fake.asks).toEqual([]);
+  });
+
+  it("Try another clears the cleanup, so the next round starts with no offer", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", JOIN);
+    await toPaste(fake, [opus, codex]);
+    paste(TERMINAL);
+    await userEvent.click(cleanUp()!);
+    await screen.findByRole("button", { name: "Put back the paste" });
+    await userEvent.click(next());
+    await userEvent.click(await screen.findByRole("button", { name: "Not yet" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Try another agent" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Codex agent" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Copy" }));
+    await screen.findByRole("heading", { name: "What came back" });
+    expect(replyBox().value).toBe("");
+    expect(putBack()).toBeNull();
+    expect(cleanUp()).toBeNull();
+    expect(screen.queryByText("Nothing to join")).toBeNull();
   });
 });

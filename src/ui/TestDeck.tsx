@@ -22,6 +22,15 @@
 // A reading belongs to this round, this reply and this assignment version, and a request
 // generation drops any answer that lands after a newer ask, an edit, a save or a new round.
 // Every other round judges exactly as before: Met and Not yet save at once.
+//
+// Jev's cleanup of a terminal paste (U9, R15, R18-R21, KTD17, KTD18). Every paste into the
+// reply box gets the meaning-safe fixes. Where Jev is usable, a terminal-looking paste
+// that replaced the whole box and still has line breaks Jev could join offers a quiet
+// "Clean up with Jev"; the joined text goes in the way a paste does, and "Put back the
+// paste" restores what the paste first produced. The deck keeps the paste, the reply as
+// the app last wrote it and the cleanup in flight, since going Back remounts the editor.
+// The app's own writes are no edit; any other change ends both offers, and a cleanup
+// generation drops an answer that lands after an edit, a new paste or the box going away.
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
@@ -29,6 +38,7 @@ import { SKELETON_ID, defaultHandoff, fillHandoff, handoffsFor, skeletonOf, winn
 import { assignmentVersion } from "../domain/hash";
 import { sameSetup } from "../domain/matrix";
 import { fitsJev } from "../domain/jevBudget";
+import { cleanUpLineBreaks, lineBreakBatches } from "../domain/lineBreaks";
 import { recordAssessment } from "../domain/operations";
 import { readingParts, secondOpinionRequest, type JevReadingParts } from "../domain/secondOpinion";
 import {
@@ -55,6 +65,7 @@ import { JevReadingPanel } from "./JevReading";
 import { useNav } from "./nav";
 import { livePlugs, plugFor, usePendingTests, type PendingTest } from "./pendingTests";
 import { RichText } from "./RichText";
+import type { PastePayload, RichTextHandle } from "./RichText";
 import { RichView } from "./RichView";
 import type { TestPick } from "./routes";
 import { StoredSwitch, focusOnMount } from "./shared";
@@ -89,6 +100,14 @@ export interface TestDeckProps {
 type Copied = HandoffTemplate;
 
 type Outcome = { kind: "open" } | { kind: "met"; plugId: string } | { kind: "not-yet"; plugId: string };
+
+/** The reply as the app last wrote it (KTD18): by a paste, a put-back or Jev's cleanup. */
+interface Unedited {
+  markdown: string;
+  by: "paste" | "putBack" | "cleanup";
+  /** A cleanup asked about this text that changed nothing: nothing to join, or a failure and whether asking again can help. */
+  note?: { line: string; failed: boolean; retry: boolean };
+}
 
 /** Jev's reading in hand, with what it was asked about (KTD11). */
 interface HeldReading {
@@ -143,6 +162,20 @@ export function TestDeck(props: TestDeckProps) {
   // The request generation: an answer lands only while its ask is still the latest (KTD11).
   const askGen = useRef(0);
   const inFlight = useRef(false);
+  // Jev's cleanup of the paste (KTD18). The ref is the reply box's handle while it is mounted.
+  const replyBox = useRef<RichTextHandle>(null);
+  // The last paste into the reply box: as it came, as the fixes left it, and whether it can be cleaned up.
+  const [pasted, setPasted] = useState<{ raw: string; fixed: string; cleanable: boolean } | null>(null);
+  // The reply as the app last wrote it, or null once anything else changed it. The ref is the
+  // same, current within the paste and change handlers before a render.
+  const [unedited, setUnedited] = useState<Unedited | null>(null);
+  const uneditedNow = useRef<Unedited | null>(null);
+  // Set while the app writes into the reply box, so its own write is not taken for an edit.
+  const writing = useRef(false);
+  const [cleaning, setCleaning] = useState(false);
+  // The cleanup generation: an answer lands only while its cleanup is still the latest.
+  const cleanGen = useRef(0);
+  const cleaningNow = useRef(false);
 
   const profile = state?.profiles.find((p) => p.slug === profileSlug);
   const credential = state?.credentials.find((c) => credentialKey(c) === key);
@@ -155,13 +188,16 @@ export function TestDeck(props: TestDeckProps) {
     [credential?.task, credential?.rubric, reply, jev.usable], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const fits = useMemo(() => request !== null && fitsJev(request), [request]);
+  // Whether Jev can be asked about the paste at all: not when the paste alone is over Jev's budget (KTD19).
+  const pasteFits = useMemo(() => !!pasted?.cleanable && lineBreakBatches(pasted.fixed) !== null, [pasted]);
   // The reading counts only for the round, reply and assignment version it was asked about.
   const shown = held && held.round === round && held.reply === reply && held.assignmentVersion === version ? held : null;
 
-  // Leaving the deck drops any ask in flight.
+  // Leaving the deck drops any ask or cleanup in flight.
   useEffect(
     () => () => {
       askGen.current++;
+      cleanGen.current++;
     },
     [],
   );
@@ -297,13 +333,87 @@ export function TestDeck(props: TestDeckProps) {
     setAsking(false);
   }
 
-  /** A changed reply drops the reading and any ask about the old one (KTD11). */
+  /**
+   * A changed reply drops the reading and any ask about the old one (KTD11). A change that
+   * is not the app's own write also ends the cleanup's offers and any cleanup in flight (KTD18).
+   */
   function editReply(next: string) {
     setReply(next);
     if (next !== reply && (held || inFlight.current)) {
       dropAsk();
       setHeld(null);
     }
+    if (!writing.current && uneditedNow.current && next !== uneditedNow.current.markdown) {
+      markUnedited(null);
+      dropCleanup();
+    }
+  }
+
+  function markUnedited(next: Unedited | null) {
+    uneditedNow.current = next;
+    setUnedited(next);
+  }
+
+  /** Forgets any cleanup in flight, so its answer or failure lands nowhere. */
+  function dropCleanup() {
+    cleanGen.current++;
+    cleaningNow.current = false;
+    setCleaning(false);
+  }
+
+  /** A paste into the reply box, with the fixes in: the reply is now what it produced (KTD18). */
+  function onPaste(paste: PastePayload) {
+    dropCleanup();
+    setPasted({ raw: paste.raw, fixed: paste.fixed, cleanable: paste.terminal && paste.candidates && paste.whole });
+    markUnedited({ markdown: paste.markdown, by: "paste" });
+  }
+
+  /** Writes text into the reply box the way a paste would, as the app's own write (KTD18). */
+  function writeReply(text: string, by: Unedited["by"]) {
+    const box = replyBox.current;
+    if (!box) return;
+    writing.current = true;
+    let markdown: string;
+    try {
+      markdown = box.replaceAsPaste(text);
+    } finally {
+      writing.current = false;
+    }
+    markUnedited({ markdown, by });
+  }
+
+  /**
+   * Asks Jev which of the paste's line breaks are a terminal's wraps and joins those (KTD17).
+   * All or nothing, and only into the box it was asked from, while the reply is still the
+   * text it was asked about.
+   */
+  async function cleanUp() {
+    const base = uneditedNow.current;
+    if (!pasted || !base || cleaningNow.current) return;
+    const asked: Unedited = { markdown: base.markdown, by: base.by };
+    markUnedited(asked);
+    const gen = ++cleanGen.current;
+    const current = () => gen === cleanGen.current && uneditedNow.current === asked;
+    cleaningNow.current = true;
+    setCleaning(true);
+    try {
+      const joined = await cleanUpLineBreaks(pasted.fixed, jev.ask, { cancelled: () => !current() });
+      if (!joined || !current() || !replyBox.current) return;
+      if (joined.joined === 0) markUnedited({ ...asked, note: { line: "Nothing to join", failed: false, retry: false } });
+      else writeReply(joined.text, "cleanup");
+    } catch (e) {
+      if (current()) markUnedited({ ...asked, note: { ...jevFailure(e), failed: true } });
+    } finally {
+      if (gen === cleanGen.current) {
+        cleaningNow.current = false;
+        setCleaning(false);
+      }
+    }
+  }
+
+  /** Puts the paste back as it first came into the box, undoing only Jev's joins (R21). */
+  function putBack() {
+    if (pasted) writeReply(pasted.raw, "putBack");
   }
 
   function choose(v: AssessmentResult) {
@@ -361,6 +471,10 @@ export function TestDeck(props: TestDeckProps) {
     verdictNow.current = null;
     setHeld(null);
     setJevTrouble(null);
+    // And no paste to clean up or put back.
+    dropCleanup();
+    setPasted(null);
+    markUnedited(null);
     setRound((r) => r + 1);
   }
 
@@ -612,12 +726,43 @@ export function TestDeck(props: TestDeckProps) {
   const plugId = waiting ? waiting.handoff?.id ?? SKELETON_ID : here?.id;
   const replyScreenState: ScreenState = sending ? { kind: "sending" } : reply.trim() ? replyScreen(reply) : { kind: "waiting" };
   const replyStage = here ? boxStage(replyScreenState, here) : stage(replyScreenState, { plugged: plugId ? { label: labelOf(plugId) } : null });
+  // The cleanup's offers (KTD18): clean up while the reply is still what a paste or a
+  // put-back wrote, put back while it is still what the cleanup wrote.
+  const untouched = unedited !== null && unedited.markdown === reply ? unedited : null;
+  const note = untouched?.note;
+  const offerCleanup = jev.usable && !!pasted?.cleanable && (untouched?.by === "paste" || untouched?.by === "putBack") && (note?.retry ?? true);
+  const offerPutBack = untouched?.by === "cleanup" && pasted !== null;
+  const cleanupPart =
+    offerCleanup || offerPutBack || note ? (
+      <>
+        {note?.failed && <p className="deck-error reply-cleanup-error">{note.line}</p>}
+        {/* A failure that can't be retried stands alone. */}
+        {(offerCleanup || offerPutBack || !note?.failed) && (
+          <p className="helper">
+            {offerCleanup && pasteFits && (
+              <button type="button" className="link" disabled={cleaning} onClick={() => void cleanUp()}>
+                {cleaning ? "Cleaning up…" : "Clean up with Jev"}
+              </button>
+            )}
+            {offerPutBack && (
+              <button type="button" className="link" onClick={putBack}>
+                Put back the paste
+              </button>
+            )}
+            <span className="helper-status" role="status">
+              {offerCleanup && !pasteFits ? "This reply is too long for Jev" : note && !note.failed ? note.line : ""}
+            </span>
+          </p>
+        )}
+      </>
+    ) : null;
   beats.push({
     id: "reply",
     title: "What came back",
     forward: stale ? undefined : "Next",
-    // A waiting test is checked for a changed task before its reply can be recorded.
-    valid: reply.trim() !== "" && !(waiting && version === null),
+    // A waiting test is checked for a changed task before its reply can be recorded, and
+    // a cleanup in flight is waited for.
+    valid: reply.trim() !== "" && !(waiting && version === null) && !cleaning,
     // The reply box takes the window and the first focus; a stale test asks for Copy again on a page.
     pane: !stale,
     focusBody: !stale,
@@ -640,8 +785,15 @@ export function TestDeck(props: TestDeckProps) {
     ) : (
       <>
         <div className="test-strip">{replyStage}</div>
-        <RichText aria-label="Reply" value={reply} onChange={editReply} placeholder="Paste the reply" />
+        <RichText ref={replyBox} aria-label="Reply" value={reply} onChange={editReply} placeholder="Paste the reply" cleanPaste onPaste={onPaste} />
+        <OnLeave run={dropCleanup} />
+        {cleanupPart}
         {waiting && <PullLink onPull={pull} />}
+        {cleaning && (
+          <p className="helper-status reply-wait" role="status">
+            Waiting for Jev
+          </p>
+        )}
       </>
     ),
   });
@@ -765,6 +917,14 @@ export function TestDeck(props: TestDeckProps) {
 /** Runs `run` before the first paint each time it mounts: a decision taken when a card first shows. */
 function OnShow({ run }: { run(): void }) {
   useLayoutEffect(run, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
+}
+
+/** Runs `run` when the card it sits on goes away, as going Back does to the reply box. */
+function OnLeave({ run }: { run(): void }) {
+  const latest = useRef(run);
+  latest.current = run;
+  useEffect(() => () => latest.current(), []);
   return null;
 }
 

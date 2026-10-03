@@ -1758,6 +1758,19 @@ button:focus-visible {
   height: 4.5rem;
 }
 
+/* Jev's cleanup of a terminal paste under the reply box (U9, KTD18): the quiet action, a
+   failure as one small line, and while Jev works, the line that says why Next waits. It
+   is the body's last line, at its right, so it sits just above Next. */
+.deck-body > .reply-cleanup-error {
+  font-size: 13px;
+}
+
+.deck-body > .reply-wait {
+  align-self: flex-end;
+  margin: 0;
+  text-align: right;
+}
+
 /* "Hand it over": the badge in the handoff box, the agent beside it (U6, KTD8). */
 .test-stage-handoff {
   align-items: flex-end;
