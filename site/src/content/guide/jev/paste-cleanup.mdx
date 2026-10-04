@@ -1,0 +1,96 @@
+---
+title: The paste cleanup, end to end
+part: jev
+order: 40
+description: How the app spots a terminal copy, finds the line breaks a terminal may have added, asks Jev one question per break, joins the ones it calls wraps, and never changes a word.
+---
+
+{/* Jev under the hood, the paste cleanup (docs/plans/2026-10-04-1503-docs-jev-deep-dive-plan.md, R11): the rules in the order the app applies them. The worked example and most of the code are on the case study page. Numbers in the prose are tied to code constants by site/tests/deepDive.test.ts. Labels are checked against src/ui/TestDeck.tsx. */}
+
+A reply copied out of a terminal often arrives broken: sentences cut where the terminal wrapped them, a margin of spaces on every line, and markers a coding tool put at the start of a message. The cleanup asks Jev which line breaks are only wraps and joins those lines. Jev decides only join or keep; the app makes the edits, so the reply's words and their order never change. [Case study: a paste cleanup](/jev/paste-cleanup-case-study/) follows one paste through every step.
+
+## The fixes every paste gets
+
+Every paste into the reply box gets fixes that can't change its meaning, with Jev Mode on or off:
+
+- Windows line endings become plain line breaks, and non-breaking spaces become spaces.
+- Trailing spaces are trimmed, except two at the end of a line in an ordinary paste, which Markdown reads as a line break.
+- A run of blank lines becomes one.
+
+Fenced code keeps its lines as they came.
+
+## Spotting a terminal copy
+
+A paste looks copied from a terminal when any of three signs holds:
+
+- A line outside fenced code starts with a coding tool's marker, `⏺` or `⎿`.
+- At least 2 non-blank lines, and every one of them, share a margin of at least 2 spaces.
+- It has a wrap signature: at least 3 lines of 40 characters or more, outside fenced code, end within 8 characters of one width, and they are most of its long lines. That width is where the terminal wrapped.
+
+A terminal copy also loses its markers and the margin every line shares, fenced code included. A terminal can put rich text on the clipboard beside the plain text; when the plain text looks terminal-copied, the box takes the plain text instead.
+
+## When the cleanup is offered
+
+<UI>Clean up with Jev</UI> appears under the reply box when all of these hold:
+
+- Jev Mode is on and has a key.
+- The paste looked terminal-copied when it came.
+- It replaced everything in the box.
+- After the fixes, at least one line break could still be a wrap.
+- The box still holds exactly what the paste wrote. Any edit of your own ends the offer.
+
+A paste too long for even one question shows <UI>This reply is too long for Jev</UI> instead.
+
+## Which line breaks could be wraps
+
+The app never asks about every line break. A break between two lines is a candidate only when:
+
+- both lines are non-blank and outside fenced code;
+- the second line starts no list item, heading, quote or fence;
+- the second line starts at the same column as the first line's text, after any list marker or quote mark. A line indented deeper, usually code, is never a candidate.
+
+When the paste has a wrap signature, a break is a candidate only if the first line, a space and the second line's first word would not have fit within that width. A terminal wraps only when the next word won't fit, so a break where it would have fit was the author's.
+
+<Source file="src/domain/pasteText.ts" symbol="findJoinCandidates" />
+
+## One question per candidate
+
+Every request's state is the whole paste after the fixes, each line after its id: `L001| `, `L002| `, and so on, padded to at least three digits. Jev reads the ids as part of the text, the way TypeSafe's [structure recovery cookbook](https://docs.typesafe.ai/cookbooks/autoformat) tags lines.
+
+Each candidate gets one Noul, keyed by the id of the line that may continue the one before it, such as `L004`. It asks whether that line picks up mid-sentence, continuing a sentence left unfinished at the end of the line before. Its criteria are worded as in the cookbook: a yes is a line that starts in the middle of a sentence the break tore apart, and a no is a line that begins a new sentence, item, heading or thought of its own.
+
+## Which breaks join
+
+A break joins when Jev's answer reaches a cut-off that depends on how the line before it ends:
+
+- after a line with no closing punctuation, at 0.2 or above;
+- after a line ending in `.`, `!`, `?`, `:`, `;` or `…`, with any closing quotes or brackets after it, at 0.5 or above.
+
+These are the cookbook's numbers. It explains that true continuations can score as low as 0.39 after an unfinished line, while a list after a colon can score just over 0.2, so no single cut-off works for both.
+
+A joined pair becomes one line: the first line's trailing spaces and the second line's indent are dropped, and one space goes between them. Nothing else changes. A break with no answer is kept.
+
+Jev returns only probabilities and writes no text, which is why the app can promise the words stay as they were. TypeSafe's [notes on Jev 1.13](https://docs.typesafe.ai/model-jaggedness/jev-1.13) say Jev isn't built to generate text.
+
+## Batches and retries
+
+A long paste can have more candidates than one request can carry. The app packs candidates into batches, in order, each within Jev's limits: at most 256 questions, and the token limits [How Jev works](/jev/how-jev-works/#jevs-size-limits) gives. Every batch carries the whole paste as its state, so each question can read the lines around its break.
+
+<details class="guide-fold">
+<summary>A paste that needs two batches</summary>
+
+<Example file="cleanup/two-batches.json" caption="300 short lines, each continuing the one before: 299 candidates, more than one request may ask" />
+
+</details>
+
+One click sends the batches one at a time. When TypeSafe answers that it has had too many asks, or is overloaded, the batch waits and tries again, up to 3 times. It waits as long as TypeSafe's Retry-After header says, or 1 second, then 2, then 4 when there's no header. A wait longer than 30 seconds fails at once instead, with its line.
+
+The cleanup is all or nothing. If any batch still fails, nothing is joined, the reply stays as you pasted it, and one line under the box says why. [How Jev works](/jev/how-jev-works/#errors-you-can-see) lists the lines.
+
+## After the cleanup
+
+The joined text goes into the box the same way a paste does, and it is what saves. While the cleanup runs, the link reads <UI>Cleaning up…</UI>, a line says <UI>Waiting for Jev</UI>, and <UI>Next</UI> waits. A cleanup that joins nothing says <UI>Nothing to join</UI>.
+
+<UI>Put back the paste</UI> puts the reply back as it first came into the box, undoing only the joins, and then offers the cleanup again. Either offer lasts until you edit the reply yourself.
+
+A cleanup sends only the text you pasted, after the fixes above.
