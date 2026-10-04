@@ -28,8 +28,8 @@ export interface JevReadingPanelProps {
   readOnly?: boolean;
 }
 
-/** Each call as the reading says it. */
-const CALL_WORDS: Record<Call, string> = { meets: "Meets", misses: "Misses", cant_call: "Can't call" };
+/** Each call as the reading says it, and as the missed-points step says it beside a point. */
+export const CALL_WORDS: Record<Call, string> = { meets: "Meets", misses: "Misses", cant_call: "Can't call" };
 /** Each call as the saved reading's summary says it, mid-sentence. */
 const SUMMARY_CALLS: Record<Call, string> = { meets: "meets", misses: "misses", cant_call: "can't call" };
 

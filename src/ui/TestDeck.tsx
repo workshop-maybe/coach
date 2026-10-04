@@ -43,20 +43,36 @@
 // starts this deck over in place at "Who takes it" with the handoff that ran carried to
 // the box, through the doors out of that card and back. In a Jev round it is a third choice
 // that Save holds; a reading in hand goes with the held reply, seen before any verdict.
+//
+// Growing context (growing context R1-R8, R11, KTD4, KTD6, KTD7, KTD11). A second opinion
+// also sends the badge's learning targets and the openings of the user's own judged replies
+// on the badge, ranked once per folder snapshot, badge and assignment version and fitted to
+// Jev's budget per reply; a muted line under the ask says how many go. A reading is frozen
+// with the cut-off pair for the model that answered, so the judge pane, the reason step and
+// the saved reading all read it the same way, and its track record shows only once Met or
+// Not yet is picked. The choice is one piece of state in both rounds, and the beats follow
+// from it: after Not yet on a rubric with points, an optional step to tap the points the
+// reply missed; after a verdict that opposes the reading's overall call, an optional line
+// asking what Jev missed, saved as the result's note. Hold adds neither. A change of choice
+// clears both drafts, the save re-derives both from the choice as it stands, and leaving
+// the judge card forward drops any ask in flight, so no reading lands on a later card.
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { SKELETON_ID, defaultHandoff, fillHandoff, handoffsFor, skeletonOf, winnerFor } from "../domain/handoffs";
 import { assignmentVersion } from "../domain/hash";
 import { sameSetup } from "../domain/matrix";
-import { fitsJev } from "../domain/jevBudget";
-import { JEV_MODEL } from "../domain/jevRequest";
+import { calibrationOf, callOf, isOverrule, type Calibration } from "../domain/calls";
+import { fitSecondOpinion } from "../domain/jevBudget";
+import { MAX_REASON_CHARS, examplesFor, rankExamples } from "../domain/jevExamples";
+import { answeringModel } from "../domain/jevRequest";
 import { assessmentDir, credentialsDir } from "../domain/folder";
 import { cleanUpLineBreaks, lineBreakBatches } from "../domain/lineBreaks";
 import { goToOf, resultOf } from "../domain/goTo";
 import { heldOn, runIdOf } from "../domain/handoffResults";
 import { holdReply, markGoTo, recordAssessment } from "../domain/operations";
-import { readingParts, secondOpinionRequest, type JevReadingParts } from "../domain/secondOpinion";
+import { reasonLine } from "../domain/reasonLine";
+import { readingParts, rubricParts, type JevReadingParts } from "../domain/secondOpinion";
 import {
   credentialKey,
   type AgentProfile,
@@ -78,7 +94,7 @@ import { backToTest } from "./HandoffDecks";
 import { handoffLabel } from "./format";
 import { imageSource } from "./imageSource";
 import { useJev } from "./jevContext";
-import { JevReadingPanel } from "./JevReading";
+import { CALL_WORDS, JevReadingPanel } from "./JevReading";
 import { useNav } from "./nav";
 import { livePlugs, plugFor, usePendingTests, type PendingTest } from "./pendingTests";
 import { RichText } from "./RichText";
@@ -134,7 +150,14 @@ interface ReadingInHand {
   parts: JevReadingParts;
   /** The pick when the reading arrived, or null when it came before one (R13). */
   verdictWhenSeen: AssessmentResult | null;
+  /** The model that answered (growing context KTD3). */
+  model: string;
+  /** The badge's calibration for that model, frozen when the reading arrived (growing context KTD8). */
+  calibration: Calibration;
+  /** How many distinct earlier replies the request quoted (growing context KTD6). */
+  examplesSent: number;
 }
+
 
 export function TestDeck(props: TestDeckProps) {
   const { storage, state, folder, apply } = useFolder();
@@ -152,12 +175,16 @@ export function TestDeck(props: TestDeckProps) {
   // The judge card shows the reply and the rubric as stored rather than rendered (R12).
   const [asStored, setAsStored] = useState(false);
   const [outcome, setOutcome] = useState<Outcome>({ kind: "open" });
-  // The choice a Met, Not yet or Hold to compare press saves at once, outside a Jev round.
-  const pressed = useRef<Choice>("met");
-  // The pick a Jev round's Save records (KTD10). The ref is the verdict picked when an answer
-  // lands: Hold is not a verdict, so a reading that lands on it was seen before any verdict.
-  const [verdict, setVerdict] = useState<Choice | null>(null);
+  // The judge card's choice (growing context KTD4): the press outside a Jev round, or the pick
+  // a Jev round's Save records (KTD10). The beats after the judge card follow from it. The ref
+  // is the verdict picked when an answer lands: Hold is not a verdict, so a reading that lands
+  // on it was seen before any verdict.
+  const [chosen, setChosen] = useState<Choice | null>(null);
   const verdictNow = useRef<AssessmentResult | null>(null);
+  // The drafts of the steps after the judge card: the points tapped as missed, by their text,
+  // and the reason line. Both are cleared on a change of choice and re-derived at the save.
+  const [ticked, setTicked] = useState<readonly string[]>([]);
+  const [reason, setReason] = useState("");
   // The handoff that ran before "Test another agent", lit for the next agent on the same badge (hold-and-compare KTD9).
   const [carried, setCarried] = useState<{ key: string; id: string } | null>(null);
   const [recording, setRecording] = useState(false);
@@ -212,12 +239,23 @@ export function TestDeck(props: TestDeckProps) {
   const replyImages = useRichImages(profile && credential ? assessmentDir(profile.slug, credential.collectionSlug, credential.slug) : null, reply);
   const rubricImages = credential ? imageSource(storage, credentialsDir(credential.collectionSlug)) : undefined;
 
-  // The second opinion this reply would ask for, and whether it fits Jev's budget (KTD19).
-  const request = useMemo(
-    () => (credential && jev.usable && credential.rubric.trim() !== "" ? secondOpinionRequest({ task: credential.task, rubric: credential.rubric, reply }) : null),
-    [credential?.task, credential?.rubric, reply, jev.usable], // eslint-disable-line react-hooks/exhaustive-deps
+  // The badge's results ranked as example sources, once per folder snapshot, badge and
+  // assignment version (growing context KTD10). Null while the version is loading.
+  const ranked = useMemo(() => (state && key && version !== null ? rankExamples(state, key, version) : null), [state, key, version]);
+  // The second opinion this reply would ask for, with the targets and as many examples as fit
+  // Jev's budget (KTD19, growing context KTD10). Null when the reply alone is too long, which
+  // is what decides "too long for Jev" and whether the round offers Jev, examples or not.
+  const fitted = useMemo(
+    () =>
+      credential && jev.usable && credential.rubric.trim() !== ""
+        ? fitSecondOpinion(
+            { task: credential.task, rubric: credential.rubric, reply, learningTargets: credential.learningTargets },
+            ranked ? examplesFor(ranked, reply) : [],
+          )
+        : null,
+    [credential?.task, credential?.rubric, credential?.learningTargets, reply, jev.usable, ranked], // eslint-disable-line react-hooks/exhaustive-deps
   );
-  const fits = useMemo(() => request !== null && fitsJev(request), [request]);
+  const fits = fitted !== null;
   // Whether Jev can be asked about the paste at all: not when the paste alone is over Jev's budget (KTD19).
   const pasteFits = useMemo(() => !!pasted?.cleanable && lineBreakBatches(pasted.fixed) !== null, [pasted]);
   // The reading counts only for the round, reply and assignment version it was asked about.
@@ -288,6 +326,18 @@ export function TestDeck(props: TestDeckProps) {
   };
   const labelOf = (id: string) => keys.find((k) => k.id === id)?.label;
 
+  // The steps after the judge card (growing context KTD4, KTD11), worked out from the choice
+  // and the folder as they are on every render. A tick counts only for a point the rubric
+  // still has, in rubric order, so a point a reload removed drops its tick
+  // (docs/solutions/runtime-errors/rederive-local-folder-ids-on-every-render.md).
+  const points = credential ? rubricParts(credential.rubric).points : [];
+  const missed = points.filter((point, i) => ticked.includes(point) && points.indexOf(point) === i);
+  const verdictChosen = chosen === "met" || chosen === "not_met" ? chosen : null;
+  /** Whether the reading in hand, read with the pair frozen when it arrived, calls the reply against this verdict. Can't call never does. */
+  const opposes = (verdict: AssessmentResult) => !!shown && isOverrule({ result: verdict, jev: shown.parts }, shown.calibration.pair);
+  const asksMissed = chosen === "not_met" && points.length > 0;
+  const asksReason = verdictChosen !== null && opposes(verdictChosen);
+
   /** Copies a handoff filled from the badge as it is now, then plugs it into the agent (R12, R15). */
   async function copy(id: string, fromHand: boolean) {
     if (!credential || !profile) return;
@@ -330,12 +380,19 @@ export function TestDeck(props: TestDeckProps) {
     return here ? { id: here.id, text: here.text } : fill(def) ?? undefined;
   }
 
-  /** Records the verdict, captured when the save starts, with the reading in hand (R13). */
+  /**
+   * Records the verdict, captured when the save starts, with the reading in hand (R13) and
+   * what the steps after the judge card drafted, each only while its step applies to this
+   * verdict (growing context KTD4): the missed points with Not yet, as current rubric points
+   * in rubric order, and the reason line while the reading opposes the verdict.
+   */
   async function record(verdict: AssessmentResult) {
     if (!state || !credential || !profile) return;
     const handoff = ran();
     // An ask still in flight is dropped: the result saves without it (KTD11).
     const jevReading = shown ? savedReading(shown, verdict) : undefined;
+    const missedPoints = verdict === "not_met" ? missed : [];
+    const note = opposes(verdict) ? reasonLine(reason) : "";
     dropAsk();
     setRecording(true);
     try {
@@ -345,11 +402,12 @@ export function TestDeck(props: TestDeckProps) {
         collectionSlug: credential.collectionSlug,
         credentialSlug: credential.slug,
         result: verdict,
-        note: "",
+        note,
         handBack: reply,
         ...(waiting?.context ? { context: waiting.context } : {}),
         ...(handoff ? { handoff } : {}),
         ...(jevReading ? { jev: jevReading } : {}),
+        ...(missedPoints.length > 0 ? { missedPoints } : {}),
       });
       // The plug comes out only once the result is written.
       remove(profile.slug, credentialKey(credential));
@@ -509,25 +567,39 @@ export function TestDeck(props: TestDeckProps) {
     if (pasted) writeReply(pasted.raw, "putBack");
   }
 
+  /** The judge card's choice, in either round. A change of choice clears both drafts (growing context KTD4). */
   function choose(v: Choice) {
     verdictNow.current = v === "hold" ? null : v;
-    setVerdict(v);
+    if (v !== chosen) {
+      setTicked([]);
+      setReason("");
+    }
+    setChosen(v);
+  }
+
+  function toggleMissed(point: string) {
+    setTicked((t) => (t.includes(point) ? t.filter((p) => p !== point) : [...t, point]));
   }
 
   /** Asks Jev about this reply once; the same inputs keep the reading in hand (KTD11). */
   async function askJev() {
-    if (!request || version === null || inFlight.current || shown) return;
+    if (!fitted || !state || !key || version === null || inFlight.current || shown) return;
+    const { request, sources } = fitted;
     const gen = ++askGen.current;
     inFlight.current = true;
     setAsking(true);
     setJevTrouble(null);
-    const asked = { round, reply, assignmentVersion: version, askedAt: new Date().toISOString() };
+    const asked = { round, reply, assignmentVersion: version, askedAt: new Date().toISOString(), examplesSent: sources.length };
     try {
-      const parts = readingParts(request.state.rubric_points, await jev.ask(request));
+      const answers = await jev.ask(request);
+      const parts = readingParts(request.state.rubric_points, answers, request.state.learning_targets);
       if (gen !== askGen.current) return;
       // An answer that isn't a full reading fails like any other ask.
       if (!parts) throw new JevError("other");
-      setInHand({ ...asked, parts, verdictWhenSeen: verdictNow.current });
+      // The pair for the model that answered, from the folder snapshot the examples came from,
+      // frozen with the reading so the judge card, the reason step and the save agree (KTD8).
+      const model = answeringModel(answers);
+      setInHand({ ...asked, parts, verdictWhenSeen: verdictNow.current, model, calibration: calibrationOf(state, key, model) });
     } catch (e) {
       if (gen === askGen.current) setJevTrouble({ round, ...jevFailure(e) });
     } finally {
@@ -557,11 +629,13 @@ export function TestDeck(props: TestDeckProps) {
     setSending(false);
     setCopied(null);
     setPicked(null);
-    // The next round decides Jev afresh, with no pick, no reading and nothing in flight.
+    // The next round decides Jev afresh, with no pick, no drafts, no reading and nothing in flight.
     dropAsk();
     setDecision(null);
-    setVerdict(null);
+    setChosen(null);
     verdictNow.current = null;
+    setTicked([]);
+    setReason("");
     setInHand(null);
     setJevTrouble(null);
     // And no paste to clean up or put back.
@@ -974,27 +1048,49 @@ export function TestDeck(props: TestDeckProps) {
   const trouble = jevTrouble?.round === round ? jevTrouble : null;
   const tooLong = live.tooLong && (jevRound || !!decided?.tooLong);
   const canAsk = jevRound && live.offered && version !== null && !shown && (trouble?.retry ?? true);
+  // What goes with the ask as it would go now, after the budget's drops (growing context KTD6).
+  // Nothing is said while the version loads, since no ask goes then.
+  const quoted = version !== null && fitted ? fitted.sources.length : 0;
+  const sendsLine =
+    quoted === 0
+      ? null
+      : (quoted === 1 ? "Also sends 1 earlier reply on this badge" : `Also sends ${quoted} earlier replies on this badge`) + (fitted?.withNotes ? " with your notes" : "");
   const jevPart =
     jevRound || tooLong ? (
       <div className="meet-jev" aria-live="polite">
         {tooLong && <p className="muted">This reply is too long for Jev</p>}
         {trouble && <p className="deck-error">{trouble.line}</p>}
         {(canAsk || asking) && (
-          <p className="helper">
-            <button type="button" className="link" disabled={asking || recording} onClick={() => void askJev()}>
-              {asking ? "Asking Jev…" : verdict === "met" || verdict === "not_met" ? "Check with Jev" : "Ask Jev"}
-            </button>
-          </p>
+          <>
+            <p className="helper">
+              <button type="button" className="link" disabled={asking || recording} onClick={() => void askJev()}>
+                {asking ? "Asking Jev…" : verdictChosen ? "Check with Jev" : "Ask Jev"}
+              </button>
+            </p>
+            {sendsLine && <p className="jev-note">{sendsLine}</p>}
+          </>
         )}
-        {shown && <JevReadingPanel reading={shown.parts} />}
+        {shown && (
+          <JevReadingPanel
+            reading={shown.parts}
+            pair={shown.calibration.pair}
+            fitted={shown.calibration.fitted}
+            // The track record waits for a verdict, so it can't lead the one being given (KTD7).
+            trackRecord={verdictChosen ? shown.calibration.trackRecord : null}
+          />
+        )}
       </div>
     ) : null;
+  // A step follows the judge card: the missed points after Not yet, or the reason line.
+  const stepFollows = asksMissed || asksReason;
   beats.push({
     id: "meet",
     title: "Did it meet it",
     pane: true,
     // In a Jev round the pick waits for Save, so the user can check with Jev first (R8, R9).
-    ...(jevRound ? { forward: "Save", valid: verdict !== null } : {}),
+    ...(jevRound ? { forward: stepFollows ? "Next" : "Save", valid: chosen !== null } : {}),
+    // Leaving forward drops any ask in flight, so no reading lands on a later card (KTD4).
+    onForward: dropAsk,
     body: ({ advance }) => (
       <div className={rubric ? "meet meet-with-rubric" : "meet"}>
         {!decided && <OnShow run={decide} />}
@@ -1019,24 +1115,25 @@ export function TestDeck(props: TestDeckProps) {
         <div className="meet-choices">
           {jevRound ? (
             <>
-              <button type="button" aria-pressed={verdict === "met"} disabled={recording} onClick={() => choose("met")}>
+              <button type="button" aria-pressed={chosen === "met"} disabled={recording} onClick={() => choose("met")}>
                 Met
               </button>
-              <button type="button" aria-pressed={verdict === "not_met"} disabled={recording} onClick={() => choose("not_met")}>
+              <button type="button" aria-pressed={chosen === "not_met"} disabled={recording} onClick={() => choose("not_met")}>
                 Not yet
               </button>
-              <button type="button" aria-pressed={verdict === "hold"} disabled={recording} onClick={() => choose("hold")}>
+              <button type="button" aria-pressed={chosen === "hold"} disabled={recording} onClick={() => choose("hold")}>
                 Hold to compare
               </button>
             </>
           ) : (
             <>
+              {/* Each press moves on once its choice has rendered: to the step it adds, or to the save. */}
               <button
                 type="button"
                 className="primary"
                 disabled={recording}
                 onClick={() => {
-                  pressed.current = "met";
+                  choose("met");
                   advance();
                 }}
               >
@@ -1046,7 +1143,7 @@ export function TestDeck(props: TestDeckProps) {
                 type="button"
                 disabled={recording}
                 onClick={() => {
-                  pressed.current = "not_met";
+                  choose("not_met");
                   advance();
                 }}
               >
@@ -1057,7 +1154,7 @@ export function TestDeck(props: TestDeckProps) {
                 type="button"
                 disabled={recording}
                 onClick={() => {
-                  pressed.current = "hold";
+                  choose("hold");
                   advance();
                 }}
               >
@@ -1069,6 +1166,47 @@ export function TestDeck(props: TestDeckProps) {
       </div>
     ),
   });
+
+  // The points the reply missed (growing context R6): optional, every current rubric point a
+  // toggle, nothing pressed at first. Jev's call sits beside each point while a reading is in
+  // hand, read with its frozen pair, and never presses anything for the user.
+  if (asksMissed) {
+    beats.push({
+      id: "missed",
+      title: "Which points did it miss",
+      forward: asksReason ? (missed.length > 0 ? "Next" : "Skip") : "Save",
+      body: (
+        <ul className="missed-points" aria-label="Rubric points">
+          {points.map((point, i) => {
+            const read = shown?.parts.points[i];
+            return (
+              <li key={i} className="missed-point">
+                <button type="button" aria-pressed={missed.includes(point)} disabled={recording} onClick={() => toggleMissed(point)}>
+                  {point}
+                </button>
+                {shown && read?.text === point && <span className="missed-call">{CALL_WORDS[callOf(read.probability, shown.calibration.pair)]}</span>}
+              </li>
+            );
+          })}
+        </ul>
+      ),
+    });
+  }
+
+  // Why the verdict went against Jev's call (growing context R7), saved as the result's note.
+  if (asksReason) {
+    beats.push({
+      id: "reason",
+      title: "What did Jev miss",
+      forward: "Save",
+      body: (
+        <>
+          <p className="muted">{verdictChosen === "not_met" ? "Jev called it meets. You said Not yet." : "Jev called it misses. You said Met."}</p>
+          <input aria-label="Reason" value={reason} maxLength={MAX_REASON_CHARS} autoComplete="off" onChange={(e) => setReason(e.target.value)} />
+        </>
+      ),
+    });
+  }
 
   /** Ejects the plug and records nothing (R17). */
   function pull() {
@@ -1090,7 +1228,9 @@ export function TestDeck(props: TestDeckProps) {
       startAt={startAt}
       unsaved={reply.trim() !== ""}
       onClose={home}
-      onFinish={() => finish(jevRound && verdict ? verdict : pressed.current)}
+      onFinish={async () => {
+        if (chosen) await finish(chosen);
+      }}
     />
   );
 }
@@ -1109,14 +1249,32 @@ function OnLeave({ run }: { run(): void }) {
   return null;
 }
 
+/**
+ * What every saved reading keeps (growing context KTD14): the model that answered, the
+ * targets when any were asked, and how many earlier replies went, zero included, so a
+ * reading taken before asks quoted any stays distinguishable.
+ */
+function readingFields(reading: ReadingInHand): Omit<JevReading, "seen" | "verdictWhenSeen" | "verdictChanged"> {
+  const { overall, points, targets } = reading.parts;
+  return {
+    model: reading.model,
+    assignmentVersion: reading.assignmentVersion,
+    askedAt: reading.askedAt,
+    overall,
+    points,
+    ...(targets.length > 0 ? { targets } : {}),
+    examplesSent: reading.examplesSent,
+  };
+}
+
 /** The reading as a held reply keeps it: seen before the verdict, which is given later (hold-and-compare KTD9). */
 function readingBeforeVerdict(reading: ReadingInHand): JevReading {
-  return { model: JEV_MODEL, assignmentVersion: reading.assignmentVersion, askedAt: reading.askedAt, overall: reading.parts.overall, points: reading.parts.points, seen: "before" };
+  return { ...readingFields(reading), seen: "before" };
 }
 
 /** The reading as the result keeps it. One seen after a pick says whether the saved verdict differs (R13). */
 function savedReading(reading: ReadingInHand, verdict: AssessmentResult): JevReading {
-  const base = { model: JEV_MODEL, assignmentVersion: reading.assignmentVersion, askedAt: reading.askedAt, overall: reading.parts.overall, points: reading.parts.points };
+  const base = readingFields(reading);
   return reading.verdictWhenSeen === null
     ? { ...base, seen: "before" }
     : { ...base, seen: "after", verdictWhenSeen: reading.verdictWhenSeen, verdictChanged: verdict !== reading.verdictWhenSeen };

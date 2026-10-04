@@ -1792,6 +1792,44 @@ button:focus-visible {
   margin-top: var(--space-sm);
 }
 
+/* The points a Not yet reply missed (growing context R6): one toggle per rubric point,
+   its text left as the rubric reads, the tapped ones lit in data blue as a handoff key is.
+   Jev's call sits beside a point quietly, a word in muted ink that never presses it. */
+.missed-points {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin: 0;
+  padding: 0;
+}
+
+.missed-point {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--space-md);
+  align-items: center;
+}
+
+.missed-point button {
+  min-height: 2.5rem;
+  text-align: left;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+
+.missed-point button[aria-pressed="true"] {
+  box-shadow: var(--focus-ring);
+  color: var(--data);
+}
+
+.missed-call {
+  min-width: 5.5rem;
+  color: var(--ink-muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
 /* Below the stacking width the rubric sits above the reply, takes at most about a third
    of the height and scrolls on its own; the reply takes the rest. */
 @media (max-width: 56rem) {

@@ -7,8 +7,10 @@ import { serializeCredentialMd } from "../domain/credential-md";
 import { assessmentPath, credentialPath, loadFolder, marksDir, profilePath } from "../domain/folder";
 import { BUILT_IN_HANDOFF, fillHandoff } from "../domain/handoffs";
 import { assignmentVersion } from "../domain/hash";
-import type { JevAnswers } from "../domain/jevRequest";
-import type { Credential, Handoff, Mark } from "../domain/types";
+import { fitsJev, jevTokens } from "../domain/jevBudget";
+import { JEV_LIMITS, JEV_MODEL, type CriteriaSide, type JevAnswers, type JevExample, type JevRequest, type SecondOpinionRequest } from "../domain/jevRequest";
+import { secondOpinionRequest } from "../domain/secondOpinion";
+import type { Assessment, Credential, Handoff, Mark } from "../domain/types";
 import { FAKE_ON, FakeJev } from "../jev/fakeJev";
 import { JEV_ERROR_KINDS, JevError } from "../jev/jev";
 import type { MemoryStorage } from "../storage/memory";
@@ -1026,8 +1028,9 @@ describe("TestDeck's paste and judge panes", () => {
 describe("TestDeck's second opinion", () => {
   const graded: Credential = { ...review, rubric: "- Names the off-by-one\n- Points to the line\n- Suggests a fix" };
   const POINTS = ["Names the off-by-one", "Points to the line", "Suggests a fix"];
-  const ANSWERS: JevAnswers = { answers: { p1: 0.94, p2: 0.52, p3: 0.12, overall: 0.38 } };
-  const ALL_HIGH: JevAnswers = { answers: { p1: 0.95, p2: 0.92, p3: 0.97, overall: 0.93 } };
+  // The badge's one learning target is asked as t1 (growing context R1).
+  const ANSWERS: JevAnswers = { answers: { p1: 0.94, p2: 0.52, p3: 0.12, t1: 0.66, overall: 0.38 } };
+  const ALL_HIGH: JevAnswers = { answers: { p1: 0.95, p2: 0.92, p3: 0.97, t1: 0.9, overall: 0.93 } };
   const REPLY = "I found it on line 12.";
   const FIX_THE_KEY = "Jev Mode in the top bar, on home";
   const codex = { ...opus, slug: "codex", name: "Codex agent", harness: "codex", model: "gpt-5" };
@@ -1070,7 +1073,7 @@ describe("TestDeck's second opinion", () => {
   const button = (name: string) => screen.getByRole("button", { name }) as HTMLButtonElement;
   const askAction = () => screen.queryByRole("button", { name: /^(Ask Jev|Check with Jev|Asking Jev…)$/ });
   const reading = () => screen.queryByRole("region", { name: "Jev's reading" });
-  const readingRows = () => within(reading()!).getAllByRole("listitem");
+  const readingRows = () => [...reading()!.querySelectorAll<HTMLElement>(".jev-points > li")];
   const saved = async (storage: MemoryStorage) => (await loadFolder(storage)).assessments;
   const settle = () => act(async () => {});
 
@@ -1144,6 +1147,8 @@ describe("TestDeck's second opinion", () => {
         { text: POINTS[1], probability: 0.92 },
         { text: POINTS[2], probability: 0.97 },
       ],
+      targets: [{ text: review.learningTargets[0], probability: 0.9 }],
+      examplesSent: 0,
     });
     expect(new Date(a.jev!.askedAt).toISOString()).toBe(a.jev!.askedAt);
     expect(fake.asks).toEqual([expect.objectContaining({ kind: "secondOpinion", state: expect.objectContaining({ reply: REPLY, rubric_points: POINTS }) })]);
@@ -1156,6 +1161,8 @@ describe("TestDeck's second opinion", () => {
     await userEvent.click(choice("Not yet"));
     await userEvent.click(button("Check with Jev"));
     await screen.findByRole("region", { name: "Jev's reading" });
+    // Not yet on a rubric with points goes on to the missed points, which save.
+    await userEvent.click(button("Next"));
     await userEvent.click(save());
     await screen.findByRole("heading", { name: "Not yet" });
     expect((await saved(storage))[0]).toMatchObject({ result: "not_met", jev: { seen: "after", verdictWhenSeen: "not_met", verdictChanged: false } });
@@ -1212,6 +1219,7 @@ describe("TestDeck's second opinion", () => {
     expect(button("Ask Jev").disabled).toBe(false);
 
     await userEvent.click(choice("Not yet"));
+    await userEvent.click(button("Next"));
     await userEvent.click(save());
     await screen.findByRole("heading", { name: "Not yet" });
     const [a] = await saved(storage);
@@ -1253,7 +1261,8 @@ describe("TestDeck's second opinion", () => {
     expect(choice("Not yet").getAttribute("aria-pressed")).toBe("true");
     expect(choice("Met").getAttribute("aria-pressed")).toBe("false");
     expect(choice("Met").classList.contains("primary")).toBe(false);
-    expect(save().disabled).toBe(false);
+    expect(button("Next").disabled).toBe(false);
+    await userEvent.click(button("Next"));
     await userEvent.click(save());
     await screen.findByRole("heading", { name: "Not yet" });
     expect((await saved(storage))[0]).toMatchObject({ result: "not_met" });
@@ -1303,14 +1312,15 @@ describe("TestDeck's second opinion", () => {
     expect((await saved(storage))[0].jev).toBeUndefined();
   });
 
-  it("Save pressed while a check is in flight saves without the reading, and the late answer changes nothing", async () => {
+  it("moving on while a check is in flight saves without the reading, and the late answer changes nothing", async () => {
     const fake = new FakeJev(FAKE_ON);
     const ask = held(fake);
     const storage = await judge(fake);
     await userEvent.click(choice("Not yet"));
     await userEvent.click(button("Check with Jev"));
     expect(button("Asking Jev…").disabled).toBe(true);
-    expect(save().disabled).toBe(false);
+    expect(button("Next").disabled).toBe(false);
+    await userEvent.click(button("Next"));
     await userEvent.click(save());
     await screen.findByRole("heading", { name: "Not yet" });
     const before = await snapshot(storage);
@@ -1379,6 +1389,7 @@ describe("TestDeck's second opinion", () => {
     await userEvent.click(button("Ask Jev"));
     await screen.findByRole("region", { name: "Jev's reading" });
     await userEvent.click(choice("Not yet"));
+    await userEvent.click(button("Next"));
     await userEvent.click(save());
     await userEvent.click(await screen.findByRole("button", { name: "Try another agent" }));
     await userEvent.click(await screen.findByRole("button", { name: "Codex agent" }));
@@ -1399,6 +1410,7 @@ describe("TestDeck's second opinion", () => {
     await judge(fake, { profiles: [opus, codex] });
     await userEvent.click(choice("Not yet"));
     await userEvent.click(button("Check with Jev"));
+    await userEvent.click(button("Next"));
     await userEvent.click(save());
     await userEvent.click(await screen.findByRole("button", { name: "Try another agent" }));
     await userEvent.click(await screen.findByRole("button", { name: "Codex agent" }));
@@ -1941,7 +1953,7 @@ describe("TestDeck's Hold to compare", () => {
 
 describe("TestDeck's Hold to compare in a Jev round", () => {
   const graded: Credential = { ...review, rubric: "- Names the off-by-one\n- Points to the line" };
-  const ANSWERS: JevAnswers = { answers: { p1: 0.9, p2: 0.4, overall: 0.6 } };
+  const ANSWERS: JevAnswers = { answers: { p1: 0.9, p2: 0.4, t1: 0.7, overall: 0.6 } };
 
   it("is a third choice that Save holds, keeping the reading in hand as seen before the verdict", async () => {
     const fake = new FakeJev(FAKE_ON);
@@ -1970,5 +1982,470 @@ describe("TestDeck's Hold to compare in a Jev round", () => {
     const folder = await loadFolder(storage);
     expect(folder.assessments).toEqual([]);
     expect(folder.held[0].jev).toEqual(expect.objectContaining({ seen: "before", overall: 0.6 }));
+  });
+});
+
+// The ask's context and the verdict's steps (growing context U7, R1-R8, R11, KTD4, KTD6,
+// KTD7, KTD10, KTD11, KTD14, KTD15).
+describe("TestDeck's growing context and the verdict's steps", () => {
+  const POINTS = ["Names the off-by-one", "Points to the line", "Suggests a fix"];
+  const graded: Credential = { ...review, rubric: POINTS.map((p) => `- ${p}`).join("\n") };
+  const REPLY = "I found it on line 12.";
+  const codex = { ...opus, slug: "codex", name: "Codex agent", harness: "codex", model: "gpt-5" };
+
+  /** Jev's answers with the overall reading at `overall`, the badge's one learning target at 0.66. */
+  const answers = (overall: number, [p1, p2, p3] = [0.94, 0.52, 0.12]): JevAnswers => ({ answers: { p1, p2, p3, t1: 0.66, overall } });
+
+  /** An earlier result on the badge, at its current assignment version. */
+  const earlier = (n: number, overrides: Partial<Assessment> = {}) =>
+    result(opus, graded, { fileStem: `2026090${n}T090000Z`, recordedAt: `2026-09-0${n}T09:00:00.000Z`, handBack: `Earlier reply ${n}.`, ...overrides });
+
+  function renderWithJev(storage: MemoryStorage, fake: FakeJev) {
+    return render(
+      <JevProvider jev={fake}>
+        <FolderProvider storage={storage} folder={FOLDER}>
+          <AppShell onChangeFolder={() => {}} initialRoute={fromBadge} />
+        </FolderProvider>
+      </JevProvider>,
+    );
+  }
+
+  async function toJudge(reply = REPLY) {
+    await userEvent.type(replyBox(), reply);
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    await screen.findByRole("heading", { name: "Did it meet it" });
+  }
+
+  /** Opus takes the badge from its page, and the reply reaches the judge pane. */
+  async function judge(
+    fake: FakeJev,
+    { credential = graded, reply = REPLY, profiles = [opus], assessments = [] }: { credential?: Credential; reply?: string; profiles?: (typeof opus)[]; assessments?: Assessment[] } = {},
+  ) {
+    const storage = storageWith({ credentials: [credential], profiles, assessments });
+    renderWithJev(storage, fake);
+    await takeAndCopy();
+    await toJudge(reply);
+    return storage;
+  }
+
+  /** An ask that waits until the test answers it. */
+  function held(fake: FakeJev) {
+    let answer!: (a: JevAnswers) => void;
+    fake.queue("ask", new Promise<JevAnswers>((resolve) => (answer = resolve)));
+    return { answer };
+  }
+
+  const button = (name: string) => screen.getByRole("button", { name }) as HTMLButtonElement;
+  const forward = () => testDeck().querySelector<HTMLButtonElement>("button.primary")!;
+  const primaries = () => [...testDeck().querySelectorAll("button.primary")].map((b) => b.textContent);
+  const pressed = (name: string) => button(name).getAttribute("aria-pressed");
+  const reading = () => screen.queryByRole("region", { name: "Jev's reading" });
+  const sends = () => screen.queryByText(/^Also sends/);
+  const trackRecord = () => screen.queryByText(/^Jev matched your verdict/);
+  const saved = async (storage: MemoryStorage) => (await loadFolder(storage)).assessments;
+  const resultFile = (storage: MemoryStorage) => Object.entries(storage.files()).find(([path]) => path.startsWith("assessments/opus/"))?.[1] ?? "";
+  const settle = () => act(async () => {});
+
+  async function askJev(name: "Ask Jev" | "Check with Jev" = "Ask Jev") {
+    await userEvent.click(button(name));
+    return screen.findByRole("region", { name: "Jev's reading" });
+  }
+
+  /** The examples on one side of a question, as sent. */
+  function examplesOf(request: JevRequest, id: string, side: CriteriaSide): JevExample[] {
+    const criteria = (request as SecondOpinionRequest).questions[id]?.criteria;
+    const what = criteria?.[side];
+    return what && typeof what !== "string" ? what.examples : [];
+  }
+
+  /** The distinct earlier replies a request quotes, by their openings: each seeded reply is distinct. */
+  function quoted(request: JevRequest): string[] {
+    const ids = Object.keys((request as SecondOpinionRequest).questions);
+    return [...new Set(ids.flatMap((id) => [...examplesOf(request, id, "true"), ...examplesOf(request, id, "false")].map((e) => e.reply_opening)))];
+  }
+
+  it("Covers AE1. The ask sends three learning targets beside four points, and the reading shows a call for each target, each point and the whole bar", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", { answers: { p1: 0.9, p2: 0.8, p3: 0.2, p4: 0.5, t1: 0.95, t2: 0.1, t3: 0.5, overall: 0.85 } });
+    const targets = ["I can find a bug in a diff.", "I can point to the line.", "I can suggest a fix."];
+    const credential = { ...graded, rubric: "- One\n- Two\n- Three\n- Four", learningTargets: targets };
+    await judge(fake, { credential });
+    const panel = await askJev();
+
+    const [request] = fake.asks as SecondOpinionRequest[];
+    expect(Object.keys(request.questions)).toEqual(["p1", "p2", "p3", "p4", "t1", "t2", "t3", "overall"]);
+    expect(request.state.learning_targets).toEqual(targets);
+    const targetRows = within(within(panel).getByRole("list", { name: "Learning targets" })).getAllByRole("listitem");
+    expect(targetRows.map((li) => li.querySelector(".jev-point-text")?.textContent)).toEqual(targets);
+    expect(targetRows.map((li) => li.querySelector(".jev-call")?.textContent)).toEqual(["Meets", "Misses", "Can't call"]);
+    expect([...panel.querySelectorAll(".jev-points .jev-call")].map((c) => c.textContent)).toEqual(["Meets", "Meets", "Misses", "Can't call: sharpen this point"]);
+    expect(panel.querySelector(".jev-overall .jev-call")?.textContent).toBe("Meets");
+  });
+
+  it("Covers AE2. With A Met and B Not met missing point 2, the ask about C carries A and B under point 2 and only A under point 1", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    const a = await earlier(1, { result: "met", handBack: "Reply A names the off-by-one." });
+    const b = await earlier(2, { result: "not_met", handBack: "Reply B is vague.", missedPoints: [POINTS[1]] });
+    await judge(fake, { assessments: [a, b], reply: "Reply C." });
+    await askJev();
+
+    const [request] = fake.asks;
+    expect(examplesOf(request, "p2", "true")).toEqual([{ reply_opening: "Reply A names the off-by-one." }]);
+    expect(examplesOf(request, "p2", "false")).toEqual([{ reply_opening: "Reply B is vague." }]);
+    expect(examplesOf(request, "p1", "true")).toEqual([{ reply_opening: "Reply A names the off-by-one." }]);
+    expect(examplesOf(request, "p1", "false")).toEqual([]);
+  });
+
+  it("with no earlier replies on the badge, no line says what goes with the ask", async () => {
+    await judge(new FakeJev(FAKE_ON));
+    expect(button("Ask Jev")).toBeTruthy();
+    expect(sends()).toBeNull();
+  });
+
+  it("with two earlier replies that go, the line under the ask counts them", async () => {
+    const a = await earlier(1, { result: "met" });
+    const b = await earlier(2, { result: "not_met" });
+    await judge(new FakeJev(FAKE_ON), { assessments: [a, b] });
+    const line = await screen.findByText("Also sends 2 earlier replies on this badge");
+    expect(button("Ask Jev").compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("with a note among the earlier replies that go, the line ends with your notes", async () => {
+    const b = await earlier(2, { result: "not_met", note: "Too vague." });
+    await judge(new FakeJev(FAKE_ON), { assessments: [b] });
+    expect(await screen.findByText("Also sends 1 earlier reply on this badge with your notes")).toBeTruthy();
+  });
+
+  it("the count in the line is the number of distinct earlier replies in the request Jev receives", async () => {
+    // Three Met replies and one Not met: each side takes two, so the oldest Met reply stays home.
+    const fake = new FakeJev(FAKE_ON);
+    const results = await Promise.all([earlier(1, { result: "met" }), earlier(2, { result: "met" }), earlier(3, { result: "met" }), earlier(4, { result: "not_met" })]);
+    await judge(fake, { assessments: results });
+    const line = await screen.findByText(/^Also sends \d+ earlier replies on this badge$/);
+    const count = Number(/\d+/.exec(line.textContent ?? "")?.[0]);
+    await askJev();
+    expect(quoted(fake.asks[0])).toHaveLength(count);
+    expect(quoted(fake.asks[0]).sort()).toEqual(["Earlier reply 2.", "Earlier reply 3.", "Earlier reply 4."]);
+  });
+
+  it("Covers AE7. Examples that would push the request past Jev's limit stay home and the ask still goes; a reply too long alone says so", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    // One point and no targets, so the two questions are close in length and a long excerpt fits neither.
+    const credential = { ...graded, rubric: `- ${POINTS[0]}`, learningTargets: [] };
+    const long = (n: number) => `Earlier reply ${n} ${"walks through the diff. ".repeat(20)}`;
+    const results = [await result(opus, credential, { result: "met", handBack: long(1) }), await result(opus, credential, { fileStem: "20260902T090000Z", result: "not_met", handBack: long(2) })];
+    await judge(fake, { credential, assessments: results });
+    expect(await screen.findByText("Also sends 2 earlier replies on this badge")).toBeTruthy();
+
+    // A reply that leaves the bare request one token inside the limit.
+    const bare = secondOpinionRequest({ task: credential.task, rubric: credential.rubric, reply: "" });
+    const longest = Math.max(...Object.values(bare.questions).map(jevTokens));
+    const length = (JEV_LIMITS.stateAndLongest - longest - 1) * 4 - JSON.stringify(bare.state).length;
+    await userEvent.click(button("Back"));
+    fireEvent.change(replyBox(), { target: { value: "y".repeat(length) } });
+    await userEvent.click(button("Next"));
+    await screen.findByRole("heading", { name: "Did it meet it" });
+    expect(sends()).toBeNull();
+    await askJev();
+    expect(quoted(fake.asks[0])).toEqual([]);
+    expect(fitsJev(fake.asks[0])).toBe(true);
+
+    await userEvent.click(button("Back"));
+    fireEvent.change(replyBox(), { target: { value: "x".repeat(130_000) } });
+    await userEvent.click(button("Next"));
+    await screen.findByRole("heading", { name: "Did it meet it" });
+    expect(screen.getByText("This reply is too long for Jev")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Ask Jev" })).toBeNull();
+    expect(fake.asks).toHaveLength(1);
+  });
+
+  it("outside a Jev round, Not yet opens Which points did it miss with its heading in focus, and ticking point 2 then Save records it", async () => {
+    const storage = await judge(new FakeJev());
+    await userEvent.click(button("Not yet"));
+    const heading = await screen.findByRole("heading", { name: "Which points did it miss" });
+    expect(document.activeElement).toBe(heading);
+    expect(POINTS.map(pressed)).toEqual(["false", "false", "false"]);
+    expect(primaries()).toEqual(["Save"]);
+
+    await userEvent.click(button(POINTS[1]));
+    expect(pressed(POINTS[1])).toBe("true");
+    expect(primaries()).toEqual(["Save"]);
+    await userEvent.click(button("Save"));
+    await screen.findByRole("heading", { name: "Not yet" });
+    expect((await saved(storage))[0]).toMatchObject({ result: "not_met", note: "", missedPoints: [POINTS[1]] });
+    expect(resultFile(storage)).toContain("missed_points");
+  });
+
+  it("outside a Jev round, Not yet then Save with nothing ticked records no missed points, and Met still records at once", async () => {
+    const storage = await judge(new FakeJev(), { profiles: [opus, codex] });
+    await userEvent.click(button("Not yet"));
+    await screen.findByRole("heading", { name: "Which points did it miss" });
+    await userEvent.click(button("Save"));
+    await screen.findByRole("heading", { name: "Not yet" });
+    const [a] = await saved(storage);
+    expect(a.result).toBe("not_met");
+    expect(a.missedPoints).toBeUndefined();
+    expect(resultFile(storage)).not.toContain("missed_points");
+
+    await userEvent.click(button("Try another agent"));
+    await userEvent.click(await screen.findByRole("button", { name: "Codex agent" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Copy" }));
+    await screen.findByRole("heading", { name: "What came back" });
+    await toJudge("Codex's reply.");
+    await userEvent.click(button("Met"));
+    expect(await screen.findByTestId("landing")).toBeTruthy();
+  });
+
+  it("in a Jev round, Not yet makes the forward read Next, and the step shows Jev's call beside each point with nothing ticked", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", answers(0.38));
+    await judge(fake);
+    await askJev();
+    expect(forward().textContent).toBe("Save");
+    await userEvent.click(button("Not yet"));
+    expect(forward().textContent).toBe("Next");
+    await userEvent.click(button("Next"));
+    await screen.findByRole("heading", { name: "Which points did it miss" });
+
+    const rows = within(screen.getByRole("list", { name: "Rubric points" })).getAllByRole("listitem");
+    expect(rows.map((li) => within(li).getByRole("button").textContent)).toEqual(POINTS);
+    expect(rows.map((li) => li.querySelector(".missed-call")?.textContent)).toEqual(["Meets", "Can't call", "Misses"]);
+    expect(POINTS.map(pressed)).toEqual(["false", "false", "false"]);
+    // Jev can't call the whole bar, so nothing opposes the verdict and this step is the last.
+    expect(primaries()).toEqual(["Save"]);
+  });
+
+  it("Covers AE3. With Jev at 90% overall, Not yet, Skip, then What did Jev miss saves the line as the note, and the next ask puts that reply with its line first", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", answers(0.9, [0.9, 0.9, 0.9]));
+    // A newer Not met reply by Codex, which newest-first alone would put ahead.
+    const newer = await result(codex, graded, { fileStem: "20990101T090000Z", recordedAt: "2099-01-01T09:00:00.000Z", result: "not_met", handBack: "A newer vague reply." });
+    const storage = await judge(fake, { profiles: [opus, codex], assessments: [newer] });
+    await askJev();
+    await userEvent.click(button("Not yet"));
+    await userEvent.click(button("Next"));
+    await screen.findByRole("heading", { name: "Which points did it miss" });
+    expect(forward().textContent).toBe("Skip");
+    await userEvent.click(button(POINTS[0]));
+    expect(forward().textContent).toBe("Next");
+    await userEvent.click(button(POINTS[0]));
+    expect(forward().textContent).toBe("Skip");
+
+    await userEvent.click(button("Skip"));
+    const heading = await screen.findByRole("heading", { name: "What did Jev miss" });
+    expect(document.activeElement).toBe(heading);
+    expect(screen.getByText("Jev called it meets. You said Not yet.")).toBeTruthy();
+    expect(primaries()).toEqual(["Save"]);
+    const field = screen.getByRole("textbox", { name: "Reason" }) as HTMLInputElement;
+    expect(field.maxLength).toBe(200);
+    await userEvent.type(field, "skips the rollback");
+    await userEvent.click(button("Save"));
+    await screen.findByRole("heading", { name: "Not yet" });
+    const recorded = (await saved(storage)).find((a) => a.handBack === REPLY);
+    expect(recorded).toMatchObject({ result: "not_met", note: "skips the rollback" });
+    expect(recorded?.missedPoints).toBeUndefined();
+
+    await userEvent.click(button("Try another agent"));
+    await userEvent.click(await screen.findByRole("button", { name: "Codex agent" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Copy" }));
+    await screen.findByRole("heading", { name: "What came back" });
+    await toJudge("Codex's reply.");
+    await askJev();
+    expect(examplesOf(fake.asks[1], "overall", "false")).toEqual([{ reply_opening: REPLY, user_reason: "skips the rollback" }, { reply_opening: "A newer vague reply." }]);
+  });
+
+  it("with Jev at 15% overall, Met offers What did Jev miss before the save, and the go-to offer follows the save", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", answers(0.15, [0.1, 0.1, 0.1]));
+    const storage = await judge(fake);
+    await askJev();
+    await userEvent.click(button("Met"));
+    expect(forward().textContent).toBe("Next");
+    await userEvent.click(button("Next"));
+    await screen.findByRole("heading", { name: "What did Jev miss" });
+    expect(screen.getByText("Jev called it misses. You said Met.")).toBeTruthy();
+    await userEvent.type(screen.getByRole("textbox", { name: "Reason" }), "names the line exactly");
+    await userEvent.click(button("Save"));
+    expect(await screen.findByRole("button", { name: "Make Opus agent the go-to" })).toBeTruthy();
+    const [a] = await saved(storage);
+    expect(a).toMatchObject({ result: "met", note: "names the line exactly" });
+    expect(a.missedPoints).toBeUndefined();
+  });
+
+  it("Covers AE4. With Jev at 50% overall, neither verdict offers the reason step", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", answers(0.5));
+    const storage = await judge(fake);
+    await askJev();
+    await userEvent.click(button("Met"));
+    expect(forward().textContent).toBe("Save");
+    await userEvent.click(button("Not yet"));
+    await userEvent.click(button("Next"));
+    await screen.findByRole("heading", { name: "Which points did it miss" });
+    expect(forward().textContent).toBe("Save");
+    await userEvent.click(button("Save"));
+    await screen.findByRole("heading", { name: "Not yet" });
+    expect((await saved(storage))[0]).toMatchObject({ result: "not_met", note: "" });
+  });
+
+  it("a change of verdict clears both drafts, so Not yet again starts with nothing ticked and no reason", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", answers(0.9, [0.9, 0.9, 0.9]));
+    const storage = await judge(fake);
+    await askJev();
+    await userEvent.click(button("Not yet"));
+    await userEvent.click(button("Next"));
+    await userEvent.click(await screen.findByRole("button", { name: POINTS[2] }));
+    await userEvent.click(button("Next"));
+    await userEvent.type(await screen.findByRole("textbox", { name: "Reason" }), "first thought");
+    await userEvent.click(button("Back"));
+    await userEvent.click(await screen.findByRole("button", { name: "Back" }));
+    await screen.findByRole("heading", { name: "Did it meet it" });
+
+    // Met agrees with Jev's call, so nothing follows it.
+    await userEvent.click(button("Met"));
+    expect(forward().textContent).toBe("Save");
+    await userEvent.click(button("Not yet"));
+    await userEvent.click(button("Next"));
+    await screen.findByRole("heading", { name: "Which points did it miss" });
+    expect(POINTS.map(pressed)).toEqual(["false", "false", "false"]);
+    await userEvent.click(button("Skip"));
+    expect((await screen.findByRole("textbox", { name: "Reason" }) as HTMLInputElement).value).toBe("");
+    await userEvent.click(button("Save"));
+    await screen.findByRole("heading", { name: "Not yet" });
+    const [a] = await saved(storage);
+    expect(a.note).toBe("");
+    expect(a.missedPoints).toBeUndefined();
+  });
+
+  it("an ask in flight when the user moves on never lands, and Back then Check with Jev adds the reason step when its call opposes the verdict", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    const ask = held(fake);
+    await judge(fake);
+    await userEvent.click(button("Not yet"));
+    await userEvent.click(button("Check with Jev"));
+    await userEvent.click(button("Next"));
+    await screen.findByRole("heading", { name: "Which points did it miss" });
+    await act(async () => ask.answer(answers(0.9, [0.9, 0.9, 0.9])));
+    await settle();
+    // No reading landed, so nothing opposes Not yet.
+    expect(forward().textContent).toBe("Save");
+
+    await userEvent.click(button("Back"));
+    await screen.findByRole("heading", { name: "Did it meet it" });
+    expect(reading()).toBeNull();
+    fake.queue("ask", answers(0.9, [0.9, 0.9, 0.9]));
+    await askJev("Check with Jev");
+    await userEvent.click(button("Next"));
+    await screen.findByRole("heading", { name: "Which points did it miss" });
+    await userEvent.click(button("Skip"));
+    expect(await screen.findByRole("heading", { name: "What did Jev miss" })).toBeTruthy();
+  });
+
+  it("the track record shows under the reading only once Met or Not yet is picked, never for Hold", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", answers(0.9, [0.9, 0.9, 0.9]));
+    const version = await assignmentVersion(graded.task, graded.rubric);
+    const judged = await Promise.all(
+      [0.9, 0.9, 0.9, 0.9, 0.1, 0.1, 0.1, 0.1].map((overall, i) =>
+        earlier(i + 1, {
+          result: overall > 0.5 ? "met" : "not_met",
+          jev: { model: JEV_MODEL, assignmentVersion: version, askedAt: "2026-09-01T09:00:00.000Z", seen: "before", overall, points: POINTS.map((text) => ({ text, probability: overall })) },
+        }),
+      ),
+    );
+    await judge(fake, { assessments: judged });
+    await askJev();
+    expect(trackRecord()).toBeNull();
+    await userEvent.click(button("Met"));
+    expect(trackRecord()?.textContent).toBe("Jev matched your verdict 8 of 8 times on this badge");
+    await userEvent.click(button("Hold to compare"));
+    expect(trackRecord()).toBeNull();
+    await userEvent.click(button("Not yet"));
+    expect(trackRecord()).not.toBeNull();
+  });
+
+  it("a reading in hand reads with the badge's fitted pair for the model that answered, and the reason step follows that call", async () => {
+    // Met at 60% and Not met at 40% fit the band to 45-55, where the default reads both can't call.
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", answers(0.6, [0.6, 0.6, 0.6]));
+    const version = await assignmentVersion(graded.task, graded.rubric);
+    const judged = await Promise.all(
+      [0.6, 0.6, 0.6, 0.6, 0.4, 0.4, 0.4, 0.4].map((overall, i) =>
+        earlier(i + 1, {
+          result: overall > 0.5 ? "met" : "not_met",
+          jev: { model: JEV_MODEL, assignmentVersion: version, askedAt: "2026-09-01T09:00:00.000Z", seen: "before", overall, points: POINTS.map((text) => ({ text, probability: overall })) },
+        }),
+      ),
+    );
+    await judge(fake, { assessments: judged });
+    const panel = await askJev();
+    expect(panel.querySelector(".jev-overall .jev-call")?.textContent).toBe("Meets");
+    expect(within(panel).getByText("Cut-offs fitted to your verdicts")).toBeTruthy();
+    await userEvent.click(button("Not yet"));
+    await userEvent.click(button("Next"));
+    await userEvent.click(await screen.findByRole("button", { name: "Skip" }));
+    expect(await screen.findByText("Jev called it meets. You said Not yet.")).toBeTruthy();
+  });
+
+  it("the saved reading keeps the model that answered, the targets asked and how many earlier replies went", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", { ...answers(0.5), model: "jev-1.14.0" });
+    const storage = await judge(fake, { assessments: [await earlier(1, { result: "met" })] });
+    await askJev();
+    await userEvent.click(button("Met"));
+    await userEvent.click(button("Save"));
+    await screen.findByTestId("landing");
+    const recorded = (await saved(storage)).find((a) => a.handBack === REPLY);
+    expect(recorded?.jev).toMatchObject({ model: "jev-1.14.0", examplesSent: 1, targets: [{ text: review.learningTargets[0], probability: 0.66 }] });
+  });
+
+  it("Covers AE9. Hold skips both steps: in a Jev round Save holds against Jev's call, and outside one Hold holds at once", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", answers(0.9, [0.9, 0.9, 0.9]));
+    let storage = await judge(fake);
+    await askJev();
+    await userEvent.click(button("Hold to compare"));
+    expect(forward().textContent).toBe("Save");
+    await userEvent.click(button("Save"));
+    expect(await screen.findByRole("heading", { name: "Reply held" })).toBeTruthy();
+    const { held: holds } = await loadFolder(storage);
+    expect(holds).toHaveLength(1);
+    expect(holds[0].jev).toMatchObject({ seen: "before", model: JEV_MODEL, examplesSent: 0, targets: [{ text: review.learningTargets[0], probability: 0.66 }] });
+    expect(await saved(storage)).toEqual([]);
+
+    cleanup();
+    localStorage.clear();
+    storage = await judge(new FakeJev());
+    await userEvent.click(button("Hold to compare"));
+    expect(await screen.findByRole("heading", { name: "Reply held" })).toBeTruthy();
+    expect((await loadFolder(storage)).held).toHaveLength(1);
+  });
+
+  it("a rubric point removed by a reload while the step is open drops its tick, and the result saves the rest", async () => {
+    const storage = await judge(new FakeJev());
+    await userEvent.click(button("Not yet"));
+    await screen.findByRole("heading", { name: "Which points did it miss" });
+    await userEvent.click(button(POINTS[1]));
+    await userEvent.click(button(POINTS[2]));
+    await storage.writeText("data", credentialPath("eng", "review"), serializeCredentialMd({ ...graded, rubric: `- ${POINTS[0]}\n- ${POINTS[2]}` }));
+    fireEvent.focus(window);
+    await waitFor(() => expect(screen.queryByRole("button", { name: POINTS[1] })).toBeNull());
+    expect(pressed(POINTS[0])).toBe("false");
+    expect(pressed(POINTS[2])).toBe("true");
+    await userEvent.click(button("Save"));
+    await screen.findByRole("heading", { name: "Not yet" });
+    expect((await saved(storage))[0].missedPoints).toEqual([POINTS[2]]);
+  });
+
+  it("a double press on the last step's Save records one result", async () => {
+    const storage = await judge(new FakeJev());
+    await userEvent.click(button("Not yet"));
+    await screen.findByRole("heading", { name: "Which points did it miss" });
+    await userEvent.click(button(POINTS[0]));
+    await userEvent.dblClick(button("Save"));
+    await screen.findByRole("heading", { name: "Not yet" });
+    await settle();
+    expect(await saved(storage)).toHaveLength(1);
   });
 });
