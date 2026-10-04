@@ -52,6 +52,7 @@ function folder(opts: { profiles?: AgentProfile[]; assessments?: Assessment[]; h
     profiles: opts.profiles ?? [opus, codex, haiku],
     assessments: opts.assessments ?? [],
     handoffs: opts.handoffs ?? [],
+    marks: [],
     skeleton: null,
     errors: [],
     warnings: [],

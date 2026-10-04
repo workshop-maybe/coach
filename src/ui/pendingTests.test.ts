@@ -148,6 +148,7 @@ describe("pendingTests", () => {
       assessments: [],
       skeleton: null,
       handoffs: [],
+      marks: [],
       errors: [],
       warnings: [],
       raw: {},

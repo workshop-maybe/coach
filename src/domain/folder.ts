@@ -20,6 +20,7 @@ import type {
   JevPoint,
   JevReading,
   LoadError,
+  Mark,
   Slug,
   TestContext,
 } from "./types";
@@ -61,6 +62,15 @@ export function handoffsDir(collectionSlug: Slug, credentialSlug: Slug): string 
 
 export function handoffPath(collectionSlug: Slug, credentialSlug: Slug, id: string): string {
   return `${handoffsDir(collectionSlug, credentialSlug)}/${id}.md`;
+}
+
+/** Every go-to mark file for one badge, parsed or not. Kept with the badge, so trashing an agent leaves them (KTD1). */
+export function marksDir(collectionSlug: Slug, credentialSlug: Slug): string {
+  return `${COLLECTIONS_DIR}/${collectionSlug}/marks/${credentialSlug}`;
+}
+
+export function markPath(collectionSlug: Slug, credentialSlug: Slug, id: string): string {
+  return `${marksDir(collectionSlug, credentialSlug)}/${id}.json`;
 }
 
 /** Where a file moved to the trash at `stamp` lands: its own path under trash/<stamp>/. */
@@ -236,6 +246,18 @@ export function parseProfile(text: string, slug: Slug): AgentProfile {
 export function serializeProfile(profile: AgentProfile): string {
   const { name, harness, model, effort, repo, notes, params } = profile;
   return `${JSON.stringify({ name, harness, model, effort, repo, notes, params }, null, 2)}\n`;
+}
+
+// ---------------------------------------------------------------------------
+// Go-to mark JSON: the agent's slug and the marked result's file stem (KTD1).
+
+export function parseMark(text: string, ids: Pick<Mark, "collectionSlug" | "credentialSlug" | "id">): Mark {
+  const obj = parseObject(text);
+  return { ...ids, profileSlug: requiredString(obj, "agent"), fileStem: requiredString(obj, "result") };
+}
+
+export function serializeMark(mark: Mark): string {
+  return `${JSON.stringify({ agent: mark.profileSlug, result: mark.fileStem }, null, 2)}\n`;
 }
 
 // ---------------------------------------------------------------------------
@@ -460,8 +482,10 @@ function byName<T extends { name: string; slug: string }>(a: T, b: T): number {
   return a.name.localeCompare(b.name) || a.slug.localeCompare(b.slug);
 }
 
+type BadgeFile = Pick<Handoff, "collectionSlug" | "credentialSlug" | "id">;
+
 /** By collection, then credential, then id: stems are stamps, so ids sort in creation order (KTD3). */
-function byHandoffOrder(a: Handoff, b: Handoff): number {
+function byBadgeThenId(a: BadgeFile, b: BadgeFile): number {
   return compare(a.collectionSlug, b.collectionSlug) || compare(a.credentialSlug, b.credentialSlug) || compare(a.id, b.id);
 }
 
@@ -482,6 +506,7 @@ export async function loadFolder(storage: Storage): Promise<FolderState> {
     assessments: [],
     skeleton: null,
     handoffs: [],
+    marks: [],
     errors: [],
     warnings: [],
     raw: {},
@@ -514,7 +539,8 @@ export async function loadFolder(storage: Storage): Promise<FolderState> {
   // Collections and credentials.
   const collectionFiles = new Map<Slug, string>();
   const credentialFiles = new Map<Slug, { slug: Slug; path: string }[]>();
-  const handoffFiles: { collectionSlug: Slug; credentialSlug: Slug; id: string; path: string }[] = [];
+  const handoffFiles: (BadgeFile & { path: string })[] = [];
+  const markFiles: (BadgeFile & { path: string })[] = [];
   for (const path of await storage.listFiles("data", COLLECTIONS_DIR)) {
     const parts = path.split("/");
     if (parts.length === 3 && parts[2] === "collection.json" && !isIgnoredName(parts[1])) {
@@ -528,6 +554,9 @@ export async function loadFolder(storage: Storage): Promise<FolderState> {
     } else if (parts.length === 5 && parts[2] === "handoffs" && !isIgnoredName(parts[1]) && !isIgnoredName(parts[3])) {
       const id = stem(parts[4], ".md");
       if (id !== null) handoffFiles.push({ collectionSlug: parts[1], credentialSlug: parts[3], id, path });
+    } else if (parts.length === 5 && parts[2] === "marks" && !isIgnoredName(parts[1]) && !isIgnoredName(parts[3])) {
+      const id = stem(parts[4], ".json");
+      if (id !== null) markFiles.push({ collectionSlug: parts[1], credentialSlug: parts[3], id, path });
     }
   }
 
@@ -573,7 +602,14 @@ export async function loadFolder(storage: Storage): Promise<FolderState> {
     const text = await load(path, (t) => t);
     if (text !== null) state.handoffs.push({ ...ids, text });
   }
-  state.handoffs.sort(byHandoffOrder);
+  state.handoffs.sort(byBadgeThenId);
+
+  // Go-to marks (KTD1). One that cannot be read lands in errors and is skipped, as a result is.
+  for (const { path, ...ids } of markFiles) {
+    const mark = await load(path, (t) => parseMark(t, ids));
+    if (mark) state.marks.push(mark);
+  }
+  state.marks.sort(byBadgeThenId);
 
   // Agent profiles.
   for (const path of await storage.listFiles("data", AGENTS_DIR)) {

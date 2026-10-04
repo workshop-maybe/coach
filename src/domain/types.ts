@@ -145,6 +145,22 @@ export interface Handoff extends HandoffTemplate {
   credentialSlug: Slug;
 }
 
+/**
+ * A go-to mark: the user chose this agent for a badge on one of its Met results. Read from
+ * collections/<collection>/marks/<credential>/<id>.json, a new file per mark, so every choice
+ * and confirmation stays in the record and no result file ever changes.
+ */
+export interface Mark {
+  collectionSlug: Slug;
+  credentialSlug: Slug;
+  /** The file stem, a stamp. A badge's marks order by it, the newest last. */
+  id: string;
+  /** The agent the mark chose. */
+  profileSlug: Slug;
+  /** The file stem of the result the mark was made on. */
+  fileStem: string;
+}
+
 /** A file the app could not read. The app reports it and never rewrites it (R22). */
 export interface LoadError {
   path: string;
@@ -161,6 +177,8 @@ export interface FolderState {
   skeleton: string | null;
   /** Every badge's handoffs, by collection, credential, then id (creation order). */
   handoffs: Handoff[];
+  /** Every badge's go-to marks, by collection, credential, then id (oldest first). */
+  marks: Mark[];
   errors: LoadError[];
   /** Readable files with settings that fall back to defaults (KTD3). Never gate anything. */
   warnings: LoadError[];
