@@ -28,6 +28,7 @@ import {
   trashPath,
 } from "./folder";
 import { checkHandoff, isHandoffLocked, type HandoffProblem } from "./handoffs";
+import { resultOf } from "./goTo";
 import { assignmentVersion } from "./hash";
 import { findPreset, presetCredential } from "./presets";
 import { uniqueSlug } from "./slug";
@@ -483,9 +484,7 @@ export interface MarkInput {
 export async function markGoTo(storage: Storage, state: FolderState, input: MarkInput, now: Date = new Date()): Promise<FolderState> {
   findProfile(state, input.profileSlug);
   const credential = findCredential(state, input.collectionSlug, input.credentialSlug);
-  const result = state.assessments.find(
-    (a) => a.profileSlug === input.profileSlug && credentialKey(a) === credentialKey(credential) && a.fileStem === input.fileStem,
-  );
+  const result = resultOf(state, input.profileSlug, credentialKey(credential), input.fileStem);
   if (!result) throw new Error("That result is no longer in the folder.");
   if (result.result !== "met") throw new Error("Only a Met result can make an agent the go-to.");
   const dir = marksDir(credential.collectionSlug, credential.slug);

@@ -17,14 +17,19 @@ export interface GoTo {
   result: Assessment;
 }
 
+/** One agent's result on a badge by its file stem, if the folder still has it. */
+export function resultOf(state: FolderState, profileSlug: string, key: string, fileStem: string): Assessment | undefined {
+  return state.assessments.find((a) => a.profileSlug === profileSlug && credentialKey(a) === key && a.fileStem === fileStem);
+}
+
 /** The badge's go-to, from the folder alone, or null when it has none. */
 export function goToOf(state: FolderState, key: string): GoTo | null {
   let mark: Mark | null = null;
   for (const m of state.marks) if (credentialKey(m) === key && (!mark || m.id > mark.id)) mark = m;
   if (!mark) return null;
-  const { profileSlug, fileStem } = mark;
+  const profileSlug = mark.profileSlug;
   const profile = state.profiles.find((p) => p.slug === profileSlug);
-  const result = state.assessments.find((a) => a.profileSlug === profileSlug && credentialKey(a) === key && a.fileStem === fileStem);
+  const result = resultOf(state, profileSlug, key, mark.fileStem);
   if (!profile || !result || result.result !== "met") return null;
   return { profile, mark, result };
 }

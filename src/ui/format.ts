@@ -20,7 +20,7 @@ export const FLAG_SHORT: Record<CellFlag, string> = {
   setup_mismatch: "setup changed",
 };
 
-/** A go-to's flag in a few words: "not met" as the badge page's rows print the result, and the setup flag as rows print it. */
+/** A go-to's flag in a few words. `not_met` reads as the result label does. */
 const GO_TO_FLAG_SHORT: Record<GoToFlag, string> = {
   not_met: "not met",
   setup_mismatch: FLAG_SHORT.setup_mismatch,

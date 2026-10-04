@@ -45,7 +45,7 @@ import { sameSetup } from "../domain/matrix";
 import { fitsJev } from "../domain/jevBudget";
 import { cleanUpLineBreaks, lineBreakBatches } from "../domain/lineBreaks";
 import { fileStemFor } from "../domain/folder";
-import { goToOf } from "../domain/goTo";
+import { goToOf, resultOf } from "../domain/goTo";
 import { markGoTo, recordAssessment } from "../domain/operations";
 import { readingParts, secondOpinionRequest, type JevReadingParts } from "../domain/secondOpinion";
 import {
@@ -571,9 +571,7 @@ export function TestDeck(props: TestDeckProps) {
     if (!credential || !profile) return <Missing onHome={home} />;
     const k = credentialKey(credential);
     const { fileStem } = outcome;
-    const recorded = state.assessments.some(
-      (a) => a.profileSlug === profile.slug && credentialKey(a) === k && a.fileStem === fileStem && a.result === "met",
-    );
+    const recorded = resultOf(state, profile.slug, k, fileStem)?.result === "met";
     const keep = goToOf(state, k)?.profile.slug === profile.slug;
     const heldUp = props.returnTo && state.credentials.find((c) => credentialKey(c) === props.returnTo?.credentialKey);
     return (
