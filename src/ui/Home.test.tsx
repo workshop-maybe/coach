@@ -12,14 +12,16 @@ import {
   collectionPath,
   credentialPath,
   handoffPath,
+  markPath,
   profilePath,
   serializeAssessment,
   serializeCollection,
+  serializeMark,
   serializeProfile,
 } from "../domain/folder";
 import { serializeCredentialMd } from "../domain/credential-md";
 import { assignmentVersion } from "../domain/hash";
-import type { AgentProfile, Assessment, Credential } from "../domain/types";
+import type { AgentProfile, Assessment, Credential, Mark } from "../domain/types";
 
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ writeText: vi.fn() }));
 const pick = vi.hoisted(() => vi.fn<() => Promise<string | null>>());
@@ -57,7 +59,7 @@ async function met(profile: AgentProfile, credential: Credential, overrides: Par
   };
 }
 
-function storageWith(opts: { credentials?: Credential[]; profiles?: AgentProfile[]; assessments?: Assessment[] } = {}): MemoryStorage {
+function storageWith(opts: { credentials?: Credential[]; profiles?: AgentProfile[]; assessments?: Assessment[]; marks?: Mark[] } = {}): MemoryStorage {
   const credentials = opts.credentials ?? [];
   const files: Record<string, string> = { [MARKER_PATH]: '{ "format": 1 }\n' };
   if (credentials.length > 0) {
@@ -74,6 +76,7 @@ function storageWith(opts: { credentials?: Credential[]; profiles?: AgentProfile
   for (const a of opts.assessments ?? []) {
     files[assessmentPath(a.profileSlug, a.collectionSlug, a.credentialSlug, a.fileStem)] = serializeAssessment(a);
   }
+  for (const m of opts.marks ?? []) files[markPath(m.collectionSlug, m.credentialSlug, m.id)] = serializeMark(m);
   return new MemoryStorage(files);
 }
 
@@ -87,6 +90,59 @@ function renderApp(storage: MemoryStorage) {
 
 const needs = () => screen.findByRole("region", { name: "What needs you" });
 const rows = async () => within(await needs()).getAllByRole("button").filter((b) => b.textContent !== "More");
+
+/** Home's sections, which pair What needs you with Agents on a wide window when all three show. */
+const shelves = () => document.querySelector<HTMLElement>(".home > .home-shelves");
+const sectionNames = () => [...(shelves()?.querySelectorAll(":scope > section") ?? [])].map((s) => s.querySelector("h2")?.textContent);
+const PAIRED = "home-shelves-paired";
+
+describe("Home's paired row", () => {
+  it("pairs What needs you with Agents when all three sections show, and keeps the doors outside", async () => {
+    renderApp(storageWith({ credentials: [review], profiles: [opus, codex], assessments: [await met(opus, review)] }));
+    await needs();
+    expect(shelves()!.classList.contains(PAIRED)).toBe(true);
+    expect(sectionNames()).toEqual(["What needs you", "Agents", "Badges"]);
+    const door = screen.getByRole("button", { name: "Create an agent" });
+    expect(shelves()!.contains(door)).toBe(false);
+    expect(door.closest(".doors")?.parentElement?.classList.contains("home")).toBe(true);
+  });
+
+  it("does not pair agents and badges when nothing needs you", async () => {
+    renderApp(storageWith({ credentials: [review], profiles: [opus], assessments: [await met(opus, review)] }));
+    await screen.findByRole("region", { name: "Badges" });
+    expect(screen.queryByRole("region", { name: "What needs you" })).toBeNull();
+    expect(sectionNames()).toEqual(["Agents", "Badges"]);
+    expect(shelves()!.classList.contains(PAIRED)).toBe(false);
+  });
+
+  it("does not pair What needs you with Badges when there are no agents", async () => {
+    renderApp(storageWith({ credentials: [review] }));
+    await needs();
+    expect(sectionNames()).toEqual(["What needs you", "Badges"]);
+    expect(shelves()!.classList.contains(PAIRED)).toBe(false);
+  });
+
+  it("an empty folder has no shelves", async () => {
+    renderApp(storageWith());
+    await screen.findByRole("button", { name: "Try a first test" });
+    expect(document.querySelector(".home-empty")).not.toBeNull();
+    expect(shelves()).toBeNull();
+  });
+
+  it("a need resolved by a reload unpairs the row, and the doors stay the same nodes", async () => {
+    const storage = storageWith({ credentials: [review], profiles: [opus, codex], assessments: [await met(opus, review)] });
+    renderApp(storage);
+    expect((await rows())[0].textContent).toContain("Test Codex agent");
+    expect(shelves()!.classList.contains(PAIRED)).toBe(true);
+    const door = screen.getByRole("button", { name: "Create an agent" });
+    const result = await met(codex, review);
+    await storage.writeText("data", assessmentPath(result.profileSlug, result.collectionSlug, result.credentialSlug, result.fileStem), serializeAssessment(result));
+    await userEvent.click(screen.getByRole("button", { name: "Reload" }));
+    await waitFor(() => expect(screen.queryByRole("region", { name: "What needs you" })).toBeNull());
+    expect(shelves()!.classList.contains(PAIRED)).toBe(false);
+    expect(screen.getByRole("button", { name: "Create an agent" })).toBe(door);
+  });
+});
 
 describe("Home", () => {
   it("Covers AE1. An empty folder shows the first test, then the two doors", async () => {
@@ -335,5 +391,70 @@ describe("Home", () => {
     await userEvent.click(screen.getByRole("button", { name: "Export" }));
     await waitFor(() => expect(pick).toHaveBeenCalled());
     expect(storage.files("export")).toEqual({});
+  });
+});
+
+// The go-to on a badge's card (U4, R7, R9, KTD8): one line under its holders, flagged when
+// the go-to's latest result there is not Met or its setup changed.
+describe("Home's go-to", () => {
+  const day2 = { fileStem: "20260902T090000Z", recordedAt: "2026-09-02T09:00:00.000Z" };
+  const markOn = (profile: AgentProfile, fileStem = "20260901T090000Z"): Mark => ({
+    collectionSlug: "eng",
+    credentialSlug: "review",
+    id: "20260903T090000Z",
+    profileSlug: profile.slug,
+    fileStem,
+  });
+  const card = async (name: RegExp) => within(await screen.findByRole("region", { name: "Badges" })).getByRole("button", { name });
+  const goToLineOf = (el: HTMLElement) => el.querySelector<HTMLElement>(".badge-card-goto");
+
+  it("Covers AE1. A badge two agents hold names its go-to in one line, and the go-to's hidden holder name stays the only exact match", async () => {
+    renderApp(storageWith({ credentials: [review], profiles: [opus, codex], assessments: [await met(opus, review), await met(codex, review)], marks: [markOn(codex)] }));
+    const held = await card(/Code review/);
+    await waitFor(() => expect(goToLineOf(held)?.textContent).toBe("Go-to: Codex agent"));
+    expect(goToLineOf(held)!.classList.contains("flagged")).toBe(false);
+    expect(within(held).getAllByText("Codex agent")).toHaveLength(1);
+    expect(within(held).getByText("Codex agent").classList.contains("visually-hidden")).toBe(true);
+    expect(within(held).getByText("Go-to: Codex agent")).toBe(goToLineOf(held));
+  });
+
+  it("a badge with no go-to has no go-to line", async () => {
+    renderApp(storageWith({ credentials: [review, docs], profiles: [opus, codex], assessments: [await met(opus, review), await met(codex, review)], marks: [markOn(codex)] }));
+    const held = await card(/Code review/);
+    await waitFor(() => expect(goToLineOf(held)).not.toBeNull());
+    expect(goToLineOf(await card(/Write docs/))).toBeNull();
+    expect(within(await card(/Write docs/)).queryByText(/^Go-to/)).toBeNull();
+  });
+
+  it("Covers AE5. A go-to whose latest result is Not met leaves the card unheld and still names it, flagged", async () => {
+    renderApp(
+      storageWith({
+        credentials: [review],
+        profiles: [opus, codex],
+        assessments: [await met(codex, review), await met(codex, review, { ...day2, result: "not_met" })],
+        marks: [markOn(codex)],
+      }),
+    );
+    const unheld = await card(/Code review/);
+    await waitFor(() => expect(goToLineOf(unheld)?.textContent).toBe("Go-to: Codex agent · not met"));
+    expect(unheld.classList.contains("badge-card-unheld")).toBe(true);
+    expect(within(unheld).getByText("No holders yet")).toBeTruthy();
+    expect(goToLineOf(unheld)!.classList.contains("flagged")).toBe(true);
+  });
+
+  it("a go-to whose setup changed since its result is flagged setup changed", async () => {
+    const earned = await met(codex, review);
+    renderApp(storageWith({ credentials: [review], profiles: [opus, { ...codex, model: "gpt-6" }], assessments: [earned], marks: [markOn(codex)] }));
+    const held = await card(/Code review/);
+    await waitFor(() => expect(goToLineOf(held)?.textContent).toBe("Go-to: Codex agent · setup changed"));
+    expect(goToLineOf(held)!.classList.contains("flagged")).toBe(true);
+  });
+
+  it("Covers AE8. A go-to agent in the trash leaves its badge with no go-to line", async () => {
+    renderApp(storageWith({ credentials: [review], profiles: [opus], assessments: [await met(opus, review), await met(codex, review)], marks: [markOn(codex)] }));
+    const held = await card(/Code review/);
+    await waitFor(() => expect(within(held).getByText("Opus agent")).toBeTruthy());
+    expect(goToLineOf(held)).toBeNull();
+    expect(within(held).queryByText(/^Go-to/)).toBeNull();
   });
 });

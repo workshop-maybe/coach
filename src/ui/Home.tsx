@@ -1,19 +1,24 @@
 // Home, the only room (KTD1). Top to bottom: what needs you, your agents (machines, each
 // lighting the keys it earned), your badges (cartridges, each showing who holds it), then
-// the two doors with dashed outlines of what they make (R9, R12). An empty folder leads
-// with "Try a first test", which runs one preset on an agent made on the spot. An agent holding a
-// handoff shows it plugged in wherever it stands (R15). The cast is hidden from
-// assistive tech, so names and what each agent earned stay in text.
+// the two doors with dashed outlines of what they make (R9, R12). When all three sections
+// show, a wide window puts what needs you beside your agents so home fits one screen; the
+// pairing is a class on one wrapper, so a need coming or going never remounts a shelf or a
+// door (App.css). An empty folder leads with "Try a first test", which runs one preset on
+// an agent made on the spot. An agent holding a handoff shows it plugged in wherever it
+// stands (R15). A badge with a go-to names it under its holders, flagged when it needs a
+// look (R7, R9). The cast is hidden from assistive tech, so names and what each agent earned
+// stay in text.
 
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import { goToOf, goToStanding } from "../domain/goTo";
 import { cellKey } from "../domain/matrix";
 import { credentialKey, type AgentProfile, type Collection, type Credential, type FolderState } from "../domain/types";
 import { Cartridge } from "../cast/Cartridge";
 import { Machine } from "../cast/Machine";
 import { Outline } from "../cast/Outline";
 import { machineKeys, type MachineKey } from "../cast/mappings";
-import { FLAG_SHORT, plugMark } from "./format";
+import { FLAG_SHORT, goToLine, plugMark } from "./format";
 import { useNav } from "./nav";
 import { needsYou, type NeedsYouItem } from "./needsYou";
 import { livePlugs, plugFor, usePendingTests, type PendingTest } from "./pendingTests";
@@ -76,87 +81,99 @@ export function Home() {
   const holds = (profileSlug: string, key: string) => matrix?.cells.get(cellKey(profileSlug, key))?.status === "met";
   const shown = all ? items : items.slice(0, SHOWN);
   const profiles = shelf ? (state?.profiles ?? []) : [];
+  const showNeeds = !!shelf && items.length > 0;
+  const showAgents = !!shelf && profiles.length > 0;
+  const showBadges = !!shelf && shelf.credentials.length > 0;
+  const paired = showNeeds && showAgents && showBadges;
 
   return (
     <div className={empty ? "home home-empty" : "home"}>
       <h1 className="visually-hidden">Home</h1>
 
-      {shelf && items.length > 0 && (
-        <section className="home-section" aria-labelledby="home-needs">
-          <h2 id="home-needs">What needs you</h2>
-          <ol className="needs">
-            {shown.map((item) => (
-              <li key={`${item.kind}:${itemId(item)}`}>
-                <NeedRow item={item} shelf={shelf} onOpen={() => navigate(item.route)} />
-              </li>
-            ))}
-          </ol>
-          {!all && items.length > SHOWN && (
-            <button type="button" className="link more" onClick={() => setAll(true)}>
-              More
-            </button>
+      {shelf && (showNeeds || showAgents || showBadges) && (
+        <div className={paired ? "home-shelves home-shelves-paired" : "home-shelves"}>
+          {showNeeds && (
+            <section className="home-section" aria-labelledby="home-needs">
+              <h2 id="home-needs">What needs you</h2>
+              <ol className="needs">
+                {shown.map((item) => (
+                  <li key={`${item.kind}:${itemId(item)}`}>
+                    <NeedRow item={item} shelf={shelf} onOpen={() => navigate(item.route)} />
+                  </li>
+                ))}
+              </ol>
+              {!all && items.length > SHOWN && (
+                <button type="button" className="link more" onClick={() => setAll(true)}>
+                  More
+                </button>
+              )}
+            </section>
           )}
-        </section>
-      )}
 
-      {shelf && profiles.length > 0 && (
-        <section className="home-section" aria-labelledby="home-agents">
-          <h2 id="home-agents">Agents</h2>
-          <ul className="shelf">
-            {profiles.map((p) => {
-              const earned = shelf.credentials.filter((c) => holds(p.slug, c.key));
-              return (
-                <li key={p.slug}>
-                  <button type="button" className="agent-card" onClick={() => navigate({ view: "item", item: "agent", profileSlug: p.slug })}>
-                    <Machine mini setup={p} keys={shelf.keys.get(p.slug)} plugged={shelf.plugs.get(p.slug)} width={128} />
-                    <span className="agent-card-name">{p.name}</span>
-                    <span className="agent-card-setup">{[p.harness, p.model, p.effort].filter(Boolean).join(" · ")}</span>
-                    {earned.length > 0 && (
-                      <span className="visually-hidden" role="list" aria-label="Earned">
-                        {earned.map((c) => (
-                          <span key={c.key} role="listitem">
-                            {c.credential.name}
+          {showAgents && (
+            <section className="home-section" aria-labelledby="home-agents">
+              <h2 id="home-agents">Agents</h2>
+              <ul className="shelf">
+                {profiles.map((p) => {
+                  const earned = shelf.credentials.filter((c) => holds(p.slug, c.key));
+                  return (
+                    <li key={p.slug}>
+                      <button type="button" className="agent-card" onClick={() => navigate({ view: "item", item: "agent", profileSlug: p.slug })}>
+                        <Machine mini setup={p} keys={shelf.keys.get(p.slug)} plugged={shelf.plugs.get(p.slug)} width={128} />
+                        <span className="agent-card-name">{p.name}</span>
+                        <span className="agent-card-setup">{[p.harness, p.model, p.effort].filter(Boolean).join(" · ")}</span>
+                        {earned.length > 0 && (
+                          <span className="visually-hidden" role="list" aria-label="Earned">
+                            {earned.map((c) => (
+                              <span key={c.key} role="listitem">
+                                {c.credential.name}
+                              </span>
+                            ))}
                           </span>
-                        ))}
-                      </span>
-                    )}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      )}
+                        )}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
 
-      {shelf && shelf.credentials.length > 0 && (
-        <section className="home-section" aria-labelledby="home-badges">
-          <h2 id="home-badges">Badges</h2>
-          <ul className="shelf">
-            {shelf.credentials.map((c) => {
-              const holders = profiles.filter((p) => holds(p.slug, c.key));
-              return (
-                <li key={c.key}>
-                  <button type="button" className={`badge-card${holders.length === 0 ? " badge-card-unheld" : ""}`} onClick={() => navigate({ view: "item", item: "badge", credentialKey: c.key })}>
-                    <Cartridge collection={c.collection} credential={c.credential} width={64} />
-                    <span className="badge-card-name">{c.credential.name}</span>
-                    <span className="holders">
-                      {holders.length === 0 ? (
-                        <span className="holders-none">No holders yet</span>
-                      ) : (
-                        holders.map((p) => (
-                          <span key={p.slug} className="holder" title={p.name}>
-                            <Machine mini setup={p} keys={shelf.keys.get(p.slug)} plugged={shelf.plugs.get(p.slug)} width={36} />
-                            <span className="visually-hidden">{p.name}</span>
-                          </span>
-                        ))
-                      )}
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
+          {showBadges && (
+            <section className="home-section" aria-labelledby="home-badges">
+              <h2 id="home-badges">Badges</h2>
+              <ul className="shelf">
+                {shelf.credentials.map((c) => {
+                  const holders = profiles.filter((p) => holds(p.slug, c.key));
+                  const goTo = state && matrix ? goToOf(state, c.key) : null;
+                  const flags = goTo && matrix ? goToStanding(matrix, goTo).flags : [];
+                  return (
+                    <li key={c.key}>
+                      <button type="button" className={`badge-card${holders.length === 0 ? " badge-card-unheld" : ""}`} onClick={() => navigate({ view: "item", item: "badge", credentialKey: c.key })}>
+                        <Cartridge collection={c.collection} credential={c.credential} width={64} />
+                        <span className="badge-card-name">{c.credential.name}</span>
+                        <span className="holders">
+                          {holders.length === 0 ? (
+                            <span className="holders-none">No holders yet</span>
+                          ) : (
+                            holders.map((p) => (
+                              <span key={p.slug} className="holder" title={p.name}>
+                                <Machine mini setup={p} keys={shelf.keys.get(p.slug)} plugged={shelf.plugs.get(p.slug)} width={36} />
+                                <span className="visually-hidden">{p.name}</span>
+                              </span>
+                            ))
+                          )}
+                        </span>
+                        {/* One text run, so the hidden holder names stay the only text that is just a name (KTD8). */}
+                        {goTo && <span className={`badge-card-goto${flags.length > 0 ? " flagged" : ""}`}>{goToLine(goTo.profile.name, flags)}</span>}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
+        </div>
       )}
 
       {empty && (

@@ -12,8 +12,11 @@ import {
   handoffPath,
   handoffsDir,
   loadFolder,
+  markPath,
+  marksDir,
   parseAssessment,
   parseCollection,
+  parseMark,
   parseProfile,
   profilePath,
   saveAssessment,
@@ -24,12 +27,13 @@ import {
   SKELETON_PATH,
   serializeAssessment,
   serializeCollection,
+  serializeMark,
   serializeProfile,
 } from "./folder";
 import { buildExport } from "./export";
 import { reorderCredentials } from "./operations";
 import { resolveBadgeSettings } from "../badge/settings";
-import type { AgentProfile, Assessment, Collection, Credential, JevReading } from "./types";
+import type { AgentProfile, Assessment, Collection, Credential, JevReading, Mark } from "./types";
 
 function cred(slug: string, name: string, collectionSlug = "eng"): Credential {
   return {
@@ -862,5 +866,66 @@ describe("handoff files", () => {
     expect(state.raw[bad]).toBeUndefined();
     expect(state.credentials.map((c) => c.slug)).toEqual(["review"]);
     expect(storage.writes).toEqual([]);
+  });
+});
+
+describe("mark files", () => {
+  const mark: Mark = { collectionSlug: "eng", credentialSlug: "review", id: "20261001T090000Z", profileSlug: "claude-high", fileStem: "20260929T084900Z" };
+  const ids = { collectionSlug: "eng", credentialSlug: "review", id: mark.id };
+
+  it("puts a badge's marks beside its handoffs, one JSON file each (KTD1)", () => {
+    expect(marksDir("eng", "review")).toBe("collections/eng/marks/review");
+    expect(markPath("eng", "review", "20261001T090000Z")).toBe("collections/eng/marks/review/20261001T090000Z.json");
+  });
+
+  it("a mark serializes to its agent and result and parses back unchanged", () => {
+    const text = serializeMark(mark);
+    expect(JSON.parse(text)).toEqual({ agent: "claude-high", result: "20260929T084900Z" });
+    expect(parseMark(text, ids)).toEqual(mark);
+  });
+
+  it("refuses a mark missing its agent or result, or holding a non-string", () => {
+    expect(() => parseMark('{"result":"20260929T084900Z"}', ids)).toThrow(/agent/);
+    expect(() => parseMark('{"agent":"claude-high"}', ids)).toThrow(/result/);
+    expect(() => parseMark('{"agent":"claude-high","result":3}', ids)).toThrow(/result/);
+    expect(() => parseMark("[1]", ids)).toThrow();
+  });
+
+  it("loads every badge's marks, by badge then id, with their raw text, and writes nothing", async () => {
+    const storage = fixture();
+    storage.seed({ [credentialPath("eng", "docs")]: serializeCredentialMd(cred("docs", "Docs")) });
+    const later = { ...mark, id: "20261002T090000Z" };
+    const docs = { ...mark, credentialSlug: "docs", id: "20260930T090000Z" };
+    for (const m of [later, docs, mark]) storage.seed({ [markPath(m.collectionSlug, m.credentialSlug, m.id)]: serializeMark(m) });
+    const state = await loadFolder(storage);
+    expect(state.errors).toEqual([]);
+    expect(state.marks).toEqual([docs, mark, later]);
+    expect(state.raw[markPath("eng", "review", later.id)]).toBe(serializeMark(later));
+    expect(storage.writes).toEqual([]);
+  });
+
+  it("an unreadable mark lands in errors and not in marks, and the others still load", async () => {
+    const storage = fixture();
+    const bad = markPath("eng", "review", "20261002T090000Z");
+    storage.seed({ [markPath("eng", "review", mark.id)]: serializeMark(mark), [bad]: '{"agent":"claude-high"}' });
+    const state = await loadFolder(storage);
+    expect(state.errors.map((e) => e.path)).toEqual([bad]);
+    expect(state.marks).toEqual([mark]);
+    expect(state.raw[bad]).toBeUndefined();
+  });
+
+  it("skips hidden and temp files in a marks folder, and never reads a .json beside a result as a mark", async () => {
+    const storage = fixture();
+    storage.seed({
+      "collections/eng/marks/review/.20261001T090000Z.json.swp": "x",
+      "collections/eng/marks/review/20261001T090000Z.json.tmp-1": "x",
+      "collections/eng/marks/review/notes.txt": "x",
+      "collections/eng/marks/.hidden/20261001T090000Z.json": "x",
+      "assessments/claude-high/eng/review/20261001T090000Z.json": serializeMark(mark),
+    });
+    const state = await loadFolder(storage);
+    expect(state.errors).toEqual([]);
+    expect(state.marks).toEqual([]);
+    expect(state.assessments).toHaveLength(1);
   });
 });

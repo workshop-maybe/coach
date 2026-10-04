@@ -1,7 +1,7 @@
 // A handoff, opened (U3, R12): one of a badge's handoffs once two or more have run. Its
-// name and text, then every agent's reply to it, each opening as its own view and coming
-// back here with its take lit and the picks kept (U5, R16). Close and Escape go back to its
-// badge.
+// name and text in one column and every agent's reply to it in the other, as on its badge's
+// page, each reply opening as its own view and coming back here with its take lit and the
+// picks kept (U5, R16). Close and Escape go back to its badge.
 
 import { handoffRuns } from "../domain/handoffResults";
 import { SKELETON_ID, handoffsFor, skeletonOf } from "../domain/handoffs";
@@ -34,30 +34,34 @@ export function HandoffDetail({ credentialKey: key, handoffId, lit, litTake, pic
   const name = handoffText(state, key, handoffId);
 
   return (
-    <section className="detail" aria-label={`${credential.name}, ${name}`}>
+    <section className="detail detail-split" aria-label={`${credential.name}, ${name}`}>
       <button type="button" className="deck-close ghost" aria-label="Close" onClick={toBadge}>
         ×
       </button>
-      <div className="detail-head">
-        <h2 tabIndex={-1} ref={focusOnMount}>
-          {name}
-        </h2>
-        <p className="muted">{credential.name}</p>
-        <button type="button" className="primary" onClick={() => navigate({ view: "deck", deck: "test", credentialKey: key, handoffId })}>
-          Test it on an agent
-        </button>
+      <div className="detail-main">
+        <div className="detail-head">
+          <h2 tabIndex={-1} ref={focusOnMount}>
+            {name}
+          </h2>
+          <p className="muted">{credential.name}</p>
+          <button type="button" className="primary" onClick={() => navigate({ view: "deck", deck: "test", credentialKey: key, handoffId })}>
+            Test it on an agent
+          </button>
+        </div>
+
+        <details className="handoff-text">
+          {/* The skeleton never locks, so a reply may have run an earlier one; each reply keeps its own text. */}
+          <summary>{skeleton ? "The current skeleton" : "Its text"}</summary>
+          <pre className="handback">{text}</pre>
+        </details>
       </div>
 
-      <details className="handoff-text">
-        {/* The skeleton never locks, so a reply may have run an earlier one; each reply keeps its own text. */}
-        <summary>{skeleton ? "The current skeleton" : "Its text"}</summary>
-        <pre className="handback">{text}</pre>
-      </details>
-
-      <section className="detail-section" aria-labelledby="handoff-replies">
-        <h3 id="handoff-replies">Replies</h3>
-        <ReplyList credentialKey={key} run={run} state={state} matrix={matrix} lit={lit} litTake={litTake} picks={picks} focusCompare={focusCompare} />
-      </section>
+      <div className="detail-side">
+        <section className="detail-section" aria-labelledby="handoff-replies">
+          <h3 id="handoff-replies">Replies</h3>
+          <ReplyList credentialKey={key} run={run} state={state} matrix={matrix} lit={lit} litTake={litTake} picks={picks} focusCompare={focusCompare} />
+        </section>
+      </div>
     </section>
   );
 }

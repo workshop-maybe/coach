@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ChangedOnDiskError } from "../storage/storage";
 import { MemoryStorage } from "../storage/memory";
 import { assignmentVersion } from "./hash";
-import { assessmentPath, collectionPath, credentialPath, handoffPath, loadFolder, profilePath, SKELETON_PATH } from "./folder";
+import { assessmentPath, collectionPath, credentialPath, handoffPath, loadFolder, markPath, marksDir, profilePath, serializeMark, SKELETON_PATH } from "./folder";
 import { BUILT_IN_HANDOFF, defaultHandoff, handoffsFor, isHandoffLocked, SKELETON_ID, winnerFor } from "./handoffs";
 import {
   HandoffLockedError,
@@ -16,6 +16,7 @@ import {
   duplicateProfileDraft,
   importBadgeArt,
   isSetupLocked,
+  markGoTo,
   recordAssessment,
   reorderCredentials,
   saveSkeleton,
@@ -704,6 +705,76 @@ describe("moving to trash", () => {
     const done = await trashProfile(storage, between, "claude-opus", new Date("2026-09-30T10:00:05Z"));
     expect(done.profiles).toEqual([]);
     expect(Object.keys(storage.files()).filter((p) => p.startsWith("assessments/"))).toEqual([]);
+  });
+
+  it("Covers AE8. Trashing the marked agent leaves the badge's marks where they are", async () => {
+    const { storage, state } = await withOneAssessment();
+    const marked = await markGoTo(storage, state, { profileSlug: "claude-opus", collectionSlug: "go-basics", credentialSlug: "write-a-cli", fileStem: "20260929T084900Z" }, now);
+    const path = markPath("go-basics", "write-a-cli", "20260930T100000Z");
+    const next = await trashProfile(storage, marked, "claude-opus", new Date("2026-09-30T11:00:00Z"));
+    expect(storage.file(path)).toBe(serializeMark(marked.marks[0]));
+    expect(next.marks).toEqual(marked.marks);
+  });
+
+  it("trashing a badge moves its marks under the same stamp, and leaves another badge's marks", async () => {
+    const { storage, state: first } = await withOneAssessment();
+    const second = await createCredential(storage, first, "go-basics", "Read a file");
+    const other = await recordAssessment(storage, second.state, { profileSlug: "claude-opus", collectionSlug: "go-basics", credentialSlug: "read-a-file", result: "met", note: "", handBack: "Read." }, new Date("2026-09-29T09:00:00Z"));
+    let state = await markGoTo(storage, other, { profileSlug: "claude-opus", collectionSlug: "go-basics", credentialSlug: "write-a-cli", fileStem: "20260929T084900Z" }, new Date("2026-09-29T09:30:00Z"));
+    state = await markGoTo(storage, state, { profileSlug: "claude-opus", collectionSlug: "go-basics", credentialSlug: "read-a-file", fileStem: "20260929T090000Z" }, new Date("2026-09-29T09:30:00Z"));
+    const moved = markPath("go-basics", "write-a-cli", "20260929T093000Z");
+    const movedText = storage.file(moved);
+    state = await trashCredential(storage, state, "go-basics", "write-a-cli", now);
+    expect(Object.keys(storage.files()).filter((p) => p.startsWith(`${marksDir("go-basics", "write-a-cli")}/`))).toEqual([]);
+    expect(storage.file(`trash/20260930T100000Z/${moved}`)).toBe(movedText);
+    expect(storage.file(markPath("go-basics", "read-a-file", "20260929T093000Z"))).toBeDefined();
+    expect(state.marks.map((m) => m.credentialSlug)).toEqual(["read-a-file"]);
+  });
+});
+
+describe("go-to marks", () => {
+  const ref = { profileSlug: "claude-opus", collectionSlug: "go-basics", credentialSlug: "write-a-cli", fileStem: "20260929T084900Z" };
+  const now = new Date("2026-10-01T09:00:00.000Z");
+  const markFiles = (storage: MemoryStorage) => Object.keys(storage.files()).filter((p) => p.startsWith(`${marksDir("go-basics", "write-a-cli")}/`));
+
+  it("marks a Met result with a new file naming its agent and result, and never touches the result", async () => {
+    const { storage, state } = await withOneAssessment();
+    const result = assessmentPath("claude-opus", "go-basics", "write-a-cli", ref.fileStem);
+    const before = storage.file(result);
+    const next = await markGoTo(storage, state, ref, now);
+    expect(markFiles(storage)).toEqual([markPath("go-basics", "write-a-cli", "20261001T090000Z")]);
+    expect(JSON.parse(storage.file(markPath("go-basics", "write-a-cli", "20261001T090000Z"))!)).toEqual({ agent: "claude-opus", result: ref.fileStem });
+    expect(next.marks).toEqual([{ collectionSlug: "go-basics", credentialSlug: "write-a-cli", id: "20261001T090000Z", profileSlug: "claude-opus", fileStem: ref.fileStem }]);
+    expect(storage.file(result)).toBe(before);
+  });
+
+  it("two marks in the same second get two files, the second with the later stamp", async () => {
+    const { storage, state } = await withOneAssessment();
+    const one = await markGoTo(storage, state, ref, now);
+    const two = await markGoTo(storage, one, ref, now);
+    expect(two.marks.map((m) => m.id)).toEqual(["20261001T090000Z", "20261001T090001Z"]);
+  });
+
+  it("a mark made while the clock reads earlier than the newest mark still gets a later stamp", async () => {
+    const { storage, state } = await withOneAssessment();
+    const one = await markGoTo(storage, state, ref, now);
+    const two = await markGoTo(storage, one, ref, new Date("2026-09-30T00:00:00Z"));
+    expect(two.marks.map((m) => m.id)).toEqual(["20261001T090000Z", "20261001T090001Z"]);
+  });
+
+  it("refuses a Not met result and writes nothing (R3)", async () => {
+    const { storage, state } = await setup();
+    const notMet = await recordAssessment(storage, state, { ...ref, result: "not_met", note: "", handBack: "Tried." }, new Date("2026-09-29T08:49:00Z"));
+    await expect(markGoTo(storage, notMet, ref, now)).rejects.toThrow(/Met/);
+    expect(markFiles(storage)).toEqual([]);
+  });
+
+  it("refuses a result, agent or badge the folder does not have, and writes nothing", async () => {
+    const { storage, state } = await withOneAssessment();
+    await expect(markGoTo(storage, state, { ...ref, fileStem: "20200101T000000Z" }, now)).rejects.toThrow();
+    await expect(markGoTo(storage, state, { ...ref, profileSlug: "nobody" }, now)).rejects.toThrow();
+    await expect(markGoTo(storage, state, { ...ref, credentialSlug: "nothing" }, now)).rejects.toThrow();
+    expect(Object.keys(storage.files()).some((p) => p.includes("/marks/"))).toBe(false);
   });
 });
 

@@ -11,7 +11,7 @@ Everything you make lives in the folder you chose, as plain text. Credentials an
 
 ## What's in the folder
 
-A folder with one badge, one agent and one result looks like this:
+A folder with one badge, one agent, one result and one go-to looks like this:
 
 ```text
 Andamio/
@@ -25,6 +25,9 @@ Andamio/
       handoffs/
         say-how-sure-you-are/
           20260928T090000Z.md
+      marks/
+        say-how-sure-you-are/
+          20260926T170000Z.json
       badge/
         say-how-sure-you-are-1a2b3c4d.png
   agents/
@@ -43,6 +46,7 @@ Andamio/
 - `collections/` holds your credentials, grouped in collections. Most folders have one, `my-credentials`. Its `collection.json` holds the collection's name, the order of its badges, their numbers for [export](/how-to/export/) and their looks.
 - `credentials/` has one Markdown file per badge. An `image-….png` beside them is a picture pasted into a task or rubric; see [Paste an image](/how-to/paste-an-image/).
 - `handoffs/` inside a collection holds the handoffs a badge has of its own, one file each, named for when it was made.
+- `marks/` inside a collection holds every time you chose a badge's go-to, one small file each, named for when you chose. Each names the agent and the result you chose it on, and the newest one is the badge's go-to. See [Choose a go-to](/how-to/choose-a-go-to/).
 - `badge/` holds the art you chose for a badge's look.
 - `agents/` has one JSON file per agent: its name, harness, model, effort, repo, notes and parameters.
 - `assessments/` holds your results: a folder for each agent, then its collection, then the badge, with one file per result.
@@ -104,7 +108,7 @@ You can change any file while the app is open. It reads the folder again when it
 
 ## The trash
 
-<UI>Move to trash</UI> deletes nothing. It moves the files into `trash/`, in a folder named for when you moved them, at the same paths they had. An agent goes with its results. A badge goes with its handoffs, every agent's results on it and a copy of its collection's file as it was. Pictures pasted into a result go with it. Pictures beside a badge or an agent stay where they are, since other badges or agents may name the same file.
+<UI>Move to trash</UI> deletes nothing. It moves the files into `trash/`, in a folder named for when you moved them, at the same paths they had. An agent goes with its results, and while it's there no badge has it as its go-to. A badge goes with its handoffs, its go-to choices, every agent's results on it and a copy of its collection's file as it was. Pictures pasted into a result go with it. Pictures beside a badge or an agent stay where they are, since other badges or agents may name the same file.
 
 To get something back, move its files from the trash to the same places in your folder, then click <UI>Reload</UI>. To delete something for good, delete it from `trash/`.
 

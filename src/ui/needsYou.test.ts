@@ -20,7 +20,7 @@ const opus: AgentProfile = { slug: "opus", name: "Opus agent", harness: "claude-
 const codex: AgentProfile = { ...opus, slug: "codex", name: "Codex agent", harness: "codex", model: "gpt" };
 
 function folder(parts: Partial<FolderState>): FolderState {
-  return { collections: [eng], credentials: [], profiles: [], assessments: [], skeleton: null, handoffs: [], errors: [], warnings: [], raw: {}, ...parts };
+  return { collections: [eng], credentials: [], profiles: [], assessments: [], skeleton: null, handoffs: [], marks: [], errors: [], warnings: [], raw: {}, ...parts };
 }
 
 async function met(profile: AgentProfile, credential: Credential, overrides: Partial<Assessment> = {}): Promise<Assessment> {

@@ -9,14 +9,16 @@ import {
   SKELETON_PATH,
   credentialPath,
   handoffPath,
+  markPath,
   profilePath,
   serializeAssessment,
   serializeCollection,
+  serializeMark,
   serializeProfile,
 } from "../domain/folder";
 import { serializeCredentialMd } from "../domain/credential-md";
 import { assignmentVersion } from "../domain/hash";
-import type { AgentProfile, Assessment, Credential, Handoff } from "../domain/types";
+import type { AgentProfile, Assessment, Credential, Handoff, Mark } from "../domain/types";
 import { MemoryStorage } from "../storage/memory";
 import { AppShell, type Route } from "./AppShell";
 import { FolderProvider } from "./useFolderState";
@@ -69,6 +71,8 @@ export function storageWith(
     handoffs?: Handoff[];
     /** An edited skeleton. Absent means the built-in one. */
     skeleton?: string;
+    /** Go-to marks, each written as its own file. */
+    marks?: Mark[];
   } = {},
 ): MemoryStorage {
   const credentials = opts.credentials ?? [];
@@ -89,6 +93,7 @@ export function storageWith(
   }
   for (const h of opts.handoffs ?? []) files[handoffPath(h.collectionSlug, h.credentialSlug, h.id)] = h.text;
   if (opts.skeleton !== undefined) files[SKELETON_PATH] = opts.skeleton;
+  for (const m of opts.marks ?? []) files[markPath(m.collectionSlug, m.credentialSlug, m.id)] = serializeMark(m);
   return new MemoryStorage(files);
 }
 

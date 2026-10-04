@@ -37,6 +37,49 @@ async function litRow() {
   return rows[0].getAttribute("aria-label");
 }
 
+/** The column beside the player card on a wide window, which stacks under it on a narrow one. */
+const sideColumn = () => document.querySelector<HTMLElement>(".agent-detail > .detail-side");
+
+describe("AgentDetail's two columns", () => {
+  it("puts the parts, the badges and Move to trash beside the player card, with one Close", async () => {
+    renderApp(storageWith({ credentials: [review], profiles: [opus], assessments: [await result(opus, review)] }), agent);
+    await waitFor(() => expect(document.querySelector(".detail-earned li")).not.toBeNull());
+    const side = sideColumn();
+    expect(side).not.toBeNull();
+    expect(within(side!).getByRole("list", { name: "Parts" })).toBeTruthy();
+    expect(within(side!).getByRole("region", { name: "Badges" })).toBeTruthy();
+    expect(within(side!).getByRole("button", { name: "Move to trash" })).toBeTruthy();
+    // The player card is the other column, never inside the side one.
+    expect(side!.querySelector(".player")).toBeNull();
+    expect(document.querySelector(".agent-detail > .deck .player")).not.toBeNull();
+    expect(screen.getAllByRole("button", { name: "Close" })).toHaveLength(1);
+  });
+
+  it("puts Pull the handoff in the side column, before the parts", async () => {
+    addPending(FOLDER, {
+      profileSlug: "opus",
+      credentialKey: "eng/review",
+      copiedAt: "2026-09-30T09:00:00.000Z",
+      assignmentVersion: "v",
+      setup: { harness: opus.harness, model: opus.model, effort: opus.effort },
+      handoff: { id: "skeleton", text: "Review the attached diff." },
+    });
+    renderApp(storageWith({ credentials: [review], profiles: [opus] }), agent);
+    const pull = await screen.findByRole("button", { name: "Pull the handoff" });
+    const side = sideColumn()!;
+    expect(side.contains(pull)).toBe(true);
+    const parts = within(side).getByRole("list", { name: "Parts" });
+    expect(pull.compareDocumentPosition(parts) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("an untested agent's Test it sits in the side column", async () => {
+    renderApp(storageWith({ credentials: [review], profiles: [opus] }), agent);
+    const testIt = await screen.findByRole("button", { name: "Test it" });
+    expect(sideColumn()!.contains(testIt)).toBe(true);
+    expect(within(sideColumn()!).getByText(/Not tested yet/)).toBeTruthy();
+  });
+});
+
 describe("AgentDetail", () => {
   it("shows the player card in edit mode with its parts", async () => {
     renderApp(storageWith({ profiles: [opus] }), agent);
