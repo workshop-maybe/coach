@@ -38,12 +38,30 @@ export function useTakeWrites(onSaved?: (take: Take) => void) {
     }
   }
 
+  /**
+   * Runs one async section behind the same gate (jev-in-compare KTD9), so compare's Jev saves
+   * and its verdicts never interleave. It records no error and rethrows, so the caller says
+   * what failed; a section asked for while another write saves is refused, never skipped.
+   */
+  async function exclusive<T>(section: () => Promise<T>): Promise<T> {
+    if (savingNow.current) throw new Error("Another save is still in progress.");
+    savingNow.current = true;
+    setSaving(true);
+    try {
+      return await section();
+    } finally {
+      savingNow.current = false;
+      setSaving(false);
+    }
+  }
+
   return {
     saving,
     savingNow,
     error,
     judge: (take: Take, result: AssessmentResult) => run(take, (current) => judgeHeldReply(storage, current, refOf(take), result)),
     mark: (take: Take) => run(take, (current) => markGoTo(storage, current, refOf(take))),
+    exclusive,
   };
 }
 

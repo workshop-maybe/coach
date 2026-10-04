@@ -1,5 +1,5 @@
 // Test fixtures for the deck tests: a data folder in memory with credentials, agents
-// and results, and the app rendered over it on a chosen route.
+// and results, and the app rendered over it on a chosen route, with Jev Mode or without.
 
 import { render } from "@testing-library/react";
 import {
@@ -27,8 +27,10 @@ import {
 import { serializeCredentialMd } from "../domain/credential-md";
 import { assignmentVersion } from "../domain/hash";
 import type { AgentProfile, Assessment, Credential, Handoff, HeadToHead, HeldReading, HeldReply, Mark, Rejudge } from "../domain/types";
+import type { FakeJev } from "../jev/fakeJev";
 import { MemoryStorage } from "../storage/memory";
 import { AppShell, type Route } from "./AppShell";
+import { JevProvider } from "./jevContext";
 import { FolderProvider } from "./useFolderState";
 
 export const FOLDER = "/data";
@@ -137,6 +139,17 @@ export function renderApp(storage: MemoryStorage, initialRoute?: Route) {
     <FolderProvider storage={storage} folder={FOLDER}>
       <AppShell onChangeFolder={() => {}} initialRoute={initialRoute} />
     </FolderProvider>,
+  );
+}
+
+/** The app over the folder with Jev Mode from `fake`, on a chosen route. Every ask goes to the fake. */
+export function renderWithJev(storage: MemoryStorage, fake: FakeJev, initialRoute?: Route) {
+  return render(
+    <JevProvider jev={fake}>
+      <FolderProvider storage={storage} folder={FOLDER}>
+        <AppShell onChangeFolder={() => {}} initialRoute={initialRoute} />
+      </FolderProvider>
+    </JevProvider>,
   );
 }
 
