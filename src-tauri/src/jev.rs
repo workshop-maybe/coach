@@ -24,7 +24,8 @@
 //! Mode off, and changes nothing unless the delete succeeds. `jev_set_on` with
 //! `false` keeps the key. `jev_ask` checks, in order, that Jev Mode is on, that the
 //! request is one of the two shapes below with no other field, and that it fits
-//! the budget; only then does it read the key and post. It is never retried here.
+//! the budget, examples included; only then does it read the key and post. It is
+//! never retried here.
 //!
 //! ```ts
 //! type JevStatus = {
@@ -57,44 +58,65 @@
 //!
 //! type JevCriteria = { true: string; false: string };
 //!
-//! // A second opinion (KTD7): one question per rubric point plus one overall.
-//! // State and instruction keys are TypeSafe's wire names, so backticked
-//! // references in question text (`reply`, `point`, `rubric_notes`, `task`) resolve.
+//! // One example on a criteria side (growing context KTD2, KTD10): the opening of an
+//! // earlier reply on the badge, and the user's note on it. `reply_opening` is 1 to 300
+//! // characters; `user_reason` is at most 200 characters and holds no line break
+//! // (U+000A, U+000B, U+000C, U+000D, U+0085, U+2028, U+2029). Characters are code points.
+//! type JevExample = { reply_opening: string; user_reason?: string };
+//!
+//! // A criteria side: a string, or TypeSafe's structured Noul criteria, the string as
+//! // `what` with one or two examples.
+//! type JevCriterion = string | { what: string; examples: JevExample[] };
+//!
+//! // A second opinion (KTD7): one question per rubric point, one per learning target,
+//! // plus one overall. State and instruction keys are TypeSafe's wire names, so
+//! // backticked references in question text (`reply`, `point`, `rubric_notes`,
+//! // `target`, `task`) resolve.
 //! type SecondOpinionRequest = {
 //!   kind: "secondOpinion";
 //!   state: {
 //!     task: string;
-//!     rubric_points: string[]; // the rubric's top-level list items, in order
-//!     rubric_notes: string;    // the rubric's lines outside its list
-//!     rubric: string;          // the full rubric
+//!     rubric_points: string[];    // the rubric's top-level list items, in order
+//!     rubric_notes: string;       // the rubric's lines outside its list
+//!     rubric: string;             // the full rubric
+//!     learning_targets: string[]; // the badge's learning targets, in order; may be empty
 //!     reply: string;
 //!   };
 //!   // Exactly these keys: "p1" … "pN" for rubric_points[0] … rubric_points[N-1],
-//!   // plus "overall". With no rubric points, only "overall".
+//!   // "t1" … "tM" for learning_targets[0] … learning_targets[M-1], plus "overall".
+//!   // With no rubric points and no targets, only "overall".
 //!   questions: Record<string, {
 //!     type: "noul";
-//!     instructions: string | { point?: string; rubric_notes?: string; question: string };
-//!     criteria?: JevCriteria;
+//!     instructions: string | { point?: string; rubric_notes?: string; target?: string; question: string };
+//!     criteria?: { true: JevCriterion; false: JevCriterion };
 //!   }>;
 //! };
+//! // A "t" question's instructions are structured and name its `target`, and its
+//! // criteria are strings; no other question names a `target`. Examples ride only on
+//! // "p" questions and "overall", and a "p" question's true side carries no `user_reason`.
 //!
 //! // A line-break cleanup (KTD17): one question per candidate break.
 //! type LineBreaksRequest = {
 //!   kind: "lineBreaks";
 //!   state: string; // only the pasted text, each line tagged with its id ("L014| …")
 //!   // Each key is the id of the line that may continue the one before it:
-//!   // "L" and one to six digits, e.g. "L015".
+//!   // "L" and one to six digits, e.g. "L015". Criteria are strings only.
 //!   questions: Record<string, { type: "noul"; instructions: string; criteria?: JevCriteria }>;
 //! };
 //!
 //! type JevRequest = SecondOpinionRequest | LineBreaksRequest;
 //!
-//! // Every requested id, each a probability from 0 to 1. Nothing else from TypeSafe.
-//! type JevAnswers = { answers: Record<string, number> };
+//! // Every requested id, each a probability from 0 to 1, and the model that answered
+//! // (growing context KTD3). Nothing else from TypeSafe. `model` is the versioned id
+//! // TypeSafe names when it is a short one (letters, digits, `.`, `_`, `:`, `/`, `+`
+//! // and `-`, at most 64 characters). One that is absent or in any other shape reads
+//! // as the pinned "jev-1.13.0" and never fails the ask, for either request.
+//! type JevAnswers = { answers: Record<string, number>; model: string };
 //! ```
 //!
 //! Any other field, at any level (a `model` field included), is refused as
-//! `"other"`, as are other question types and keys outside the rules above.
+//! `"other"`, as are other question types, keys outside the rules above, and
+//! examples or targets placed or sized outside them.
 //!
 //! Budget (KTD19), checked in the web view and again here. For a value `v`,
 //! `tokens(v) = Math.ceil(JSON.stringify(v).length / 4)`, taken separately for
@@ -126,6 +148,13 @@ pub const MAX_QUESTIONS: usize = 256;
 pub const STATE_PLUS_LONGEST_TOKENS: usize = 32_000;
 pub const STATE_PLUS_ALL_TOKENS: usize = 64_000;
 pub const MAX_KEY_CHARS: usize = 512;
+/// A second opinion's examples (growing context KTD2, KTD10): at most two per criteria
+/// side, each reply opening 1 to 300 characters, each reason at most 200.
+pub const MAX_EXAMPLES_PER_SIDE: usize = 2;
+pub const MAX_OPENING_CHARS: usize = 300;
+pub const MAX_REASON_CHARS: usize = 200;
+/// The longest model id an answer may name before it reads as the pinned one (KTD3).
+const MAX_MODEL_CHARS: usize = 64;
 /// Shorter keys get no hint, since four characters would give away too much of them.
 const HINT_MIN_CHARS: usize = 12;
 /// The one keychain entry. Setting a new key overwrites it.
@@ -337,10 +366,11 @@ pub struct JevStatus {
     pub hint: Option<String>,
 }
 
-/// Jev's probabilities, keyed by the ask's own question ids.
+/// Jev's probabilities, keyed by the ask's own question ids, and the model that answered.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Answers {
     pub answers: BTreeMap<String, f64>,
+    pub model: String,
 }
 
 /// Jev Mode's native side, held in `AppState`.
@@ -479,10 +509,10 @@ enum Ask {
 #[serde(deny_unknown_fields)]
 struct SecondOpinion {
     state: OpinionState,
-    questions: BTreeMap<String, Question<Instructions>>,
+    questions: BTreeMap<String, Question<Instructions, OpinionCriteria>>,
 }
 
-/// Only the reply, the badge's task and its rubric (R5).
+/// Only the reply, the badge's task, its rubric and its learning targets (R5).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct OpinionState {
@@ -490,6 +520,7 @@ struct OpinionState {
     rubric_points: Vec<String>,
     rubric_notes: String,
     rubric: String,
+    learning_targets: Vec<String>,
     reply: String,
 }
 
@@ -498,17 +529,18 @@ struct OpinionState {
 #[serde(deny_unknown_fields)]
 struct LineBreaks {
     state: String,
-    questions: BTreeMap<String, Question<String>>,
+    questions: BTreeMap<String, Question<String, Criteria>>,
 }
 
+/// One question. `criteria` is optional, so its type needs no `Default` of its own.
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Question<I> {
+#[serde(deny_unknown_fields, bound(deserialize = "I: Deserialize<'de>, C: Deserialize<'de>"))]
+struct Question<I, C> {
     #[serde(rename = "type")]
     kind: Noul,
     instructions: I,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    criteria: Option<Criteria>,
+    criteria: Option<C>,
 }
 
 /// The only question type an ask may carry.
@@ -525,7 +557,8 @@ enum Instructions {
     Structured(StructuredInstructions),
 }
 
-/// TypeSafe's structured instructions object, limited to what a point question needs.
+/// TypeSafe's structured instructions object, limited to what a point or target question
+/// needs. `target` is set on a target question and only there.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct StructuredInstructions {
@@ -533,9 +566,12 @@ struct StructuredInstructions {
     point: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     rubric_notes: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    target: Option<String>,
     question: String,
 }
 
+/// A cleanup's criteria: plain strings only.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Criteria {
@@ -545,23 +581,60 @@ struct Criteria {
     no: String,
 }
 
+/// A second opinion's criteria, where either side may carry examples.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct OpinionCriteria {
+    #[serde(rename = "true")]
+    yes: Side,
+    #[serde(rename = "false")]
+    no: Side,
+}
+
+/// A criteria side: a string, or TypeSafe's structured Noul criteria.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+enum Side {
+    Text(String),
+    Structured(StructuredSide),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct StructuredSide {
+    what: String,
+    examples: Vec<Example>,
+}
+
+/// The opening of an earlier reply, and the user's own note on it, kept apart.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Example {
+    reply_opening: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    user_reason: Option<String>,
+}
+
 impl Ask {
     /// Reads the web view's request into one of the two shapes, with its keys
-    /// following the shape's rules.
+    /// following the shape's rules, and a second opinion's targets and examples
+    /// placed and sized as the contract says.
     fn parse(request: Value) -> Result<Ask, JevError> {
         let malformed = JevError::of(Kind::Other);
         let ask: Ask = serde_json::from_value(request).map_err(|_| malformed)?;
-        let keyed = match &ask {
+        let checked = match &ask {
             Ask::SecondOpinion(o) => {
                 let expected: BTreeSet<String> = (1..=o.state.rubric_points.len())
                     .map(|i| format!("p{i}"))
+                    .chain((1..=o.state.learning_targets.len()).map(|i| format!("t{i}")))
                     .chain(["overall".to_string()])
                     .collect();
                 o.questions.keys().cloned().collect::<BTreeSet<_>>() == expected
+                    && o.questions.iter().all(|(id, q)| opinion_question_fits(id, q))
             }
             Ask::LineBreaks(l) => !l.questions.is_empty() && l.questions.keys().all(|id| is_line_id(id)),
         };
-        if keyed {
+        if checked {
             Ok(ask)
         } else {
             Err(malformed)
@@ -601,6 +674,51 @@ impl Ask {
         };
         serde_json::json!({ "state": state, "model": MODEL, "questions": questions })
     }
+}
+
+/// What a second-opinion question's types can't say (growing context KTD2), for a key
+/// already checked: a target question names its `target`, no other question does, and
+/// its criteria are plain; a side's examples number one or two, each within its size;
+/// and a point's true side carries no reason. The sizes hold even if the web view's
+/// excerpts don't.
+fn opinion_question_fits(id: &str, question: &Question<Instructions, OpinionCriteria>) -> bool {
+    let is_target = id.starts_with('t');
+    let names_target = matches!(&question.instructions, Instructions::Structured(s) if s.target.is_some());
+    if is_target != names_target {
+        return false;
+    }
+    let Some(criteria) = &question.criteria else {
+        return true;
+    };
+    if is_target {
+        return matches!((&criteria.yes, &criteria.no), (Side::Text(_), Side::Text(_)));
+    }
+    let is_point = id.starts_with('p');
+    side_fits(&criteria.yes, !is_point) && side_fits(&criteria.no, true)
+}
+
+fn side_fits(side: &Side, reasons: bool) -> bool {
+    match side {
+        Side::Text(_) => true,
+        Side::Structured(s) => {
+            (1..=MAX_EXAMPLES_PER_SIDE).contains(&s.examples.len()) && s.examples.iter().all(|e| example_fits(e, reasons))
+        }
+    }
+}
+
+/// Sizes count characters (code points), as the web view cuts them.
+fn example_fits(example: &Example, reasons: bool) -> bool {
+    let opening = example.reply_opening.chars().count();
+    let reason_fits = example.user_reason.as_deref().is_none_or(|reason| {
+        reasons && reason.chars().count() <= MAX_REASON_CHARS && !reason.chars().any(is_line_break)
+    });
+    (1..=MAX_OPENING_CHARS).contains(&opening) && reason_fits
+}
+
+/// Every Unicode line break a reason may not hold, so one can never start a new line in
+/// a saved file or in the question.
+fn is_line_break(c: char) -> bool {
+    matches!(c, '\n' | '\r' | '\u{b}' | '\u{c}' | '\u{85}' | '\u{2028}' | '\u{2029}')
 }
 
 /// "L" and one to six digits, as the cleanup tags its lines.
@@ -680,6 +798,9 @@ fn retry_after(headers: &HeaderMap) -> Option<u32> {
 #[derive(Deserialize)]
 struct WireReply {
     answers: BTreeMap<String, WireAnswer>,
+    /// Read as any value, so a model in an unexpected shape never fails the ask (KTD3).
+    #[serde(default)]
+    model: Value,
 }
 
 #[derive(Deserialize)]
@@ -689,9 +810,10 @@ struct WireAnswer {
     noul: Option<f64>,
 }
 
-/// Turns TypeSafe's reply into probabilities keyed by the ask's own ids. A status
-/// that isn't a success never reads the body. An answer outside 0–1, of another
-/// type, missing, or for an id the ask didn't send is "other", never clamped.
+/// Turns TypeSafe's reply into probabilities keyed by the ask's own ids, with the
+/// model that answered. A status that isn't a success never reads the body. An answer
+/// outside 0–1, of another type, missing, or for an id the ask didn't send is "other",
+/// never clamped. The model is never a reason to fail: the cleanup ignores it.
 fn answers_from(status: u16, headers: &HeaderMap, body: &[u8], ids: &BTreeSet<String>) -> Result<Answers, JevError> {
     if !(200..300).contains(&status) {
         return Err(kind_of(Failure::Status(status, retry_after(headers))));
@@ -710,7 +832,17 @@ fn answers_from(status: u16, headers: &HeaderMap, body: &[u8], ids: &BTreeSet<St
             _ => return Err(malformed),
         }
     }
-    Ok(Answers { answers })
+    Ok(Answers { answers, model: answering_model(&reply.model) })
+}
+
+/// The model TypeSafe names when it is a short id (letters, digits, `.`, `_`, `:`, `/`,
+/// `+` and `-`, at most 64 characters), else the pinned model.
+fn answering_model(model: &Value) -> String {
+    let short_id = |id: &&str| {
+        (1..=MAX_MODEL_CHARS).contains(&id.len())
+            && id.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | ':' | '/' | '+' | '-'))
+    };
+    model.as_str().filter(short_id).unwrap_or(MODEL).to_string()
 }
 
 /// Sends a prepared ask and returns Jev's probabilities.
@@ -855,7 +987,14 @@ mod tests {
     }
 
     fn opinion(points: usize) -> Value {
+        opinion_with(points, 0)
+    }
+
+    /// A second opinion on `points` rubric points and `targets` learning targets, with
+    /// string criteria on every question.
+    fn opinion_with(points: usize, targets: usize) -> Value {
         let rubric_points: Vec<String> = (1..=points).map(|i| format!("Point {i}")).collect();
+        let learning_targets: Vec<String> = (1..=targets).map(|i| format!("Target {i}")).collect();
         let mut questions = serde_json::Map::new();
         for i in 1..=points {
             questions.insert(
@@ -866,6 +1005,19 @@ mod tests {
                         "point": format!("Point {i}"),
                         "rubric_notes": "A rewrite in other words passes.",
                         "question": "Does `reply` satisfy `point`, read with `rubric_notes`, given `task`?"
+                    },
+                    "criteria": criteria()
+                }),
+            );
+        }
+        for i in 1..=targets {
+            questions.insert(
+                format!("t{i}"),
+                json!({
+                    "type": "noul",
+                    "instructions": {
+                        "target": format!("Target {i}"),
+                        "question": "Does `reply` show the work `target` describes, given `task`?"
                     },
                     "criteria": criteria()
                 }),
@@ -882,9 +1034,68 @@ mod tests {
                 "rubric_points": rubric_points,
                 "rubric_notes": "A rewrite in other words passes.",
                 "rubric": "- Point 1\n- Point 2",
+                "learning_targets": learning_targets,
                 "reply": "Done. I wrote README.md with an install section."
             },
             "questions": questions
+        })
+    }
+
+    /// One example: the opening of an earlier reply, with the user's note when given.
+    fn example(opening: &str, reason: Option<&str>) -> Value {
+        match reason {
+            Some(reason) => json!({ "reply_opening": opening, "user_reason": reason }),
+            None => json!({ "reply_opening": opening }),
+        }
+    }
+
+    /// A criteria side with these examples.
+    fn side(examples: Vec<Value>) -> Value {
+        json!({ "what": "the reply names the files", "examples": examples })
+    }
+
+    /// Two points and two targets, with examples on both sides of p1 and on overall's
+    /// true side, as the web view sends them.
+    fn opinion_with_examples() -> Value {
+        let mut o = opinion_with(2, 2);
+        o["questions"]["p1"]["criteria"] = json!({
+            "true": side(vec![
+                example("I added README.md with an install section.", None),
+                example("README.md now covers install and usage.", None),
+            ]),
+            "false": side(vec![example("Done, the README is updated.", Some("names no file"))]),
+        });
+        o["questions"]["overall"]["criteria"]["true"] =
+            side(vec![example("I added README.md with an install section.", Some("shows the install command"))]);
+        o
+    }
+
+    /// The web view's budget test for a second opinion with examples sends this same
+    /// request (`withExamples` in src/domain/jevBudget.test.ts).
+    fn opinion_for_budget(reply_chars: usize, examples: bool) -> Value {
+        let criteria = if examples {
+            json!({
+                "true": { "what": "w", "examples": [{ "reply_opening": "o".repeat(300) }, { "reply_opening": "o".repeat(300) }] },
+                "false": { "what": "w", "examples": [{ "reply_opening": "n".repeat(300), "user_reason": "r".repeat(200) }] }
+            })
+        } else {
+            json!({ "true": "w", "false": "w" })
+        };
+        json!({
+            "kind": "secondOpinion",
+            "state": {
+                "task": "Write the README",
+                "rubric_points": ["Point 1"],
+                "rubric_notes": "",
+                "rubric": "- Point 1",
+                "learning_targets": ["Target 1"],
+                "reply": "y".repeat(reply_chars)
+            },
+            "questions": {
+                "p1": { "type": "noul", "instructions": { "point": "Point 1", "question": "q" }, "criteria": criteria },
+                "t1": { "type": "noul", "instructions": { "target": "Target 1", "question": "q" }, "criteria": { "true": "w", "false": "w" } },
+                "overall": { "type": "noul", "instructions": "q" }
+            }
         })
     }
 
@@ -995,7 +1206,50 @@ mod tests {
         }"#;
         let answers = answers_from(200, &HeaderMap::new(), body, &ids(&["p1", "overall"])).unwrap();
         assert_eq!(answers.answers, BTreeMap::from([("overall".to_string(), 0.0), ("p1".to_string(), 0.92)]));
-        assert_eq!(serde_json::to_value(&answers).unwrap(), json!({ "answers": { "overall": 0.0, "p1": 0.92 } }));
+        assert_eq!(
+            serde_json::to_value(&answers).unwrap(),
+            json!({ "answers": { "overall": 0.0, "p1": 0.92 }, "model": "jev-1.13.0" })
+        );
+    }
+
+    #[test]
+    fn the_answer_names_the_model_that_answered_or_the_pinned_one() {
+        let asked = ids(&["p1", "t1", "overall"]);
+        let model_of = |model: &str| {
+            let body = format!(
+                r#"{{"answers":{{"p1":{{"type":"noul","noul":0.5}},"t1":{{"type":"noul","noul":0.4}},"overall":{{"type":"noul","noul":0.6}}}}{model}}}"#
+            );
+            answers_from(200, &HeaderMap::new(), body.as_bytes(), &asked).expect("the ask succeeds").model
+        };
+        assert_eq!(model_of(r#","model":"jev-1.13.2""#), "jev-1.13.2");
+        assert_eq!(model_of(r#","model":"jev:1.14/beta+2_rc.1-a""#), "jev:1.14/beta+2_rc.1-a");
+        let longest = "m".repeat(64);
+        assert_eq!(model_of(&format!(r#","model":"{longest}""#)), longest);
+
+        let too_long = format!(r#","model":"{}""#, "m".repeat(65));
+        let fallbacks = [
+            ("absent", ""),
+            ("with a space", r#","model":"jev 1.13""#),
+            ("over 64 characters", too_long.as_str()),
+            ("empty", r#","model":"""#),
+            ("not ASCII", r#","model":"jév-1.13""#),
+            ("a number", r#","model":113"#),
+            ("null", r#","model":null"#),
+            ("an object", r#","model":{"id":"jev-2"}"#),
+        ];
+        for (what, model) in fallbacks {
+            assert_eq!(model_of(model), MODEL, "{what}");
+        }
+    }
+
+    #[test]
+    fn a_cleanups_answer_succeeds_whatever_model_it_names() {
+        let asked = ids(&["L002"]);
+        for model in [r#""model":"jev-1.13.0","#, r#""model":"not a model id!","#, r#""model":[1,2],"#, ""] {
+            let body = format!(r#"{{{model}"answers":{{"L002":{{"type":"noul","noul":0.9}}}}}}"#);
+            let answers = answers_from(200, &HeaderMap::new(), body.as_bytes(), &asked).expect(model);
+            assert_eq!(answers.answers, BTreeMap::from([("L002".to_string(), 0.9)]));
+        }
     }
 
     #[test]
@@ -1100,7 +1354,62 @@ mod tests {
         let mut unknown_kind = line_breaks(&["L002"]);
         unknown_kind["kind"] = json!("rewrite");
 
-        let refused = [
+        // Learning targets, structured criteria and examples (growing context KTD2). Each
+        // changes one thing in a request that is accepted as it stands.
+        let base = opinion_with_examples;
+        let mut no_targets = opinion(1);
+        no_targets["state"].as_object_mut().unwrap().remove("learning_targets");
+        let mut extra_target = base();
+        extra_target["questions"]["t3"] = extra_target["questions"]["t1"].clone();
+        let mut missing_target = base();
+        missing_target["questions"].as_object_mut().unwrap().remove("t2");
+        let mut target_as_text = base();
+        target_as_text["questions"]["t1"]["instructions"] = json!("Does `reply` show the work?");
+        let mut target_without_target = base();
+        target_without_target["questions"]["t1"]["instructions"].as_object_mut().unwrap().remove("target");
+        let mut point_with_target = base();
+        point_with_target["questions"]["p2"]["instructions"]["target"] = json!("Target 1");
+        let mut overall_with_target = base();
+        overall_with_target["questions"]["overall"]["instructions"] =
+            json!({ "target": "Target 1", "question": "Does `reply` satisfy all of `rubric`?" });
+        let mut target_examples = base();
+        target_examples["questions"]["t1"]["criteria"]["true"] = side(vec![example("I added README.md.", None)]);
+        let mut extra_example = base();
+        extra_example["questions"]["p1"]["criteria"]["false"]["examples"][0]["agent"] = json!("claude");
+        let mut no_opening = base();
+        no_opening["questions"]["p1"]["criteria"]["false"]["examples"][0] = json!({ "user_reason": "names no file" });
+        let mut no_what = base();
+        no_what["questions"]["p1"]["criteria"]["false"].as_object_mut().unwrap().remove("what");
+        let mut what_alone = base();
+        what_alone["questions"]["p1"]["criteria"]["false"].as_object_mut().unwrap().remove("examples");
+        let mut extra_side = base();
+        extra_side["questions"]["p1"]["criteria"]["false"]["weight"] = json!(2);
+        let mut no_examples = base();
+        no_examples["questions"]["p1"]["criteria"]["false"]["examples"] = json!([]);
+        let mut three_examples = base();
+        three_examples["questions"]["p1"]["criteria"]["false"]["examples"] =
+            json!([example("One.", None), example("Two.", None), example("Three.", None)]);
+        let mut structured_cleanup = line_breaks(&["L002"]);
+        structured_cleanup["questions"]["L002"]["criteria"]["true"] = side(vec![example("L001| a", None)]);
+        let mut empty_opening = base();
+        empty_opening["questions"]["p1"]["criteria"]["false"]["examples"][0]["reply_opening"] = json!("");
+        let mut long_opening = base();
+        long_opening["questions"]["p1"]["criteria"]["false"]["examples"][0]["reply_opening"] = json!("a".repeat(301));
+        let mut long_reason = base();
+        long_reason["questions"]["p1"]["criteria"]["false"]["examples"][0]["user_reason"] = json!("r".repeat(201));
+        let mut reason_on_holds = base();
+        reason_on_holds["questions"]["p1"]["criteria"]["true"]["examples"][0]["user_reason"] = json!("shows the install");
+        let breaks = [
+            ("a reason with a line feed", '\n'),
+            ("a reason with a carriage return", '\r'),
+            ("a reason with a vertical tab", '\u{b}'),
+            ("a reason with a form feed", '\u{c}'),
+            ("a reason with a next line", '\u{85}'),
+            ("a reason with a line separator", '\u{2028}'),
+            ("a reason with a paragraph separator", '\u{2029}'),
+        ];
+
+        let mut refused = vec![
             ("a model field", with_model),
             ("an unknown top-level field", extra_top),
             ("an unknown state field", extra_state),
@@ -1118,7 +1427,33 @@ mod tests {
             ("a line id that's too long", line_breaks(&["L1234567"])),
             ("a cleanup with no questions", line_breaks(&[])),
             ("not an object", json!("ask")),
+            ("no learning_targets", no_targets),
+            ("a target question for no target", extra_target),
+            ("a target with no question", missing_target),
+            ("a target question with text instructions", target_as_text),
+            ("a target question with no target", target_without_target),
+            ("a target on a point question", point_with_target),
+            ("a target on the overall question", overall_with_target),
+            ("examples on a target question", target_examples),
+            ("an unknown example field", extra_example),
+            ("an example with no reply_opening", no_opening),
+            ("examples with no what", no_what),
+            ("a structured side with no examples", what_alone),
+            ("an unknown structured side field", extra_side),
+            ("an empty examples list", no_examples),
+            ("three examples on a side", three_examples),
+            ("structured criteria in a cleanup", structured_cleanup),
+            ("an empty reply_opening", empty_opening),
+            ("a reply_opening over 300 characters", long_opening),
+            ("a user_reason over 200 characters", long_reason),
+            ("a user_reason on a point's true side", reason_on_holds),
         ];
+        for (what, line_break) in breaks {
+            let mut broken = base();
+            broken["questions"]["p1"]["criteria"]["false"]["examples"][0]["user_reason"] =
+                json!(format!("names no{line_break}file"));
+            refused.push((what, broken));
+        }
         for (what, request) in refused {
             assert_eq!(kind(r.jev.prepare(&r.file, request)), Kind::Other, "{what}");
         }
@@ -1169,6 +1504,45 @@ mod tests {
         assert_eq!(body["model"], MODEL);
         assert_eq!(body["state"]["rubric_points"], json!(["Point 1", "Point 2"]));
         assert_eq!(body["state"]["rubric_notes"], "A rewrite in other words passes.");
+    }
+
+    #[test]
+    fn an_ask_with_targets_and_examples_is_sent_as_it_came() {
+        let r = rig_on();
+        let request = opinion_with_examples();
+        let prepared = r.jev.prepare(&r.file, request.clone()).unwrap();
+        assert_eq!(prepared.ask.ids(), ids(&["overall", "p1", "p2", "t1", "t2"]));
+        let body = prepared.ask.body();
+        assert_eq!(body["state"], request["state"]);
+        assert_eq!(body["questions"], request["questions"]);
+        assert_eq!(body["state"]["learning_targets"], json!(["Target 1", "Target 2"]));
+        assert_eq!(body["questions"]["t2"]["instructions"]["target"], "Target 2");
+        assert_eq!(body["questions"]["p1"]["criteria"]["false"]["examples"][0]["user_reason"], "names no file");
+    }
+
+    #[test]
+    fn examples_at_their_largest_are_accepted_counting_code_points() {
+        let r = rig_on();
+        let mut request = opinion_with_examples();
+        // 300 and 200 code points, each ending in an emoji the web view never splits.
+        let opening = format!("{}😀", "a".repeat(299));
+        let reason = format!("{}😀", "r".repeat(199));
+        request["questions"]["p1"]["criteria"]["false"] = side(vec![example(&opening, Some(&reason)), example(&opening, None)]);
+        request["questions"]["overall"]["criteria"]["false"] = side(vec![example(&opening, Some(&reason))]);
+        assert!(r.jev.prepare(&r.file, request).is_ok());
+    }
+
+    #[test]
+    fn example_text_counts_toward_the_budget_at_the_web_views_sizes() {
+        // The same request refuses at the same reply length in src/domain/jevBudget.test.ts.
+        let r = rig_on();
+        let Ask::SecondOpinion(o) = Ask::parse(opinion_for_budget(0, true)).unwrap() else {
+            panic!("a second opinion");
+        };
+        assert_eq!(tokens(&o.questions["p1"]), 332);
+        assert!(r.jev.prepare(&r.file, opinion_for_budget(126_535, true)).is_ok());
+        assert_eq!(kind(r.jev.prepare(&r.file, opinion_for_budget(126_536, true))), Kind::TooLong);
+        assert!(r.jev.prepare(&r.file, opinion_for_budget(126_536, false)).is_ok());
     }
 
     #[test]

@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render, renderHook, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
-import type { LineBreaksRequest } from "../domain/jevRequest";
+import { JEV_MODEL, type LineBreaksRequest } from "../domain/jevRequest";
 import { JEV_OFF, JevError, type Jev, type JevStatus } from "../jev/jev";
 import { FAKE_ANSWER, FAKE_ON, FakeJev } from "../jev/fakeJev";
 import { JevProvider, useJev } from "./jevContext";
@@ -253,7 +253,7 @@ describe("JevProvider ask", () => {
 
   it("answers every requested id when nothing is queued", async () => {
     const { result } = await loaded(new FakeJev(FAKE_ON));
-    await act(() => expect(result.current.ask(pasteCleanup)).resolves.toEqual({ answers: { L002: FAKE_ANSWER, L003: FAKE_ANSWER } }));
+    await act(() => expect(result.current.ask(pasteCleanup)).resolves.toEqual({ answers: { L002: FAKE_ANSWER, L003: FAKE_ANSWER }, model: JEV_MODEL }));
   });
 
   it("serves queued answers and errors per call, in order", async () => {

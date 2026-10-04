@@ -3,11 +3,14 @@
 // turns Jev Mode off, and an ask is refused while off or with no key. Tests queue what
 // the next call of a method returns, fails with or waits on, and read `calls` to see what
 // the UI asked for. The budget check is the web view's own, so a test queues "tooLong".
+// An ask with nothing queued answers every requested id with FAKE_ANSWER and names the
+// pinned model, as the native side names the model that answered; a queued answer is
+// returned as queued, and one with no model reads as the pinned one.
 //
 // The key is never recorded in `calls` and is held only in a private field, so printing
 // the fake never shows it. `holdsKey` answers whether a given key was the one set.
 
-import type { JevAnswers, JevRequest } from "../domain/jevRequest";
+import { JEV_MODEL, type JevAnswers, type JevRequest } from "../domain/jevRequest";
 import { JEV_OFF, JevError, type Jev, type JevStatus } from "./jev";
 
 export type JevMethod = keyof Jev;
@@ -115,6 +118,7 @@ export class FakeJev implements Jev {
     try {
       return await this.#serve("ask", () => ({
         answers: Object.fromEntries(Object.keys(request.questions).map((id) => [id, FAKE_ANSWER])),
+        model: JEV_MODEL,
       }));
     } catch (e) {
       // As natively: an ask that finds no key clears the stored key from settings.

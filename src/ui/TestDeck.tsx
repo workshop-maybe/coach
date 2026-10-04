@@ -50,6 +50,7 @@ import { SKELETON_ID, defaultHandoff, fillHandoff, handoffsFor, skeletonOf, winn
 import { assignmentVersion } from "../domain/hash";
 import { sameSetup } from "../domain/matrix";
 import { fitsJev } from "../domain/jevBudget";
+import { JEV_MODEL } from "../domain/jevRequest";
 import { assessmentDir, credentialsDir } from "../domain/folder";
 import { cleanUpLineBreaks, lineBreakBatches } from "../domain/lineBreaks";
 import { goToOf, resultOf } from "../domain/goTo";
@@ -91,9 +92,6 @@ import { useRichImages } from "./useRichImages";
 
 /** How long the dots run across the screen after Copy before the cursor waits. */
 export const SENDING_MS = 700;
-
-/** The Jev model a reading records. The native side pins it (MODEL in src-tauri/src/jev.rs) and does not return it. */
-const JEV_MODEL = "jev-1.13.0";
 
 function reducedMotion(): boolean {
   return typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
