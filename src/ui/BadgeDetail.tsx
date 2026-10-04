@@ -5,17 +5,23 @@
 // with its take lit and the picks kept (U5, R16); once two or more have, each handoff that
 // ran is a row that opens it as its own item (R1, R3, R5).
 // The holders are small machines, the agents whose latest result met it, each naming the
-// handoff that earned it; opening one goes to the reply that earned it (R4).
+// handoff that earned it; opening one goes to the reply that earned it (R4). Under each
+// holder is one line: Go-to on the go-to, Make go-to on every other holder, which marks
+// that holder's latest result. A go-to that no longer holds the badge shows under them,
+// flagged (U5, R4, R8, R9, KTD7). The go-to is resolved from the folder on every render.
 
+import { useEffect, useId, useRef, useState } from "react";
 import { resolveBadgeSettings } from "../badge/settings";
 import { cellKey, type Cell } from "../domain/matrix";
 import { Cartridge } from "../cast/Cartridge";
 import { Machine } from "../cast/Machine";
 import { machineKeys } from "../cast/mappings";
+import { goToOf, goToStanding } from "../domain/goTo";
+import { markGoTo } from "../domain/operations";
 import { credentialKey, type AgentProfile, type FolderState } from "../domain/types";
 import { handoffRuns, type HandoffRun } from "../domain/handoffResults";
 import { SKELETON_ID, handoffsFor, skeletonOf } from "../domain/handoffs";
-import { FLAG_SHORT, firstLine, formatDate, handoffLabel, handoffText, plugMark, resultLabel } from "./format";
+import { FLAG_SHORT, firstLine, formatDate, goToLine, handoffLabel, handoffText, plugMark, resultLabel } from "./format";
 import { useNav } from "./nav";
 import { livePlugs, plugFor, usePendingTests } from "./pendingTests";
 import { ReplyList } from "./ReplyList";
@@ -23,15 +29,31 @@ import { replyRoute } from "./replyRoute";
 import type { CredentialPart, ReplyListState } from "./routes";
 import { Missing, PartCard, fileName, focusOnMount, paletteName, useEscape } from "./shared";
 import { TrashLink } from "./TrashDeck";
-import { useFolder } from "./useFolderState";
+import { describeError, useFolder } from "./useFolderState";
 import { useMatrix } from "./useMatrix";
 
 export function BadgeDetail({ credentialKey: key, lit, litTake, picks, focusCompare }: { credentialKey: string } & ReplyListState) {
-  const { state, folder } = useFolder();
+  const { state, folder, storage, apply } = useFolder();
   const { navigate } = useNav();
   const { pending } = usePendingTests(folder);
   const matrix = useMatrix(state);
   useEscape(() => navigate({ view: "home" }));
+  const ids = useId();
+  const [marking, setMarking] = useState(false);
+  const [markError, setMarkError] = useState<string | null>(null);
+  // The agent just made the go-to. Its row takes focus once it says Go-to, since the
+  // Make go-to that was pressed is gone by then (KTD7).
+  const [focusSlug, setFocusSlug] = useState<string | null>(null);
+  const rowButtons = useRef(new Map<string, HTMLButtonElement>());
+  const goTo = state ? goToOf(state, key) : null;
+  const goToSlug = goTo?.profile.slug ?? null;
+  useEffect(() => {
+    if (!focusSlug || goToSlug !== focusSlug) return;
+    const button = rowButtons.current.get(focusSlug);
+    if (!button) return;
+    button.focus();
+    setFocusSlug(null);
+  }, [focusSlug, goToSlug, matrix]);
 
   if (!state) return null;
   const home = () => navigate({ view: "home" });
@@ -51,6 +73,21 @@ export function BadgeDetail({ credentialKey: key, lit, litTake, picks, focusComp
   const handoffs = handoffsFor(state, key).length;
   const live = livePlugs(pending, state);
   const plugged = (slug: string) => plugMark(state, plugFor(live, slug));
+  const standing = goTo && matrix ? goToStanding(matrix, goTo) : null;
+
+  const makeGoTo = async (profile: AgentProfile, fileStem: string) => {
+    if (marking) return;
+    setMarking(true);
+    setMarkError(null);
+    try {
+      apply(await markGoTo(storage, state, { profileSlug: profile.slug, collectionSlug: credential.collectionSlug, credentialSlug: credential.slug, fileStem }));
+      setFocusSlug(profile.slug);
+    } catch (e) {
+      setMarkError(describeError(e));
+    } finally {
+      setMarking(false);
+    }
+  };
 
   return (
     <section className="detail detail-split" aria-label={credential.name}>
@@ -113,11 +150,17 @@ export function BadgeDetail({ credentialKey: key, lit, litTake, picks, focusComp
                 <li key={profile.slug}>
                   <button
                     type="button"
+                    ref={(el) => {
+                      if (el) rowButtons.current.set(profile.slug, el);
+                      else rowButtons.current.delete(profile.slug);
+                    }}
                     className={`detail-holder${cell.flags.length > 0 ? " flagged" : ""}`}
                     onClick={() => matrix && navigate(replyRoute(matrix, state, key, profile.slug))}
                   >
                     {matrix && <Machine mini setup={profile} keys={machineKeys(matrix, profile.slug)} plugged={plugged(profile.slug)} width={64} />}
-                    <span className="detail-holder-name">{profile.name}</span>
+                    <span className="detail-holder-name" id={`${ids}-${profile.slug}`}>
+                      {profile.name}
+                    </span>
                     <span className="detail-holder-latest">
                       {[
                         resultLabel(cell.status),
@@ -129,9 +172,27 @@ export function BadgeDetail({ credentialKey: key, lit, litTake, picks, focusComp
                         .join(" · ")}
                     </span>
                   </button>
+                  {matrix &&
+                    (goToSlug === profile.slug ? (
+                      <p className={`detail-holder-goto${standing && standing.flags.length > 0 ? " flagged" : ""}`}>Go-to</p>
+                    ) : (
+                      cell.latest && (
+                        <p className="helper">
+                          <button type="button" className="link" aria-describedby={`${ids}-${profile.slug}`} disabled={marking} onClick={() => cell.latest && makeGoTo(profile, cell.latest.fileStem)}>
+                            Make go-to
+                          </button>
+                        </p>
+                      )
+                    ))}
                 </li>
               ))}
             </ul>
+          )}
+          {goTo && standing && !standing.holds && <p className="detail-goto-away flagged">{goToLine(goTo.profile.name, standing.flags)}</p>}
+          {markError && (
+            <p className="deck-error" role="alert">
+              {markError}
+            </p>
           )}
         </section>
 

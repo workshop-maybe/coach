@@ -5,18 +5,20 @@
 // pairing is a class on one wrapper, so a need coming or going never remounts a shelf or a
 // door (App.css). An empty folder leads with "Try a first test", which runs one preset on
 // an agent made on the spot. An agent holding a handoff shows it plugged in wherever it
-// stands (R15). The cast is hidden from assistive tech, so names and what each agent earned
+// stands (R15). A badge with a go-to names it under its holders, flagged when it needs a
+// look (R7, R9). The cast is hidden from assistive tech, so names and what each agent earned
 // stay in text.
 
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import { goToOf, goToStanding } from "../domain/goTo";
 import { cellKey } from "../domain/matrix";
 import { credentialKey, type AgentProfile, type Collection, type Credential, type FolderState } from "../domain/types";
 import { Cartridge } from "../cast/Cartridge";
 import { Machine } from "../cast/Machine";
 import { Outline } from "../cast/Outline";
 import { machineKeys, type MachineKey } from "../cast/mappings";
-import { FLAG_SHORT, plugMark } from "./format";
+import { FLAG_SHORT, goToLine, plugMark } from "./format";
 import { useNav } from "./nav";
 import { needsYou, type NeedsYouItem } from "./needsYou";
 import { livePlugs, plugFor, usePendingTests, type PendingTest } from "./pendingTests";
@@ -143,6 +145,8 @@ export function Home() {
               <ul className="shelf">
                 {shelf.credentials.map((c) => {
                   const holders = profiles.filter((p) => holds(p.slug, c.key));
+                  const goTo = state && matrix ? goToOf(state, c.key) : null;
+                  const flags = goTo && matrix ? goToStanding(matrix, goTo).flags : [];
                   return (
                     <li key={c.key}>
                       <button type="button" className={`badge-card${holders.length === 0 ? " badge-card-unheld" : ""}`} onClick={() => navigate({ view: "item", item: "badge", credentialKey: c.key })}>
@@ -160,6 +164,8 @@ export function Home() {
                             ))
                           )}
                         </span>
+                        {/* One text run, so the hidden holder names stay the only text that is just a name (KTD8). */}
+                        {goTo && <span className={`badge-card-goto${flags.length > 0 ? " flagged" : ""}`}>{goToLine(goTo.profile.name, flags)}</span>}
                       </button>
                     </li>
                   );
