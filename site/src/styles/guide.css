@@ -1,0 +1,510 @@
+/* The user guide site's own layout (U2, KTD3, R14–R18), drawn in the app's world: warm
+   paper, white records, ink rules, square corners, data blue for links and for the page
+   being read, Inter for text and Fragment Mono for labels. Every value comes from the
+   app's tokens (src/theme), which the layout imports first, so a change to the app's look
+   carries here. A color derived here uses color-mix(), never a literal. Light only.
+   src/theme/brand.test.ts holds this file to the same rules as the app's component
+   styles (R16). */
+
+/* ---------------------------------------------------------------------------
+   Ground and type. */
+
+:root {
+  /* How wide the frame grows on a large screen. */
+  --frame-width: 1120px;
+  color-scheme: light;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.6;
+  letter-spacing: var(--ui-tracking);
+  color: var(--ink);
+  background: var(--paper);
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+h1,
+h2,
+h3 {
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: var(--heading-tracking);
+  margin: 0 0 var(--space-md);
+}
+
+h1 {
+  font-size: 2.1rem;
+  letter-spacing: var(--display-tracking);
+}
+
+h2 {
+  font-size: 1.3rem;
+}
+
+h3 {
+  font-size: 1.05rem;
+}
+
+code,
+kbd,
+pre {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  letter-spacing: 0;
+}
+
+a {
+  color: var(--data);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+a:hover {
+  text-decoration-thickness: 2px;
+}
+
+/* Keyboard focus is a data-blue ring, as in the app's buttons. */
+:focus-visible {
+  outline: var(--rule-width) solid var(--data);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------------------
+   The frame: header across the top, navigation beside the page, footer below. */
+
+.guide-skip {
+  position: absolute;
+  top: var(--space-sm);
+  left: var(--space-sm);
+  z-index: 10;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--surface);
+  border: var(--rule-width) solid var(--rule);
+  transform: translateY(-200%);
+}
+
+.guide-skip:focus-visible {
+  transform: none;
+}
+
+.guide-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md) var(--space-lg);
+  /* The rule runs edge to edge; what sits on it lines up with the frame below. */
+  padding: var(--space-base) max(var(--space-lg), calc((100% - var(--frame-width)) / 2 + var(--space-lg)));
+  border-bottom: var(--rule-width) solid var(--rule);
+}
+
+.guide-home {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-md);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.guide-name {
+  font-family: var(--font-mono);
+  font-size: var(--label);
+  letter-spacing: var(--label-tracking);
+  color: var(--ink-muted);
+}
+
+.guide-search {
+  flex: 0 1 340px;
+  min-width: 0;
+}
+
+.guide-search[hidden] {
+  display: none;
+}
+
+.guide-frame {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: var(--space-2xl);
+  flex: 1;
+  width: 100%;
+  max-width: var(--frame-width);
+  margin: 0 auto;
+  padding: var(--space-xl) var(--space-lg) var(--space-3xl);
+}
+
+.guide-side {
+  position: sticky;
+  top: var(--space-lg);
+  align-self: start;
+  max-height: calc(100vh - 2 * var(--space-lg));
+  overflow: auto;
+}
+
+.guide-main {
+  min-width: 0;
+  max-width: 46rem;
+}
+
+.guide-footer {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-lg);
+  border-top: var(--rule-width) solid var(--rule);
+  font-size: 14px;
+}
+
+/* ---------------------------------------------------------------------------
+   Navigation. Ink names; the page being read is lit in data blue. */
+
+.guide-nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.guide-nav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.guide-nav a {
+  display: block;
+  padding: 5px 0 5px var(--space-md);
+  border-left: var(--rule-width) solid var(--cell);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.guide-nav a:hover {
+  border-left-color: var(--ink);
+}
+
+.guide-nav a[aria-current="page"] {
+  border-left-color: var(--data);
+  color: var(--data);
+  font-weight: 600;
+}
+
+.guide-nav-home {
+  font-weight: 600;
+}
+
+.guide-nav-label {
+  margin: 0 0 var(--space-xs);
+  font-family: var(--font-mono);
+  font-size: var(--label);
+  letter-spacing: var(--label-tracking);
+  color: var(--ink-muted);
+}
+
+/* The phone menu: a disclosure that opens without JavaScript. Hidden on a wide screen,
+   where the sidebar shows the same navigation. */
+.guide-menu {
+  display: none;
+  border-bottom: 1px solid var(--cell);
+  background: var(--surface);
+}
+
+.guide-menu > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md) var(--space-base);
+  font-family: var(--font-mono);
+  font-size: var(--label);
+  letter-spacing: var(--label-tracking);
+  cursor: pointer;
+  list-style: none;
+}
+
+.guide-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.guide-menu > summary::after {
+  content: "+";
+  font-size: 16px;
+  line-height: 1;
+}
+
+.guide-menu[open] > summary::after {
+  content: "\2212";
+}
+
+.guide-menu .guide-nav {
+  padding: 0 var(--space-base) var(--space-lg);
+}
+
+/* ---------------------------------------------------------------------------
+   The page: a white record on the paper, then the way on to the next page. */
+
+.guide-page {
+  padding: var(--space-xl);
+  background: var(--surface);
+  border: var(--rule-width) solid var(--rule);
+  box-shadow: var(--shadow);
+}
+
+.guide-page > :last-child {
+  margin-bottom: 0;
+}
+
+.guide-page :is(p, ul, ol, pre, table, blockquote, figure) {
+  margin: 0 0 var(--space-base);
+}
+
+.guide-page :is(h2, h3) {
+  margin-top: var(--space-xl);
+}
+
+.guide-page :is(ul, ol) {
+  padding-left: 1.4em;
+}
+
+.guide-page li + li {
+  margin-top: var(--space-xs);
+}
+
+.guide-page img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--cell);
+}
+
+.guide-page :not(pre) > code {
+  padding: 1px 4px;
+  background: var(--grid);
+}
+
+.guide-page pre {
+  overflow-x: auto;
+  padding: var(--space-md) var(--space-base);
+  background: var(--paper);
+  border: 1px solid var(--cell);
+  line-height: 1.5;
+}
+
+.guide-page blockquote {
+  padding-left: var(--space-base);
+  border-left: var(--rule-width) solid var(--rule);
+  color: var(--ink-muted);
+}
+
+.guide-page table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+
+.guide-page :is(th, td) {
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--cell);
+  text-align: left;
+  vertical-align: top;
+}
+
+.guide-page th {
+  font-family: var(--font-mono);
+  font-size: var(--label);
+  font-weight: 400;
+  letter-spacing: var(--label-tracking);
+  color: var(--ink-muted);
+  border-bottom-color: var(--rule);
+}
+
+.guide-page hr {
+  margin: var(--space-xl) 0;
+  border: none;
+  border-top: 1px solid var(--cell);
+}
+
+/* One of the app's labels (components/UI.astro, U5): Fragment Mono in a square key, so
+   it reads as the control it names. A placeholder the app fills in is muted. A long
+   label wraps with its key drawn on each line. */
+.guide-ui {
+  padding: 0 5px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-bottom-width: 2px;
+  color: var(--ink);
+  font-size: 0.86em;
+  line-height: 1.5;
+  white-space: normal;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+.guide-ui-slot {
+  font-style: normal;
+  color: var(--ink-muted);
+}
+
+/* A screenshot (components/Shot.astro, U5): the full width of the text column, right
+   after the step it shows. Tapping it opens the picture at full size. */
+.guide-page .guide-shot {
+  margin: 0 0 var(--space-lg);
+}
+
+.guide-shot-open {
+  display: block;
+  cursor: zoom-in;
+}
+
+.guide-shot img {
+  width: 100%;
+}
+
+.guide-shot figcaption {
+  margin-top: var(--space-sm);
+  font-size: 14px;
+  color: var(--ink-muted);
+}
+
+/* The home page: the preview notice, set apart by a rule like a note in the margin. */
+.guide-notice {
+  padding-left: var(--space-base);
+  border-left: var(--rule-width) solid var(--rule);
+}
+
+/* The home page's list of parts: each page's name, then what it is for. */
+.guide-contents ul {
+  list-style: none;
+  padding: 0;
+}
+
+.guide-contents li {
+  display: flex;
+  flex-direction: column;
+}
+
+.guide-contents span {
+  color: var(--ink-muted);
+}
+
+.guide-next {
+  display: flex;
+  justify-content: flex-end;
+  margin: var(--space-lg) 0 0;
+}
+
+.guide-next a {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-md) var(--space-base);
+  background: var(--surface);
+  border: var(--rule-width) solid var(--rule);
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.guide-next a:hover {
+  color: var(--data);
+}
+
+.guide-next-label {
+  font-family: var(--font-mono);
+  font-size: var(--label);
+  font-weight: 400;
+  letter-spacing: var(--label-tracking);
+  color: var(--ink-muted);
+}
+
+/* ---------------------------------------------------------------------------
+   Search: Pagefind's Component UI, drawn through its custom properties. `html:root`
+   outweighs the `:root` its own stylesheet sets them on, whichever loads last. */
+
+html:root {
+  --pf-font: var(--font-sans);
+  --pf-text: var(--ink);
+  --pf-text-secondary: var(--ink-muted);
+  --pf-text-muted: var(--ink-muted);
+  --pf-background: var(--surface);
+  --pf-border: var(--cell);
+  --pf-border-focus: var(--data);
+  --pf-hover: var(--data-wash);
+  --pf-mark: var(--data);
+  --pf-skeleton: var(--grid);
+  --pf-skeleton-shine: var(--paper);
+  --pf-scroll-shadow: var(--cell);
+  --pf-shadow-sm: var(--shadow);
+  --pf-shadow-md: var(--shadow);
+  --pf-shadow-lg: var(--shadow);
+  --pf-outline-focus: var(--data);
+  --pf-outline-width: var(--rule-width);
+  --pf-outline-offset: 2px;
+  --pf-error-bg: var(--error-wash);
+  --pf-error-border: var(--error);
+  --pf-error-text: var(--error);
+  --pf-error-text-secondary: var(--ink-muted);
+  --pf-border-radius: 0;
+  --pf-input-height: 38px;
+  /* 16px keeps a phone from zooming into the box. */
+  --pf-input-font-size: 16px;
+  --pf-searchbox-max-width: 100%;
+  --pf-dropdown-z-index: 20;
+}
+
+/* Some of Pagefind's corners are set directly, behind three of `:is(*, #\#)`. Four
+   outweigh them, so every part of the search box stays square. */
+:is(*, #\#):is(*, #\#):is(*, #\#):is(*, #\#) pagefind-searchbox,
+:is(*, #\#):is(*, #\#):is(*, #\#):is(*, #\#) pagefind-searchbox * {
+  border-radius: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   A phone: one column, the menu in place of the sidebar, the search box on its own row. */
+
+@media (max-width: 719.98px) {
+  .guide-header {
+    padding: var(--space-md) var(--space-base);
+  }
+
+  .guide-search {
+    flex-basis: 100%;
+  }
+
+  .guide-menu {
+    display: block;
+  }
+
+  .guide-side {
+    display: none;
+  }
+
+  .guide-frame {
+    grid-template-columns: minmax(0, 1fr);
+    padding: var(--space-lg) var(--space-base) var(--space-2xl);
+  }
+
+  .guide-page {
+    padding: var(--space-lg) var(--space-base);
+  }
+
+  h1 {
+    font-size: 1.75rem;
+  }
+}

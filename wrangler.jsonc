@@ -1,0 +1,12 @@
+// The user guide on Cloudflare Workers static assets (U9, KTD9). An assets-only Worker:
+// no script, just the files `npm run site:build` writes to site/dist. The build runs on
+// Cloudflare from the repo root; site/README.md has the setup steps.
+{
+  "name": "andamio-desktop-guide",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./site/dist",
+    // A missing page gets the guide's own 404 page, not Cloudflare's.
+    "not_found_handling": "404-page"
+  }
+}

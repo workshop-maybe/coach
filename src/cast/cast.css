@@ -1,0 +1,136 @@
+/* The cast's own styles (U1, KTD3): the machines, cartridges and handoff boxes, the logo
+   lockup and the drawn tool keys. They live apart from App.css so the user guide site can
+   draw cast pieces without the app shell's window styles. App.tsx imports this file right
+   after App.css; every other rule that targets these classes is more specific, so moving
+   them here changes nothing in the app. */
+
+/* The logo lockup (src/ui/Lockup.tsx). */
+.lockup {
+  display: block;
+  height: 22px;
+  width: auto;
+  overflow: visible;
+}
+
+.lockup-ink {
+  stroke: var(--ink);
+}
+
+.lockup-brace {
+  stroke: var(--sys-orange);
+}
+
+.lockup-dot {
+  fill: var(--ink);
+}
+
+/* Tools are drawn keys (src/cast/ToolKey.tsx). */
+.tool-key {
+  display: block;
+  overflow: visible;
+}
+
+.tool-key-edge,
+.tool-key-icon {
+  fill: none;
+  stroke: var(--ink);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tool-key-edge {
+  stroke-width: 1.4;
+}
+
+.tool-key-fill {
+  fill: var(--ink);
+}
+
+.tool-key-on .tool-key-icon {
+  stroke: var(--on-ink);
+}
+
+/* The cast (src/cast): agents are machines, credentials are cartridges, drawn in a
+   hand-inked line. Strokes are currentColor; the only fills are paper-white insides
+   and lit keys, whose badge colors are SVG attributes. */
+.ink-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+.cast {
+  display: block;
+  color: var(--ink);
+  overflow: visible;
+}
+
+.cast-paper {
+  fill: var(--surface);
+}
+
+.cast-glass {
+  fill: var(--paper);
+}
+
+.cast-screen-text {
+  font-family: var(--font-mono);
+  letter-spacing: 0;
+}
+
+/* The handoff box's letters, and the letter on a handoff card's header bar. */
+.cast-handoff-label,
+.cast-card-label {
+  font-family: var(--font-mono);
+  letter-spacing: 0;
+  fill: currentColor;
+}
+
+.cast-handoff-label-lit,
+.cast-card-label {
+  fill: var(--surface);
+}
+
+/* The lit key's light: the handoff the view is about. */
+.cast-handoff-led {
+  fill: var(--data);
+}
+
+.cast-outline {
+  color: var(--ink-faint);
+}
+
+.cast-encoder-live {
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .cast-dot {
+    animation: cast-dot-out 960ms ease-in-out infinite both;
+  }
+
+  .cast-cursor {
+    animation: cast-blink 1060ms steps(1, end) infinite;
+  }
+}
+
+@keyframes cast-dot-out {
+  0% {
+    opacity: 0.15;
+    transform: translateX(-3px);
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.15;
+    transform: translateX(3px);
+  }
+}
+
+@keyframes cast-blink {
+  50% {
+    opacity: 0;
+  }
+}

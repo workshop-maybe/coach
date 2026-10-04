@@ -1,0 +1,38 @@
+---
+// The guide's navigation (U2, R13): home, then every page under its part, in reading
+// order. The page being read is lit in data blue and marked aria-current. The layout draws
+// it twice, as the sidebar on a wide screen and inside the phone menu, and shows one at a
+// time.
+
+import { byPart, pageHref, type PageSummary } from "../parts";
+
+interface Props {
+  pages: PageSummary[];
+  /** The address of the page being read, if navigation lists it. */
+  current?: string;
+}
+
+const { pages, current } = Astro.props;
+const groups = byPart(pages);
+const here = (href: string) => (href === current ? "page" : undefined);
+---
+
+<nav class="guide-nav" aria-label="Guide">
+  <a class="guide-nav-home" href="/" aria-current={here("/")}>Home</a>
+  {
+    groups.map((group) => (
+      <div class="guide-nav-part">
+        <p class="guide-nav-label">{group.label}</p>
+        <ul>
+          {group.pages.map((page) => (
+            <li>
+              <a href={pageHref(page.id)} aria-current={here(pageHref(page.id))}>
+                {page.title}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+    ))
+  }
+</nav>

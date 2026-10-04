@@ -1,0 +1,47 @@
+---
+title: Export
+part: how-to
+order: 80
+description: Write your credentials out as Markdown and JSON files, without their rubrics.
+---
+
+{/* How to, last page (U7, R6, R11): Export in the top bar. Its folder picker is the system's own, so this page has words and no picture. What goes out follows src/ui/exportAll.ts and src/domain/export.ts, which always build without the rubric. */}
+
+Export writes your credentials out as Markdown and JSON files, in a folder you choose. The files follow the layout the Andamio command-line tool imports.
+
+## Export your credentials
+
+1. On home, click <UI>Export</UI> in the top bar. It stays greyed out until your folder has a credential.
+2. Your system's folder picker opens. Choose the folder to export into, or cancel to export nothing.
+3. The app writes the files. A line under the top bar says how many files it wrote and where. <UI>Dismiss</UI> closes it.
+
+Exporting again to the same folder replaces the files that have the same names.
+
+## What goes out
+
+Your credentials sit in a collection, a group with its own name. Most folders have one, `my-credentials`. For each collection, the export writes a folder with one numbered folder per credential, and one JSON file:
+
+```text
+my-credentials/
+  1/
+    outline.md
+    assignment.md
+    badge.svg
+  2/
+    …
+my-credentials.json
+```
+
+- `outline.md` holds the credential's name and its learning targets.
+- `assignment.md` holds its name and its task.
+- `badge.svg` is its badge, in the colors, art and title you gave it.
+- The JSON file holds every credential in the collection, with the same names, learning targets and tasks.
+
+Each credential keeps its number from one export to the next.
+
+## What stays out
+
+- **The rubric.** No exported file holds it. It stays in your folder, so the bar you judge by stays yours.
+- **Your agents, results and handoffs.** Export covers credentials only. Everything else is already plain text in your folder, as [Your data](/help/your-data/) shows.
+
+If a badge's art can't be read, the export writes that badge without its art and the line under the top bar says so. If a collection's file can't be read, the export skips that collection and names it.

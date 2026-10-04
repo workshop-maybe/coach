@@ -39,3 +39,5 @@ Planning. Built with Tauri 2 and React + TypeScript. The prototype targets Mac a
 On first run the app asks for a data folder. It keeps everything there as plain files you can read, edit and put under git: collections and credentials as Markdown and JSON, agent profiles as JSON, and each recorded result as a Markdown file.
 
 The app has one home: what needs you, your agents, your badges, and two doors to create an agent or a credential. Every step after that asks one thing at a time.
+
+The user guide is in `site/`. Preview it with `npm run site:build && npm run site:preview`.

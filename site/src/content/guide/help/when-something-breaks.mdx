@@ -1,0 +1,82 @@
+---
+title: When something breaks
+part: help
+order: 30
+description: What to do when the app won't open, your folder moved, a file changed under you, or Jev can't answer.
+---
+
+{/* Jev Mode, data and help, third page (U8, R7): the known ways things go wrong and what to do. Labels are checked against src/ui/FolderGate.tsx, src/ui/AppShell.tsx, src/ui/LoadErrors.tsx, src/ui/shared.tsx, src/ui/ReplyView.tsx, src/ui/Deck.tsx, src/ui/JevDeck.tsx and src/ui/TestDeck.tsx (KTD8). What the app does when the folder is gone follows src-tauri/src/files.rs, whose messages are not checked labels, so the page describes them. */}
+
+The app is an early preview, and some things will break. Here's what to do about the ones we know. If yours isn't here, [tell James](/help/feedback/).
+
+## Your Mac won't open the app
+
+The first time you open it, your Mac may say it can't open the app.
+
+1. Open **System Settings**, then **Privacy & Security**.
+2. Scroll down to the line about Andamio Desktop and click **Open Anyway**.
+3. Confirm, then open the app again.
+
+[Install the app](/getting-started/install/) has the rest of the first run.
+
+## Your folder moved or was renamed
+
+The app remembers where your folder was, not what it holds.
+
+- **While the app was closed:** it opens on its first screen, as if new. Click <UI>Choose folder</UI> and pick your folder where it is now.
+- **While the app was open:** it can no longer read the folder, and a line under the top bar says the folder no longer exists. Click <UI>Change folder</UI> in the top bar and pick your folder where it is now.
+
+Everything you made is still in the folder, so nothing is lost. A test you left half done is the one exception. The app remembers it for the folder's old place, so it no longer shows under <UI>What needs you</UI>. Start that test again from the badge.
+
+## Something looks out of date
+
+The app reads your folder again whenever its window comes back to the front. To read it again now, click <UI>Reload</UI> in the top bar.
+
+## A file can't be read
+
+If a file in your folder isn't in a shape the app can read, a banner at the top says <UI>One file could not be read.</UI> or <UI>\{count\} files could not be read.</UI> It names each file and what's wrong with it. The app leaves those files as they are.
+
+Open the file in a text editor, fix what the banner names, then click <UI>Reload</UI>. [Your data](/help/your-data/) shows what each file should hold.
+
+If only a badge's look can't be read, the banner says <UI>Some badge settings could not be read and are shown with defaults.</UI> The badge works as usual, in the default look.
+
+## Not in the folder
+
+<UI>Not in the folder</UI> means the badge, agent or reply you opened is gone from your folder. It may have been moved or deleted outside the app. Click the card's button to go back, such as <UI>Home</UI> or <UI>Back to the badge</UI>.
+
+If it's in `trash/`, you can move it back. [Your data](/help/your-data/#the-trash) shows how.
+
+## Changed on disk
+
+You saved a card, but the file it changes was changed since you opened the card, perhaps in a text editor, by a sync or on another computer. The card turns into <UI>Changed on disk</UI>: <UI>This file changed since the card opened.</UI>
+
+- <UI>Use theirs</UI> drops your change and leaves the file as it is now.
+- <UI>Keep mine</UI> saves your change anyway. When you're changing one part of a badge or an agent, only that part is written, so the file's other changes stay.
+
+## Jev Mode
+
+### Turning it on or changing the key
+
+When something is wrong on the Jev Mode card, one line on the card says what:
+
+- <UI>That doesn't look like a TypeSafe key.</UI> Copy the whole key again from TypeSafe and paste only the key.
+- <UI>The keychain didn't allow it, so nothing changed.</UI> Your system's keychain refused, for example when you click Deny on its prompt. Try again and allow it.
+- <UI>The key is gone. Paste it again.</UI> Jev Mode is on, but its key was removed from the keychain. On a Linux setup with no keychain, the key is gone each time you quit.
+- <UI>The app's settings couldn't be read, so nothing changed.</UI> or <UI>That didn't work. Try again.</UI> Try again. If it keeps happening, [tell James](/help/feedback/).
+
+### A second opinion or a cleanup
+
+When Jev can't answer, one line says why, under the rubric for a second opinion or under the reply box for a cleanup.
+
+- **A key problem, or Jev Mode is off.** TypeSafe refused the key, there's no key, the key doesn't look right, or Jev Mode was turned off. The line sends you to <UI>Jev Mode</UI> in the top bar, on home, to paste the key again, use a new one or turn Jev Mode on.
+- <UI>Jev has had too many asks. Try again in a moment.</UI> or <UI>Jev is overloaded. Try again shortly.</UI> Wait a little, then ask again.
+- <UI>Jev couldn't be reached.</UI> Check your connection, then ask again.
+- <UI>The keychain didn't give up the key.</UI> Your system didn't let the app read the key. Ask again and allow it.
+- <UI>Jev couldn't answer.</UI> or <UI>Jev Mode's settings couldn't be read.</UI> Ask again. If it keeps happening, [tell James](/help/feedback/), with the number in brackets if the line shows one.
+- <UI>This reply is too long for Jev.</UI> Jev can't read a reply this long. Judge it yourself.
+
+Whatever the line says, you can still record your verdict. A cleanup that fails leaves the reply as you pasted it.
+
+## Report a problem
+
+If something broke, felt wrong or isn't covered here, [tell James](/help/feedback/). Say what you did, what you expected and what happened. A screenshot or a screen recording helps most. Never send your TypeSafe key.

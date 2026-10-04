@@ -1,0 +1,109 @@
+---
+// The guide's one layout (U2, KTD3–KTD5, R13–R18): the lockup and search across the top,
+// navigation beside the page (a disclosure menu on a phone, which works without
+// JavaScript), the page itself as a white record on the paper, a link to the next page in
+// its part, and a footer that links the feedback page. Styles come from the app's design
+// source in the order src/main.tsx takes them (fonts, tokens, app tokens), then the cast,
+// then the site's own layout. Never App.css, which is the app's window shell (KTD3).
+//
+// InkDefs mounts once here, or the cast's hand-inked filter resolves to nothing (KTD4).
+// Cast pieces render to static HTML: nothing on the site hydrates.
+//
+// The site asks search engines not to index it until a public download exists (the plan's
+// Assumptions). Lifting that is deleting the robots meta below.
+
+import "@fontsource-variable/inter";
+import "@fontsource/fragment-mono";
+import "../../../src/theme/tokens.css";
+import "../../../src/theme/app-tokens.css";
+import "../../../src/cast/cast.css";
+import "../styles/guide.css";
+
+import { InkDefs } from "../../../src/cast/InkDefs";
+import { Lockup } from "../../../src/ui/Lockup";
+import favicon from "../../../public/favicon.png";
+import Nav from "../components/Nav.astro";
+import Search from "../components/Search.astro";
+import { guidePages } from "../guidePages";
+import { FEEDBACK_ID, SITE_NAME, nextInPart, pageHref } from "../parts";
+
+interface Props {
+  /** The page's one h1, and its tab title. */
+  title: string;
+  /** The page's meta description. */
+  description?: string;
+  /** The address navigation lights: "/" on the home page, a guide page's own address. None on the 404. */
+  current?: string;
+  /** Leaves the page out of search, as the 404 is. */
+  unindexed?: boolean;
+}
+
+const { title, description, current, unindexed = false } = Astro.props;
+
+const pages = await guidePages();
+const here = pages.find((page) => pageHref(page.id) === current);
+const next = here && nextInPart(pages, here.id);
+const feedback = pages.find((page) => page.id === FEEDBACK_ID);
+const tabTitle = title === SITE_NAME ? title : `${title} · ${SITE_NAME}`;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <meta name="color-scheme" content="light" />
+    <title>{tabTitle}</title>
+    {description && <meta name="description" content={description} />}
+    <link rel="icon" type="image/png" href={favicon.src} />
+    <link rel="stylesheet" href="/pagefind/pagefind-component-ui.css" />
+  </head>
+  <body>
+    <InkDefs />
+    <a class="guide-skip" href="#page">Skip to the page</a>
+
+    <header class="guide-header">
+      <a class="guide-home" href="/">
+        <Lockup />
+        <span class="guide-name">Desktop guide</span>
+      </a>
+      <Search />
+    </header>
+
+    <details class="guide-menu">
+      <summary>Menu</summary>
+      <Nav pages={pages} current={current} />
+    </details>
+
+    <div class="guide-frame">
+      <aside class="guide-side">
+        <Nav pages={pages} current={current} />
+      </aside>
+
+      <main id="page" class="guide-main">
+        <article class="guide-page" data-pagefind-body={unindexed ? undefined : ""}>
+          <h1>{title}</h1>
+          <slot />
+        </article>
+        {
+          next && (
+            <p class="guide-next">
+              <a href={pageHref(next.id)} rel="next">
+                <span class="guide-next-label">Next</span> <span>{next.title}</span>
+              </a>
+            </p>
+          )
+        }
+      </main>
+    </div>
+
+    {
+      feedback && (
+        <footer class="guide-footer">
+          <a href={pageHref(feedback.id)}>{feedback.title}</a>
+        </footer>
+      )
+    }
+  </body>
+</html>

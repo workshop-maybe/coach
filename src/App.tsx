@@ -7,6 +7,7 @@ import { JevProvider } from "./ui/jevContext";
 import { FolderProvider } from "./ui/useFolderState";
 import { WindowFrameProvider } from "./ui/windowFrame";
 import "./App.css";
+import "./cast/cast.css";
 
 function App() {
   const storage = useMemo(() => new TauriStorage(), []);

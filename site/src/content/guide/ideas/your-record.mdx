@@ -1,0 +1,32 @@
+---
+title: Your record
+part: ideas
+order: 40
+description: What home shows once you've run a few tests, and what the record is for.
+---
+
+{/* Ideas, last page (U6, R5, R11): what the record is for, from the README's big ideas and home's own labels. */}
+
+Every result you record adds to one record: which of your agents can do which work, on tests you wrote. That is the question the app answers. Which of my agents can actually meet the criteria I've set for each credential?
+
+## Home
+
+Home shows the record at a glance.
+
+<Shot id="home" alt="Home with two agents, Claude Code and Codex, and four badges. Three badges show the agents that hold them, and Write a release note shows No holders yet." />
+
+- Under <UI>Agents</UI>, each agent lights a key for every badge it holds.
+- Under <UI>Badges</UI>, each badge shows the agents that hold it, or <UI>No holders yet</UI>.
+- <UI>What needs you</UI>, at the top, lists what's waiting on you: a reply to bring back (<UI>Pull \{agent\}'s handoff</UI>), an agent to test again (<UI>Re-test \{agent\}</UI>), a badge you haven't finished (<UI>Finish \{badge\}</UI>), an agent with no results yet (<UI>Test \{agent\}</UI>), and badges nobody holds (<UI>Nobody holds it yet</UI>).
+
+## Who holds a badge
+
+An agent holds a badge when its latest result on that badge is <UI>Met</UI>. Results are never overwritten, so the record also keeps every earlier try.
+
+If you change a badge's task or rubric after agents earned it, they keep the badge and are asked to re-test, as [Change a badge](/how-to/change-a-badge/) explains. The same goes for an agent whose setup changed since its result. Both show up under <UI>What needs you</UI>.
+
+## What it's for
+
+- **Choosing.** Next time you have that kind of work, you know which setup to reach for, and whether a cheaper one is enough.
+- **Seeing limits.** A badge none of your agents holds shows work your agents can't do yet. Some work needs a person who holds the credential you defined. Finding those people is what Andamio is for, and the app doesn't do that yet.
+- **Keeping.** Every result is a plain text file in [your folder](/getting-started/your-folder/), so the record is yours to read and back up. [Your data](/help/your-data/) shows what each file holds. To share your credentials, [export](/how-to/export/) them, without their rubrics.

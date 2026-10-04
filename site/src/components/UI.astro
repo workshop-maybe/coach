@@ -1,0 +1,22 @@
+---
+// One of the app's own labels, named on a page (U5, KTD8, R11): set in Fragment Mono like
+// a key, so a reader can find the control by its name. Pages use it without importing it
+// ([...slug].astro hands it to every page). Write the label exactly as the app shows it;
+// site/tests/content.test.ts fails when the app no longer shows it.
+//
+// A templated label escapes its placeholder's braces in the page (`Pull \{agent\}'s
+// handoff`), so MDX keeps them as text. The placeholder renders as text, braces and all,
+// in a <var> that reads as the part the app fills in. Styles live in styles/guide.css.
+
+const html = await Astro.slots.render("default");
+// The slot is MDX's own output: text, with any `{name}` placeholder left as braces. The
+// guide's typography curls quotes, but the app's labels use straight ones, so a label
+// shows them straight, as on screen.
+const label = html
+  .trim()
+  .replace(/[‘’]/g, "'")
+  .replace(/[“”]/g, '"')
+  .replace(/\{([^{}<>]+)\}/g, '<var class="guide-ui-slot">{$1}</var>');
+---
+
+<kbd class="guide-ui" set:html={label} />

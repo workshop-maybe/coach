@@ -1,0 +1,122 @@
+---
+title: Your data
+part: help
+order: 20
+description: What's in your folder, how to read and edit it, and the little the app keeps outside it.
+---
+
+{/* Jev Mode, data and help, second page (U8, R7): the data folder as plain text you own. The layout follows src/domain/folder.ts and the trash src/domain/operations.ts. What lives outside the folder follows src/ui/pendingTests.ts (local storage) and src-tauri/src/settings.rs and jev.rs (the settings file and the keychain). */}
+
+Everything you make lives in the folder you chose, as plain text. Credentials and results are Markdown, and agents are JSON. You can open any file in a text editor, back the folder up, sync it or put it under git. The app has no database and no account.
+
+## What's in the folder
+
+A folder with one badge, one agent and one result looks like this:
+
+```text
+Andamio/
+  andamio-desktop.json
+  collections/
+    my-credentials/
+      collection.json
+      credentials/
+        say-how-sure-you-are.md
+      handoffs/
+        say-how-sure-you-are/
+          20260928T090000Z.md
+      badge/
+        say-how-sure-you-are-1a2b3c4d.png
+  agents/
+    claude-code-opus-high.json
+  assessments/
+    claude-code-opus-high/
+      my-credentials/
+        say-how-sure-you-are/
+          20260926T164500Z.md
+  handoffs/
+    skeleton.md
+  trash/
+```
+
+- `andamio-desktop.json` marks the folder as the app's. The app writes it the first time it opens the folder.
+- `collections/` holds your credentials, grouped in collections. Most folders have one, `my-credentials`. Its `collection.json` holds the collection's name, the order of its badges, their numbers for [export](/how-to/export/) and their looks.
+- `credentials/` has one Markdown file per badge.
+- `handoffs/` inside a collection holds the handoffs a badge has of its own, one file each, named for when it was made.
+- `badge/` holds the art you chose for a badge's look.
+- `agents/` has one JSON file per agent: its name, harness, model, effort, repo, notes and parameters.
+- `assessments/` holds your results: a folder for each agent, then its collection, then the badge, with one file per result.
+- `handoffs/skeleton.md`, at the top, is the skeleton. It appears only once you edit it. Until then the app uses its built-in one.
+- `trash/` holds what you moved to the trash.
+
+A badge or an agent gets its file name from its name when you make it: *Say how sure you are* becomes `say-how-sure-you-are.md`. Renaming it later keeps the file name. A result is named for when you recorded it, in UTC.
+
+## A credential
+
+A credential is one Markdown file: its name as the title, then a section each for its learning targets, its task and its rubric.
+
+```markdown
+# Say how sure you are
+
+## Learning targets
+
+1. I can state how confident I am in an answer, so that my confidence matches how often I am right.
+2. I can tell when a question has more than one answer.
+
+## Task
+
+Answer the six questions below from what you know and can work out. Do not run code or search.
+…
+
+## Rubric
+
+The answers:
+…
+
+Met when every point holds.
+```
+
+Any other section you add by hand is kept when the app saves the file.
+
+## A result
+
+A result is one Markdown file. It starts with a block of fields between `---` lines:
+
+- `result`: `met` or `not_met`.
+- `recorded_at`: when you recorded it.
+- `assignment_version`: which version of the badge's task and rubric it was judged against. When you change either one, its holders are asked to re-test.
+- `setup`: the agent's harness, model and effort at the time.
+- The computer the test started on, the exact handoff text the agent got, and Jev's reading when you asked for one.
+
+Below the fields, `## Note` holds the result's note and `## Handback` holds the reply as you pasted it.
+
+A test saves the note empty. To add one, open the result file in a text editor and write it under `## Note`. The note then shows at the top of the reply when you open it. The app doesn't change a result file once it's written, so your note stays.
+
+Results are never overwritten. Each test writes a new file, so the folder keeps every try.
+
+## Edit by hand
+
+You can change any file while the app is open. It reads the folder again when its window comes back to the front, and when you click <UI>Reload</UI> in the top bar.
+
+- A change to a badge's task or rubric counts the same as one made in the app. Its holders keep the badge and are asked to re-test.
+- A file the app can't read is named in a banner at the top, with what's wrong: <UI>One file could not be read.</UI> The app leaves the file as it is, so you can fix it and click <UI>Reload</UI>.
+- If you change a file while the same thing is open in the app, the app asks before it saves over your change. See [Changed on disk](/help/when-something-breaks/#changed-on-disk).
+
+## The trash
+
+<UI>Move to trash</UI> deletes nothing. It moves the files into `trash/`, in a folder named for when you moved them, at the same paths they had. An agent goes with its results. A badge goes with its handoffs, every agent's results on it and a copy of its collection's file as it was.
+
+To get something back, move its files from the trash to the same places in your folder, then click <UI>Reload</UI>. To delete something for good, delete it from `trash/`.
+
+## Back it up and share it
+
+Your folder is the whole record of your credentials, agents and results. Copy it, back it up or put it under git like any other folder.
+
+If you sync it between computers, each result still says which computer its test started on. [Export](/how-to/export/) writes your credentials out for others, without their rubrics.
+
+## What isn't in the folder
+
+A few things stay with the app on each computer, outside your folder:
+
+- **Tests left half done.** When you copy a handoff and close the test before pasting a reply, the app remembers it in its own storage on that computer, for that folder. That's what puts <UI>Pull \{agent\}'s handoff</UI> under <UI>What needs you</UI>. Open the folder on another computer, or from a new place, and the reminder isn't there. Losing it loses only the reminder, never a result.
+- **Your TypeSafe key.** [Jev Mode](/help/jev-mode/) keeps it in your system's keychain, never in the folder.
+- **The app's settings.** Which folder it opens, and whether Jev Mode is on.

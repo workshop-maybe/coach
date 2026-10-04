@@ -1,0 +1,46 @@
+---
+title: Compare takes
+part: how-to
+order: 50
+description: Read every reply to a badge, open one in full, and put two side by side.
+---
+
+{/* How to, fifth page (U7, R6, R11): a badge's replies, one reply opened, and two compared (the old tester's sheet, step 8). Labels are checked against src/ui/BadgeDetail.tsx, src/ui/ReplyList.tsx, src/ui/ReplyView.tsx and src/ui/CompareView.tsx (KTD8). */}
+
+Every result keeps the reply that earned it. A badge's page lists them all, so you can read what each agent sent back and compare any two. Each reply is a take: one agent's try at the badge.
+
+## Get two takes
+
+You need two replies to the same badge.
+
+1. Make a second agent with a different model or effort. See [Make an agent](/how-to/make-an-agent/).
+2. Give it the same badge. See [Hand off a test](/how-to/hand-off-a-test/).
+
+Two takes by the same agent compare too. Under an agent's reply on the badge's page, <UI>Test again</UI> starts another test for it.
+
+## Find the replies
+
+Open the badge from home and scroll to <UI>Replies</UI>. Each agent that took the test has a row with its verdict, the date, the computer it ran on and the start of its reply. An agent's latest take leads its row, with any older takes below.
+
+<Shot id="badge-replies" alt="The Replies on Say how sure you are: Claude Code, Met, and Codex, Not met, each with the start of its reply and both ticked, the Compare button above them, and Claude Code under Holders" />
+
+Once two or more of the badge's handoffs have results, <UI>Replies</UI> lists each handoff that ran instead, with how many agents ran it and how many met. Open one to see its replies, laid out the same way.
+
+## Read one in full
+
+Click an agent's name or its reply to open the take.
+
+<Shot id="reply-view" alt="Codex's take on Say how sure you are: a bar with codex · gpt-6-astra · medium, Not met and Sep 25, 2026, a note on the result, then the reply in full, and the Skeleton handoff it ran, folded, below" />
+
+The bar at the top shows the agent, its setup, the verdict and the date. <UI>Show as stored</UI> shows the reply as Markdown. Below the reply, the handoff it ran is folded under its name, such as <UI>Skeleton</UI>. Click the name to read the exact text the agent got. A take judged with Jev's help also keeps Jev's reading there.
+
+Close the take with the × or Escape. You're back on the badge, with that take's row lit.
+
+## Put two side by side
+
+1. Tick the boxes beside two takes. Until you have two, the button reads <UI>Pick two to compare</UI>. A third tick drops the first one you ticked.
+2. Click <UI>Compare</UI>.
+
+<Shot id="compare" alt="Two takes side by side: Codex, Not met, on the left and Claude Code, Met, on the right, each with its setup and date above its reply, and Show as stored above both" />
+
+Each reply scrolls on its own. One <UI>Show as stored</UI> switch changes both. Close the compare, and you're back on the badge with both takes still ticked.

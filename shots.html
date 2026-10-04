@@ -1,0 +1,20 @@
+<!doctype html>
+<!--
+  The screenshot harness page (U3, KTD6, R19, R20). Dev only: `vite build` builds index.html
+  alone, so this page never reaches the app bundle. Open /shots.html?shot=<id> under
+  `npm run dev` or the shots-only config (vite.shots.config.ts) to see one shot from
+  src/shots/shots.ts as the real app over the sample folder. `npm run site:shots` drives it.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <title>Andamio Desktop shots</title>
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/shots/main.tsx"></script>
+  </body>
+</html>

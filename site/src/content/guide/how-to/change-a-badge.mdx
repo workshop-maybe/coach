@@ -1,0 +1,83 @@
+---
+title: Change a badge
+part: how-to
+order: 60
+description: Edit a badge's name, targets, task, rubric and look, write its handoffs, or move it to the trash.
+---
+
+{/* How to, sixth page (U7, R6, R11): a badge's parts and their one-card edits, the re-test warning, the badge's handoffs (the skeleton, writing one and its slots, keeping the rubric out, a handoff with results saving as a new one), and the trash (the old tester's sheet, step 7). Labels are checked against src/ui/BadgeDetail.tsx, src/ui/EditDecks.tsx, src/ui/HandoffDecks.tsx, src/ui/TrashDeck.tsx and src/domain/operations.ts (KTD8). */}
+
+Open a badge from home. Each of its parts is a card. Click one to change just that part. Nothing changes until you click <UI>Save</UI> on its last card.
+
+<Shot id="badge-page" alt="The Write a release note badge: its art and Test it on an agent, then six part cards, Name, Learning targets, Task, Rubric, Look and Handoffs, which reads 1 handoff, and Nobody holds it yet under Holders" />
+
+## Its parts
+
+- <UI>Name</UI> opens <UI>What is it called</UI>.
+- <UI>Learning targets</UI> opens <UI>What its holder can do</UI>. Remove a target with its ×. Type a new one and press Enter, or click <UI>Add another</UI>. A target with detail in it offers <UI>Move to the rubric</UI>, as it does when you [build a credential](/how-to/build-a-credential/).
+- <UI>Task</UI> opens <UI>The task</UI>.
+- <UI>Rubric</UI> opens <UI>What good looks like</UI>.
+- <UI>Look</UI> opens three cards in turn: <UI>Colors</UI>, <UI>Art</UI> and <UI>Title</UI>. Pick a palette, then <UI>Choose an image</UI> for the art, then type the title the badge shows. <UI>Skip</UI> leaves a card as it is.
+- <UI>Handoffs</UI> opens the badge's handoffs, [below](#its-handoffs).
+
+The task and rubric cards each have helpers that copy a prompt for your assistant: <UI>Review this assignment</UI> and <UI>Write a refine prompt</UI> on the task, <UI>Check my criteria</UI> on the rubric. These prompts include the rubric. Give them to an assistant that's helping you write, not to an agent you're about to test.
+
+## When agents already hold it
+
+A badge's holders earned it against its task and rubric as they were. If you change either one, a card warns you before it saves.
+
+<Shot id="edit-retest" alt="Holders will re-test, under Rubric changed: They keep the badge and are asked to re-test, with Claude Code listed and the Save button" />
+
+<UI>Holders will re-test</UI> lists the agents that hold the badge. Click <UI>Save</UI>. They keep the badge, and home lists each one under <UI>What needs you</UI> as <UI>Re-test \{agent\}</UI>. Adding a rubric to a badge that had none counts as a change. So does moving detail from a target to the rubric. Other changes to the name, the targets or the look ask nothing.
+
+## Its handoffs
+
+A handoff is the prompt a test copies for your agent. Every badge starts with the skeleton, the app's default handoff, shown on the key S. Give a badge a handoff of its own when its test needs something the skeleton doesn't say, such as who the agent is writing for.
+
+Click <UI>Handoffs</UI> on the badge's page, or <UI>Edit handoffs</UI> during a test.
+
+<Shot id="handoffs-box" alt="Handoffs for Write a release note: the box with the keys S and A, A lit, an A · default button, and the links Write a new handoff and Edit the skeleton" />
+
+The box lights the badge's default. Each handoff of the badge's own has a button, and the default reads <UI>\{label\} · default</UI>. A badge with none says <UI>This badge uses the skeleton</UI>.
+
+### Write a handoff
+
+1. Click <UI>Write a new handoff</UI>. It starts as a copy of the skeleton.
+2. Change the text.
+3. Click <UI>Save</UI>. It gets the next letter, and as the newest handoff it becomes the badge's default.
+
+To change one, click its button. It opens as <UI>Handoff \{label\}</UI>.
+
+<Shot id="handoff-edit" alt="Handoff A for Write a release note: the template text with its slots, an added line asking the agent to write for the people who use the app, and Slots listed below" />
+
+A handoff is a template. Each time you copy it, the app fills its slots from the badge as it is then:
+
+- `{{name}}`: the badge's name.
+- `{{learning_targets}}`: its learning targets, numbered.
+- `{{task}}`: its task.
+
+A handoff must hold `{{task}}`. Any other text in double braces is copied as written.
+
+### Keep the rubric out
+
+There is no slot for the rubric. The agent shouldn't see how it will be judged, or it can write to the rubric instead of doing the task. A handoff that contains the badge's rubric word for word won't save: <UI>A handoff cannot include the badge's rubric.</UI>
+
+### A handoff with results
+
+Once a result has run a handoff, its text is fixed, so every result keeps the text it ran. Edit it and click <UI>Next</UI>, and a card says <UI>This handoff has results</UI>: <UI>Its results keep the text that ran.</UI> Click <UI>Save as a new handoff</UI>. Your edit becomes a new handoff with the next letter and becomes the default. The old one stays as it was.
+
+### The skeleton
+
+<UI>Edit the skeleton</UI> changes the skeleton for every badge, and every new handoff starts from it. It doesn't lock. Each result keeps the handoff text it ran, so older results still show the skeleton as it was.
+
+Once two or more of a badge's handoffs have results, its page lists each one under <UI>Replies</UI>. [Compare takes](/how-to/compare-takes/) shows how to read them.
+
+## Move it to the trash
+
+At the foot of the badge's page, click <UI>Move to trash</UI>.
+
+<Shot id="trash-badge" alt="Move Say how sure you are to trash: Its 2 results go with it, with Back and the Move to trash button" />
+
+The card says what goes with the badge: every agent's results on it, and any handoff for it that an agent still holds, which is pulled with no result. Its handoffs go too. Click <UI>Move to trash</UI>.
+
+Nothing is deleted. The files move into a `trash` folder inside your folder, so you can get them back.

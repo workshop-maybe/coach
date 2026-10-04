@@ -1,0 +1,42 @@
+---
+title: Make an agent
+part: how-to
+order: 20
+description: Set up an agent for each way you run an assistant, by its harness, model and effort.
+---
+
+{/* How to, second page (U7, R6, R11): the agent card, Create an agent through Make the agent, and a new agent like a locked one. Labels are checked against src/ui/PlayerCard.tsx (KTD8). */}
+
+An agent is one setup you run: a harness, a model and an effort level. Make one for each setup you want to test. To compare two models, or two efforts, make two agents. [Agents](/ideas/agents/) explains why.
+
+## Set its dials
+
+1. On home, click <UI>Create an agent</UI>.
+2. Turn each dial to match how you run the assistant: <UI>Harness</UI>, <UI>Model</UI> and <UI>Effort</UI>. Click the arrows on either side of a dial, or click the dial and use the arrow keys.
+3. Some models also have a <UI>Version</UI> dial. <UI>latest</UI> means whatever version is newest when you run it.
+4. If your harness or model isn't listed, turn its dial to <UI>Other</UI> and type it. While an agent uses a model you typed, the model dial offers it again for that harness.
+5. Click <UI>Make the agent</UI>.
+
+<Shot id="agent-new" alt="The agent card named Claude Code, sonnet, medium: the agent drawn above its Harness, Model, Version and Effort dials, with Make the agent below" />
+
+The three knobs on the drawing turn the same dials. Click a knob to step its dial forward, or hold Shift as you click to step back.
+
+The card's heading is the name the agent gets, such as *Claude Code, sonnet, medium*. If another agent already has that name, the app adds a number. You can rename it later. [Fill in an agent](/how-to/fill-in-an-agent/) covers its name, repo, notes and parameters.
+
+## After you make it
+
+The new agent is on home, under <UI>Agents</UI>. Until it has a result, <UI>What needs you</UI> lists it as <UI>Test \{agent\}</UI>. Click that to start its first test, or see [Hand off a test](/how-to/hand-off-a-test/).
+
+If you made the agent from a test, with <UI>Create an agent</UI> on the <UI>Who takes it</UI> card, the app takes you straight back to that test.
+
+## A new setup for an agent with results
+
+Once an agent has a result, its dials lock. Every result stays tied to the setup that produced it.
+
+To test another model or effort:
+
+1. Open the agent from home.
+2. Click <UI>Make a new agent like this</UI>. A new card opens with the same dials, and the new agent keeps the old one's repo, notes and parameters.
+3. Turn the dials you want to change and click <UI>Make the agent</UI>.
+
+The new agent opens once it's made.

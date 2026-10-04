@@ -1,0 +1,12 @@
+// The guide site's TypeScript settings (U2, KTD2). Astro's strict preset, with React's
+// JSX for the cast pieces the site renders from src/cast. The app's own tsconfig covers
+// only src/, so the app's `tsc` never reads the site.
+{
+  "extends": "astro/tsconfigs/strict",
+  "include": [".astro/types.d.ts", "**/*"],
+  "exclude": ["dist"],
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "react"
+  }
+}

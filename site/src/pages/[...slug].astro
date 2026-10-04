@@ -1,0 +1,26 @@
+---
+// Every guide page (U2, R13): one route per entry in the guide collection, at its entry id
+// (content/guide/how-to/export.mdx is /how-to/export/). The layout draws the title as the
+// page's h1, so a page's MDX starts below it.
+
+import { getCollection, render } from "astro:content";
+import Shot from "../components/Shot.astro";
+import UI from "../components/UI.astro";
+import Guide from "../layouts/Guide.astro";
+import { pageHref } from "../parts";
+
+export async function getStaticPaths() {
+  const entries = await getCollection("guide");
+  return entries.map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
+}
+
+const { entry } = Astro.props;
+const { Content } = await render(entry);
+
+// What every page may use without importing it: an app label and a screenshot (U5).
+const components = { UI, Shot };
+---
+
+<Guide title={entry.data.title} description={entry.data.description} current={pageHref(entry.id)}>
+  <Content components={components} />
+</Guide>
