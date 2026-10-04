@@ -55,3 +55,7 @@ The optional setting, off by default, that connects the app to TypeSafe's Jev mo
 ### Second opinion
 
 Jev's reading of a reply against a badge's rubric, given only when the user asks: a probability for each rubric point, one overall reading, and a flag on any point it can't call with confidence. The user still records the verdict, and the reading is saved with the result.
+
+### Call
+
+Jev's answer on one rubric point, one learning target or the whole bar, read from its probability as meets, misses or can't call. A badge starts with fixed cut-offs, and they move to fit the user's own verdicts once the badge has enough judged results; moving them re-reads saved readings without asking Jev again.
