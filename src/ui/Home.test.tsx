@@ -88,6 +88,59 @@ function renderApp(storage: MemoryStorage) {
 const needs = () => screen.findByRole("region", { name: "What needs you" });
 const rows = async () => within(await needs()).getAllByRole("button").filter((b) => b.textContent !== "More");
 
+/** Home's sections, which pair What needs you with Agents on a wide window when all three show. */
+const shelves = () => document.querySelector<HTMLElement>(".home > .home-shelves");
+const sectionNames = () => [...(shelves()?.querySelectorAll(":scope > section") ?? [])].map((s) => s.querySelector("h2")?.textContent);
+const PAIRED = "home-shelves-paired";
+
+describe("Home's paired row", () => {
+  it("pairs What needs you with Agents when all three sections show, and keeps the doors outside", async () => {
+    renderApp(storageWith({ credentials: [review], profiles: [opus, codex], assessments: [await met(opus, review)] }));
+    await needs();
+    expect(shelves()!.classList.contains(PAIRED)).toBe(true);
+    expect(sectionNames()).toEqual(["What needs you", "Agents", "Badges"]);
+    const door = screen.getByRole("button", { name: "Create an agent" });
+    expect(shelves()!.contains(door)).toBe(false);
+    expect(door.closest(".doors")?.parentElement?.classList.contains("home")).toBe(true);
+  });
+
+  it("does not pair agents and badges when nothing needs you", async () => {
+    renderApp(storageWith({ credentials: [review], profiles: [opus], assessments: [await met(opus, review)] }));
+    await screen.findByRole("region", { name: "Badges" });
+    expect(screen.queryByRole("region", { name: "What needs you" })).toBeNull();
+    expect(sectionNames()).toEqual(["Agents", "Badges"]);
+    expect(shelves()!.classList.contains(PAIRED)).toBe(false);
+  });
+
+  it("does not pair What needs you with Badges when there are no agents", async () => {
+    renderApp(storageWith({ credentials: [review] }));
+    await needs();
+    expect(sectionNames()).toEqual(["What needs you", "Badges"]);
+    expect(shelves()!.classList.contains(PAIRED)).toBe(false);
+  });
+
+  it("an empty folder has no shelves", async () => {
+    renderApp(storageWith());
+    await screen.findByRole("button", { name: "Try a first test" });
+    expect(document.querySelector(".home-empty")).not.toBeNull();
+    expect(shelves()).toBeNull();
+  });
+
+  it("a need resolved by a reload unpairs the row, and the doors stay the same nodes", async () => {
+    const storage = storageWith({ credentials: [review], profiles: [opus, codex], assessments: [await met(opus, review)] });
+    renderApp(storage);
+    expect((await rows())[0].textContent).toContain("Test Codex agent");
+    expect(shelves()!.classList.contains(PAIRED)).toBe(true);
+    const door = screen.getByRole("button", { name: "Create an agent" });
+    const result = await met(codex, review);
+    await storage.writeText("data", assessmentPath(result.profileSlug, result.collectionSlug, result.credentialSlug, result.fileStem), serializeAssessment(result));
+    await userEvent.click(screen.getByRole("button", { name: "Reload" }));
+    await waitFor(() => expect(screen.queryByRole("region", { name: "What needs you" })).toBeNull());
+    expect(shelves()!.classList.contains(PAIRED)).toBe(false);
+    expect(screen.getByRole("button", { name: "Create an agent" })).toBe(door);
+  });
+});
+
 describe("Home", () => {
   it("Covers AE1. An empty folder shows the first test, then the two doors", async () => {
     renderApp(storageWith());

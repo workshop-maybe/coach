@@ -43,6 +43,50 @@ const openPart = async (name: RegExp) => {
   await userEvent.click(within(parts()).getByRole("button", { name }));
 };
 
+/** A badge page's two columns on a wide window, which stack on a narrow one. */
+const mainColumn = () => document.querySelector<HTMLElement>(".detail-split > .detail-main")!;
+const sideColumn = () => document.querySelector<HTMLElement>(".detail-split > .detail-side")!;
+
+describe("BadgeDetail's two columns", () => {
+  it("puts the badge and its parts on one side, and its replies, holders and Move to trash on the other", async () => {
+    renderApp(storageWith({ credentials: [review], profiles: [opus], assessments: [await result(opus, review)] }), badge);
+    const replies = await screen.findByRole("region", { name: "Replies" });
+    expect(mainColumn()).not.toBeNull();
+    expect(mainColumn().querySelector(".detail-head svg.cast-cartridge")).not.toBeNull();
+    expect(within(mainColumn()).getByRole("heading", { name: "Code review", level: 2 })).toBeTruthy();
+    expect(within(mainColumn()).getByRole("list", { name: "Parts" })).toBeTruthy();
+    expect(sideColumn().contains(replies)).toBe(true);
+    expect(within(sideColumn()).getByRole("region", { name: "Holders" })).toBeTruthy();
+    expect(within(sideColumn()).getByRole("button", { name: "Move to trash" })).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "Close" })).toHaveLength(1);
+    expect(document.querySelectorAll("button.primary")).toHaveLength(1);
+  });
+
+  it("a badge nobody has tried has only its holders and Move to trash beside it", async () => {
+    renderApp(storageWith({ credentials: [review], profiles: [opus] }), badge);
+    await screen.findByText("Nobody holds it yet");
+    expect(within(sideColumn()).getByText("Nobody holds it yet")).toBeTruthy();
+    expect(within(sideColumn()).getByRole("button", { name: "Move to trash" })).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Replies" })).toBeNull();
+  });
+
+  it("once two handoffs have run, their rows sit in the side column", async () => {
+    const one = { collectionSlug: "eng", credentialSlug: "review", id: "20260902T090000Z", text: "{{task}}\n" };
+    renderApp(
+      storageWith({
+        credentials: [review],
+        profiles: [opus, codex],
+        handoffs: [one],
+        assessments: [await result(opus, review, { handoff: { id: one.id, text: "B" } }), await result(codex, review, { result: "not_met" })],
+      }),
+      badge,
+    );
+    await screen.findByRole("region", { name: "Replies" });
+    expect(sideColumn().querySelector(".handoff-runs")).not.toBeNull();
+    expect(mainColumn().querySelector(".handoff-runs")).toBeNull();
+  });
+});
+
 describe("BadgeDetail", () => {
   it("shows the badge, its six parts, and only the agents that met it as holders", async () => {
     const storage = storageWith({
