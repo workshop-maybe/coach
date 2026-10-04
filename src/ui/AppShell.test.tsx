@@ -52,9 +52,12 @@ stand.home = () => <Probe />;
 const bar = () => screen.getByRole("banner");
 const shell = () => document.querySelector(".shell");
 
-/** The full bar shows the folder and its three actions; the slim bar shows neither. */
+/** The bar's actions after the folder, in order. */
+const BAR_ACTIONS = ["Change folder", "Reload", "Export", "Jev Mode"];
+
+/** The full bar shows the folder and its four actions; the slim bar shows neither. */
 function expectFolderInBar(shown: boolean) {
-  for (const name of ["Change folder", "Reload", "Export"]) {
+  for (const name of BAR_ACTIONS) {
     expect(within(bar()).queryByRole("button", { name }) !== null, name).toBe(shown);
   }
   expect(within(bar()).queryByText(FOLDER) !== null, "folder path").toBe(shown);
@@ -79,6 +82,19 @@ describe("pane mode in the shell", () => {
     await openShell();
     expectFolderInBar(true);
     expectWindowKeysAndBrand();
+  });
+
+  it("lists Change folder, Reload, Export and Jev Mode, in that order", async () => {
+    await openShell();
+    const actions = bar().querySelector(".topbar-actions") as HTMLElement;
+    expect(within(actions).getAllByRole("button").map((b) => b.textContent)).toEqual(BAR_ACTIONS);
+  });
+
+  it("Jev Mode opens the Jev Mode deck", async () => {
+    const { press } = await openShell();
+    await press("Jev Mode");
+    expect(await screen.findByRole("region", { name: "Jev Mode" })).toBeTruthy();
+    expectFolderInBar(true);
   });
 
   it("a view that claims pane mode hides the folder path and its actions, and keeps the window keys and the brand", async () => {

@@ -576,7 +576,7 @@ mod tests {
         let settings_path = settings_dir.path().join("settings.json");
         let saved = crate::settings::Settings {
             data_folder: Some(dir.path().to_string_lossy().into_owned()),
-            machine_id: None,
+            ..Default::default()
         };
         crate::settings::save(&settings_path, &saved).unwrap();
 

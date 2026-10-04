@@ -1600,6 +1600,96 @@ button:focus-visible {
   font-size: 15px;
 }
 
+/* In a Jev round Met and Not yet are choices that wait for Save (U6, KTD10): the picked
+   one is lit in data blue, as a handoff key is, and Save stays the one ink block. */
+.meet-choices button[aria-pressed="true"] {
+  box-shadow: var(--focus-ring);
+  color: var(--data);
+}
+
+/* Jev's part of the rubric column, below the rubric (U6, KTD13): the quiet ask, a failure
+   or the too-long line, and the reading once it is in hand. It scrolls on its own when
+   the column is short. */
+.meet-jev {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-top: 1px solid var(--cell);
+}
+
+/* Empty, it takes no room but stays rendered, so a screen reader hears its first update. */
+.meet-jev:empty {
+  padding: 0;
+  border-top: 0;
+}
+
+.meet-jev > p {
+  margin: 0;
+}
+
+.meet-jev .deck-error {
+  font-size: 13px;
+}
+
+/* Jev's reading: each point with its probability in the mono, then the whole rubric.
+   Numbers and words only, never a fill. */
+.jev-reading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  font-size: 13px;
+}
+
+.jev-reading-head {
+  font-family: var(--font-mono);
+  font-size: var(--label);
+  letter-spacing: var(--label-tracking);
+  color: var(--ink-muted);
+}
+
+.jev-points {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.jev-point {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--space-md);
+  align-items: baseline;
+  margin: 0;
+}
+
+.jev-p {
+  font-family: var(--font-mono);
+  letter-spacing: var(--value-tracking);
+  text-align: right;
+}
+
+.jev-vague {
+  grid-column: 1 / -1;
+  color: var(--ink-muted);
+  font-size: 12px;
+}
+
+.jev-overall {
+  padding-top: var(--space-xs);
+  border-top: 1px solid var(--cell);
+  font-weight: 600;
+}
+
+.jev-overall .jev-vague {
+  font-weight: 400;
+}
+
 /* Below the stacking width the rubric sits above the reply, takes at most about a third
    of the height and scrolls on its own; the reply takes the rest. */
 @media (max-width: 56rem) {
@@ -1615,6 +1705,16 @@ button:focus-visible {
   .meet-with-rubric .meet-text-rubric {
     flex: 0 1 auto;
     max-height: 33%;
+  }
+
+  /* With Jev's reading or a line from Jev below it, the rubric column takes more of the
+     height, and the rubric keeps a couple of lines in view while Jev's part scrolls. */
+  .meet-with-rubric .meet-text-jev {
+    max-height: 60%;
+  }
+
+  .meet-with-rubric .meet-text-jev .rich-view {
+    min-height: 3.5rem;
   }
 
   .meet-with-rubric .rich-view {
@@ -1656,6 +1756,19 @@ button:focus-visible {
 .test-strip .cast {
   width: auto;
   height: 4.5rem;
+}
+
+/* Jev's cleanup of a terminal paste under the reply box (U9, KTD18): the quiet action, a
+   failure as one small line, and while Jev works, the line that says why Next waits. It
+   is the body's last line, at its right, so it sits just above Next. */
+.deck-body > .reply-cleanup-error {
+  font-size: 13px;
+}
+
+.deck-body > .reply-wait {
+  align-self: flex-end;
+  margin: 0;
+  text-align: right;
 }
 
 /* "Hand it over": the badge in the handoff box, the agent beside it (U6, KTD8). */
@@ -2210,6 +2323,29 @@ button:focus-visible {
    control share the top row at the right, then the two takes as records like the reply
    view's, each with its mono bar over a reply that scrolls on its own (R10). Below the
    stacking width the records stack, each taking half the height left. */
+/* A saved Jev reading, read-only and collapsed (U7). Its own box, not the handoff text's:
+   the panel is words and numbers, not preformatted text. */
+.reply-jev-body {
+  max-height: 30vh;
+  margin: var(--space-sm) 0 0;
+  padding: var(--space-sm) var(--space-base);
+  overflow: auto;
+  border: 1px solid var(--cell);
+  background: var(--bg);
+}
+
+/* Inside a compare record it sits within the record's border, and opens shorter, since
+   each record gets half the height once the compare stacks. */
+.reply-record > .reply-jev {
+  margin: 0;
+  padding: var(--space-sm) var(--space-base);
+  border-top: 1px solid var(--cell);
+}
+
+.reply-record > .reply-jev .reply-jev-body {
+  max-height: 20vh;
+}
+
 .compare-top {
   flex: none;
   display: flex;
@@ -2435,6 +2571,37 @@ button:focus-visible {
   color: var(--ink-muted);
   font-weight: 500;
   padding-inline: 0;
+}
+
+/* The Jev Mode deck (KTD6): the key or the switch, its quiet actions, and below them, small
+   and muted, what leaves the machine. */
+.jev {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.jev p {
+  margin: 0;
+}
+
+.jev-about {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.jev-about ul {
+  margin: 0;
+  padding-left: var(--space-lg);
+  list-style: square;
+}
+
+.jev-about a {
+  color: var(--data);
+  text-underline-offset: 2px;
 }
 
 /* The window's own keys (no system title bar): close, minimize and full screen, drawn

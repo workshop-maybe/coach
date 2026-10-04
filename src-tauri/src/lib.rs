@@ -1,5 +1,6 @@
 mod context;
 mod files;
+mod jev;
 mod settings;
 
 use std::path::PathBuf;
@@ -12,7 +13,10 @@ use tauri_plugin_dialog::DialogExt;
 /// Approved roots plus where settings live, and this machine's identity.
 struct AppState {
     roots: Mutex<Roots>,
-    settings_path: PathBuf,
+    /// Every settings write goes through its guarded update (KTD3).
+    settings: settings::SettingsFile,
+    /// Jev Mode's key store and the key held for this session, if any.
+    jev: jev::Jev,
     machine_id: String,
     /// Looked up on the first copy, not at launch, since it spawns a process.
     machine_name: std::sync::OnceLock<String>,
@@ -79,9 +83,7 @@ async fn pick_data_folder(
     let Some(path) = pick_and_approve(&app, &state, RootKind::Data)? else {
         return Ok(None);
     };
-    let mut s = settings::load(&state.settings_path);
-    s.data_folder = Some(path.clone());
-    settings::save(&state.settings_path, &s)?;
+    state.settings.remember_data_folder(&path)?;
     Ok(Some(path))
 }
 
@@ -187,6 +189,47 @@ async fn read_context(state: State<'_, AppState>, repo: String, harness: String)
     })
 }
 
+// Jev Mode (KTD1). Work that can reach the key store runs on a blocking thread,
+// since a keychain prompt waits on the user. The contract is at the top of jev.rs.
+
+async fn off_thread<T: Send + 'static>(
+    app: AppHandle,
+    work: impl FnOnce(&AppState) -> Result<T, jev::JevError> + Send + 'static,
+) -> Result<T, jev::JevError> {
+    tauri::async_runtime::spawn_blocking(move || work(&app.state::<AppState>()))
+        .await
+        .unwrap_or_else(|_| Err(jev::JevError::of(jev::Kind::Other)))
+}
+
+/// Jev Mode's state, from settings and memory only. Never reads the key store.
+#[tauri::command]
+async fn jev_status(state: State<'_, AppState>) -> Result<jev::JevStatus, jev::JevError> {
+    Ok(state.jev.status(&state.settings))
+}
+
+#[tauri::command]
+async fn jev_set_key(app: AppHandle, key: String) -> Result<jev::JevStatus, jev::JevError> {
+    let key = zeroize::Zeroizing::new(key);
+    off_thread(app, move |state| state.jev.set_key(&state.settings, &key)).await
+}
+
+#[tauri::command]
+async fn jev_clear_key(app: AppHandle) -> Result<jev::JevStatus, jev::JevError> {
+    off_thread(app, |state| state.jev.clear_key(&state.settings)).await
+}
+
+#[tauri::command]
+async fn jev_set_on(app: AppHandle, on: bool) -> Result<jev::JevStatus, jev::JevError> {
+    off_thread(app, move |state| state.jev.set_on(&state.settings, on)).await
+}
+
+/// The request arrives untyped so that the on check runs before its shape is read.
+#[tauri::command]
+async fn jev_ask(app: AppHandle, request: serde_json::Value) -> Result<jev::Answers, jev::JevError> {
+    let prepared = off_thread(app, move |state| state.jev.prepare(&state.settings, request)).await?;
+    jev::send(prepared).await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
@@ -216,7 +259,10 @@ pub fn run() {
             files::register_remembered(&mut roots, saved.data_folder.as_deref());
             app.manage(AppState {
                 roots: Mutex::new(roots),
-                settings_path,
+                settings: settings::SettingsFile::new(settings_path),
+                // Opening the store sets keyring-core's default (KTD2). It reads no key and
+                // raises no prompt; on Linux it connects to the Secret Service over D-Bus.
+                jev: jev::Jev::new(Box::new(jev::Keychain::open())),
                 machine_id,
                 machine_name: std::sync::OnceLock::new(),
                 home: app.path().home_dir().ok(),
@@ -233,7 +279,12 @@ pub fn run() {
             move_file,
             import_badge_art,
             read_data_uri,
-            read_context
+            read_context,
+            jev_status,
+            jev_set_key,
+            jev_clear_key,
+            jev_set_on,
+            jev_ask
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -37,6 +37,7 @@ import {
   type Collection,
   type Credential,
   type FolderState,
+  type JevReading,
   type Slug,
   type TestContext,
 } from "./types";
@@ -413,11 +414,14 @@ export interface AssessmentInput {
   context?: TestContext;
   /** The handoff the test ran with, as copied. Recording it locks that handoff (KTD5). */
   handoff?: Assessment["handoff"];
+  /** Jev's reading of this reply, when the user asked. Dropped unless its version is the one stamped (KTD11). */
+  jev?: JevReading;
 }
 
 /**
  * Records a result the user chose (R14, R15), stamped with the credential's current
- * assignment version and the profile's current setup (R16). Always a new file.
+ * assignment version and the profile's current setup (R16). Always a new file. A Jev
+ * reading taken against any other assignment version is left off; the result still saves.
  */
 export async function recordAssessment(
   storage: Storage,
@@ -433,6 +437,7 @@ export async function recordAssessment(
   }
   const profile = findProfile(state, input.profileSlug);
   const credential = findCredential(state, input.collectionSlug, input.credentialSlug);
+  const version = await assignmentVersion(credential.task, credential.rubric);
 
   const assessment: Assessment = {
     profileSlug: profile.slug,
@@ -441,12 +446,13 @@ export async function recordAssessment(
     fileStem: fileStemFor(now),
     result: input.result,
     recordedAt: now.toISOString(),
-    assignmentVersion: await assignmentVersion(credential.task, credential.rubric),
+    assignmentVersion: version,
     setup: { harness: profile.harness, model: profile.model, effort: profile.effort },
     note: input.note ?? "",
     handBack: input.handBack,
     ...(input.context ? { context: input.context } : {}),
     ...(input.handoff ? { handoff: { id: input.handoff.id, text: input.handoff.text } } : {}),
+    ...(input.jev && input.jev.assignmentVersion === version ? { jev: input.jev } : {}),
   };
   await saveAssessment(storage, assessment);
   return loadFolder(storage);

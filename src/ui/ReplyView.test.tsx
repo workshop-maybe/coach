@@ -1,16 +1,20 @@
 // @vitest-environment jsdom
 // The reply view (U5, R11, R12, R15, R16, KTD7): one take opened as its own pane, with its
-// record header, its reply rendered, the handoff text that ran, and the way back it works
-// out from the take each time it closes.
+// record header, its reply rendered, the handoff text that ran, Jev's saved reading (U7,
+// R14), and the way back it works out from the take each time it closes.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { assessmentPath, profilePath, serializeAssessment, serializeProfile } from "../domain/folder";
-import type { Assessment, FolderState, Handoff } from "../domain/types";
+import type { Assessment, FolderState, Handoff, JevReading } from "../domain/types";
+import { FakeJev } from "../jev/fakeJev";
 import type { MemoryStorage } from "../storage/memory";
+import { AppShell } from "./AppShell";
 import { formatDate } from "./format";
+import { JevProvider } from "./jevContext";
 import type { TakeRef } from "./routes";
-import { opus, renderApp, result, review, storageWith } from "./testFolder";
+import { FOLDER, opus, renderApp, result, review, storageWith } from "./testFolder";
+import { FolderProvider } from "./useFolderState";
 
 // Each finished matrix build is noted, so a test can wait for the build of a reloaded folder.
 const builds = vi.hoisted(() => ({ last: null as FolderState | null }));
@@ -58,6 +62,24 @@ function reloadAfter(change: () => void) {
 
 const write = (storage: MemoryStorage, path: string, text: string) => storage.seed({ [path]: text });
 const resultPath = (r: Assessment) => assessmentPath(r.profileSlug, r.collectionSlug, r.credentialSlug, r.fileStem);
+
+/** A reading saved on a result, seen before the verdict. Its points are the rubric as Jev read it then. */
+const reading: JevReading = {
+  model: "jev-1.13.0",
+  assignmentVersion: "v1",
+  askedAt: "2026-09-01T09:05:00.000Z",
+  seen: "before",
+  overall: 0.82,
+  points: [
+    { text: "Names the off-by-one", probability: 0.94 },
+    { text: "Points to the line", probability: 0.52 },
+  ],
+};
+
+/** The collapsed part that holds the saved reading, found by its summary. */
+function savedReading(summary: string): HTMLDetailsElement {
+  return screen.getByText(summary, { selector: "summary" }).closest("details")!;
+}
 
 /** The take's row on the page the view went back to, found by its pick box's name. */
 function takeHead(agent: string, n: number): HTMLElement {
@@ -112,6 +134,60 @@ describe("ReplyView", () => {
     const ranWith = summary.closest("details")!;
     expect(ranWith.open).toBe(false);
     expect(ranWith.querySelector("pre")?.textContent).toBe("Filled handoff A");
+  });
+
+  it("keeps a saved reading collapsed under the reply, with its overall in the summary and the stored point text, not the rubric as it is now", async () => {
+    const rewritten = { ...review, rubric: "- Covers every file\n- Is kind" };
+    const assessments = [await result(opus, review, { ...day(1), jev: reading })];
+    const storage = storageWith({ credentials: [rewritten], profiles: [opus, codex], handoffs: [a], assessments });
+    open(storage);
+    await screen.findByRole("heading", { name: "Opus agent" });
+
+    const saved = savedReading("Jev's reading, 82% overall");
+    expect(saved.open).toBe(false);
+    const panel = saved.querySelector<HTMLElement>(".jev-reading-saved")!;
+    expect([...panel.querySelectorAll("li .jev-point-text")].map((t) => t.textContent)).toEqual(["Names the off-by-one", "Points to the line"]);
+    expect([...panel.querySelectorAll("li .jev-p")].map((p) => p.textContent)).toEqual(["94%", "52%"]);
+    expect(panel.querySelector(".jev-overall .jev-p")?.textContent).toBe("82%");
+    expect(panel.textContent).not.toContain("Covers every file");
+    expect(within(panel).queryByRole("button")).toBeNull();
+  });
+
+  it("says in the summary when the verdict changed after Jev's reading was seen", async () => {
+    const after = { ...reading, seen: "after" as const, verdictWhenSeen: "met" as const, verdictChanged: true };
+    open(folder([await result(opus, review, { ...day(1), result: "not_met", jev: after })]));
+    await screen.findByRole("heading", { name: "Opus agent" });
+    expect(savedReading("Jev's reading, 82% overall · verdict changed after it")).toBeTruthy();
+  });
+
+  it("says nothing of the verdict when it stayed as it was when Jev's reading was seen", async () => {
+    const after = { ...reading, seen: "after" as const, verdictWhenSeen: "met" as const, verdictChanged: false };
+    open(folder([await result(opus, review, { ...day(1), jev: after })]));
+    await screen.findByRole("heading", { name: "Opus agent" });
+    expect(savedReading("Jev's reading, 82% overall")).toBeTruthy();
+    expect(screen.queryByText(/verdict changed/)).toBeNull();
+  });
+
+  it("shows no reading for a result without one", async () => {
+    open(folder([await result(opus, review, day(1))]));
+    await screen.findByRole("heading", { name: "Opus agent" });
+    expect(screen.queryByText(/Jev's reading/)).toBeNull();
+    expect(document.querySelector(".jev-reading")).toBeNull();
+  });
+
+  it("shows a saved reading while Jev Mode is off, and asks Jev nothing", async () => {
+    const fake = new FakeJev();
+    render(
+      <JevProvider jev={fake}>
+        <FolderProvider storage={folder([await result(opus, review, { ...day(1), jev: reading })])} folder={FOLDER}>
+          <AppShell onChangeFolder={() => {}} initialRoute={{ view: "item", item: "reply", credentialKey: "eng/review", take: take("opus", 1) }} />
+        </FolderProvider>
+      </JevProvider>,
+    );
+    await screen.findByRole("heading", { name: "Opus agent" });
+    expect(fake.current.on).toBe(false);
+    expect(savedReading("Jev's reading, 82% overall").querySelector(".jev-overall .jev-p")?.textContent).toBe("82%");
+    expect(fake.calls).toEqual([{ method: "status" }]);
   });
 
   it("switches the reply to its stored text, exactly as stored, and back", async () => {

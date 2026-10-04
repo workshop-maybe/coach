@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ChangedOnDiskError } from "../storage/storage";
 import { MemoryStorage } from "../storage/memory";
 import { assignmentVersion } from "./hash";
-import { collectionPath, credentialPath, handoffPath, loadFolder, profilePath, SKELETON_PATH } from "./folder";
+import { assessmentPath, collectionPath, credentialPath, handoffPath, loadFolder, profilePath, SKELETON_PATH } from "./folder";
 import { BUILT_IN_HANDOFF, defaultHandoff, handoffsFor, isHandoffLocked, SKELETON_ID, winnerFor } from "./handoffs";
 import {
   HandoffLockedError,
@@ -29,7 +29,7 @@ import {
   updateProfile,
 } from "./operations";
 import { findPreset, presetCredential } from "./presets";
-import { credentialKey, type AgentProfile, type AssessmentResult, type FolderState } from "./types";
+import { credentialKey, type AgentProfile, type AssessmentResult, type FolderState, type JevReading } from "./types";
 
 const baseProfile: Omit<AgentProfile, "slug"> = {
   name: "Claude Opus",
@@ -382,6 +382,45 @@ describe("recording assessments", () => {
     const without = await recordAssessment(storage, withIt, { ...input, result: "met" }, new Date("2026-10-01T09:40:00Z"));
     const second = without.assessments.find((a) => a.fileStem === "20261001T094000Z");
     expect(second).not.toHaveProperty("handoff");
+  });
+
+  /** A reading taken against `version`, seen after a Not yet the user then changed. */
+  function reading(version: string): JevReading {
+    return {
+      model: "jev-1",
+      assignmentVersion: version,
+      askedAt: "2026-09-29T08:45:00.000Z",
+      seen: "after",
+      verdictWhenSeen: "not_met",
+      verdictChanged: true,
+      overall: 0.93,
+      points: [{ text: "Flags parse.", probability: 0.95 }],
+    };
+  }
+
+  it("saves Jev's reading taken against the version stamped at save, and none when there was none", async () => {
+    const { storage, state } = await setup();
+    const jev = reading(await assignmentVersion("Build a CLI.", "Flags parse."));
+    const withIt = await recordAssessment(storage, state, { ...input, result: "met", jev }, new Date("2026-09-29T08:49:00Z"));
+    expect(withIt.assessments[0].jev).toEqual(jev);
+    expect(storage.file(assessmentPath("claude-opus", "go-basics", "write-a-cli", "20260929T084900Z"))).toContain("jev:");
+    expect(await loadFolder(storage)).toEqual(withIt);
+    const without = await recordAssessment(storage, withIt, { ...input, result: "met" }, new Date("2026-09-29T08:50:00Z"));
+    const second = without.assessments.find((a) => a.fileStem === "20260929T085000Z");
+    expect(second).not.toHaveProperty("jev");
+    expect(storage.file(assessmentPath("claude-opus", "go-basics", "write-a-cli", "20260929T085000Z"))).not.toContain("jev");
+  });
+
+  it("drops a reading taken against an older assignment version, and still saves the result", async () => {
+    const { storage, state } = await setup();
+    const jev = reading(await assignmentVersion("Build a CLI.", "Flags parse."));
+    const path = credentialPath("go-basics", "write-a-cli");
+    const edited = await updateCredential(storage, { ...state.credentials[0], rubric: "Flags parse and help prints." }, state.raw[path]);
+    const next = await recordAssessment(storage, edited, { ...input, result: "met", jev }, new Date("2026-09-29T08:49:00Z"));
+    expect(next.assessments).toHaveLength(1);
+    expect(next.assessments[0].result).toBe("met");
+    expect(next.assessments[0]).not.toHaveProperty("jev");
+    expect(storage.file(assessmentPath("claude-opus", "go-basics", "write-a-cli", "20260929T084900Z"))).not.toContain("jev");
   });
 
   it("stamps the edited assignment version after the credential changes", async () => {

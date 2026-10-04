@@ -7,14 +7,15 @@
 //
 // The take is a record: a mono header bar with the agent, its setup, the verdict, the date
 // and the note, then the reply rendered at a readable measure with a switch to the text as
-// stored, then the handoff text that ran, collapsed. Close and Escape go back by the rule in
-// replyRoute.ts, worked out when the view closes: the page that holds the take, its row lit
-// and focused, the list's picks kept (R16).
+// stored, then Jev's saved reading and the handoff text that ran, each collapsed. Close and
+// Escape go back by the rule in replyRoute.ts, worked out when the view closes: the page
+// that holds the take, its row lit and focused, the list's picks kept (R16).
 
 import { useState } from "react";
 import { BUILT_IN_HANDOFF } from "../domain/handoffs";
 import { credentialKey } from "../domain/types";
 import { formatDate, handoffText } from "./format";
+import { SavedReading } from "./JevReading";
 import { useNav } from "./nav";
 import { usePane } from "./pane";
 import { backFromReply, takeOf } from "./replyRoute";
@@ -59,6 +60,7 @@ export function ReplyView({ credentialKey: key, take, picks }: { credentialKey: 
         </TakeBar>
         <RichView aria-label="Reply" value={a.handBack} stored={asStored} />
       </article>
+      {a.jev && <SavedReading reading={a.jev} />}
       <details className="reply-ran">
         <summary>{handoffText(state, key, a.handoff?.id)}</summary>
         <pre className="handback">{a.handoff?.text ?? BUILT_IN_HANDOFF}</pre>

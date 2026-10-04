@@ -26,10 +26,29 @@ tauri-plugin-dialog = "2"
 tauri-plugin-clipboard-manager = "2"
 sha2 = "0.10"
 base64 = "0.22"
+# Jev Mode (KTD1, KTD2). reqwest is called from Rust, never through tauri-plugin-http,
+# so no capability can make the web view a fetcher; its `rustls` feature verifies TLS
+# with the OS trust store. The key store is chosen per platform below, never keyring's
+# `cli` feature or a database-backed store.
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
+keyring-core = "1"
+zeroize = "1"
 
 # Desktop only: remembers the window's size and position across launches (R5, KTD2).
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-window-state = "2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+apple-native-keyring-store = { version = "1", features = ["keychain"] }
+
+# zbus already runs on async-io in this tree (tauri-plugin-opener), so the store does too.
+# `secret-service` is named only to recognize its "unavailable" error at startup.
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus-secret-service-keyring-store = { version = "1", features = ["rt-async-io-crypto-rust"] }
+secret-service = { version = "5", default-features = false }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-native-keyring-store = "1"
 
 [dev-dependencies]
 tempfile = "3"

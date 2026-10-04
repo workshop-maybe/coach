@@ -1,6 +1,7 @@
-// The app frame (KTD1). Home is the only room: a top bar with the folder and its three
-// single actions (Change folder, Reload, Export), the load-error banner, the badge-warning
-// notice and the notice banner, then home, a deck in progress, or one item open.
+// The app frame (KTD1). Home is the only room: a top bar with the folder and its single
+// actions (Change folder, Reload, Export, and Jev Mode, which opens the Jev Mode deck, KTD6),
+// the load-error banner, the badge-warning notice and the notice banner, then home, a deck
+// in progress, or one item open.
 //
 // A view can claim the window as a pane (KTD3, pane.tsx). While one does, the bar keeps
 // only the window keys and the brand (R8), and the shell turns into a full-height column
@@ -17,6 +18,7 @@ import { CredentialDeck } from "./CredentialDeck";
 import { EditAgentDeck, EditCredentialDeck } from "./EditDecks";
 import { EditHandoffDeck, HandoffsDeck } from "./HandoffDecks";
 import { HandoffDetail } from "./HandoffDetail";
+import { JevDeck } from "./JevDeck";
 import { TrashDeck } from "./TrashDeck";
 import { WindowControls } from "./WindowControls";
 import { useWindowFrame } from "./windowFrame";
@@ -99,6 +101,9 @@ export function AppShell({ onChangeFolder, initialRoute = { view: "home" } }: Ap
                   <button type="button" onClick={() => void runExport()} disabled={exporting || !state || state.credentials.length === 0}>
                     Export
                   </button>
+                  <button type="button" onClick={() => navigate({ view: "deck", deck: "jev" })}>
+                    Jev Mode
+                  </button>
                 </div>
               </>
             )}
@@ -149,6 +154,8 @@ function DeckView({ route }: { route: DeckRoute }) {
       return <EditHandoffDeck credentialKey={route.credentialKey} handoff={route.handoff} returnTo={route.returnTo} />;
     case "trash":
       return <TrashDeck item={route.item} />;
+    case "jev":
+      return <JevDeck />;
   }
 }
 

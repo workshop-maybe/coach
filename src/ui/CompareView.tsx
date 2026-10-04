@@ -5,10 +5,11 @@
 // first render; a focus reload can take either take or its agent away while it is open.
 //
 // Each take is a record: a mono bar with the agent, its setup, the verdict and the date
-// over the reply rendered, which scrolls on its own. One switch above them shows both as
-// stored. Below the stacking width the two records stack, each still scrolling on its own.
-// Close and Escape go back by the rule in replyRoute.ts, worked out when the view closes:
-// the page that lists the takes, both still picked, Compare focused.
+// over the reply rendered, which scrolls on its own, then Jev's saved reading, collapsed,
+// when the take has one (R14). One switch above them shows both as stored. Below the
+// stacking width the two records stack, each still scrolling on its own. Close and Escape
+// go back by the rule in replyRoute.ts, worked out when the view closes: the page that
+// lists the takes, both still picked, Compare focused.
 
 import { useState } from "react";
 import { credentialKey } from "../domain/types";
@@ -17,6 +18,7 @@ import { useNav } from "./nav";
 import { usePane } from "./pane";
 import { backFromCompare, takeOf } from "./replyRoute";
 import { RichView } from "./RichView";
+import { SavedReading } from "./JevReading";
 import type { TakeRef } from "./routes";
 import { Missing, StoredSwitch, TakeBar, useEscape } from "./shared";
 import { useFolder } from "./useFolderState";
@@ -61,6 +63,7 @@ export function CompareView({ credentialKey: key, takes, picks }: { credentialKe
             <article key={i} className="reply-record" aria-label={`${profile.name}, ${date}`}>
               <TakeBar name={profile.name} result={a} focus={i === 0} />
               <RichView aria-label="Reply" value={a.handBack} stored={asStored} />
+              {a.jev && <SavedReading reading={a.jev} />}
             </article>
           );
         })}
