@@ -45,6 +45,8 @@ export const JEV_ERROR_KINDS = [
   "keyMissing",
   /** TypeSafe answered 401. */
   "keyRefused",
+  /** TypeSafe answered 422: the request failed its validation, which can only be a bug in the app. */
+  "invalidRequest",
   /** TypeSafe answered 429. */
   "rateLimited",
   /** TypeSafe answered 529. */
@@ -53,7 +55,7 @@ export const JEV_ERROR_KINDS = [
   "tooLong",
   /** No connection, or no complete answer within 20 seconds. */
   "unreachable",
-  /** Any other status, a redirect, a malformed request or answer, or a failure outside Jev's own checks. */
+  /** Any other status, a redirect, a malformed request caught before sending, a malformed answer, or a failure outside Jev's own checks. */
   "other",
   /** The OS key store refused or failed (a Deny, a dismissed unlock prompt). */
   "keychain",
