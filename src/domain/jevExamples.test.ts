@@ -281,6 +281,21 @@ describe("an excerpt", () => {
     expect(excerptOf("![one](a.png)\n\n![two](data:image/png;base64,iVBORw0KGgo=)")).toBe("");
   });
 
+  it("strips a video reference as it strips a picture, and inline video data", () => {
+    const reply = "Recorded the fix.\n\n![](video-1a2b3c4d.mp4)\n\nIt plays ![clip](video-9c0d1e2f.webm) end to end.\n[clip]: data:video/mp4;base64,AAAAIGZ0eXA=\nRaw data:video/webm;base64,GkXfo59Ch here.";
+    // The line the video stood on goes; the reply's own blank lines stay, as with a picture.
+    expect(excerptOf(reply)).toBe("Recorded the fix.\n\n\nIt plays  end to end.\nRaw  here.");
+    expect(excerptOf("![](video-1a2b3c4d.mp4)")).toBe("");
+  });
+
+  it("gives no example from an earlier reply that is only a video, and quotes the words around one", () => {
+    const video = result("codex", "met", 1, { handBack: "![](video-1a2b3c4d.mp4)" });
+    const narrated = result("claude", "met", 2, { handBack: "Shows the fix.\n![](video-5e6f7a8b.mov)" });
+    const yes = side(examples(folder([video, narrated])), "overall", "true");
+    expect(yes.map((e) => e.sourceId)).toEqual([id(narrated)]);
+    expect(yes[0].item.reply_opening).toBe("Shows the fix.");
+  });
+
   it("cuts back to the last line end inside the first 300 characters", () => {
     expect(excerptOf(`First line of the reply\nSecond line ${"word ".repeat(80)}`)).toBe("First line of the reply");
   });

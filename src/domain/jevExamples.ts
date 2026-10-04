@@ -157,7 +157,8 @@ export function reasonOf(note: string): string {
 const INVISIBLE = /(?!\t)[\p{Cc}\p{Cf}\u{E0000}-\u{E007F}]/gu;
 
 // A Markdown image, inline (`![alt](src "title")`) or by reference (`![alt][ref]`,
-// `![alt][]`), with any src, data URIs included. Each part stops at the next bracket of its
+// `![alt][]`), with any src, data URIs included. A video in a rich box uses the same syntax
+// (`![](video-1a2b3c4d.mp4)`), so this strips videos too. Each part stops at the next bracket of its
 // kind (an alt or label holds no `[`, an angle src no `<`, a bare src no paren and cannot
 // start with `<`), so a long line of unclosed brackets is read in one pass, never once per
 // bracket. An alt with nested brackets or a src with parens is left, its data URI still goes.
@@ -165,10 +166,10 @@ const ALT = String.raw`!\[(?:\\.|[^[\]\\])*\]`;
 const INLINE_SRC = String.raw`\(\s*(?:<(?:\\.|[^<>\\])*>|[^<\s()][^\s()]*)(?:\s+"(?:\\.|[^"\\])*")?\s*\)`;
 const REFERENCE = String.raw`\[(?:\\.|[^[\]\\])*\]`;
 const IMAGE = new RegExp(`${ALT}(?:${INLINE_SRC}|${REFERENCE})`, "g");
-/** A reference definition whose destination is an image data URI: `[ref]: data:image/png;base64,…`. */
-const IMAGE_DEFINITION = /^ {0,3}\[(?:\\.|[^[\]\\])+\]:\s*<?data:image\//i;
-/** An image data URI anywhere: its type and parameters, then its data up to whitespace, a closing bracket or a quote. */
-const IMAGE_DATA = /data:image\/[\w.+;=-]*,[^\s)\]"'<>]*/gi;
+/** A reference definition whose destination is an image or video data URI: `[ref]: data:image/png;base64,…`. */
+const IMAGE_DEFINITION = /^ {0,3}\[(?:\\.|[^[\]\\])+\]:\s*<?data:(?:image|video)\//i;
+/** An image or video data URI anywhere: its type and parameters, then its data up to whitespace, a closing bracket or a quote. */
+const IMAGE_DATA = /data:(?:image|video)\/[\w.+;=-]*,[^\s)\]"'<>]*/gi;
 
 // Lines that look like secrets (KTD10). A heuristic, not a guarantee: earlier replies may
 // hold keys an agent printed, and some never left the machine before.
