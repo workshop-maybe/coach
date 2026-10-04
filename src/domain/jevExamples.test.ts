@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { calibrationOf, callOf } from "./calls";
-import { examplesFor, excerptOf, MAX_OPENING_CHARS, MAX_REASON_CHARS, rankExamples, reasonOf } from "./jevExamples";
+import { examplesFor, excerptOf, rankExamples, reasonOf } from "./jevExamples";
+import { MAX_OPENING_CHARS, MAX_REASON_CHARS } from "./jevRequest";
 import type { CriteriaSide, JevExampleEntry } from "./jevRequest";
 import type { Assessment, AssessmentResult, Credential, FolderState, HeldReply, JevReading } from "./types";
 
@@ -279,7 +280,7 @@ describe("an excerpt", () => {
   });
 
   it("drops zero-width, bidi and tag characters, and reads every line break as one", () => {
-    const reply = "Fi​xed ‮the‬ bug\u{E0041}\u{E0042}.⁦⁩\r\nDone­.\rAll good\u000Bnow﻿.";
+    const reply = "Fi\u200bxed \u202ethe\u202c bug\u{E0041}\u{E0042}.\u2066\u2069\r\nDone\u00ad.\rAll\u2028good\u000Bnow\ufeff.";
     expect(excerptOf(reply)).toBe("Fixed the bug.\nDone.\nAll\ngood\nnow.");
   });
 
@@ -310,8 +311,8 @@ describe("an excerpt", () => {
 
 describe("a reason", () => {
   it("turns a note of three lines into one", () => {
-    expect(reasonOf("Skips the rollback.\r\nNever runs the migration. Names no file.")).toBe("Skips the rollback. Never runs the migration. Names no file.");
-    expect(reasonOf("a\u000Bb\u000Cc\u0085d e")).toBe("a b c d e");
+    expect(reasonOf("Skips the rollback.\r\nNever runs the migration.\u2028Names no file.")).toBe("Skips the rollback. Never runs the migration. Names no file.");
+    expect(reasonOf("a\u000Bb\u000Cc\u0085d\u2029e")).toBe("a b c d e");
   });
 
   it("is capped at 200 characters, counting an emoji as one", () => {
@@ -320,7 +321,7 @@ describe("a reason", () => {
   });
 
   it("is cleaned as an excerpt is", () => {
-    expect(reasonOf(`Misses​ the point.\nAPI_TOKEN=${"q".repeat(30)}\n![shot](a.png)`)).toBe("Misses the point.");
+    expect(reasonOf(`Misses\u200b the point.\nAPI_TOKEN=${"q".repeat(30)}\n![shot](a.png)`)).toBe("Misses the point.");
   });
 
   it("is empty for a blank note", () => {

@@ -85,6 +85,12 @@ export function targetId(index: number): string {
   return `t${index + 1}`;
 }
 
+/** The tapped points that are among `points`, once each, in rubric order. Anything else tapped is dropped. */
+export function tappedPoints(points: readonly string[], tapped: readonly string[]): string[] {
+  const picked = new Set(tapped);
+  return points.filter((point, i) => picked.has(point) && points.indexOf(point) === i);
+}
+
 /** The rubric's points and notes. A rubric with no list has no points. */
 export function rubricParts(rubric: string): RubricParts {
   const points: string[] = [];

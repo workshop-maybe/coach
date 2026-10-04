@@ -7,6 +7,18 @@
 /** The Jev model the native side pins (MODEL in src-tauri/src/jev.rs), and what an answer that names no model reads as. */
 export const JEV_MODEL = "jev-1.13.0";
 
+// The sizes and the line breaks the native side holds a second opinion's examples to, so
+// every web-side module that builds or trims one reads the same numbers as Rust.
+
+/** The most examples one criteria side carries (MAX_EXAMPLES_PER_SIDE in src-tauri/src/jev.rs). */
+export const MAX_EXAMPLES_PER_SIDE = 2;
+/** The longest `reply_opening`, in code points (MAX_OPENING_CHARS in src-tauri/src/jev.rs). */
+export const MAX_OPENING_CHARS = 300;
+/** The longest `user_reason`, in code points (MAX_REASON_CHARS in src-tauri/src/jev.rs). */
+export const MAX_REASON_CHARS = 200;
+/** The line breaks Rust refuses in a reason (`is_line_break` in src-tauri/src/jev.rs), a CRLF read as one. */
+export const LINE_BREAK = /\r\n|[\n\r\v\f\u0085\u2028\u2029]/;
+
 export interface JevCriteria {
   true: string;
   false: string;

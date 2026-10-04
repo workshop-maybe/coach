@@ -9,16 +9,11 @@
 // step (`fitSecondOpinion` in ./jevBudget) fits what this returns into the request.
 
 import { calibrationsOf, ranksAsOverrule } from "./calls";
-import { MAX_EXAMPLES_PER_SIDE } from "./jevBudget";
-import type { CriteriaSide, JevExample, JevExampleEntry } from "./jevRequest";
+import { LINE_BREAK, MAX_EXAMPLES_PER_SIDE, MAX_OPENING_CHARS, MAX_REASON_CHARS, type CriteriaSide, type JevExample, type JevExampleEntry } from "./jevRequest";
 import { newestFirst } from "./matrix";
 import { OVERALL_ID, pointId, rubricParts } from "./secondOpinion";
 import { credentialKey, type Assessment, type FolderState } from "./types";
 
-/** The longest excerpt, in code points. Rust holds `reply_opening` to the same (MAX_OPENING_CHARS in src-tauri/src/jev.rs). */
-export const MAX_OPENING_CHARS = 300;
-/** The longest reason, in code points. Rust holds `user_reason` to the same (MAX_REASON_CHARS in src-tauri/src/jev.rs). */
-export const MAX_REASON_CHARS = 200;
 
 /** A question side an earlier result can show on. */
 export interface ExampleFeed {
@@ -150,8 +145,6 @@ export function reasonOf(note: string): string {
 
 // ---------------------------------------------------------------------------
 
-/** The line breaks Rust refuses in a reason (`is_line_break` in src-tauri/src/jev.rs), a CRLF read as one. */
-const LINE_BREAK = /\r\n|[\n\r\v\f\u0085\u2028\u2029]/;
 /**
  * Control and format characters other than tab, and the whole tag block (U+E0000 itself is
  * unassigned, not a format character). The user judged the rendered reply and never saw

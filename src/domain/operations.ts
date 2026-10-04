@@ -36,7 +36,7 @@ import { resultOf } from "./goTo";
 import { heldOf } from "./handoffResults";
 import { assignmentVersion } from "./hash";
 import { findPreset, presetCredential } from "./presets";
-import { rubricParts } from "./secondOpinion";
+import { rubricParts, tappedPoints } from "./secondOpinion";
 import { uniqueSlug } from "./slug";
 import {
   credentialKey,
@@ -470,9 +470,7 @@ function nextResultStem(storage: Storage, ids: Omit<AssessmentIds, "fileStem">, 
  * from an earlier rubric, or text that is not a point, is dropped.
  */
 function keptMissedPoints(tapped: readonly string[], rubric: string): string[] {
-  const picked = new Set(tapped);
-  const { points } = rubricParts(rubric);
-  return points.filter((point, i) => picked.has(point) && points.indexOf(point) === i);
+  return tappedPoints(rubricParts(rubric).points, tapped);
 }
 
 /**

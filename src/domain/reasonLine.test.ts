@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_REASON_CHARS } from "./jevExamples";
+import { MAX_REASON_CHARS } from "./jevRequest";
 import { reasonLine } from "./reasonLine";
 
 describe("reasonLine", () => {

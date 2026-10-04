@@ -3,10 +3,10 @@
 // `## Note` heading, so whatever was pasted into the one-line field must stay one line and
 // never read as a heading of its own.
 
-import { MAX_REASON_CHARS } from "./jevExamples";
+import { LINE_BREAK, MAX_REASON_CHARS } from "./jevRequest";
 
-/** Every Unicode line break, a CRLF read as one: the set Rust refuses in a reason. */
-const LINE_BREAK = /\r\n|[\n\r\v\f\u0085\u2028\u2029]/g;
+/** Every line break Rust refuses in a reason, a CRLF read as one, found throughout the text. */
+const EVERY_LINE_BREAK = new RegExp(LINE_BREAK.source, "g");
 /** Leading heading marks and whitespace, in any mix. */
 const LEADING_MARKS = /^[#\s]+/;
 
@@ -16,6 +16,6 @@ const LEADING_MARKS = /^[#\s]+/;
  * points, the same cap an example's reason has. Empty when nothing is left.
  */
 export function reasonLine(text: string): string {
-  const line = text.replace(LINE_BREAK, " ").replace(LEADING_MARKS, "").trim();
+  const line = text.replace(EVERY_LINE_BREAK, " ").replace(LEADING_MARKS, "").trim();
   return Array.from(line).slice(0, MAX_REASON_CHARS).join("").trimEnd();
 }

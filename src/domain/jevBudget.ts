@@ -10,11 +10,8 @@
 // reply fits with no examples decides "too long", and examples that push it over are
 // dropped, never the reply.
 
-import { JEV_LIMITS, type CriteriaSide, type JevExampleEntry, type JevRequest, type SecondOpinionRequest } from "./jevRequest";
+import { JEV_LIMITS, MAX_EXAMPLES_PER_SIDE, type CriteriaSide, type JevExampleEntry, type JevRequest, type SecondOpinionRequest } from "./jevRequest";
 import { OVERALL_ID, secondOpinionRequest, withExamples, type SecondOpinionInput } from "./secondOpinion";
-
-/** The most examples one criteria side carries. The native side refuses more. */
-export const MAX_EXAMPLES_PER_SIDE = 2;
 
 /** A second opinion that fits Jev's limits, and what it quotes. */
 export interface FittedOpinion {

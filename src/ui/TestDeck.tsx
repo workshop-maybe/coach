@@ -64,15 +64,15 @@ import { assignmentVersion } from "../domain/hash";
 import { sameSetup } from "../domain/matrix";
 import { calibrationOf, callOf, isOverrule, type Calibration } from "../domain/calls";
 import { fitSecondOpinion } from "../domain/jevBudget";
-import { MAX_REASON_CHARS, examplesFor, rankExamples } from "../domain/jevExamples";
-import { answeringModel } from "../domain/jevRequest";
+import { examplesFor, rankExamples } from "../domain/jevExamples";
+import { MAX_REASON_CHARS, answeringModel } from "../domain/jevRequest";
 import { assessmentDir, credentialsDir } from "../domain/folder";
 import { cleanUpLineBreaks, lineBreakBatches } from "../domain/lineBreaks";
 import { goToOf, resultOf } from "../domain/goTo";
 import { heldOn, runIdOf } from "../domain/handoffResults";
 import { holdReply, markGoTo, recordAssessment } from "../domain/operations";
 import { reasonLine } from "../domain/reasonLine";
-import { readingParts, rubricParts, type JevReadingParts } from "../domain/secondOpinion";
+import { readingParts, rubricParts, tappedPoints, type JevReadingParts } from "../domain/secondOpinion";
 import {
   credentialKey,
   type AgentProfile,
@@ -157,7 +157,6 @@ interface ReadingInHand {
   /** How many distinct earlier replies the request quoted (growing context KTD6). */
   examplesSent: number;
 }
-
 
 export function TestDeck(props: TestDeckProps) {
   const { storage, state, folder, apply } = useFolder();
@@ -256,6 +255,8 @@ export function TestDeck(props: TestDeckProps) {
     [credential?.task, credential?.rubric, credential?.learningTargets, reply, jev.usable, ranked], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const fits = fitted !== null;
+  // The badge's rubric points, for the missed-points step, parsed once per rubric.
+  const points = useMemo(() => (credential ? rubricParts(credential.rubric).points : []), [credential?.rubric]); // eslint-disable-line react-hooks/exhaustive-deps
   // Whether Jev can be asked about the paste at all: not when the paste alone is over Jev's budget (KTD19).
   const pasteFits = useMemo(() => !!pasted?.cleanable && lineBreakBatches(pasted.fixed) !== null, [pasted]);
   // The reading counts only for the round, reply and assignment version it was asked about.
@@ -330,8 +331,7 @@ export function TestDeck(props: TestDeckProps) {
   // and the folder as they are on every render. A tick counts only for a point the rubric
   // still has, in rubric order, so a point a reload removed drops its tick
   // (docs/solutions/runtime-errors/rederive-local-folder-ids-on-every-render.md).
-  const points = credential ? rubricParts(credential.rubric).points : [];
-  const missed = points.filter((point, i) => ticked.includes(point) && points.indexOf(point) === i);
+  const missed = tappedPoints(points, ticked);
   const verdictChosen = chosen === "met" || chosen === "not_met" ? chosen : null;
   /** Whether the reading in hand, read with the pair frozen when it arrived, calls the reply against this verdict. Can't call never does. */
   const opposes = (verdict: AssessmentResult) => !!shown && isOverrule({ result: verdict, jev: shown.parts }, shown.calibration.pair);
