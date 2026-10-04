@@ -7,14 +7,17 @@
 // Two variants. "empty" is a first run's folder: only the marker file. "full" holds one
 // collection (three presets and one hand-built credential), two agents with different
 // setups, dated results (two takes on one badge for the compare, one with a saved Jev
-// reading) and one waiting test for What needs you. Values follow src/ui/testFolder.tsx,
-// copied rather than imported, since that file imports @testing-library/react.
+// reading), one waiting test for What needs you, and one handoff of the hand-built
+// credential's own that no result has run, for How to's handoff pictures (U7). Values
+// follow src/ui/testFolder.tsx, copied rather than imported, since that file imports
+// @testing-library/react.
 
 import {
   MARKER_PATH,
   assessmentPath,
   collectionPath,
   credentialPath,
+  handoffPath,
   profilePath,
   serializeAssessment,
   serializeCollection,
@@ -67,6 +70,8 @@ export const SAMPLE = {
     claudeHowSure: "20260926T164500Z",
     codexAnswerKey: "20260927T112000Z",
   },
+  /** Badge handoffs by their file stem. Write a release note's is its default, handoff A. */
+  handoffs: { releaseNote: "20260928T090000Z" },
 } as const;
 
 /** The sample folder's files by path, and the waiting tests the harness puts in local storage. */
@@ -116,6 +121,15 @@ const RELEASE_NOTE: Credential = {
   ].join("\n"),
   extraSections: [],
 };
+
+/**
+ * Write a release note's own handoff (U7): the skeleton with one line added, as a new
+ * handoff starts. No result names it, so it opens unlocked and stays the badge default.
+ */
+const RELEASE_NOTE_HANDOFF = BUILT_IN_HANDOFF.replace(
+  "## Learning targets",
+  "Write for the people who use the app, not for the people who build it.\n\n## Learning targets",
+);
 
 const CLAUDE: AgentProfile = {
   slug: SAMPLE.agents.claude,
@@ -254,6 +268,7 @@ export async function sampleFolder(variant: SeedVariant): Promise<SampleFolder> 
   files[collectionPath(collection.slug)] = serializeCollection(collection);
   for (const c of credentials) files[credentialPath(c.collectionSlug, c.slug)] = serializeCredentialMd(c);
   for (const p of [CLAUDE, CODEX]) files[profilePath(p.slug)] = serializeProfile(p);
+  files[handoffPath(SAMPLE.collection, RELEASE_NOTE.slug, SAMPLE.handoffs.releaseNote)] = RELEASE_NOTE_HANDOFF;
 
   const answerKeyTake = await take(CODEX, answerKey, SAMPLE.takes.codexAnswerKey, {
     result: "met",

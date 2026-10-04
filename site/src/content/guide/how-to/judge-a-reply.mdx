@@ -1,0 +1,37 @@
+---
+title: Judge a reply
+part: how-to
+order: 40
+description: Read the reply beside the badge's rubric, then record Met or Not yet.
+---
+
+{/* How to, fourth page (U7, R6, R11): the judge pane and what each verdict does. Jev Mode only in passing; help/jev-mode covers it, and these pictures are taken with it off (KTD7). Labels are checked against src/ui/TestDeck.tsx and src/ui/shared.tsx (KTD8). */}
+
+After you bring back a reply and click <UI>Next</UI>, the test asks <UI>Did it meet it</UI>. The badge's rubric is on the left and the reply is on the right.
+
+<Shot id="judge" alt="Did it meet it: the Write a release note rubric on the left, Claude Code's release note on the right, and the Met and Not yet buttons below" />
+
+## Read it against the rubric
+
+1. Read the rubric one point at a time.
+2. For each point, find where the reply meets it or misses it.
+3. Check what the reply cites. Look up the files, commits and facts it names. One invented piece of evidence is enough to fail it.
+
+<UI>Show as stored</UI> shows the rubric and the reply as the Markdown they're stored as. <UI>Show formatted</UI> goes back.
+
+Pasted the wrong thing? <UI>Back</UI> returns to the reply box with your paste still in it.
+
+A badge with no rubric shows only the reply. Give it one before you rely on its results: [Change a badge](/how-to/change-a-badge/).
+
+## Record your verdict
+
+- Click <UI>Met</UI> when the reply meets the rubric as written. The app shows <UI>\{agent\} holds it</UI>, then goes home on its own.
+- Click <UI>Not yet</UI> when it doesn't. The card says <UI>\{agent\} does not hold it</UI>. Click <UI>Done</UI> to go home, or <UI>Try another agent</UI> to give the same badge to another of your agents.
+
+Either way, the app saves a result in your folder: your verdict, the reply as it stands in the reply box, and the handoff you copied. The badge's page lists the reply under <UI>Replies</UI>, and on <UI>Met</UI> the agent lights a key for the badge on home.
+
+A result is never overwritten. To judge an agent again, test it again. Its newest result is the one that counts, and the older ones stay on the badge's page. [Compare takes](/how-to/compare-takes/) shows how to read them.
+
+## A second opinion
+
+With [Jev Mode](/help/jev-mode/) on, the card can also offer <UI>Ask Jev</UI>, and <UI>Met</UI> and <UI>Not yet</UI> become choices you confirm with <UI>Save</UI>. Jev Mode is off by default, and you can judge every reply without it. [Judging a result](/ideas/judging/) explains why the call is always yours.

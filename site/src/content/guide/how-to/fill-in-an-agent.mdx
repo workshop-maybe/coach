@@ -1,0 +1,51 @@
+---
+title: Fill in an agent
+part: how-to
+order: 70
+description: Name an agent, note its repo and parameters, see the badges it has tried, or move it to the trash.
+---
+
+{/* How to, seventh page (U7, R6, R11): an agent's page, its parts and their one-card edits, its badges, and the trash (the old tester's sheet, step 9). Labels are checked against src/ui/AgentDetail.tsx, src/ui/EditDecks.tsx, src/ui/PlayerCard.tsx and src/ui/TrashDeck.tsx (KTD8). */}
+
+Open an agent from home. Its card shows its dials. Below the card are its parts and the badges it has tried.
+
+<Shot id="agent-page" alt="Claude Code's page: its locked dials and Make a new agent like this, then the part cards Name, Repo, Notes and Parameters, and the two badges it holds under Badges" />
+
+## Its parts
+
+Click a part to change it, then click <UI>Save</UI>.
+
+- <UI>Name</UI>: what you call it, under <UI>What is it called</UI>.
+- <UI>Repo</UI>: <UI>Where it works</UI>, the folder it opens in.
+- <UI>Notes</UI>: anything worth remembering about it, such as what it's good at.
+- <UI>Parameters</UI>: any other settings it runs with, one per line, as `name = value`. Type one and press Enter, or click <UI>Add another</UI>. Remove one with its ×.
+
+<Shot id="agent-params" alt="The Parameters card: the line max turns = 40 above an empty name = value field, Add another, and the Save button" />
+
+## Its setup
+
+Until the agent has a result, you can turn its dials here and click <UI>Keep this setup</UI>. Once it has one, the dials lock, so every result stays tied to the setup that produced it. To try another model or effort, click <UI>Make a new agent like this</UI>. [Make an agent](/how-to/make-an-agent/) has the steps.
+
+## Its badges
+
+Under <UI>Badges</UI> is every badge the agent has tried. Click one to open the reply that counts.
+
+- A badge it hasn't met says <UI>Not met</UI>.
+- A badge it holds whose task or rubric changed since says <UI>Tested against an earlier version of the assignment</UI>.
+- A badge it holds from before its setup changed says <UI>Agent setup changed since this result</UI>.
+
+An agent with no results says <UI>Not tested yet.</UI> Click <UI>Test it</UI> to start one.
+
+The keys on the agent's drawing light up for the badges it holds. Click a lit key to open that badge's reply.
+
+If the agent holds a handoff, <UI>Pull the handoff</UI> above its parts opens that test at <UI>What came back</UI>.
+
+## Move it to the trash
+
+At the foot of the agent's page, click <UI>Move to trash</UI>.
+
+<Shot id="trash-agent" alt="Move Codex to trash: Its 2 results go with it. Its handoff is pulled with no result. With Back and the Move to trash button" />
+
+The card says what goes with the agent: its results, and the handoff it holds, which is pulled with no result. Click <UI>Move to trash</UI>.
+
+Nothing is deleted. The files move into a `trash` folder inside your folder, so you can get them back.

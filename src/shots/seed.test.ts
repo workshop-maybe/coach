@@ -5,6 +5,7 @@
 import { describe, expect, it } from "vitest";
 import { loadFolder } from "../domain/folder";
 import { assignmentVersion } from "../domain/hash";
+import { defaultHandoff, isHandoffLocked } from "../domain/handoffs";
 import { buildMatrix } from "../domain/matrix";
 import { PRESETS } from "../domain/presets";
 import { credentialKey } from "../domain/types";
@@ -12,7 +13,7 @@ import { FAKE_ON } from "../jev/fakeJev";
 import { JEV_OFF } from "../jev/jev";
 import { needsYou } from "../ui/needsYou";
 import { pendingStorageKey, readPending } from "../ui/pendingTests";
-import { SAMPLE_FOLDER, SAMPLE_READING, sampleFolder, sampleJev, sampleStorage } from "./seed";
+import { SAMPLE, SAMPLE_FOLDER, SAMPLE_READING, sampleFolder, sampleJev, sampleStorage } from "./seed";
 import { SHOTS } from "./shots";
 
 /** A web storage holding only what the seed asks the harness to put there. */
@@ -107,6 +108,13 @@ describe("the full sample folder", () => {
     expect(pending[0].assignmentVersion).toBe(await assignmentVersion(credential.task, credential.rubric));
     const items = needsYou(state, await buildMatrix(state), pending);
     expect(items[0]).toMatchObject({ kind: "reply", profileSlug: pending[0].profileSlug, credentialKey: pending[0].credentialKey });
+  });
+
+  it("gives Write a release note one handoff of its own, its default, which no result has run", async () => {
+    const { state } = await loadSample("full");
+    expect(state.handoffs.map((h) => `${credentialKey(h)}/${h.id}`)).toEqual([`${SAMPLE.badges.releaseNote}/${SAMPLE.handoffs.releaseNote}`]);
+    expect(defaultHandoff(state, SAMPLE.badges.releaseNote).id).toBe(SAMPLE.handoffs.releaseNote);
+    expect(isHandoffLocked(state, SAMPLE.badges.releaseNote, SAMPLE.handoffs.releaseNote)).toBe(false);
   });
 
   it("answers a context read with the sample machine", async () => {

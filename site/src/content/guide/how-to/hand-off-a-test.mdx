@@ -1,0 +1,67 @@
+---
+title: Hand off a test
+part: how-to
+order: 30
+description: Copy a badge's handoff into one of your agents, bring back its reply, and finish a test you left half done.
+---
+
+{/* How to, third page (U7, R6, R11, AE3): the test deck from Which badge to What came back, the handoff box's keys, and a test left half done and finished from What needs you (the old tester's sheet, step 5). Labels are checked against src/ui/TestDeck.tsx, src/ui/Home.tsx and src/ui/AgentDetail.tsx (KTD8). */}
+
+A test gives one badge's task to one agent. The app writes the prompt, called a handoff. You paste it into your agent, let it work, and bring back what it says.
+
+## Start a test
+
+Start from whichever side you have open:
+
+- On a badge's page, click <UI>Test it on an agent</UI>. The test asks <UI>Who takes it</UI>.
+- On the page of an agent with no results, click <UI>Test it</UI>. The test asks <UI>Which badge</UI>.
+- On home, click a row under <UI>What needs you</UI>, such as <UI>Test \{agent\}</UI> or <UI>Re-test \{agent\}</UI>.
+
+Click the badge or the agent you want. If it doesn't exist yet, the same card has <UI>Create a credential</UI> or <UI>Create an agent</UI>. Make it there, and the app brings you back to the test.
+
+## Hand it over
+
+<Shot id="test-hand" alt="Hand it over: the Write a release note badge in a box beside the agent Claude Code, the keys S and A · default under the box, Edit handoffs, and the Copy button" />
+
+<UI>Hand it over</UI> puts the badge in a box beside the agent. The keys under the box are the badge's handoffs: S is the skeleton, the default every badge starts with, and each handoff the badge has of its own gets a letter. The lit key is the one you'll copy.
+
+1. To copy a different handoff, click its key.
+2. Click <UI>Copy</UI>. The handoff goes on your clipboard, filled in with the badge's name, learning targets and task. It never includes the rubric.
+3. Paste it into your agent and let it work. Run the agent the way you always do.
+
+If the agent earned this badge before with a handoff that isn't the badge's default, no key is lit. The box marks both, <UI>\{label\} · this agent's winner</UI> and <UI>\{label\} · badge default</UI>, and asks you to <UI>Pick one to copy</UI>.
+
+To change the badge's handoffs before you copy, click <UI>Edit handoffs</UI>. [Change a badge](/how-to/change-a-badge/) covers writing a handoff.
+
+## Bring back the reply
+
+<Shot id="test-reply" alt="What came back: the release note Claude Code wrote, pasted into the reply box, with Pull without a result and Next below" />
+
+1. When your agent has finished, copy its whole answer.
+2. Paste it into the box under <UI>What came back</UI>. Headings, lists and code keep their shape.
+3. Click <UI>Next</UI> to judge it. [Judge a reply](/how-to/judge-a-reply/) takes it from there.
+
+To end a test with nothing recorded, click <UI>Pull without a result</UI>.
+
+## Leave it half done
+
+You don't have to wait for your agent. Once you've copied the handoff, you can close the test with the × in its corner. A reply you had pasted is not kept, but the agent keeps holding the handoff, and its drawing shows the handoff plugged in.
+
+Home lists it at the top of <UI>What needs you</UI>, as <UI>Pull \{agent\}'s handoff</UI>.
+
+<Shot id="home-needs" alt="What needs you on home: Pull Codex's handoff, for Name what matters next, above Write a release note, which nobody holds yet" />
+
+To finish the test:
+
+1. On home, click <UI>Pull \{agent\}'s handoff</UI>. The test opens at <UI>What came back</UI>.
+2. Paste the reply, click <UI>Next</UI> and judge it.
+
+The agent's own page also offers <UI>Pull the handoff</UI>, which opens the same test.
+
+### One handoff at a time
+
+An agent holds one handoff at a time. If you start a test for an agent that still holds another badge's handoff, the test stops at <UI>Pull that handoff first</UI> and says <UI>\{agent\} holds the \{badge\} handoff</UI>. Click <UI>Pull it</UI>. Record that test's result, or pull it without one, and the app brings you back to the new test.
+
+### If something changed
+
+If the badge's task or rubric changed after you copied the handoff, the test says <UI>The task changed</UI> before it takes a reply. If the agent's setup changed, it says <UI>The agent's setup changed</UI>. Click <UI>Copy again</UI> to copy the handoff as the badge is now, and give that to your agent instead.

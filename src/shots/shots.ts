@@ -92,6 +92,44 @@ const FIRST_TEST_TO_REPLY: readonly Step[] = [
 /** On from the pasted reply to "Did it meet it", with the reply beside the rubric. */
 const FIRST_TEST_TO_JUDGE: readonly Step[] = [...FIRST_TEST_TO_REPLY, { click: { button: "Next" } }, { waitFor: { text: "Did it meet it" } }];
 
+// How to's pictures (U7) name the full sample folder's slugs and stems as src/shots/seed.ts
+// writes them (SAMPLE there), spelled out so this file stays plain data.
+const CLAUDE = "claude-code-opus-high";
+const CODEX = "codex-gpt-6-astra-medium";
+const HOW_SURE = "my-credentials/say-how-sure-you-are";
+const RELEASE_NOTE = "my-credentials/write-a-release-note";
+const CODEX_HOW_SURE = { profileSlug: CODEX, fileStem: "20260925T100500Z" };
+const CLAUDE_HOW_SURE = { profileSlug: CLAUDE, fileStem: "20260926T164500Z" };
+/** Write a release note's own handoff, A, its default. */
+const RELEASE_NOTE_HANDOFF = "20260928T090000Z";
+
+/** How to's test: Claude Code takes Write a release note, which opens at "Hand it over". */
+const RELEASE_TEST: Route = { view: "deck", deck: "test", profileSlug: CLAUDE, credentialKey: RELEASE_NOTE };
+
+/** What Claude Code sends back for Write a release note, about the same invented repo as the first test. */
+const RELEASE_REPLY = `# Release notes for 0.9
+
+## Before you update
+
+- Sync is now on by default. If you sync through your own server, add its address under Settings, then Sync, before you update.
+
+## What changed
+
+- **Edits no longer go missing when the server is busy.** The app waits and tries again instead of dropping the change.
+- **Tags have their own column.** Searching by tag is faster, and every note keeps its tags.
+- **The old settings screen is gone.** Everything it held is in the Settings panel.
+
+---
+
+## Handback
+
+- **What I did:** Read the 14 changes merged since 0.8 and grouped them by what a user notices.
+- **What I found:** One change renames a column that saved searches use.
+- **What is still open:** Whether sync on by default ships in this release.`;
+
+/** From "Hand it over" to the release note pasted under "What came back". */
+const RELEASE_TO_REPLY: readonly Step[] = [{ click: { button: "Copy" } }, { waitFor: { text: "What came back" } }, { paste: RELEASE_REPLY }];
+
 export const SHOTS: readonly Shot[] = [
   {
     id: "first-run",
@@ -173,6 +211,187 @@ export const SHOTS: readonly Shot[] = [
     jev: "on",
     expect: { text: "Your key ends in c0de." },
   },
+
+  // How to (U7): every picture over the full sample with Jev Mode off (KTD7).
+  {
+    id: "credential-start",
+    page: "how-to/build-a-credential",
+    route: { view: "deck", deck: "credential" },
+    seed: "full",
+    jev: "off",
+    expect: { text: "Where to start" },
+  },
+  {
+    // The target from the old tester's sheet, whose "by" clause the app offers to move.
+    id: "credential-target",
+    page: "how-to/build-a-credential",
+    route: { view: "deck", deck: "credential" },
+    seed: "full",
+    jev: "off",
+    expect: { text: "Move to the rubric" },
+    steps: [
+      { click: { button: "Build your own" } },
+      { fill: { label: "Name" }, value: "Plan a week of dinners" },
+      { click: { button: "Next" } },
+      { fill: { label: "Learning target" }, value: "I can plan a week of dinners by checking what's already in the fridge" },
+      { waitFor: { text: "Move to the rubric" } },
+    ],
+  },
+  {
+    id: "agent-new",
+    page: "how-to/make-an-agent",
+    route: { view: "deck", deck: "agent" },
+    seed: "full",
+    jev: "off",
+    expect: { text: "Claude Code, sonnet, medium" },
+    steps: [{ click: { button: "Next model" } }, { click: { button: "Previous effort" } }, { waitFor: { text: "Claude Code, sonnet, medium" } }],
+  },
+  {
+    id: "test-hand",
+    page: "how-to/hand-off-a-test",
+    route: RELEASE_TEST,
+    seed: "full",
+    jev: "off",
+    expect: { text: "A · default" },
+  },
+  {
+    id: "test-reply",
+    page: "how-to/hand-off-a-test",
+    route: RELEASE_TEST,
+    seed: "full",
+    jev: "off",
+    expect: { text: "Release notes for 0.9" },
+    steps: RELEASE_TO_REPLY,
+  },
+  {
+    // Codex holds Name what matters next's handoff, waiting on its reply.
+    id: "home-needs",
+    page: "how-to/hand-off-a-test",
+    route: { view: "home" },
+    seed: "full",
+    jev: "off",
+    expect: { text: "Pull Codex's handoff" },
+    clip: { selector: 'section[aria-labelledby="home-needs"]', pad: 24 },
+  },
+  {
+    id: "judge",
+    page: "how-to/judge-a-reply",
+    route: RELEASE_TEST,
+    seed: "full",
+    jev: "off",
+    expect: { text: "Did it meet it" },
+    steps: [...RELEASE_TO_REPLY, { click: { button: "Next" } }, { waitFor: { text: "Did it meet it" } }],
+  },
+  {
+    id: "badge-replies",
+    page: "how-to/compare-takes",
+    route: { view: "item", item: "badge", credentialKey: HOW_SURE },
+    seed: "full",
+    jev: "off",
+    expect: { text: "Compare" },
+    steps: [
+      { click: { label: "Pick Codex, Sep 25, 2026" } },
+      { click: { label: "Pick Claude Code, Sep 26, 2026" } },
+      { waitFor: { text: "Compare" } },
+      { scroll: { selector: 'section[aria-labelledby="badge-replies"]' } },
+    ],
+  },
+  {
+    id: "reply-view",
+    page: "how-to/compare-takes",
+    route: { view: "item", item: "reply", credentialKey: HOW_SURE, take: CODEX_HOW_SURE },
+    seed: "full",
+    jev: "off",
+    expect: { text: "Show as stored" },
+  },
+  {
+    id: "compare",
+    page: "how-to/compare-takes",
+    route: { view: "item", item: "compare", credentialKey: HOW_SURE, takes: [CODEX_HOW_SURE, CLAUDE_HOW_SURE] },
+    seed: "full",
+    jev: "off",
+    expect: { selector: ".compare-panes" },
+  },
+  {
+    id: "badge-page",
+    page: "how-to/change-a-badge",
+    route: { view: "item", item: "badge", credentialKey: RELEASE_NOTE },
+    seed: "full",
+    jev: "off",
+    expect: { text: "1 handoff" },
+  },
+  {
+    // Claude Code holds Say how sure you are, so a changed rubric warns before it saves.
+    // Next stays disabled until the paste has changed the rubric.
+    id: "edit-retest",
+    page: "how-to/change-a-badge",
+    route: { view: "deck", deck: "edit-credential", credentialKey: HOW_SURE, part: "rubric" },
+    seed: "full",
+    jev: "off",
+    expect: { text: "Holders will re-test" },
+    steps: [
+      { paste: "Each confidence comes with a reason. " },
+      { click: { button: "Next" } },
+      { waitFor: { text: "Holders will re-test" } },
+    ],
+  },
+  {
+    id: "handoffs-box",
+    page: "how-to/change-a-badge",
+    route: { view: "deck", deck: "handoffs", credentialKey: RELEASE_NOTE },
+    seed: "full",
+    jev: "off",
+    expect: { text: "Write a new handoff" },
+  },
+  {
+    id: "handoff-edit",
+    page: "how-to/change-a-badge",
+    route: { view: "deck", deck: "edit-handoff", credentialKey: RELEASE_NOTE, handoff: RELEASE_NOTE_HANDOFF },
+    seed: "full",
+    jev: "off",
+    expect: { text: "Handoff A" },
+  },
+  {
+    // A pad under the gap to the close control, so the clip shows only the card.
+    id: "trash-badge",
+    page: "how-to/change-a-badge",
+    route: { view: "deck", deck: "trash", item: { kind: "badge", credentialKey: HOW_SURE } },
+    seed: "full",
+    jev: "off",
+    expect: { text: "Its 2 results go with it." },
+    clip: { selector: ".deck-card", pad: 16 },
+  },
+  {
+    // The player card fills the window, so the picture scrolls its parts into view. The
+    // card focuses its heading once it mounts, which scrolls back to the top, so the scroll
+    // waits for the badges the agent has tried, which show only once the matrix is built.
+    id: "agent-page",
+    page: "how-to/fill-in-an-agent",
+    route: { view: "item", item: "agent", profileSlug: CLAUDE },
+    seed: "full",
+    jev: "off",
+    expect: { text: "Parameters" },
+    steps: [{ waitFor: { selector: ".detail-earned" } }, { scroll: { selector: 'ul[aria-label="Parts"]' } }],
+  },
+  {
+    id: "agent-params",
+    page: "how-to/fill-in-an-agent",
+    route: { view: "deck", deck: "edit-agent", profileSlug: CLAUDE, part: "params" },
+    seed: "full",
+    jev: "off",
+    expect: { text: "max turns = 40" },
+    steps: [{ fill: { label: "New parameter" }, value: "max turns = 40" }, { click: { button: "Add another" } }, { waitFor: { text: "max turns = 40" } }],
+  },
+  {
+    // Codex holds a handoff, so the card says it is pulled too.
+    id: "trash-agent",
+    page: "how-to/fill-in-an-agent",
+    route: { view: "deck", deck: "trash", item: { kind: "agent", profileSlug: CODEX } },
+    seed: "full",
+    jev: "off",
+    expect: { text: "Its handoff is pulled with no result." },
+    clip: { selector: ".deck-card", pad: 16 },
+  },
 ];
 
 /** Marks a route kind no shot pictures yet. */
@@ -192,19 +411,20 @@ export function routeKind(route: Route | "gate"): RouteKind {
 /** For each route kind, the shots that picture it, or NOT_PICTURED. Every shot is listed under its own kind. */
 export const COVERAGE: Record<RouteKind, readonly string[] | typeof NOT_PICTURED> = {
   gate: ["first-run"],
-  home: ["home-empty", "home"],
-  "deck:credential": NOT_PICTURED,
-  "deck:agent": ["first-test-agent", "first-test-hand", "first-test-judge", "first-test-home"],
-  "deck:test": NOT_PICTURED,
-  "deck:edit-credential": NOT_PICTURED,
-  "deck:edit-agent": NOT_PICTURED,
-  "deck:handoffs": NOT_PICTURED,
-  "deck:edit-handoff": NOT_PICTURED,
-  "deck:trash": NOT_PICTURED,
+  home: ["home-empty", "home", "home-needs"],
+  "deck:credential": ["credential-start", "credential-target"],
+  "deck:agent": ["first-test-agent", "first-test-hand", "first-test-judge", "first-test-home", "agent-new"],
+  "deck:test": ["test-hand", "test-reply", "judge"],
+  "deck:edit-credential": ["edit-retest"],
+  "deck:edit-agent": ["agent-params"],
+  "deck:handoffs": ["handoffs-box"],
+  "deck:edit-handoff": ["handoff-edit"],
+  "deck:trash": ["trash-badge", "trash-agent"],
   "deck:jev": ["jev-off", "jev-on"],
-  "item:badge": NOT_PICTURED,
-  "item:agent": NOT_PICTURED,
+  "item:badge": ["badge-replies", "badge-page"],
+  "item:agent": ["agent-page"],
+  // A handoff opens as its own item only once two or more have results; the sample's has none.
   "item:handoff": NOT_PICTURED,
-  "item:reply": NOT_PICTURED,
-  "item:compare": NOT_PICTURED,
+  "item:reply": ["reply-view"],
+  "item:compare": ["compare"],
 };
