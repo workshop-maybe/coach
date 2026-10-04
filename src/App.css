@@ -521,6 +521,13 @@ button:focus-visible {
   box-shadow: var(--focus-ring);
 }
 
+/* The box a file dragged over the window would land in (src/ui/dropFiles.ts): an outline in
+   data blue, never a fill. */
+.rich-drop {
+  outline: 1.5px solid var(--data);
+  outline-offset: 2px;
+}
+
 .rich-bar {
   display: flex;
   flex-wrap: wrap;

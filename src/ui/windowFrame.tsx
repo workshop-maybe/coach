@@ -56,7 +56,8 @@ export function fitWithin(size: Size, position: Point, area: { position: Point; 
   };
 }
 
-const hasTauriBridge = () => "__TAURI_INTERNALS__" in window;
+/** Whether the page runs inside Tauri. False in tests and the browser recipe, which make no native calls. */
+export const hasTauriBridge = () => "__TAURI_INTERNALS__" in window;
 
 type NativeWindow = ReturnType<typeof getCurrentWindow>;
 

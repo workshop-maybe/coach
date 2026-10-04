@@ -16,7 +16,10 @@
 // A box whose `images` can `add` files also takes videos (KTD8, KTD9 of the video plan): its
 // Video key adds a picked file, and each name the add returns goes in where the cursor was,
 // as a video or an image by its extension. While an add runs the box says so on a line kept
-// free under the text.
+// free under the text. Such a box also registers with the window's drop listener
+// (src/ui/dropFiles.ts) while mounted: a file dropped on it is added where it landed, or at
+// the end of the box when it landed off the text. A paste of a video copied in Finder goes in
+// at the cursor the same way, with no text and no bytes, ahead of the image paste.
 
 import { useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, Ref } from "react";
@@ -31,7 +34,8 @@ import { ToolKey, type ToolName } from "../cast/ToolKey";
 import { findJoinCandidates, fixPastedText, looksTerminalCopied } from "../domain/pasteText";
 import { hasVideoExtension } from "../domain/videos";
 import type { AddFrom } from "../storage/storage";
-import { imagePaste } from "./pasteImages";
+import { registerDropBox } from "./dropFiles";
+import { imagePaste, videoPaste } from "./pasteImages";
 import { richExtensions } from "./richExtensions";
 import { refreshImages, type RichImageSource } from "./richImage";
 
@@ -242,6 +246,22 @@ export function RichText({ value, onChange, onNormalized, placeholder, autoFocus
     if (mounted.current && !ed.isDestroyed) ed.view.focus();
   }
 
+  /**
+   * Adds files dropped on the box (KTD8). Over the text the point (CSS pixels) picks the
+   * spot; anywhere else on the box the files go at the end. Everything is read at drop time,
+   * so the add goes to the folder the box shows now.
+   */
+  function takeDrop(paths: string[], x: number, y: number) {
+    const ed = editorRef.current;
+    const add = latest.current.images?.add;
+    if (!ed || ed.isDestroyed || !add || !ed.isEditable) return;
+    const { view } = ed;
+    const under = document.elementFromPoint(x, y);
+    const point = under && view.dom.contains(under) ? view.posAtCoords({ left: x, top: y })?.pos : undefined;
+    const at = point ?? TextSelection.atEnd(view.state.doc).from;
+    void addThenInsert(at, at, () => add({ kind: "drop", paths }));
+  }
+
   const editor = useEditor({
     extensions: richExtensions(placeholder, () => latest.current.images ?? null),
     content: value,
@@ -262,9 +282,19 @@ export function RichText({ value, onChange, onNormalized, placeholder, autoFocus
       // pane it steps out of the box (U6, R19, KTD8).
       handleDOMEvents: {
         keydown: (_view, event) => event.key === "Escape",
-        // An image paste is taken here, ahead of ProseMirror's own paste and the text
-        // handling below, and only when the clipboard carries no real text (KTD5).
+        // A video copied in Finder, and then an image paste, are taken here, ahead of
+        // ProseMirror's own paste and the text handling below, and only when the clipboard
+        // carries no real text (KTD5 of both plans). A video paste sends only the files'
+        // names and sizes; Rust copies them from the paths on the clipboard.
         paste: (view, event) => {
+          const add = latest.current.images?.add;
+          const videos = add && view.editable ? videoPaste(event.clipboardData) : [];
+          if (add && videos.length > 0) {
+            event.preventDefault();
+            const { from, to } = view.state.selection;
+            void addThenInsert(from, to, () => add({ kind: "paste", files: videos }));
+            return true;
+          }
           const save = latest.current.images?.save;
           if (!save || !view.editable) return false;
           const files = imagePaste(event.clipboardData);
@@ -380,8 +410,19 @@ export function RichText({ value, onChange, onNormalized, placeholder, autoFocus
   }, [editor, images]);
 
   const canAdd = !!images?.add;
+  // While it can add files, the box takes drops. Its class name stays fixed, since the drop
+  // listener puts its outline class on this element directly.
+  const root = useRef<HTMLDivElement>(null);
+  const latestDrop = useRef(takeDrop);
+  latestDrop.current = takeDrop;
+  useEffect(() => {
+    const element = root.current;
+    if (!canAdd || !element) return;
+    return registerDropBox({ element, drop: (paths, x, y) => latestDrop.current(paths, x, y) });
+  }, [canAdd]);
+
   return (
-    <div className="rich" onContextMenuCapture={stopOnVideo} onDragStartCapture={stopOnVideo}>
+    <div ref={root} className="rich" onContextMenuCapture={stopOnVideo} onDragStartCapture={stopOnVideo}>
       {editor && <Toolbar editor={editor} full label="Formatting" onVideo={canAdd ? () => void pickFile() : undefined} />}
       <EditorContent editor={editor} />
       {editor && <SelectionMenu editor={editor} />}

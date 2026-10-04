@@ -4,6 +4,7 @@
 
 import { clearArtCache } from "../badge/resolve";
 import { clearImageCache } from "./imageSource";
+import { installDropNotice } from "./dropFiles";
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { loadFolder } from "../domain/folder";
@@ -93,6 +94,10 @@ export function FolderProvider({ storage, folder, children }: FolderProviderProp
       latest.current++; // Drop any load still in flight.
     };
   }, [reload]);
+
+  // A file dropped on the window is heard outside React (KTD8 of the video plan), so its
+  // notices come here while the provider is mounted.
+  useEffect(() => installDropNotice(setNotice), []);
 
   const apply = useCallback((next: FolderState) => {
     latest.current++; // A reload that started before this save must not replace its result.
