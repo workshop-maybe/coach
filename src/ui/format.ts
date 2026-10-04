@@ -63,4 +63,11 @@ export function formatDate(iso: string): string {
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
-export const firstLine = (text: string) => text.trim().split("\n")[0] ?? "";
+/** A line that holds nothing but Markdown images. */
+const IMAGES_ONLY = /^\s*(?:!\[(?:\\.|[^\]\\])*\]\((?:<[^>\n]*>|[^\s)]+)(?:\s+"(?:\\.|[^"\\])*")?\s*\)\s*)+$/;
+
+/** The text's first line, skipping lines that hold only images, so a preview never shows raw image Markdown. */
+export function firstLine(text: string): string {
+  const lines = text.trim().split("\n");
+  return lines.find((l) => l.trim() !== "" && !IMAGES_ONLY.test(l))?.trim() ?? lines[0] ?? "";
+}

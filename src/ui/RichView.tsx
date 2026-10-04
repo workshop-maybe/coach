@@ -1,13 +1,17 @@
 // A stored reply, read (U3). Rendered, it is a read-only Tiptap view with the editor's own
 // extensions and prose type (R11, KTD5): the stored string is parsed as Markdown, never set
-// as HTML, and the schema has no image, frame or script node, so nothing in a reply runs or
-// loads (R13). Stored, it is the exact string the file holds, in the record mono (R12, KTD6).
+// as HTML, and the schema has no frame or script node, so nothing in a reply runs (R13). Its
+// one image node shows only a PNG or JPEG the caller's image source returns for a bare file
+// name beside the reply's file, so nothing loads from the network or outside the data folder
+// either (KTD2 of the paste-images plan, which supersedes in part this view's "no image
+// node"). Stored, it is the exact string the file holds, in the record mono (R12, KTD6).
 // The caller owns the switch between the two.
 //
 // Links leave for the system browser. A click, a middle-click, the context menu and a drag
 // on a rendered link are all stopped, since the webview would otherwise follow the link or
 // offer its own "Open Link" in the frameless window. Only http, https and mailto addresses
-// reach the opener (KTD5).
+// reach the opener (KTD5). The context menu and a drag are stopped on an image too, so the
+// webview offers no "Open Image" and a drag never carries the image's data URI as text.
 //
 // The region scrolls on its own, spans its container and holds the prose to a centered
 // measure of about 70 characters (R9). It is focusable, so the keyboard can scroll it.
@@ -17,6 +21,7 @@ import type { DragEvent as ReactDragEvent, MouseEvent as ReactMouseEvent } from 
 import { EditorContent, useEditor } from "@tiptap/react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { TableAsText, richExtensions } from "./richExtensions";
+import { refreshImages, type RichImageSource } from "./richImage";
 
 export interface RichViewProps {
   /** The reply as stored: the editor's Markdown. */
@@ -25,6 +30,8 @@ export interface RichViewProps {
   stored?: boolean;
   /** Names the scrolling region. */
   "aria-label": string;
+  /** Reads the images beside the reply's file. Without it, images show as placeholders. */
+  images?: RichImageSource;
 }
 
 const OPENABLE = new Set(["http:", "https:", "mailto:"]);
@@ -47,12 +54,18 @@ function linkOf(e: ReactMouseEvent<HTMLElement> | ReactDragEvent<HTMLElement>): 
   return a && e.currentTarget.contains(a) ? a : null;
 }
 
+/** Whether an event landed on an image inside the region. */
+function onImage(e: ReactMouseEvent<HTMLElement> | ReactDragEvent<HTMLElement>): boolean {
+  const img = e.target instanceof Element ? e.target.closest("img") : null;
+  return !!img && e.currentTarget.contains(img);
+}
+
 function open(a: HTMLAnchorElement) {
   const href = externalHref(a.getAttribute("href"));
   if (href) openUrl(href).catch(() => undefined);
 }
 
-export function RichView({ value, stored = false, "aria-label": label }: RichViewProps) {
+export function RichView({ value, stored = false, images, "aria-label": label }: RichViewProps) {
   function onClick(e: ReactMouseEvent<HTMLElement>) {
     const a = linkOf(e);
     if (!a) return;
@@ -68,7 +81,7 @@ export function RichView({ value, stored = false, "aria-label": label }: RichVie
   }
 
   function onStop(e: ReactMouseEvent<HTMLElement> | ReactDragEvent<HTMLElement>) {
-    if (linkOf(e)) e.preventDefault();
+    if (linkOf(e) || onImage(e)) e.preventDefault();
   }
 
   return (
@@ -82,17 +95,19 @@ export function RichView({ value, stored = false, "aria-label": label }: RichVie
       onContextMenuCapture={onStop}
       onDragStartCapture={onStop}
     >
-      <div className="rich-view-measure">{stored ? <pre className="rich-stored">{value}</pre> : <Rendered value={value} />}</div>
+      <div className="rich-view-measure">{stored ? <pre className="rich-stored">{value}</pre> : <Rendered value={value} images={images} />}</div>
     </div>
   );
 }
 
 /** The rendered reply. Mounted only while showing, so the stored text never sits beside a hidden copy. */
-function Rendered({ value }: { value: string }) {
+function Rendered({ value, images }: { value: string; images?: RichImageSource }) {
   // The Markdown the view last showed, so a value that comes back unchanged is not re-parsed.
   const shown = useRef(value);
+  // The image source as it is now: the image node reads it on every render.
+  const source = useRef(images);
   const editor = useEditor({
-    extensions: [...richExtensions(), TableAsText],
+    extensions: [...richExtensions("", () => source.current ?? null), TableAsText],
     content: value,
     contentType: "markdown",
     editable: false,
@@ -109,6 +124,13 @@ function Rendered({ value }: { value: string }) {
     shown.current = value;
     editor.commands.setContent(value, { contentType: "markdown", emitUpdate: false });
   }, [editor, value]);
+
+  // A new source (another folder) redraws the images that show.
+  useEffect(() => {
+    if (source.current === images) return;
+    source.current = images;
+    if (editor) refreshImages(editor);
+  }, [editor, images]);
 
   return <EditorContent editor={editor} />;
 }

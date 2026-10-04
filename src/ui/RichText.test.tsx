@@ -165,6 +165,54 @@ describe("RichText", () => {
   });
 });
 
+describe("images in the Markdown (KTD1, R9)", () => {
+  /** Opens `md`, makes an unrelated edit at the end, and returns what the box saves. */
+  function editedOnce(md: string): string {
+    const { ed, onChange } = setup(md);
+    act(() => {
+      ed.commands.focus("end");
+    });
+    typeInto(ed, " x");
+    const saved = onChange.mock.lastCall?.[0] as string;
+    return saved.endsWith(" x") ? saved.slice(0, -2) : saved;
+  }
+
+  it.each([
+    ["a block image between paragraphs", "Before\n\n![](image-1a2b3c4d.png)\n\nAfter"],
+    ["alt and title", 'See ![alt](a.png "t") here'],
+    ["an inline image mid-sentence", "Look ![](image-1a2b3c4d.png) here"],
+    ["a src with a space", "Shot ![](<Screenshot at 09.12.png>) here"],
+    ["a remote src", "Remote ![a picture](https://example.com/p.png) here"],
+  ])("keeps %s after an edit", (_, md) => {
+    expect(editedOnce(md)).toBe(md);
+    cleanup();
+  });
+
+  it("keeps a paragraph that holds only an image (KTD15)", () => {
+    const { ed } = setup("One\n\n![](image-1a2b3c4d.png)\n\nTwo");
+    expect(ed.getMarkdown()).toBe("One\n\n![](image-1a2b3c4d.png)\n\nTwo");
+  });
+
+  it.each([
+    ["an escaped bracket in alt", "![a\\]b](x.png)", "![a\\]b](x.png)"],
+    ["an escaped backslash in alt", "![a\\\\b](x.png)", "![a\\\\b](x.png)"],
+    ["an escaped underscore in alt", "![a\\_b](x.png)", "![a_b](x.png)"],
+    ["an escaped quote in a title", '![](x.png "say \\"hi\\"")', '![](x.png "say \\"hi\\"")'],
+    ["angle brackets in a bracketed src", "![](<a\\<b\\>.png>)", "![](<a\\<b\\>.png>)"],
+  ])("settles %s after one edit, and a second edit changes nothing more", (_, md, settled) => {
+    const once = editedOnce(md);
+    expect(once).toBe(settled);
+    cleanup();
+    expect(editedOnce(once)).toBe(settled);
+    cleanup();
+  });
+
+  it("copies an image as its Markdown in plain text", () => {
+    const { ed } = setup("![shot](image-1a2b3c4d.png)");
+    expect(ed.getText()).toBe("![shot](image-1a2b3c4d.png)");
+  });
+});
+
 describe("blank lines (KTD15, R17)", () => {
   it("saves no &nbsp; after Enter three times between paragraphs", () => {
     const { ed, onChange } = setup("First\n\nSecond");

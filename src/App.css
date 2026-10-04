@@ -689,6 +689,41 @@ button:focus-visible {
   font-size: inherit;
 }
 
+/* A pasted image (src/ui/richImage.ts): it fits the measure on a cell rule. One that can't
+   be read is a quiet mono label naming its file. */
+:is(.rich-input, .rich-prose) .rich-image {
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: bottom;
+}
+
+:is(.rich-input, .rich-prose) .rich-image img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--cell);
+}
+
+:is(.rich-input, .rich-prose) .rich-image[aria-busy="true"] {
+  min-width: 48px;
+  min-height: 32px;
+  background: var(--grid);
+}
+
+:is(.rich-input, .rich-prose) .rich-image-missing {
+  padding: 1px 4px;
+  border: 1px dashed var(--cell);
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+
+.rich-input .rich-image.ProseMirror-selectednode {
+  outline: 1.5px solid var(--data);
+}
+
 :is(.rich-input, .rich-prose) a {
   color: var(--data);
   text-decoration: underline;
