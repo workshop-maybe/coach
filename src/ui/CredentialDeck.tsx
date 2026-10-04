@@ -203,7 +203,7 @@ export function CredentialDeck({ returnTo }: { returnTo?: TestPick }) {
           forward: "Next",
           valid: allTargets.length > 0,
           // A pane keeps its trail to one line, so several targets settle as their count.
-          settled: allTargets.length === 1 ? allTargets[0] : allTargets.length > 1 ? `${allTargets.length} learning targets` : undefined,
+          settled: allTargets.length > 1 ? `${allTargets.length} learning targets` : allTargets[0],
           body: (
             <Lines
               lines={targets}
