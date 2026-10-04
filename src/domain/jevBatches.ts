@@ -21,8 +21,8 @@ export interface BatchOptions<R> {
   wait?(ms: number): Promise<void>;
   /** Checked before each request and after each answer or wait: true stops the ask, which then resolves to null. */
   cancelled?(): boolean;
-  /** Reads one request's answer before the next request goes, and throws to end the ask. */
-  check?(request: R, answers: JevAnswers): void;
+  /** Reads one request's answer, given with its place among the requests, before the next request goes; throws to end the ask. */
+  check?(request: R, answers: JevAnswers, index: number): void;
 }
 
 /**
@@ -36,7 +36,7 @@ export async function askBatches<R>(
   { wait = sleep, cancelled = () => false, check }: BatchOptions<R> = {},
 ): Promise<JevAnswers[] | null> {
   const all: JevAnswers[] = [];
-  for (const request of requests) {
+  for (const [index, request] of requests.entries()) {
     for (let retry = 0; ; retry++) {
       if (cancelled()) return null;
       let got: JevAnswers;
@@ -52,7 +52,7 @@ export async function askBatches<R>(
       }
       if (cancelled()) return null;
       if (typeof got !== "object" || got === null) throw new JevError("other");
-      check?.(request, got);
+      check?.(request, got, index);
       all.push(got);
       break;
     }

@@ -80,6 +80,11 @@ export const MATCH_CRITERIA: JevCriteria = Object.freeze({
   false: "The job asks for a different kind of work, or only shares a topic, a tool or a word with the badge",
 });
 
+/** The id of a request's `n`th match question, from zero: "m1" … "mN", as the native side expects them. */
+export function matchId(n: number): string {
+  return `m${n + 1}`;
+}
+
 /** The difficulty question's id, the one Score a route may carry. */
 export const DIFFICULTY_ID = "difficulty";
 /** The difficulty question's text. */
@@ -176,8 +181,9 @@ export function routeBatches(job: string, badges: readonly RouteBadge[]): RouteP
     const keys: Record<string, string> = {};
     const questions: RouteRequest["questions"] = {};
     pack.questions.forEach(([key, question], n) => {
-      keys[`m${n + 1}`] = key;
-      questions[`m${n + 1}`] = question;
+      const id = matchId(n);
+      keys[id] = key;
+      questions[id] = question;
     });
     if (i === withDifficulty) questions[DIFFICULTY_ID] = difficulty;
     return { request: { kind: "route", state, questions }, keys };
@@ -196,11 +202,10 @@ export async function askRoute(
   ask: (request: RouteRequest) => Promise<JevAnswers>,
   options: Pick<BatchOptions<RouteRequest>, "wait" | "cancelled"> = {},
 ): Promise<RouteOutcome | null> {
-  const keysOf = new Map(plan.batches.map((b) => [b.request, b.keys]));
   const answers: Record<string, number> = {};
   let levels: number[] | null = null;
-  const check = (request: RouteRequest, got: JevAnswers) => {
-    for (const [id, key] of Object.entries(keysOf.get(request) ?? {})) {
+  const check = (request: RouteRequest, got: JevAnswers, index: number) => {
+    for (const [id, key] of Object.entries(plan.batches[index].keys)) {
       const p = (got.answers as Record<string, unknown> | undefined)?.[id];
       if (!isProbability(p)) throw new JevError("other");
       answers[key] = p;

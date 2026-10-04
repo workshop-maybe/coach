@@ -14,9 +14,6 @@ import { isProbability, type JevAnswers, type JevCriteria, type LineBreaksReques
 import { scanLines } from "./markdownLines";
 import { findJoinCandidates } from "./pasteText";
 
-// The retries and waits are the shared batch rule's (router KTD5), kept under their names here.
-export { BACKOFF_MS, BATCH_RETRIES as LINE_BREAK_RETRIES, MAX_WAIT_MS } from "./jevBatches";
-
 /** A break joins at this probability or above after a line with no terminal punctuation. Tunable. */
 export const JOIN_AFTER_OPEN = 0.2;
 /** A break joins at this probability or above after a line ending in terminal punctuation. Tunable. */
@@ -96,11 +93,8 @@ export function joinLines(text: string, answers: Record<string, number>): { text
 export type LineBreakOptions = Pick<BatchOptions<LineBreaksRequest>, "wait" | "cancelled">;
 
 /**
- * Sends the batches one at a time and gathers every answer, by the shared batch rule
- * (`askBatches` in ./jevBatches): a rate-limited or overloaded batch waits and is tried
- * again, and anything else ends the cleanup. Rejects with the JevError that ends it, or with
- * kind "other" for an answer that misses an id or is not a probability, before the next
- * batch goes. Null once cancelled.
+ * Sends the batches by `askBatches` (./jevBatches) and gathers every answer. An answer that
+ * misses an id or is not a probability ends the cleanup as "other" before the next batch goes.
  */
 export async function askLineBreaks(
   batches: readonly LineBreaksRequest[],

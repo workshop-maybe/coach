@@ -37,7 +37,8 @@ function CostOrder({ atOpen, returnTo }: { atOpen: FolderState; returnTo?: Route
   const current = state ?? atOpen;
   const bySlug = new Map(current.profiles.map((p) => [p.slug, p]));
   // The order as moved, kept to agents still in the folder, then any agent added since, last.
-  const shown = [...order.filter((s) => bySlug.has(s)), ...current.profiles.map((p) => p.slug).filter((s) => !order.includes(s))];
+  const ordered = new Set(order);
+  const shown = [...order.filter((s) => bySlug.has(s)), ...current.profiles.map((p) => p.slug).filter((s) => !ordered.has(s))];
   const placed = costPlaces(current);
 
   const leave = () => navigate(returnTo ? { view: "deck", deck: "router", resume: returnTo } : { view: "home" });

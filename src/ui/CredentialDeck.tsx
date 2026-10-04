@@ -25,7 +25,7 @@ import { Outline } from "../cast/Outline";
 import { Badge } from "./Badge";
 import { Deck, type Beat } from "./Deck";
 import { useNav } from "./nav";
-import type { RouterResume, TestPick } from "./routes";
+import type { FromJob, TestPick } from "./routes";
 import { useRichDraft } from "./richDraft";
 import { Lines } from "./EditDecks";
 import { CopyHelper, focusOnMount } from "./shared";
@@ -36,7 +36,7 @@ import { useRichImages } from "./useRichImages";
 /** The "Where to start" answer: your own, or a preset's id. */
 const OWN = "own";
 
-export function CredentialDeck({ returnTo, task: fromJob, router }: { returnTo?: TestPick; task?: string; router?: RouterResume }) {
+export function CredentialDeck({ returnTo, fromJob }: { returnTo?: TestPick; fromJob?: FromJob }) {
   const { storage, state, apply } = useFolder();
   const { navigate } = useNav();
   const fromRouter = fromJob !== undefined;
@@ -46,7 +46,7 @@ export function CredentialDeck({ returnTo, task: fromJob, router }: { returnTo?:
   const [targets, setTargets] = useState<string[]>([]);
   const [line, setLine] = useState("");
   const allTargets = line.trim() ? [...targets, line.trim()] : targets;
-  const taskDraft = useRichDraft(fromJob ?? "");
+  const taskDraft = useRichDraft(fromJob?.task ?? "");
   const task = taskDraft.value;
   // Detail the target check moved out of a target. There is no rubric card here, so it waits.
   const [rubric, setRubric] = useState("");
@@ -244,6 +244,6 @@ export function CredentialDeck({ returnTo, task: fromJob, router }: { returnTo?:
   // task card. A job brought from the router is that work from the start, and leaving takes
   // it back to the router's card.
   const unsaved = picked === null && (taskDraft.changed || (fromRouter && task.trim() !== ""));
-  const leave = () => navigate(router ? { view: "deck", deck: "router", resume: router } : { view: "home" });
+  const leave = () => navigate(fromJob ? { view: "deck", deck: "router", resume: fromJob.router } : { view: "home" });
   return <Deck label="Create a credential" beats={beats} unsaved={unsaved} onClose={leave} onFinish={make} />;
 }

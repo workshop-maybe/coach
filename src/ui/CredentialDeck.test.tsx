@@ -264,7 +264,7 @@ describe("CredentialDeck", () => {
 
   describe("made from a job the router matched to no badge (router R12, KTD14)", () => {
     const JOB = "Add a reversible migration for the users table";
-    const fromJob = { view: "deck", deck: "credential", task: JOB, router: { job: JOB, picked: "none" } } as const;
+    const fromJob = { view: "deck", deck: "credential", fromJob: { task: JOB, router: { job: JOB, picked: "none" } } } as const;
 
     it("Covers AE4 (prefill). starts on its name with no Where to start, the job as its task, and saves it", async () => {
       const storage = storageWith();

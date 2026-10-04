@@ -32,6 +32,12 @@ export interface RouterResume {
   tapped?: string;
 }
 
+/** A job the router matched to no badge, carried into the credential deck as its task, with the way back (router KTD14). */
+export interface FromJob {
+  task: string;
+  router: RouterResume;
+}
+
 /** A pick of "None of these" on the router's badge list. */
 export const NONE_OF_THESE = "none";
 
@@ -39,8 +45,8 @@ export const NONE_OF_THESE = "none";
 export type HandoffTarget = string;
 
 export type DeckRoute =
-  /** With `task`, a badge made from a job: its task prefilled, and Close back to the router's card with `router` (router KTD14). */
-  | { view: "deck"; deck: "credential"; returnTo?: TestPick; task?: string; router?: RouterResume }
+  /** With `fromJob`, a badge made from a job: the job as its task, and Close back to the router's card (router KTD14). */
+  | { view: "deck"; deck: "credential"; returnTo?: TestPick; fromJob?: FromJob }
   /** With `firstTest`, making the agent also makes the first badge and starts its test (R3). */
   | { view: "deck"; deck: "agent"; returnTo?: TestPick; likeSlug?: Slug; firstTest?: true }
   | {

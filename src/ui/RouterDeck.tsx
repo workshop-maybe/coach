@@ -21,7 +21,7 @@ import { costPlaces, recommend, type CleanHolder, type Recommendation } from "..
 import { askRoute, jobFirstLine, matchOf, ratingOf, routeBadges, routeBatches, type RouteOutcome } from "../domain/router";
 import { toJevError } from "../jev/jev";
 import { JEV_MODEL } from "../domain/jevRequest";
-import { credentialKey, type Credential, type MatchedBy, type Rating, type Slug } from "../domain/types";
+import { credentialKey, type Credential, type FolderState, type MatchedBy, type Rating, type Slug } from "../domain/types";
 import { Cartridge } from "../cast/Cartridge";
 import { Machine } from "../cast/Machine";
 import { Outline } from "../cast/Outline";
@@ -58,11 +58,12 @@ interface CardFocus {
 export function RouterDeck({ resume }: { resume?: RouterResume }) {
   const { state } = useFolder();
   if (!state) return null;
-  return <Router resume={resume} />;
+  return <Router resume={resume} state={state} />;
 }
 
-function Router({ resume }: { resume?: RouterResume }) {
-  const { storage, state, apply } = useFolder();
+/** The deck over a loaded folder. `state` is the folder as it is now, read again on every render. */
+function Router({ resume, state }: { resume?: RouterResume; state: FolderState }) {
+  const { storage, apply } = useFolder();
   const { navigate } = useNav();
   const jev = useJev();
   const matrix = useMatrix(state);
@@ -77,14 +78,12 @@ function Router({ resume }: { resume?: RouterResume }) {
   const [trouble, setTrouble] = useState<string | null>(null);
   const askGen = useRef(0);
 
-  const credentials = state?.credentials ?? [];
+  const credentials = state.credentials;
   const keys = useMemo(() => credentials.map(credentialKey), [credentials]);
   const byKey = useMemo(() => new Map(credentials.map((c) => [credentialKey(c), c])), [credentials]);
   const plan = useMemo(() => routeBatches(job, routeBadges(credentials)), [job, credentials]);
   // An outcome counts only for the job and the badges it was asked about.
   const answered = !!outcome && outcome.job === job && !!plan && sameKeys(outcome.keys, plan.sent);
-
-  if (!state) return null;
 
   const resumeNow: RouterResume = { job, ...(answered ? { outcome } : {}), ...(picked !== undefined ? { picked } : {}), ...(tapped ? { tapped } : {}) };
   const home = () => navigate({ view: "home" });
@@ -130,7 +129,7 @@ function Router({ resume }: { resume?: RouterResume }) {
     }
     if (answered && outcome) {
       const m = matchOf(outcome.answers, keys);
-      const tap = tapped && byKey.has(tapped) && (tapped === m.best || m.alsoLike.includes(tapped)) && tapped !== m.best ? tapped : undefined;
+      const tap = tapped && byKey.has(tapped) && m.alsoLike.includes(tapped) ? tapped : undefined;
       const key = tap ?? m.best;
       const alsoLike = [m.best, ...m.alsoLike].filter((k): k is string => k !== null && k !== key);
       return { key, matched: tap ? "also-like" : "jev", alsoLike, rating: ratingOf(outcome.levels), model: outcome.model };
@@ -283,7 +282,7 @@ function Router({ resume }: { resume?: RouterResume }) {
       };
     }
     const { pick, basis, step, cheaper, nextUp } = rec;
-    const track = calibrationOf(state!, focus.key!, focus.model ?? JEV_MODEL).trackRecord;
+    const track = calibrationOf(state, focus.key!, focus.model ?? JEV_MODEL).trackRecord;
     const lead =
       step === "stepped-up" ? "Stepped up: Jev rates this job unusual or high-stakes" : basis === "go-to" ? `Go-to for ${credential.name}` : `Cheapest agent holding ${credential.name}`;
     return {
@@ -314,7 +313,7 @@ function Router({ resume }: { resume?: RouterResume }) {
             ))}
             {nextUp && <li>{`Next up: ${nextUp.profile.name}`}</li>}
             {!pick.placed && <li>Not in your cost order yet</li>}
-            {costPlaces(state!).size === 0 && (
+            {costPlaces(state).size === 0 && (
               <li>
                 {"Your agents have no cost order yet "}
                 <button type="button" className="link" onClick={orderByCost}>
@@ -337,7 +336,7 @@ function Router({ resume }: { resume?: RouterResume }) {
 
   async function finish() {
     if (!focus.key || !credential) {
-      navigate({ view: "deck", deck: "credential", task: job, router: resumeNow });
+      navigate({ view: "deck", deck: "credential", fromJob: { task: job, router: resumeNow } });
       return;
     }
     if (!rec) return;
@@ -351,7 +350,7 @@ function Router({ resume }: { resume?: RouterResume }) {
     }
     const pick = rec.kind === "pick" ? rec : null;
     apply(
-      await takeAgentForJob(storage, state!, {
+      await takeAgentForJob(storage, state, {
         job,
         collectionSlug: credential.collectionSlug,
         credentialSlug: credential.slug,
