@@ -20,6 +20,8 @@ Open a badge from home. Each of its parts is a card. Click one to change just th
 - <UI>Look</UI> opens three cards in turn: <UI>Colors</UI>, <UI>Art</UI> and <UI>Title</UI>. Pick a palette, then <UI>Choose an image</UI> for the art, then type the title the badge shows. <UI>Skip</UI> leaves a card as it is.
 - <UI>Handoffs</UI> opens the badge's handoffs, [below](#its-handoffs).
 
+The task and the rubric take pictures and videos as well as text: see [Paste an image](/how-to/paste-an-image/) and [Add a video](/how-to/add-a-video/).
+
 The task and rubric cards each have helpers that copy a prompt for your assistant: <UI>Review this assignment</UI> and <UI>Write a refine prompt</UI> on the task, <UI>Check my criteria</UI> on the rubric. These prompts include the rubric. Give them to an assistant that's helping you write, not to an agent you're about to test.
 
 ## When agents already hold it
@@ -28,7 +30,9 @@ A badge's holders earned it against its task and rubric as they were. If you cha
 
 <Shot id="edit-retest" alt="Holders will re-test, under Rubric changed: They keep the badge and are asked to re-test, with Claude Code listed and the Save button" />
 
-<UI>Holders will re-test</UI> lists the agents that hold the badge. Click <UI>Save</UI>. They keep the badge, and home lists each one under <UI>What needs you</UI> as <UI>Re-test \{agent\}</UI>. If the badge has a go-to, its line on home adds <UI>task changed</UI>. Adding a rubric to a badge that had none counts as a change. So does moving detail from a target to the rubric. Other changes to the name, the targets or the look ask nothing.
+<UI>Holders will re-test</UI> lists the agents that hold the badge. Click <UI>Save</UI>. They keep the badge, and home lists each one under <UI>What needs you</UI> as <UI>Re-test \{agent\}</UI>. Adding a rubric to a badge that had none counts as a change. So does moving detail from a target to the rubric. Other changes to the name, the targets or the look ask nothing.
+
+Any change you save to the task or the rubric also flags the badge's go-to, if it has one. Its line on home adds <UI>task changed</UI>, even when only the rubric changed, until that agent has a newer result. [Choose a go-to](/how-to/choose-a-go-to/) shows the flags.
 
 ## Its handoffs
 
@@ -78,6 +82,6 @@ Below the badge's holders, click <UI>Move to trash</UI>.
 
 <Shot id="trash-badge" alt="Move Say how sure you are to trash: Its 2 results go with it, with Back and the Move to trash button" />
 
-The card says what goes with the badge: every agent's results on it, and any handoff for it that an agent still holds, which is pulled with no result. Its handoffs and your go-to choices go too. Click <UI>Move to trash</UI>.
+The card says what goes with the badge: every agent's results and held replies on it, and any handoff for it that an agent still holds, which is pulled with no result. Its handoffs and your go-to choices go too. Click <UI>Move to trash</UI>.
 
 Nothing is deleted. The files move into a `trash` folder inside your folder, so you can get them back.

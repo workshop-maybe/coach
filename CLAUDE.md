@@ -5,10 +5,10 @@ A simple, beautiful little desktop app for building credentials and offering the
 ## What the app does
 
 - **Credentials.** A credential has a name and a set of learning targets.
-- **Acceptance criteria.** Each credential has assignments that a person or an agent can complete and that the user can review.
+- **Acceptance criteria.** Each credential has assignments that a person or an agent can complete and that the user can review. Tasks, rubrics, notes and replies can hold pictures and local videos, kept as files beside the Markdown.
 - **Agent profiles.** Named agent setups the user runs locally: harness, model, effort level, the repo it opens in, and free-form parameters.
 - **Prompts and handoffs.** The app writes prompts the user copies into the agent of their choice. A handoff wraps a badge's assignment for a test ("this is a test, do it and I'll review your results"). It is customizable: a default skeleton plus one or more handoffs per badge. Other prompts: "check my acceptance criteria", "review this assignment", "suggest assignments for these learning targets". A refine prompt gives an agent the full context to help refine an assignment.
-- **Assessments.** The user records whether an agent met a credential's acceptance criteria, with evidence. Home shows the badges each agent holds and who holds each badge.
+- **Assessments.** The user records whether an agent met a credential's acceptance criteria, with evidence, or holds the reply to judge later beside other agents' replies. Home shows the badges each agent holds, who holds each badge, and the go-to the user chose among its holders. With Jev Mode on, a second opinion calls each rubric point, learning target and the whole bar, with the user's earlier verdicts on that badge as context.
 - **Export.** Markdown and JSON.
 - **Beyond your computer.** When no local agent meets a credential, the app shows a quiet path toward finding people who hold it. No upsell screens.
 
@@ -25,7 +25,7 @@ The question the app answers: **which of my agents can actually meet my acceptan
 
 ## Stack
 
-- **Tauri 2** shell (`src-tauri/`, Rust). Keep the native side small: file read/write, clipboard, the window's remembered size and position, and Jev Mode's key store and its one TypeSafe request (`src-tauri/src/jev.rs`).
+- **Tauri 2** shell (`src-tauri/`, Rust). Keep the native side small: file read/write, clipboard (including Finder-copied file paths), copying dropped or picked files into the data folder, a confined `media://` scheme that serves videos from the data folder (`src-tauri/src/media.rs`), the window's remembered size and position, and Jev Mode's key store and its one TypeSafe request (`src-tauri/src/jev.rs`).
 - **React + TypeScript + Vite** UI (`src/`).
 - Identifier `io.andamio.desktop`.
 
