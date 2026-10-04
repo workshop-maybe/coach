@@ -110,6 +110,24 @@ describe("the full sample folder", () => {
     expect(items[0]).toMatchObject({ kind: "reply", profileSlug: pending[0].profileSlug, credentialKey: pending[0].credentialKey });
   });
 
+  it("holds a bake-off on Check an answer key: both agents' replies held, stamped like results, listed after the waiting test", async () => {
+    const { sample, state } = await loadSample("full");
+    expect(state.held.map((h) => [h.profileSlug, h.fileStem])).toEqual([
+      [SAMPLE.agents.claude, SAMPLE.held.claudeAnswerKey],
+      [SAMPLE.agents.codex, SAMPLE.held.codexAnswerKey],
+    ]);
+    const answerKey = state.credentials.find((c) => credentialKey(c) === SAMPLE.badges.answerKey)!;
+    for (const h of state.held) {
+      expect(credentialKey(h)).toBe(SAMPLE.badges.answerKey);
+      expect(h.assignmentVersion).toBe(await assignmentVersion(answerKey.task, answerKey.rubric));
+      expect(h.heldAt < "2026-10-01T09:00:00.000Z").toBe(true);
+    }
+    const store = storeWith({ [pendingStorageKey(SAMPLE_FOLDER)]: JSON.stringify(sample.pending) });
+    const items = needsYou(state, await buildMatrix(state), readPending(SAMPLE_FOLDER, store));
+    expect(items.slice(0, 2).map((i) => i.kind)).toEqual(["reply", "held"]);
+    expect(items[1]).toMatchObject({ credentialKey: SAMPLE.badges.answerKey, takes: [{ fileStem: SAMPLE.held.claudeAnswerKey }, { fileStem: SAMPLE.held.codexAnswerKey }] });
+  });
+
   it("gives Write a release note one handoff of its own, its default, which no result has run", async () => {
     const { state } = await loadSample("full");
     expect(state.handoffs.map((h) => `${credentialKey(h)}/${h.id}`)).toEqual([`${SAMPLE.badges.releaseNote}/${SAMPLE.handoffs.releaseNote}`]);

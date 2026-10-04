@@ -8,9 +8,10 @@
 // collection (three presets and one hand-built credential), two agents with different
 // setups, dated results (two takes on one badge for the compare, one with a saved Jev
 // reading), one waiting test for What needs you, one handoff of the hand-built
-// credential's own that no result has run, for How to's handoff pictures (U7), and one
-// go-to mark, Claude Code on the badge with two takes. Values
-// follow src/ui/testFolder.tsx, copied rather than imported, since that file imports
+// credential's own that no result has run, for How to's handoff pictures (U7), one go-to
+// mark, Claude Code on the badge with two takes, and a bake-off waiting to be judged: both
+// agents' replies to Check an answer key held without a verdict. Values follow
+// src/ui/testFolder.tsx, copied rather than imported, since that file imports
 // @testing-library/react.
 
 import {
@@ -19,10 +20,12 @@ import {
   collectionPath,
   credentialPath,
   handoffPath,
+  heldPath,
   markPath,
   profilePath,
   serializeAssessment,
   serializeCollection,
+  serializeHeld,
   serializeMark,
   serializeMarker,
   serializeProfile,
@@ -40,6 +43,7 @@ import {
   type ContextReading,
   type Credential,
   type HandoffTemplate,
+  type HeldReply,
   type Mark,
   type TestContext,
 } from "../domain/types";
@@ -78,6 +82,8 @@ export const SAMPLE = {
   handoffs: { releaseNote: "20260928T090000Z" },
   /** Go-to marks by their file stem: Claude Code on Say how sure you are, after its Met take. */
   marks: { howSure: "20260926T170000Z" },
+  /** Held replies by their file stem: both agents' on Check an answer key's skeleton. */
+  held: { claudeAnswerKey: "20260929T101500Z", codexAnswerKey: "20260929T114000Z" },
 } as const;
 
 /** The sample folder's files by path, and the waiting tests the harness puts in local storage. */
@@ -215,6 +221,20 @@ const ANSWER_KEY_REPLY = `1. Holds. 100 has 20 multiples of 5 and 4 multiples of
 4. Holds. Sorting in reverse gives [3, 2, 1], and the slice drops the 3.
 5. Does not hold. 2^10 is 1,024, a little more than 10^3, so 2^100 is a little more than 10^30, and 2^100 is larger.`;
 
+/** Claude Code's held reply to Check an answer key: every call right. */
+const ANSWER_KEY_CLAUDE_REPLY = `1. Holds. 20 multiples of 5, and the 4 multiples of 25 give one more each: 24.
+2. Does not hold. No: 2100 is divisible by 100 and not by 400, so it is not a leap year. The rationale uses only the rule for 4.
+3. Does not hold. The chance is 1 − (5/6)^4 = 671/1296, about 0.52. Adding 1/6 four times counts two sixes twice.
+4. Holds. Reverse sorting gives [3, 2, 1]; the slice from 1 gives [2, 1].
+5. Does not hold. 2^100 is larger: 2^10 = 1,024 is a little more than 10^3, not less.`;
+
+/** Codex's held reply to Check an answer key: it calls a right key wrong. */
+const ANSWER_KEY_CODEX_REPLY = `1. Holds. 24 trailing zeros.
+2. Does not hold. 2100 is not a leap year: century years need to be divisible by 400.
+3. Does not hold. The right answer is 671/1296. The rationale adds overlapping chances.
+4. Does not hold. The slice [1:] keeps the first item, so the answer is [3, 2].
+5. Does not hold. 2^100 is about 1.27 × 10^30, so it is larger.`;
+
 /** Jev's probabilities for the answer-key rubric's points, in order. */
 const ANSWER_KEY_POINTS = [0.93, 0.95, 0.9, 0.88, 0.94];
 
@@ -234,6 +254,27 @@ async function take(
   fileStem: string,
   fields: Pick<Assessment, "result" | "recordedAt" | "note" | "handBack"> & { copiedAt: string },
 ): Promise<Assessment> {
+  const { copiedAt, ...rest } = fields;
+  return {
+    profileSlug: profile.slug,
+    collectionSlug: credential.collectionSlug,
+    credentialSlug: credential.slug,
+    fileStem,
+    ...rest,
+    assignmentVersion: await assignmentVersion(credential.task, credential.rubric),
+    setup: { harness: profile.harness, model: profile.model, effort: profile.effort },
+    context: contextAt(profile, copiedAt),
+    handoff: skeletonFor(credential),
+  };
+}
+
+/** A held reply as holdReply writes it: stamped as a result would be, with no verdict. */
+async function heldTake(
+  profile: AgentProfile,
+  credential: Credential,
+  fileStem: string,
+  fields: Pick<HeldReply, "heldAt" | "handBack"> & { copiedAt: string },
+): Promise<HeldReply> {
   const { copiedAt, ...rest } = fields;
   return {
     profileSlug: profile.slug,
@@ -322,6 +363,14 @@ export async function sampleFolder(variant: SeedVariant): Promise<SampleFolder> 
   for (const a of results) {
     files[assessmentPath(a.profileSlug, a.collectionSlug, a.credentialSlug, a.fileStem)] = serializeAssessment(a);
   }
+
+  // A bake-off waiting on Check an answer key's skeleton (hold-and-compare): each agent's
+  // reply held without a verdict, Codex's after its Met take there.
+  const held: HeldReply[] = [
+    await heldTake(CLAUDE, answerKey, SAMPLE.held.claudeAnswerKey, { heldAt: "2026-09-29T10:15:00.000Z", copiedAt: "2026-09-29T10:02:00.000Z", handBack: ANSWER_KEY_CLAUDE_REPLY }),
+    await heldTake(CODEX, answerKey, SAMPLE.held.codexAnswerKey, { heldAt: "2026-09-29T11:40:00.000Z", copiedAt: "2026-09-29T11:21:00.000Z", handBack: ANSWER_KEY_CODEX_REPLY }),
+  ];
+  for (const h of held) files[heldPath(h.profileSlug, h.collectionSlug, h.credentialSlug, h.fileStem)] = serializeHeld(h);
 
   // Claude Code is Say how sure you are's go-to, marked on the Met take that earned it.
   const goTo: Mark = {
