@@ -72,7 +72,7 @@ fn find_video(root: Option<&Path>, raw: &str) -> Option<Found> {
         return None;
     }
     let ext = video_ext_of_name(name)?;
-    let rel = parts.iter().map(|p| p.to_string_lossy()).collect::<Vec<_>>().join("/");
+    let rel = crate::files::rel_string(&parts);
     let path = resolve_in_root(root, &rel).ok()?;
     let (mut file, len) = open_regular(&path).ok()??;
     let head = read_head(&mut file).ok()?;

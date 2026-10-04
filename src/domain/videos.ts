@@ -24,7 +24,7 @@ export function alreadyNamed(name: string): string {
   return `A different file is already named ${name}.`;
 }
 
-const VIDEO_NAME = /^.+\.(mp4|m4v|mov|webm)$/i;
+const VIDEO_NAME = new RegExp(`^.+\\.(${VIDEO_EXTENSIONS.join("|")})$`, "i");
 
 /** Whether a name ends in a video extension, in any case. */
 export function hasVideoExtension(name: string): boolean {

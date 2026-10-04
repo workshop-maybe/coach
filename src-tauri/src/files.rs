@@ -73,6 +73,12 @@ pub fn register_remembered(roots: &mut Roots, remembered: Option<&str>) -> Optio
     roots.set(RootKind::Data, Path::new(folder)).ok()
 }
 
+/// The parts `normalize_rel` returns, joined back into a root-relative path with forward
+/// slashes ("" for the root).
+pub(crate) fn rel_string(parts: &[&std::ffi::OsStr]) -> String {
+    parts.iter().map(|p| p.to_string_lossy()).collect::<Vec<_>>().join("/")
+}
+
 /// Lexical normalization of a root-relative path: drops `.`, applies `..`, and
 /// refuses an absolute path or one that climbs above the root. Reads no disk.
 pub(crate) fn normalize_rel(rel: &str) -> Result<Vec<&std::ffi::OsStr>, String> {
@@ -315,7 +321,12 @@ pub fn validate_image(bytes: &[u8], limit: ImageLimit) -> Result<&'static str, S
 /// The first 4 bytes of the SHA-256 of `bytes`, as 8 lowercase hex digits.
 fn hash8(bytes: &[u8]) -> String {
     use sha2::{Digest, Sha256};
-    Sha256::digest(bytes)[..4].iter().map(|b| format!("{b:02x}")).collect()
+    hex8(&Sha256::digest(bytes))
+}
+
+/// The first 4 bytes of a digest as 8 hex characters, the content-addressed part of a name.
+fn hex8(digest: &[u8]) -> String {
+    digest.iter().take(4).map(|b| format!("{b:02x}")).collect()
 }
 
 /// A slug must be one safe path segment. Hand-made folders can have any name, so
@@ -364,7 +375,7 @@ pub fn save_image_in(root: &Path, dir: &str, bytes: &[u8]) -> Result<String, Str
     // `dir` is never trimmed, so "/" stays absolute and is refused.
     let joined = if dir.is_empty() { name.clone() } else { format!("{dir}/{name}") };
     let parts = normalize_rel(&joined)?;
-    let rel = parts.iter().map(|p| p.to_string_lossy()).collect::<Vec<_>>().join("/");
+    let rel = rel_string(&parts);
     let target = resolve_in_root(root, &rel)?;
 
     // Resolving follows a link at the name to its target, so check the name as given.
@@ -627,7 +638,7 @@ fn stream_to_temp(reader: impl std::io::Read, dir: &Path, cap: u64) -> Result<(P
         return Err(e);
     }
     let digest = hasher.finalize();
-    let hash = digest.iter().take(4).map(|b| format!("{b:02x}")).collect();
+    let hash = hex8(&digest);
     Ok((temp, hash))
 }
 
@@ -668,7 +679,7 @@ fn read_full(r: &mut impl std::io::Read, buf: &mut [u8]) -> std::io::Result<usiz
 /// normalized root-relative folder with forward slashes ("" for the root).
 fn video_target_dir(root: &Path, dir: &str) -> Result<(PathBuf, String), String> {
     let parts = normalize_rel(dir)?;
-    let rel_dir = parts.iter().map(|p| p.to_string_lossy()).collect::<Vec<_>>().join("/");
+    let rel_dir = rel_string(&parts);
     let abs = resolve_in_root(root, &rel_dir)?;
     std::fs::create_dir_all(&abs).map_err(|e| format!("Cannot create the folder \"{rel_dir}\": {e}"))?;
     Ok((abs, rel_dir))

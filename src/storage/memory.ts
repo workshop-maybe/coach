@@ -108,7 +108,7 @@ export class MemoryStorage implements Storage {
     if (bytes.length > PASTED_IMAGE_MAX_BYTES) throw new Error(IMAGE_TOO_LARGE);
     const uri = `data:image/${ext === "jpg" ? "jpeg" : "png"};base64,${bytesToBase64(bytes)}`;
     const name = `image-${hash8(uri)}.${ext}`;
-    const path = dir === "" || dir === "." ? name : `${dir}/${name}`;
+    const path = pathIn(dir, name);
     const existing = this.images[root].get(path);
     if (existing === uri) return path;
     if (existing !== undefined || this.roots[root].has(path)) throw new Error(alreadyNamed(name));
@@ -171,7 +171,7 @@ export class MemoryStorage implements Storage {
     if (!videoFamilyAgrees(bytes, ext)) throw new Error(ONLY_VIDEOS_AND_IMAGES);
     if (bytes.length > VIDEO_MAX_BYTES) throw new Error(VIDEO_TOO_LARGE);
     const name = `video-${hash8(bytes)}.${ext}`;
-    const path = dir === "" || dir === "." ? name : `${dir}/${name}`;
+    const path = pathIn(dir, name);
     const existing = this.videos[root].get(path);
     if (existing !== undefined && sameBytes(existing, bytes)) return path;
     if (existing !== undefined || this.roots[root].has(path) || this.images[root].has(path)) throw new Error(alreadyNamed(name));
@@ -314,6 +314,11 @@ function checkSlug(what: string, slug: string): void {
   // Mirrors the Rust check: one safe path segment, whatever its characters.
   const unsafe = slug === "" || slug.startsWith(".") || /[/\\:]/.test(slug) || /[\u0000-\u001f\u007f]/.test(slug);
   if (unsafe) throw new Error(`The ${what} name "${slug}" cannot be used in a file path.`);
+}
+
+/** `name` in folder `dir`, where "" or "." is the root, as the Rust side joins them. */
+function pathIn(dir: string, name: string): string {
+  return dir === "" || dir === "." ? name : `${dir}/${name}`;
 }
 
 /** 8 hex chars of FNV-1a over a text's char codes or a file's bytes. Stands in for the Rust side's SHA-256 prefix. */

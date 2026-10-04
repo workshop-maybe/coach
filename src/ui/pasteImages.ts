@@ -4,24 +4,22 @@
 
 import { hasVideoExtension } from "../domain/videos";
 
-/** The image files a paste carries, from its files or, failing that, its items. */
-function pastedImages(data: DataTransfer): File[] {
-  const files = Array.from(data.files ?? []).filter((f) => f.type.startsWith("image/"));
+/**
+ * The files a paste carries whose type `keep` accepts, from its files or, failing that, its
+ * items. The filter runs before the fall-back, so items are read only when no file passes.
+ */
+function pastedFiles(data: DataTransfer, keep: (type: string) => boolean = () => true): File[] {
+  const files = Array.from(data.files ?? []).filter((f) => keep(f.type));
   if (files.length) return files;
   return Array.from(data.items ?? [])
-    .filter((i) => i.kind === "file" && i.type.startsWith("image/"))
+    .filter((i) => i.kind === "file" && keep(i.type))
     .map((i) => i.getAsFile())
     .filter((f): f is File => f !== null);
 }
 
-/** Every file a paste carries, from its files or, failing that, its items. */
-function pastedFiles(data: DataTransfer): File[] {
-  const files = Array.from(data.files ?? []);
-  if (files.length) return files;
-  return Array.from(data.items ?? [])
-    .filter((i) => i.kind === "file")
-    .map((i) => i.getAsFile())
-    .filter((f): f is File => f !== null);
+/** The image files a paste carries. */
+function pastedImages(data: DataTransfer): File[] {
+  return pastedFiles(data, (type) => type.startsWith("image/"));
 }
 
 /**

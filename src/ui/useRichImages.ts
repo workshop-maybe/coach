@@ -75,6 +75,14 @@ export function useRichImages(dir: string | null, text = ""): { images: RichImag
 
   const images = useMemo<RichImages>(() => {
     const { load, video } = dir === null ? NOTHING : imageSource(storage, dir);
+    /** Records a file this visit saved, for the carry, and returns its bare name. */
+    const remember = (path: string): string => {
+      // A file read as missing before it was added is there now.
+      forgetImage(storage, path);
+      const name = fileName(path);
+      saved.current.set(name, path);
+      return name;
+    };
     return {
       load,
       video,
@@ -89,11 +97,7 @@ export function useRichImages(dir: string | null, text = ""): { images: RichImag
         return track(async () => {
           try {
             const path = await storage.saveImage("data", dir!, new Uint8Array(await file.arrayBuffer()));
-            // A file read as missing before this paste is there now.
-            forgetImage(storage, path);
-            const name = fileName(path);
-            saved.current.set(name, path);
-            return name;
+            return remember(path);
           } catch (e) {
             setNotice(describeError(e));
             throw e;
@@ -113,12 +117,7 @@ export function useRichImages(dir: string | null, text = ""): { images: RichImag
             }
             const names: string[] = [];
             for (const { path } of files) {
-              if (path === null) continue;
-              // A picture read as missing before this add is there now.
-              forgetImage(storage, path);
-              const name = fileName(path);
-              saved.current.set(name, path);
-              names.push(name);
+              if (path !== null) names.push(remember(path));
             }
             const refused = files.filter((f) => f.path === null);
             if (refused.length > 0) setNotice(refusalNotice(refused));
