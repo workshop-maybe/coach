@@ -242,13 +242,19 @@ button:focus-visible {
 
 /* The content area takes the height the bar and the banners leave (KTD4), so a view that
    fills the window, such as an empty home, needs no height of its own. Its view spans the
-   column; a deck or an item keeps its own measure and centers in it. */
+   column; a deck keeps its own measure and centers in it. The column is wide enough that a
+   large window shows home and an opened item side by side in two columns rather than one
+   long stack.
+
+   The stacking width is 896px: `max-width: 56rem` in a media query, where a rem is 16px
+   (in a property it is 14px, from :root). At and below it every two-column view stacks
+   into one column, and the page may scroll. */
 .content {
   display: flex;
   flex-direction: column;
   flex: 1 0 auto;
   width: 100%;
-  max-width: 62rem;
+  max-width: 80rem;
   margin: 0 auto;
   padding: var(--space-xl) var(--space-xl) var(--space-3xl);
 }
@@ -477,6 +483,7 @@ button:focus-visible {
   margin: 0;
   font-size: 1.6rem;
   letter-spacing: var(--display-tracking);
+  overflow-wrap: anywhere;
 }
 
 .deck-card h2:focus-visible {
@@ -1135,9 +1142,12 @@ button:focus-visible {
   }
 }
 
-/* An empty folder: the two doors are the whole screen, each showing what it makes. */
+/* An empty folder: the two doors are the whole screen, each showing what it makes. They keep
+   the measure the content column had before it widened, so two doors never stretch thin. */
 .home-empty {
   justify-content: center;
+  max-width: calc(62rem - 2 * var(--space-xl));
+  margin-inline: auto;
 }
 
 .home-empty .doors {
@@ -1865,9 +1875,54 @@ button:focus-visible {
   margin: var(--space-2xl) auto 0;
 }
 
-.agent-detail > .deck {
-  margin-top: 0;
+/* An opened item's columns (KTD3): each keeps the page's spacing between its pieces at every
+   width, so the one-column layout below the stacking width reads as it always has. */
+:is(.detail-main, .detail-side) {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+  min-width: 0;
+}
+
+/* An agent, opened, on a wide window (KTD4): the player card in a fixed column as wide as its
+   drawing needs, so the side column's edge holds still from agent to agent, and its parts,
+   badges and trash beside it. The card's × measures from the page, not the card, so it sits
+   at the page's top right as on a badge's page. The four parts share one row. */
+.agent-detail {
+  display: grid;
+  grid-template-columns: 27rem minmax(0, 1fr);
+  align-items: start;
+  column-gap: var(--space-2xl);
   max-width: none;
+}
+
+.agent-detail > .deck {
+  position: static;
+  min-width: 0;
+  max-width: none;
+  margin: 0;
+}
+
+.agent-detail .parts {
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+}
+
+/* At the stacking width and below, the card centers over everything else, as it always has. */
+@media (max-width: 56rem) {
+  .agent-detail {
+    display: flex;
+    align-items: stretch;
+    max-width: 40rem;
+  }
+
+  .agent-detail > .deck {
+    position: relative;
+    margin: 0 auto;
+  }
+
+  .agent-detail .parts {
+    grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  }
 }
 
 .detail-head {
