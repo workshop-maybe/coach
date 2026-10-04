@@ -141,12 +141,14 @@ describe("CompareView", () => {
     );
     await screen.findByRole("region", { name: "Compare replies" });
     const [left, right] = panes();
-    const leftReading = within(left).getByText("Jev's reading, 94% overall", { selector: "summary" }).closest("details")!;
+    const leftReading = within(left).getByText("Jev's reading, meets overall", { selector: "summary" }).closest("details")!;
     expect(leftReading.open).toBe(false);
     expect(leftReading.querySelector("li .jev-point-text")?.textContent).toBe("Names the off-by-one");
+    expect(leftReading.querySelector("li .jev-call")?.textContent).toBe("Meets");
     expect(leftReading.querySelector("li .jev-p")?.textContent).toBe("94%");
-    const rightReading = within(right).getByText("Jev's reading, 12% overall", { selector: "summary" }).closest("details")!;
+    const rightReading = within(right).getByText("Jev's reading, misses overall", { selector: "summary" }).closest("details")!;
     expect(rightReading.querySelector("li .jev-point-text")?.textContent).toBe("Suggests a fix");
+    expect(rightReading.querySelector("li .jev-call")?.textContent).toBe("Misses");
     expect(within(left).queryByText("Suggests a fix")).toBeNull();
     expect(within(right).queryByText("Names the off-by-one")).toBeNull();
     cleanup();
@@ -156,9 +158,33 @@ describe("CompareView", () => {
       [take("opus", 1), take("codex", 2)],
     );
     await screen.findByRole("region", { name: "Compare replies" });
-    expect(within(panes()[0]).getByText("Jev's reading, 94% overall", { selector: "summary" })).toBeTruthy();
+    expect(within(panes()[0]).getByText("Jev's reading, meets overall", { selector: "summary" })).toBeTruthy();
     expect(within(panes()[1]).queryByText(/Jev's reading/)).toBeNull();
     expect(panes()[1].querySelector(".jev-reading")).toBeNull();
+  });
+
+  it("shows Jev's track record on a result's saved reading and never on a held reply's, each read with the badge's pair", async () => {
+    const reading = (overall: number): JevReading => ({
+      model: "jev-1.13.0",
+      assignmentVersion: "v1",
+      askedAt: "2026-09-01T09:05:00.000Z",
+      seen: "before",
+      overall,
+      points: [],
+    });
+    // Eight judged readings on the badge, every verdict Met, so the track record shows.
+    const results = await Promise.all(
+      [0.9, 0.9, 0.9, 0.9, 0.9, 0.5, 0.5, 0.2].map((overall, i) => result(opus, review, { ...day(i + 1), jev: reading(overall) })),
+    );
+    const held = await heldReply(codex, review, { fileStem: day(9).fileStem, heldAt: day(9).recordedAt, jev: reading(0.5) });
+    open(folder(results, [opus, codex], [held]), [take("opus", 1), take("codex", 9)]);
+    await screen.findByRole("region", { name: "Compare replies" });
+    const [left, right] = panes();
+    const leftReading = within(left).getByText("Jev's reading, meets overall", { selector: "summary" }).closest("details")!;
+    expect(within(leftReading).getByText("Jev matched your verdict 5 of 6 times on this badge, and couldn't call 2")).toBeTruthy();
+    const rightReading = within(right).getByText("Jev's reading, can't call overall", { selector: "summary" }).closest("details")!;
+    expect(rightReading.querySelector(".jev-overall .jev-call")?.textContent).toBe("Jev can't call the whole bar");
+    expect(within(rightReading).queryByText(/Jev matched/)).toBeNull();
   });
 
   it("two takes from the same agent each show their own verdict and date", async () => {

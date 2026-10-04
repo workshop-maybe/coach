@@ -75,9 +75,6 @@ export const TARGET_CRITERIA: JevCriteria = Object.freeze({
 /** The overall question's id. */
 export const OVERALL_ID = "overall";
 
-/** A probability in this band, ends included, is one Jev can't call (KTD9). Tunable. */
-export const VAGUE_BAND = Object.freeze({ min: 0.3, max: 0.7 });
-
 /** The question id for the point at this zero-based index: "p1" for the first. */
 export function pointId(index: number): string {
   return `p${index + 1}`;
@@ -189,11 +186,6 @@ export function readingParts(points: readonly string[], { answers }: JevAnswers,
   const readTargets = probabilities(answers, targets, targetId);
   if (!readPoints || !readTargets) return null;
   return { overall, points: readPoints, targets: readTargets };
-}
-
-/** Whether Jev can't call this probability either way: a point to sharpen in the bar (R11). */
-export function isVague(probability: number): boolean {
-  return probability >= VAGUE_BAND.min && probability <= VAGUE_BAND.max;
 }
 
 // ---------------------------------------------------------------------------

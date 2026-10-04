@@ -80,7 +80,7 @@ export function ReplyView({ credentialKey: key, take, picks }: { credentialKey: 
           {writes.error}
         </p>
       )}
-      {a.jev && <SavedReading reading={a.jev} />}
+      {a.jev && <SavedReading reading={a.jev} credentialKey={key} hasVerdict={!isHeld(a)} />}
       <details className="reply-ran">
         <summary>{handoffText(state, key, a.handoff?.id)}</summary>
         <pre className="handback">{a.handoff?.text ?? BUILT_IN_HANDOFF}</pre>

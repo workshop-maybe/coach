@@ -143,11 +143,13 @@ describe("ReplyView", () => {
     open(storage);
     await screen.findByRole("heading", { name: "Opus agent" });
 
-    const saved = savedReading("Jev's reading, 82% overall");
+    const saved = savedReading("Jev's reading, meets overall");
     expect(saved.open).toBe(false);
     const panel = saved.querySelector<HTMLElement>(".jev-reading-saved")!;
     expect([...panel.querySelectorAll("li .jev-point-text")].map((t) => t.textContent)).toEqual(["Names the off-by-one", "Points to the line"]);
+    expect([...panel.querySelectorAll("li .jev-call")].map((c) => c.textContent)).toEqual(["Meets", "Can't call: sharpen this point"]);
     expect([...panel.querySelectorAll("li .jev-p")].map((p) => p.textContent)).toEqual(["94%", "52%"]);
+    expect(panel.querySelector(".jev-overall .jev-call")?.textContent).toBe("Meets");
     expect(panel.querySelector(".jev-overall .jev-p")?.textContent).toBe("82%");
     expect(panel.textContent).not.toContain("Covers every file");
     expect(within(panel).queryByRole("button")).toBeNull();
@@ -157,14 +159,14 @@ describe("ReplyView", () => {
     const after = { ...reading, seen: "after" as const, verdictWhenSeen: "met" as const, verdictChanged: true };
     open(folder([await result(opus, review, { ...day(1), result: "not_met", jev: after })]));
     await screen.findByRole("heading", { name: "Opus agent" });
-    expect(savedReading("Jev's reading, 82% overall · verdict changed after it")).toBeTruthy();
+    expect(savedReading("Jev's reading, meets overall · verdict changed after it")).toBeTruthy();
   });
 
   it("says nothing of the verdict when it stayed as it was when Jev's reading was seen", async () => {
     const after = { ...reading, seen: "after" as const, verdictWhenSeen: "met" as const, verdictChanged: false };
     open(folder([await result(opus, review, { ...day(1), jev: after })]));
     await screen.findByRole("heading", { name: "Opus agent" });
-    expect(savedReading("Jev's reading, 82% overall")).toBeTruthy();
+    expect(savedReading("Jev's reading, meets overall")).toBeTruthy();
     expect(screen.queryByText(/verdict changed/)).toBeNull();
   });
 
@@ -186,7 +188,7 @@ describe("ReplyView", () => {
     );
     await screen.findByRole("heading", { name: "Opus agent" });
     expect(fake.current.on).toBe(false);
-    expect(savedReading("Jev's reading, 82% overall").querySelector(".jev-overall .jev-p")?.textContent).toBe("82%");
+    expect(savedReading("Jev's reading, meets overall").querySelector(".jev-overall .jev-p")?.textContent).toBe("82%");
     expect(fake.calls).toEqual([{ method: "status" }]);
   });
 
@@ -361,5 +363,112 @@ describe("ReplyView of a held reply", () => {
     await userEvent.click(screen.getByRole("button", { name: "Met" }));
     expect(await screen.findByRole("alert")).toBeTruthy();
     expect(storage.file(assessmentPath("codex", "eng", "review", held.fileStem))).toBe("someone else's");
+  });
+});
+
+// A saved reading read as calls (growing context U5, R9, R11, R12, KTD7, KTD8): with the
+// pair the badge's results fit for the reading's own model, worked out from the folder, and
+// with Jev's track record there only when the take has a verdict.
+describe("ReplyView, a saved reading read as calls", () => {
+  /** A reading from `model` with only an overall probability. */
+  const jevAt = (overall: number, model = "jev-1.13.0"): JevReading => ({
+    model,
+    assignmentVersion: "v1",
+    askedAt: "2026-09-01T09:05:00.000Z",
+    seen: "before",
+    overall,
+    points: [{ text: "Names the off-by-one", probability: overall }],
+  });
+  /** Results on the badge, one a day from day 1, each with a reading at its overall. */
+  const judged = (rows: [number, "met" | "not_met"][], profile = opus) =>
+    Promise.all(rows.map(([overall, verdict], i) => result(profile, review, { ...day(i + 1), result: verdict, jev: jevAt(overall) })));
+  /**
+   * Eight results where the user judged Met every time Jev gave 60% or more: the fit moves
+   * the meets cut-off to 55, the first grid step that reads all of them meets. Day 2 is 65%.
+   */
+  const metFromSixty = () =>
+    judged([
+      [0.6, "met"],
+      [0.65, "met"],
+      [0.68, "met"],
+      [0.72, "met"],
+      [0.9, "met"],
+      [0.1, "not_met"],
+      [0.15, "not_met"],
+      [0.2, "not_met"],
+    ]);
+  const panelIn = (summary: string) => savedReading(summary).querySelector<HTMLElement>(".jev-reading-saved")!;
+
+  it("Covers AE6. a past reading at 65% reads Meets under the fitted pair, says so, shows the track record, and asks Jev nothing", async () => {
+    const fake = new FakeJev();
+    render(
+      <JevProvider jev={fake}>
+        <FolderProvider storage={folder(await metFromSixty())} folder={FOLDER}>
+          <AppShell onChangeFolder={() => {}} initialRoute={{ view: "item", item: "reply", credentialKey: "eng/review", take: take("opus", 2) }} />
+        </FolderProvider>
+      </JevProvider>,
+    );
+    await screen.findByRole("heading", { name: "Opus agent" });
+    const panel = panelIn("Jev's reading, meets overall");
+    expect(panel.querySelector(".jev-overall .jev-call")?.textContent).toBe("Meets");
+    expect(panel.querySelector(".jev-overall .jev-p")?.textContent).toBe("65%");
+    expect(panel.querySelector("li .jev-call")?.textContent).toBe("Meets");
+    expect(within(panel).getByText("Cut-offs fitted to your verdicts")).toBeTruthy();
+    expect(within(panel).getByText("Jev matched your verdict 8 of 8 times on this badge")).toBeTruthy();
+    expect(fake.calls).toEqual([{ method: "status" }]);
+  });
+
+  it("a result's saved reading on a badge with 8 judged readings shows the track record; a held reply's on the same badge shows none", async () => {
+    // Every verdict Met, so the fit can't run, but the track record shows from 8 readings.
+    const results = await judged([
+      [0.9, "met"],
+      [0.9, "met"],
+      [0.9, "met"],
+      [0.9, "met"],
+      [0.9, "met"],
+      [0.5, "met"],
+      [0.5, "met"],
+      [0.2, "met"],
+    ]);
+    const held = await heldReply(codex, review, { fileStem: day(9).fileStem, heldAt: day(9).recordedAt, jev: jevAt(0.9) });
+    const storage = storageWith({ credentials: [review], profiles: [opus, codex], handoffs: [a], assessments: results, held: [held] });
+    open(storage, take("opus", 1));
+    await screen.findByRole("heading", { name: "Opus agent" });
+    const panel = panelIn("Jev's reading, meets overall");
+    expect(within(panel).getByText("Jev matched your verdict 5 of 6 times on this badge, and couldn't call 2")).toBeTruthy();
+    expect(within(panel).queryByText("Cut-offs fitted to your verdicts")).toBeNull();
+    cleanup();
+
+    open(storage, take("codex", 9));
+    await screen.findByRole("heading", { name: "Codex agent" });
+    const heldPanel = panelIn("Jev's reading, meets overall");
+    expect(heldPanel.querySelector(".jev-overall .jev-call")?.textContent).toBe("Meets");
+    expect(within(heldPanel).queryByText(/Jev matched/)).toBeNull();
+  });
+
+  it("a held reply's saved reading reads with the badge's fitted pair and says so, with no track record", async () => {
+    const held = await heldReply(codex, review, { fileStem: day(9).fileStem, heldAt: day(9).recordedAt, jev: jevAt(0.65) });
+    open(storageWith({ credentials: [review], profiles: [opus, codex], handoffs: [a], assessments: await metFromSixty(), held: [held] }), take("codex", 9));
+    await screen.findByRole("heading", { name: "Codex agent" });
+    const panel = panelIn("Jev's reading, meets overall");
+    expect(panel.querySelector(".jev-overall .jev-call")?.textContent).toBe("Meets");
+    expect(within(panel).queryByText(/Jev matched/)).toBeNull();
+    expect(within(panel).getByText("Cut-offs fitted to your verdicts")).toBeTruthy();
+  });
+
+  it("a saved reading from another model reads with that model's pair, not the one fitted to the badge's other readings", async () => {
+    const other = await result(codex, review, { ...day(9), jev: jevAt(0.65, "jev-2.0.0") });
+    open(folder([...(await metFromSixty()), other]), take("codex", 9));
+    await screen.findByRole("heading", { name: "Codex agent" });
+    const panel = panelIn("Jev's reading, can't call overall");
+    expect(panel.querySelector(".jev-overall .jev-call")?.textContent).toBe("Jev can't call the whole bar");
+    expect(within(panel).queryByText("Cut-offs fitted to your verdicts")).toBeNull();
+    expect(within(panel).queryByText(/Jev matched/)).toBeNull();
+  });
+
+  it("names a misses call in the summary", async () => {
+    open(folder(await judged([[0.12, "not_met"]])));
+    await screen.findByRole("heading", { name: "Opus agent" });
+    expect(panelIn("Jev's reading, misses overall").querySelector(".jev-overall .jev-call")?.textContent).toBe("Misses");
   });
 });

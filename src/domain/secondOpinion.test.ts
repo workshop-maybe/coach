@@ -4,7 +4,6 @@ import { fitsJev } from "./jevBudget";
 import { answeringModel, JEV_LIMITS, JEV_MODEL, type JevExample } from "./jevRequest";
 import { findPreset, presetCredential } from "./presets";
 import {
-  isVague,
   OVERALL_CRITERIA,
   OVERALL_ID,
   OVERALL_QUESTION,
@@ -18,7 +17,6 @@ import {
   TARGET_CRITERIA,
   TARGET_QUESTION,
   targetId,
-  VAGUE_BAND,
 } from "./secondOpinion";
 import type { JevReading } from "./types";
 
@@ -388,13 +386,5 @@ describe("answeringModel", () => {
     expect(JEV_MODEL).toBe("jev-1.13.0");
     expect(answeringModel({ answers: {}, model: "jev-1.14.0" })).toBe("jev-1.14.0");
     expect(answeringModel({ answers: {} })).toBe(JEV_MODEL);
-  });
-});
-
-describe("isVague", () => {
-  it("is true from 0.30 to 0.70 inclusive, and false outside", () => {
-    expect(VAGUE_BAND).toEqual({ min: 0.3, max: 0.7 });
-    for (const p of [0.3, 0.52, 0.7]) expect(isVague(p)).toBe(true);
-    for (const p of [0.29, 0.71, 0, 1]) expect(isVague(p)).toBe(false);
   });
 });
