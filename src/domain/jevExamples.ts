@@ -209,6 +209,13 @@ const URL_CREDENTIAL = /:\/\/[^\s/?#@:]*:[^\s/?#@]+@/;
  */
 const BASE64_RUN = /[A-Za-z0-9+/_-]{32,}/g;
 
+/**
+ * How much of a line, past its leading space, is checked for secrets and kept: twice the
+ * opening's cap in UTF-16 units, at least one code point past what an excerpt or a reason
+ * (MAX_REASON_CHARS, under MAX_OPENING_CHARS) can show, so a cut line shows the same text.
+ */
+const MAX_LINE_UNITS = 2 * (MAX_OPENING_CHARS + 1);
+
 const SENTENCE_END = /[.!?…]/;
 const CLOSER = /["'”’)\]*_`]/;
 
@@ -224,7 +231,9 @@ function looksSecret(line: string): boolean {
  * removed (a line left blank by that goes), and lines that look like secrets dropped, a
  * PEM block from its BEGIN line to its END line. Images go before the secret check, since
  * a data URI is itself a long base64 run and would take the line's words with it.
- * Stops once the kept lines reach `enough` UTF-16 units.
+ * Stops once the kept lines reach `enough` UTF-16 units. Each line is checked and kept only
+ * up to MAX_LINE_UNITS past its leading space, so the secret patterns never read an
+ * unbounded line: some are slower than linear on a long line made to defeat them.
  */
 function cleanLines(text: string, enough = Infinity): string[] {
   const kept: string[] = [];
@@ -238,8 +247,10 @@ function cleanLines(text: string, enough = Infinity): string[] {
       continue;
     }
     if (IMAGE_DEFINITION.test(line)) continue;
-    const shown = line.replace(IMAGE, "").replace(IMAGE_DATA, "");
-    if ((shown !== line && shown.trim() === "") || looksSecret(shown)) continue;
+    const full = line.replace(IMAGE, "").replace(IMAGE_DATA, "");
+    if (full !== line && full.trim() === "") continue;
+    const shown = full.slice(0, Math.max(0, full.search(/\S/)) + MAX_LINE_UNITS);
+    if (looksSecret(shown)) continue;
     if (kept.length === 0 && shown.trim() === "") continue;
     kept.push(kept.length === 0 ? shown.trimStart() : shown);
     units += kept[kept.length - 1].length + 1;

@@ -392,6 +392,7 @@ describe("an excerpt", () => {
       "b://".repeat(20_000),
       "password".repeat(25_000),
       `password: x${" ".repeat(100_000)}y`,
+      `${"password:x".repeat(20_000)} y`,
     ];
     // One at a time, since an excerpt stops reading once it has enough.
     for (const line of lines) {
@@ -399,6 +400,13 @@ describe("an excerpt", () => {
       excerptOf(line);
       expect(performance.now() - start, line.slice(0, 20)).toBeLessThan(1000);
     }
+  });
+
+  it("checks a long line only as far as an excerpt can show it", () => {
+    // The password sits past the cut, so the opening that goes is the same either way.
+    const line = `${"word ".repeat(200)}password = hunter2`;
+    expect(excerptOf(line)).toBe("word ".repeat(60).trimEnd());
+    expect(excerptOf(`password = hunter2 ${"word ".repeat(200)}`)).toBe("");
   });
 
   it("is empty for a reply that is only secret lines", () => {
