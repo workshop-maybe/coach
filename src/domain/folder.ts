@@ -321,7 +321,13 @@ function testFields(r: TestRecord): Json {
 }
 
 export function serializeAssessment(a: Assessment): string {
-  const front = YAML.stringify({ result: a.result, recorded_at: a.recordedAt, ...testFields(a) });
+  const front = YAML.stringify({
+    result: a.result,
+    recorded_at: a.recordedAt,
+    ...testFields(a),
+    // A result's own: a held reply has no verdict, so it never carries missed points.
+    ...(a.missedPoints && a.missedPoints.length > 0 ? { missed_points: a.missedPoints } : {}),
+  });
   const note = a.note.replace(/\r\n?/g, "\n").trim();
   return [
     "---\n",
@@ -335,7 +341,10 @@ export function serializeAssessment(a: Assessment): string {
   ].join("");
 }
 
-/** The `jev` mapping. The verdict fields are written only for a reading seen after the verdict. */
+/**
+ * The `jev` mapping. The verdict fields are written only for a reading seen after the verdict,
+ * and `targets` and `examples_sent` only when present, so an older reading writes back as it was.
+ */
 function serializeJev(r: JevReading): Json {
   return {
     model: r.model,
@@ -344,8 +353,14 @@ function serializeJev(r: JevReading): Json {
     seen: r.seen,
     ...(r.seen === "after" ? { verdict_when_seen: r.verdictWhenSeen, verdict_changed: r.verdictChanged } : {}),
     overall: r.overall,
-    points: r.points.map((p) => ({ text: p.text, probability: p.probability })),
+    points: serializeJevPoints(r.points),
+    ...(r.targets && r.targets.length > 0 ? { targets: serializeJevPoints(r.targets) } : {}),
+    ...(r.examplesSent !== undefined ? { examples_sent: r.examplesSent } : {}),
   };
+}
+
+function serializeJevPoints(points: JevPoint[]): Json[] {
+  return points.map((p) => ({ text: p.text, probability: p.probability }));
 }
 
 function setupString(obj: Json, key: string): string {
@@ -391,9 +406,24 @@ function jevText(v: unknown): string | null {
   return typeof text === "string" && text !== "" ? text : null;
 }
 
+/** A list of texts with their probabilities, as `points` and `targets` are saved. Null when it is not one. */
+function parseJevPoints(raw: unknown): JevPoint[] | null {
+  if (!Array.isArray(raw)) return null;
+  const points: JevPoint[] = [];
+  for (const p of raw as unknown[]) {
+    if (typeof p !== "object" || p === null || Array.isArray(p)) return null;
+    const { text, probability } = p as Json;
+    if (typeof text !== "string" || !isProbability(probability)) return null;
+    points.push({ text, probability });
+  }
+  return points;
+}
+
 /**
  * The optional `jev` mapping. Anything malformed reads as no reading rather than failing
  * the file (KTD12). Verdict fields on a reading seen before the verdict are ignored.
+ * `targets` and `examples_sent` came later: a malformed one reads as absent and the
+ * reading still loads (KTD14).
  */
 function parseJev(raw: unknown): JevReading | undefined {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return undefined;
@@ -403,17 +433,20 @@ function parseJev(raw: unknown): JevReading | undefined {
   const asked = obj.asked_at;
   const askedAt = asked instanceof Date ? asked.toISOString() : asked;
   if (model === null || version === null || typeof askedAt !== "string" || askedAt === "") return undefined;
-  if (!isProbability(obj.overall) || !Array.isArray(obj.points)) return undefined;
+  const points = parseJevPoints(obj.points);
+  if (!isProbability(obj.overall) || points === null) return undefined;
 
-  const points: JevPoint[] = [];
-  for (const p of obj.points as unknown[]) {
-    if (typeof p !== "object" || p === null || Array.isArray(p)) return undefined;
-    const { text, probability } = p as Json;
-    if (typeof text !== "string" || !isProbability(probability)) return undefined;
-    points.push({ text, probability });
-  }
-
-  const base = { model, assignmentVersion: version, askedAt, overall: obj.overall, points };
+  const targets = parseJevPoints(obj.targets);
+  const sent = obj.examples_sent;
+  const base = {
+    model,
+    assignmentVersion: version,
+    askedAt,
+    overall: obj.overall,
+    points,
+    ...(targets !== null && targets.length > 0 ? { targets } : {}),
+    ...(typeof sent === "number" && Number.isInteger(sent) && sent >= 0 ? { examplesSent: sent } : {}),
+  };
   if (obj.seen === "before") return { ...base, seen: "before" };
   if (obj.seen !== "after") return undefined;
   const verdict = obj.verdict_when_seen;
@@ -421,19 +454,41 @@ function parseJev(raw: unknown): JevReading | undefined {
   return { ...base, seen: "after", verdictWhenSeen: verdict, verdictChanged: obj.verdict_changed };
 }
 
+// Whole lines, each tested without the "\n" that ends it. A "\r" before the "\n" stays on the
+// line, so CRLF files read too.
+const CLOSE_LINE = /^---[ \t]*\r?$/;
+const NOTE_LINE = /^## Note[ \t]*\r?$/;
+const HANDBACK_LINE = /^## Handback[ \t]*\r?$/;
+
+/**
+ * The first line of `text` that `line` matches, by where it starts and where its text ends
+ * (at its "\n", or the end of the text). Lines end only at "\n" (KTD14): a multiline `^` also
+ * starts a line after a lone "\r", U+2028 or U+2029, which YAML writes raw inside a value and a
+ * pasted note may hold, so a rubric point could end the front matter early or a note read as a heading.
+ */
+function findLine(text: string, line: RegExp): { start: number; end: number } | null {
+  for (let start = 0; ; ) {
+    const newline = text.indexOf("\n", start);
+    const end = newline === -1 ? text.length : newline;
+    if (line.test(text.slice(start, end))) return { start, end };
+    if (newline === -1) return null;
+    start = newline + 1;
+  }
+}
+
 /** Splits a Markdown file into its YAML front matter mapping and the body after it. `kind` names the file in errors. */
 function splitFrontMatter(text: string, kind: string): { fm: Json; body: string } {
   const open = /^---[ \t]*\r?\n/.exec(text);
   if (!open) throw new Error(`${kind} file has no YAML frontmatter (expected it to start with ---).`);
   const rest = text.slice(open[0].length);
-  const close = /^---[ \t]*(?:\r?\n|$)/m.exec(rest);
+  const close = findLine(rest, CLOSE_LINE);
   if (!close) throw new Error(`${kind} frontmatter is not closed with ---.`);
 
-  const front: unknown = YAML.parse(rest.slice(0, close.index));
+  const front: unknown = YAML.parse(rest.slice(0, close.start));
   if (typeof front !== "object" || front === null || Array.isArray(front)) {
     throw new Error(`${kind} frontmatter must be a YAML mapping.`);
   }
-  return { fm: front as Json, body: rest.slice(close.index + close[0].length) };
+  return { fm: front as Json, body: rest.slice(close.end + 1) };
 }
 
 /** A required ISO time field. YAML may have read it as a date. */
@@ -471,12 +526,10 @@ function parseTestRecord(fm: Json): TestRecord {
   };
 }
 
-/** The reply after a `## Handback` heading at `match`, minus the blank line and final newline the serializer adds. */
-function handBackAfter(body: string, match: RegExpExecArray, offset = 0): string {
-  return body.slice(offset + match.index + match[0].length).replace(/^\n(?:\r?\n)?/, "").replace(/\r?\n$/, "");
+/** The reply after a `## Handback` heading line ending at `end`, minus the blank line and final newline the serializer adds. */
+function handBackAfter(text: string, end: number): string {
+  return text.slice(end).replace(/^\n(?:\r?\n)?/, "").replace(/\r?\n$/, "");
 }
-
-const HANDBACK_LINE = /^## Handback[ \t]*\r?$/m;
 
 export function parseAssessment(text: string, ids: AssessmentIds): Assessment {
   const { fm, body } = splitFrontMatter(text, "Assessment");
@@ -487,14 +540,25 @@ export function parseAssessment(text: string, ids: AssessmentIds): Assessment {
   }
   const recordedAt = isoTime(fm, "recorded_at");
   const record = parseTestRecord(fm);
+  const missed = fm.missed_points;
+  // Anything but a non-empty list of text reads as no missed points, never as a load error (KTD14).
+  const missedPoints = Array.isArray(missed) && missed.length > 0 && missed.every((p) => typeof p === "string") ? (missed as string[]) : null;
 
-  const noteMatch = /^## Note[ \t]*\r?$/m.exec(body);
-  const afterNoteStart = noteMatch ? noteMatch.index + noteMatch[0].length : 0;
-  const handMatch = HANDBACK_LINE.exec(body.slice(afterNoteStart));
-  const note = handMatch ? body.slice(afterNoteStart, afterNoteStart + handMatch.index) : body.slice(afterNoteStart);
-  const handBack = handMatch ? handBackAfter(body, handMatch, afterNoteStart) : "";
+  const noteLine = findLine(body, NOTE_LINE);
+  const afterNote = body.slice(noteLine ? noteLine.end : 0);
+  const handLine = findLine(afterNote, HANDBACK_LINE);
+  const note = handLine ? afterNote.slice(0, handLine.start) : afterNote;
+  const handBack = handLine ? handBackAfter(afterNote, handLine.end) : "";
 
-  return { ...ids, result: result as AssessmentResult, recordedAt, ...record, note: note.replace(/\r\n?/g, "\n").trim(), handBack };
+  return {
+    ...ids,
+    result: result as AssessmentResult,
+    recordedAt,
+    ...record,
+    ...(missedPoints ? { missedPoints } : {}),
+    note: note.replace(/\r\n?/g, "\n").trim(),
+    handBack,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -511,8 +575,8 @@ export function parseHeld(text: string, ids: AssessmentIds): HeldReply {
   const { fm, body } = splitFrontMatter(text, "Held reply");
   const heldAt = isoTime(fm, "held_at");
   const record = parseTestRecord(fm);
-  const handMatch = HANDBACK_LINE.exec(body);
-  return { ...ids, heldAt, ...record, handBack: handMatch ? handBackAfter(body, handMatch) : "" };
+  const handLine = findLine(body, HANDBACK_LINE);
+  return { ...ids, heldAt, ...record, handBack: handLine ? handBackAfter(body, handLine.end) : "" };
 }
 
 // ---------------------------------------------------------------------------
