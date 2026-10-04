@@ -64,7 +64,7 @@ export function ReplyView({ credentialKey: key, take, picks }: { credentialKey: 
   const note = isHeld(a) ? "" : a.note.trim();
   return (
     <section className="pane reply-view" aria-label={`${profile.name}, ${date}`}>
-      <button type="button" className="deck-close ghost" aria-label="Close" onClick={close}>
+      <button type="button" className="deck-close ghost" aria-label="Close" disabled={writes.saving} onClick={close}>
         ×
       </button>
       <article className="reply-record">

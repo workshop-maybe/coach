@@ -17,12 +17,12 @@ import type { Matrix } from "../domain/matrix";
 import type { AgentProfile, FolderState } from "../domain/types";
 import { contextText, takeWhen } from "./format";
 import { useNav } from "./nav";
+import { takeIdOf } from "./replyRoute";
 import type { ReplyListState, TakeRef } from "./routes";
 import { Verdict } from "./shared";
 
 /** A take's identity: file stems can repeat across agents, so the agent comes with it. */
 type TakeId = string;
-const idOf = (take: TakeRef): TakeId => `${take.profileSlug}/${take.fileStem}`;
 const refOf = (profile: AgentProfile, t: Take): TakeRef => ({ profileSlug: profile.slug, fileStem: t.fileStem });
 
 /** The opening lines of a reply, for its row. */
@@ -45,7 +45,7 @@ export function ReplyList({
   matrix: Matrix;
 } & ReplyListState) {
   const { navigate } = useNav();
-  const [picked, setPicked] = useState<TakeId[]>(() => (picks ?? []).map(idOf));
+  const [picked, setPicked] = useState<TakeId[]>(() => (picks ?? []).map(takeIdOf));
   const compareButton = useRef<HTMLButtonElement>(null);
   const litRow = useRef<HTMLLIElement>(null);
   const litHead = useRef<HTMLButtonElement>(null);
@@ -63,7 +63,7 @@ export function ReplyList({
   // while their take is still in the run.
   const takes = new Map<TakeId, { profile: AgentProfile; take: Take }>();
   for (const { profile, latest, older } of run.agents) {
-    for (const t of [latest, ...older]) takes.set(idOf(refOf(profile, t)), { profile, take: t });
+    for (const t of [latest, ...older]) takes.set(takeIdOf(refOf(profile, t)), { profile, take: t });
   }
   const live = picked.filter((id) => takes.has(id));
   const all = [...takes.values()].map((t) => t.take);
@@ -83,7 +83,7 @@ export function ReplyList({
 
   const take = (entry: AgentReplies, t: Take, latest: boolean) => {
     const ref = refOf(entry.profile, t);
-    const id = idOf(ref);
+    const id = takeIdOf(ref);
     const isLitTake = entry.profile.slug === lit && t.fileStem === litTake;
     return (
       <TakeRow

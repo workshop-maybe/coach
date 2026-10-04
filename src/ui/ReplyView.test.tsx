@@ -329,6 +329,29 @@ describe("ReplyView of a held reply", () => {
     expect(await screen.findByRole("heading", { name: "Not in the folder" })).toBeTruthy();
   });
 
+  it("while a judgment saves, Close and the other verdict are disabled and Escape does nothing", async () => {
+    const { held, storage } = await heldFolder();
+    open(storage, take("codex", 2));
+    await screen.findByRole("heading", { name: "Codex agent" });
+    const path = assessmentPath("codex", "eng", "review", held.fileStem);
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const readText = storage.readText.bind(storage);
+    storage.readText = async (root, p) => {
+      if (p === path) await gate;
+      return readText(root, p);
+    };
+    await userEvent.click(screen.getByRole("button", { name: "Met" }));
+    expect((screen.getByRole("button", { name: "Close" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Not yet" }) as HTMLButtonElement).disabled).toBe(true);
+    await userEvent.keyboard("{Escape}");
+    expect(screen.getByRole("heading", { name: "Codex agent", level: 2 })).toBeTruthy();
+    release();
+    const bar = screen.getByRole("heading", { name: "Codex agent", level: 2 }).closest<HTMLElement>(".reply-bar")!;
+    await waitFor(() => expect(within(bar).getByText("Met")).toBeTruthy());
+    expect(storage.file(path)).toMatch(/^result: met$/m);
+  });
+
   it("a failed judgment shows inline and records nothing", async () => {
     const { held, storage } = await heldFolder();
     open(storage, take("codex", 2));

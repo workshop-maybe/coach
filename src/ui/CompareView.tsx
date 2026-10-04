@@ -28,7 +28,7 @@ import { setupText, takeWhen } from "./format";
 import { resultImages } from "./imageSource";
 import { useNav } from "./nav";
 import { usePane } from "./pane";
-import { backFromCompare, takeOf } from "./replyRoute";
+import { backFromCompare, takeIdOf, takeOf } from "./replyRoute";
 import { RichView } from "./RichView";
 import { SavedReading } from "./JevReading";
 import type { TakeRef } from "./routes";
@@ -36,9 +36,6 @@ import { Missing, StoredSwitch, TakeBar, Verdict, useEscape } from "./shared";
 import { TakeActions, useTakeWrites, type GoToOffer } from "./takeActions";
 import { useFolder } from "./useFolderState";
 import { useMatrix } from "./useMatrix";
-
-/** A take's identity in the compare: stems can repeat across agents. */
-const idOf = (ref: TakeRef) => `${ref.profileSlug}/${ref.fileStem}`;
 
 interface Entry {
   id: string;
@@ -65,13 +62,13 @@ export function CompareView({ credentialKey: key, takes, picks }: { credentialKe
   const ids = useId();
   const headingOf = (id: string) => `${ids}-${id}`;
   // A saved judgment or mark: the pressed button is gone, so the take's heading takes the focus (KTD11).
-  const writes = useTakeWrites((t) => document.getElementById(headingOf(idOf(t)))?.focus());
+  const writes = useTakeWrites((t) => document.getElementById(headingOf(takeIdOf(t)))?.focus());
 
   const credential = state?.credentials.find((c) => credentialKey(c) === key);
   const strip: Entry[] = [];
   if (state && credential) {
     for (const ref of takes) {
-      const id = idOf(ref);
+      const id = takeIdOf(ref);
       const found = strip.some((e) => e.id === id) ? null : takeOf(state, key, ref);
       if (found) strip.push({ id, ...found });
     }
@@ -121,14 +118,14 @@ export function CompareView({ credentialKey: key, takes, picks }: { credentialKe
     <section className="pane compare-view" aria-label="Compare replies">
       <div className="compare-top">
         <StoredSwitch asStored={asStored} onToggle={() => setAsStored((s) => !s)} />
-        <button type="button" className="deck-close ghost" aria-label="Close" onClick={close}>
+        <button type="button" className="deck-close ghost" aria-label="Close" disabled={writes.saving} onClick={close}>
           ×
         </button>
       </div>
       <ol className="compare-strip" aria-label="Replies">
         {strip.map((e) => (
           <li key={e.id}>
-            <button type="button" className="compare-chip" aria-pressed={pair.includes(e.id)} onClick={() => choose(e.id)}>
+            <button type="button" className="compare-chip" aria-pressed={pair.includes(e.id)} disabled={writes.saving} onClick={() => choose(e.id)}>
               <span className="compare-chip-name">{e.profile.name}</span>
               <span className="compare-chip-meta">{setupText(e.take.setup)}</span>
               <span className="compare-chip-meta">

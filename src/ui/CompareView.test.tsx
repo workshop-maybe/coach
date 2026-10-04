@@ -365,11 +365,26 @@ describe("CompareView under a strip", () => {
     await userEvent.click(within(panes()[1]).getByRole("button", { name: "Met" }));
     expect((within(panes()[0]).getByRole("button", { name: "Make go-to" }) as HTMLButtonElement).disabled).toBe(true);
     expect((within(panes()[1]).getByRole("button", { name: "Not yet" }) as HTMLButtonElement).disabled).toBe(true);
+    // Close and the strip wait too, so a failed write is never left behind unseen.
+    expect((screen.getByRole("button", { name: "Close" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(strip().getAllByRole("button").every((b) => (b as HTMLButtonElement).disabled)).toBe(true);
     await userEvent.keyboard("{Escape}");
     expect(screen.getByRole("region", { name: "Compare replies" })).toBeTruthy();
     release();
     expect(await screen.findByRole("alert")).toBeTruthy();
     expect(storage.file(path)).toBe("someone else's");
+    expect((screen.getByRole("button", { name: "Close" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("a failed Make go-to shows inline and writes no mark", async () => {
+    const storage = folder([await result(opus, review, day(1)), await result(codex, review, day(2))]);
+    open(storage, [take("opus", 1), take("codex", 2)]);
+    await screen.findByRole("region", { name: "Compare replies" });
+    vi.spyOn(storage, "writeText").mockRejectedValueOnce(new Error("disk full"));
+    await userEvent.click(within(panes()[1]).getByRole("button", { name: "Make go-to" }));
+    expect((await screen.findByRole("alert")).textContent).toMatch(/disk full/);
+    expect(Object.keys(storage.files()).filter((p) => p.startsWith("collections/eng/marks/"))).toEqual([]);
+    expect(within(panes()[1]).getByRole("button", { name: "Make go-to" })).toBeTruthy();
   });
 
   it("an open reply removed by a reload is replaced by the next one in the strip", async () => {
