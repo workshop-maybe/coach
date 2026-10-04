@@ -5,7 +5,7 @@
 
 import { loadFolder } from "../domain/folder";
 import { trashCredential, trashProfile } from "../domain/operations";
-import { credentialKey, parseCredentialKey, type FolderState } from "../domain/types";
+import { credentialKey, parseCredentialKey, type Assessment, type FolderState, type HeldReply } from "../domain/types";
 import { Deck } from "./Deck";
 import { useNav } from "./nav";
 import type { TrashItem } from "./routes";
@@ -24,9 +24,13 @@ export function TrashLink({ onOpen }: { onOpen(): void }) {
   );
 }
 
-function resultsLine(count: number): string {
-  if (count === 0) return "It has no results.";
-  return count === 1 ? "Its result goes with it." : `Its ${count} results go with it.`;
+/** What goes with it: its results and its held replies, each named only when there are any. */
+function goesLine(results: number, held: number): string {
+  if (results === 0 && held === 0) return "It has no results.";
+  const parts: string[] = [];
+  if (results > 0) parts.push(results === 1 ? "result" : `${results} results`);
+  if (held > 0) parts.push(held === 1 ? (results > 0 ? "its held reply" : "held reply") : `${held} held replies`);
+  return `Its ${parts.join(" and ")} ${results + held === 1 ? "goes" : "go"} with it.`;
 }
 
 /** The plugs that go: the agent's own, or each agent's fed from the badge. */
@@ -52,9 +56,10 @@ export function TrashDeck({ item }: { item: TrashItem }) {
       : state.credentials.find((c) => credentialKey(c) === item.credentialKey)?.name;
   if (name === undefined) return <Missing onHome={home} />;
 
-  const results = state.assessments.filter((a) =>
-    item.kind === "agent" ? a.profileSlug === item.profileSlug : credentialKey(a) === item.credentialKey,
-  ).length;
+  // Everything the move takes from assessments/: the results, and the replies held without a verdict.
+  const goes = (a: Assessment | HeldReply) => (item.kind === "agent" ? a.profileSlug === item.profileSlug : credentialKey(a) === item.credentialKey);
+  const results = state.assessments.filter(goes).length;
+  const held = state.held.filter(goes).length;
   const plugged = livePlugs(pending, state)
     .filter((p) => (item.kind === "agent" ? p.profileSlug === item.profileSlug : p.credentialKey === item.credentialKey))
     .map((p) => state.profiles.find((a) => a.slug === p.profileSlug)!.name);
@@ -98,7 +103,7 @@ export function TrashDeck({ item }: { item: TrashItem }) {
           forward: "Move to trash",
           body: (
             <>
-              <p className="muted">{resultsLine(results)}</p>
+              <p className="muted">{goesLine(results, held)}</p>
               {pulled && <p className="muted">{pulled}</p>}
             </>
           ),
