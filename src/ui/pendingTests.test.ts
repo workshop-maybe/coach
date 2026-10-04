@@ -146,6 +146,7 @@ describe("pendingTests", () => {
       credentials: [review],
       profiles: [opus],
       assessments: [],
+      held: [],
       skeleton: null,
       handoffs: [],
       marks: [],

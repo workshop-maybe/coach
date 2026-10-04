@@ -2,12 +2,12 @@
 title: Compare takes
 part: how-to
 order: 50
-description: Read every reply to a badge, open one in full, and put two side by side.
+description: Read every reply to a badge, open one in full, and compare them two side by side.
 ---
 
-{/* How to, fifth page (U7, R6, R11): a badge's replies, one reply opened, and two compared (the old tester's sheet, step 8). Labels are checked against src/ui/BadgeDetail.tsx, src/ui/ReplyList.tsx, src/ui/ReplyView.tsx and src/ui/CompareView.tsx (KTD8). */}
+{/* How to, fifth page (U7, R6, R11; hold-and-compare R7, R8): a badge's replies, one reply opened, and replies compared under a strip (the old tester's sheet, step 8). Labels are checked against src/ui/BadgeDetail.tsx, src/ui/ReplyList.tsx, src/ui/ReplyView.tsx and src/ui/CompareView.tsx (KTD8). */}
 
-Every result keeps the reply that earned it. A badge's page lists them all, so you can read what each agent sent back and compare any two. Each reply is a take: one agent's try at the badge.
+Every result keeps the reply that earned it. A badge's page lists them all, so you can read what each agent sent back and compare them. Each reply is a take: one agent's try at the badge.
 
 ## Get two takes
 
@@ -20,11 +20,11 @@ Two takes by the same agent compare too. Under an agent's reply on the badge's p
 
 ## Find the replies
 
-Open the badge from home. Under <UI>Replies</UI>, beside its parts, each agent that took the test has a row with its verdict, the date, the computer it ran on and the start of its reply. An agent's latest take leads its row, with any older takes below.
+Open the badge from home. Under <UI>Replies</UI>, beside its parts, each agent that took the test has a row with its verdict, the date, the computer it ran on and the start of its reply. An agent's latest take leads its row, with any older takes below. A reply you held to compare says <UI>Held</UI> where a verdict would be; [Run a bake-off](/how-to/run-a-bake-off/) explains holding.
 
 <Shot id="badge-replies" alt="Say how sure you are's page: its parts on the left, and on the right its Replies, Claude Code, Met, and Codex, Not met, each with the start of its reply and both ticked, the Compare button above them, and Claude Code under Holders, marked Go-to" />
 
-Once two or more of the badge's handoffs have results, <UI>Replies</UI> lists each handoff that ran instead, with how many agents ran it and how many met. Open one to see its replies, laid out the same way.
+Once two or more of the badge's handoffs have replies, <UI>Replies</UI> lists each handoff that ran instead, with how many agents ran it, how many met and how many replies are held. Open one to see its replies, laid out the same way.
 
 ## Read one in full
 
@@ -36,13 +36,15 @@ The bar at the top shows the agent, its setup, the verdict and the date. <UI>Sho
 
 Close the take with the × or Escape. You're back on the badge, with that take's row lit.
 
-## Put two side by side
+## Compare them
 
-1. Tick the boxes beside two takes. Until you have two, the button reads <UI>Pick two to compare</UI>. A third tick drops the first one you ticked.
+1. Tick the boxes beside two or more takes, held or judged. Until you have two, the button reads <UI>Pick two to compare</UI>.
 2. Click <UI>Compare</UI>.
 
-<Shot id="compare" alt="Two takes side by side: Codex, Not met, on the left and Claude Code, Met, on the right, each with its setup and date above its reply, and Show as stored above both" />
+<Shot id="compare" alt="A compare of two takes: a strip naming Codex, Not met, and Claude Code, Met, both lit, then the two replies side by side, each with its setup and date above it, Claude Code's marked Go-to at its foot, and Show as stored above" />
 
-Each reply scrolls on its own. One <UI>Show as stored</UI> switch changes both. Close the compare, and you're back on the badge with both takes still ticked.
+A strip at the top names every take you ticked, with its agent, setup, state and date. Two of them are open side by side below it, the first two you ticked to start with, and they're lit in the strip. Click another take in the strip to open it on the right; the left one stays. Click the one open on the right to swap the two sides.
+
+Each reply scrolls on its own. One <UI>Show as stored</UI> switch changes both. A held reply has <UI>Met</UI> and <UI>Not yet</UI> at its foot, and a Met one offers <UI>Make go-to</UI>, or says <UI>Go-to</UI> when it's the one your go-to was chosen on. Close the compare, and you're back on the badge with the takes still ticked.
 
 Once you know which one you'll use, make it the badge's go-to: [Choose a go-to](/how-to/choose-a-go-to/).

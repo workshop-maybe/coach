@@ -2,14 +2,14 @@
 title: Judge a reply
 part: how-to
 order: 40
-description: Read the reply beside the badge's rubric, then record Met or Not yet.
+description: Read the reply beside the badge's rubric, then record Met or Not yet, or hold it to compare.
 ---
 
 {/* How to, fourth page (U7, R6, R11): the judge pane and what each verdict does. Jev Mode only in passing; help/jev-mode covers it, and these pictures are taken with it off (KTD7). Labels are checked against src/ui/TestDeck.tsx and src/ui/shared.tsx (KTD8). */}
 
 After you bring back a reply and click <UI>Next</UI>, the test asks <UI>Did it meet it</UI>. The badge's rubric is on the left and the reply is on the right.
 
-<Shot id="judge" alt="Did it meet it: the Write a release note rubric on the left, Claude Code's release note on the right, and the Met and Not yet buttons below" />
+<Shot id="judge" alt="Did it meet it: the Write a release note rubric on the left, Claude Code's release note on the right, and the Met, Not yet and Hold to compare buttons below" />
 
 ## Read it against the rubric
 
@@ -27,11 +27,12 @@ A badge with no rubric shows only the reply. Give it one before you rely on its 
 
 - Click <UI>Met</UI> when the reply meets the rubric as written. The app shows <UI>\{agent\} holds it</UI> and waits. Click <UI>Make \{agent\} the go-to</UI> to choose this agent for the badge, or <UI>Home</UI> to leave it. [Choose a go-to](/how-to/choose-a-go-to/) explains the choice.
 - Click <UI>Not yet</UI> when it doesn't. The card says <UI>\{agent\} does not hold it</UI>. Click <UI>Done</UI> to go home, or <UI>Try another agent</UI> to give the same badge to another of your agents.
+- Click <UI>Hold to compare</UI> to judge it later, beside other agents' replies to the same handoff. The app saves the reply with no verdict and shows <UI>Reply held</UI>. <UI>Test another agent</UI> runs the same handoff on another agent. [Run a bake-off](/how-to/run-a-bake-off/) takes it from there.
 
-Either way, the app saves a result in your folder: your verdict, the reply as it stands in the reply box, and the handoff you copied. The badge's page lists the reply under <UI>Replies</UI>, and on <UI>Met</UI> the agent lights a key for the badge on home.
+On <UI>Met</UI> or <UI>Not yet</UI>, the app saves a result in your folder: your verdict, the reply as it stands in the reply box, and the handoff you copied. The badge's page lists the reply under <UI>Replies</UI>, and on <UI>Met</UI> the agent lights a key for the badge on home.
 
 A result is never overwritten. To judge an agent again, test it again. Its newest result is the one that counts, and the older ones stay on the badge's page. [Compare takes](/how-to/compare-takes/) shows how to read them.
 
 ## A second opinion
 
-With [Jev Mode](/help/jev-mode/) on, the card can also offer <UI>Ask Jev</UI>, and <UI>Met</UI> and <UI>Not yet</UI> become choices you confirm with <UI>Save</UI>. Jev Mode is off by default, and you can judge every reply without it. [Judging a result](/ideas/judging/) explains why the call is always yours.
+With [Jev Mode](/help/jev-mode/) on, the card can also offer <UI>Ask Jev</UI>, and <UI>Met</UI>, <UI>Not yet</UI> and <UI>Hold to compare</UI> become choices you confirm with <UI>Save</UI>. Jev Mode is off by default, and you can judge every reply without it. [Judging a result](/ideas/judging/) explains why the call is always yours.

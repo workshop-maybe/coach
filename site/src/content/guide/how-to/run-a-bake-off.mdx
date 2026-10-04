@@ -1,0 +1,55 @@
+---
+title: Run a bake-off
+part: how-to
+order: 52
+description: Give one handoff to several agents, hold each reply, then read them side by side and choose.
+---
+
+{/* How to, the bake-off (hold-and-compare R12): holding a reply, the next agent on the same handoff, the held replies on home, and judging and choosing in the compare. Labels are checked against src/ui/TestDeck.tsx, src/ui/Home.tsx, src/ui/CompareView.tsx and src/ui/takeActions.tsx (KTD8). */}
+
+When several of your agents could do a job, you can give each one the same handoff and read their replies side by side before you judge any of them. Each reply waits, held, until you've seen them all.
+
+## Hold the first reply
+
+1. Run the test as usual: [Hand off a test](/how-to/hand-off-a-test/).
+2. At <UI>Did it meet it</UI>, click <UI>Hold to compare</UI> instead of <UI>Met</UI> or <UI>Not yet</UI>.
+
+<Shot id="held" alt="Reply held: Claude Code with its handoff ejecting, 1 reply held to compare, and Done and Test another agent below" />
+
+The app saves the reply without a verdict, with the handoff it ran and the agent's setup. The agent holds nothing yet, and it's free for its next test. The card counts the replies held on this handoff so far.
+
+## Test the next agent
+
+Click <UI>Test another agent</UI>. The test starts over on the same badge at <UI>Who takes it</UI>, and the handoff you just ran stays lit in the box.
+
+1. Pick the next agent.
+2. Click <UI>Copy</UI>, paste it into that agent, and bring back its reply.
+3. Click <UI>Hold to compare</UI> again.
+
+Repeat for each agent you want to try. Click <UI>Done</UI> when you've run them all.
+
+## Open the replies
+
+Home lists the handoff under <UI>What needs you</UI>: <UI>Compare \{n\} replies</UI>, or <UI>Judge \{agent\}'s reply</UI> while only one is held.
+
+<Shot id="home-needs" alt="What needs you on home: Pull Codex's handoff, for Name what matters next, then Compare 2 replies, for Check an answer key on the skeleton, then Write a release note, which nobody holds yet" />
+
+Click it. A strip at the top names every held reply with its agent, setup, state and date. The two lit ones are open side by side below it, the first two to start with.
+
+<Shot id="compare-held" alt="Check an answer key's bake-off: a strip naming Claude Code, Held, Codex, Held, and Codex's earlier Met take, with the two held replies open below, each with Met and Not yet at its foot" />
+
+Click another reply in the strip to open it on the right. The left one stays. Click the reply open on the right to swap the two sides, so the one you're keeping to read against moves left.
+
+## Judge each one
+
+Under each held reply, click <UI>Met</UI> or <UI>Not yet</UI>. The verdict saves at once, as an ordinary result dated when the reply came back, and the strip shows it. A Met reply holds the badge for its agent, as a Met in a test does.
+
+## Choose the go-to
+
+A Met reply offers <UI>Make go-to</UI> at its foot. Click it under the reply you'll use, and that agent becomes the badge's go-to. The reply then says <UI>Go-to</UI>. [Choose a go-to](/how-to/choose-a-go-to/) explains what home does with it.
+
+## Where held replies wait
+
+Held replies also show on the badge's page under <UI>Replies</UI>, marked <UI>Held</UI>, beside the replies you've judged. Tick any of them, held or judged, and click <UI>Compare</UI> to read them together. Open one on its own to judge just that one.
+
+A held reply holds no badge until you judge it, and it waits until you do. Its file sits in a `held` folder beside the agent's results, as [Your data](/help/your-data/) shows.

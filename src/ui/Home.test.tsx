@@ -3,6 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AppShell } from "./AppShell";
+import { Home } from "./Home";
+import { NavContext } from "./nav";
+import type { Route } from "./routes";
+import { heldReply } from "./testFolder";
 import { FolderProvider } from "./useFolderState";
 import { addPending } from "./pendingTests";
 import { MemoryStorage } from "../storage/memory";
@@ -12,16 +16,18 @@ import {
   collectionPath,
   credentialPath,
   handoffPath,
+  heldPath,
   markPath,
   profilePath,
   serializeAssessment,
   serializeCollection,
+  serializeHeld,
   serializeMark,
   serializeProfile,
 } from "../domain/folder";
 import { serializeCredentialMd } from "../domain/credential-md";
 import { assignmentVersion } from "../domain/hash";
-import type { AgentProfile, Assessment, Credential, Mark } from "../domain/types";
+import type { AgentProfile, Assessment, Credential, HeldReply, Mark } from "../domain/types";
 
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ writeText: vi.fn() }));
 const pick = vi.hoisted(() => vi.fn<() => Promise<string | null>>());
@@ -59,7 +65,7 @@ async function met(profile: AgentProfile, credential: Credential, overrides: Par
   };
 }
 
-function storageWith(opts: { credentials?: Credential[]; profiles?: AgentProfile[]; assessments?: Assessment[]; marks?: Mark[] } = {}): MemoryStorage {
+function storageWith(opts: { credentials?: Credential[]; profiles?: AgentProfile[]; assessments?: Assessment[]; held?: HeldReply[]; marks?: Mark[] } = {}): MemoryStorage {
   const credentials = opts.credentials ?? [];
   const files: Record<string, string> = { [MARKER_PATH]: '{ "format": 1 }\n' };
   if (credentials.length > 0) {
@@ -76,6 +82,7 @@ function storageWith(opts: { credentials?: Credential[]; profiles?: AgentProfile
   for (const a of opts.assessments ?? []) {
     files[assessmentPath(a.profileSlug, a.collectionSlug, a.credentialSlug, a.fileStem)] = serializeAssessment(a);
   }
+  for (const h of opts.held ?? []) files[heldPath(h.profileSlug, h.collectionSlug, h.credentialSlug, h.fileStem)] = serializeHeld(h);
   for (const m of opts.marks ?? []) files[markPath(m.collectionSlug, m.credentialSlug, m.id)] = serializeMark(m);
   return new MemoryStorage(files);
 }
@@ -394,8 +401,8 @@ describe("Home", () => {
   });
 });
 
-// The go-to on a badge's card (U4, R7, R9, KTD8): one line under its holders, flagged when
-// the go-to's latest result there is not Met or its setup changed.
+// The go-to on a badge's card (U4, U7, R7, R9, KTD8): one line under its holders, flagged when
+// the go-to's latest result there is not Met, or the badge's task or the go-to's setup changed since.
 describe("Home's go-to", () => {
   const day2 = { fileStem: "20260902T090000Z", recordedAt: "2026-09-02T09:00:00.000Z" };
   const markOn = (profile: AgentProfile, fileStem = "20260901T090000Z"): Mark => ({
@@ -450,11 +457,100 @@ describe("Home's go-to", () => {
     expect(goToLineOf(held)!.classList.contains("flagged")).toBe(true);
   });
 
+  it("Covers AE9. A go-to whose badge's task changed since its Met still holds it and is flagged task changed", async () => {
+    const earned = await met(codex, review);
+    renderApp(storageWith({ credentials: [{ ...review, task: "Review the diff, then its tests." }], profiles: [opus, codex], assessments: [earned], marks: [markOn(codex)] }));
+    const held = await card(/Code review/);
+    await waitFor(() => expect(goToLineOf(held)?.textContent).toBe("Go-to: Codex agent · task changed"));
+    expect(goToLineOf(held)!.classList.contains("flagged")).toBe(true);
+    expect(within(held).getByText("Codex agent").classList.contains("visually-hidden")).toBe(true);
+  });
+
   it("Covers AE8. A go-to agent in the trash leaves its badge with no go-to line", async () => {
     renderApp(storageWith({ credentials: [review], profiles: [opus], assessments: [await met(opus, review), await met(codex, review)], marks: [markOn(codex)] }));
     const held = await card(/Code review/);
     await waitFor(() => expect(within(held).getByText("Opus agent")).toBeTruthy());
     expect(goToLineOf(held)).toBeNull();
     expect(within(held).queryByText(/^Go-to/)).toBeNull();
+  });
+});
+
+// Held replies in What needs you (hold-and-compare KTD12, KTD13): one row per handoff with
+// held replies, a cartridge counting them or the one agent's machine, the badge and the
+// handoff as detail.
+describe("Home's held replies", () => {
+  const sonnet: AgentProfile = { ...opus, slug: "sonnet", name: "Sonnet agent", model: "sonnet" };
+  const day = (d: number) => ({ fileStem: `2026090${d}T090000Z`, heldAt: `2026-09-0${d}T09:00:00.000Z` });
+  const ref = (h: HeldReply) => ({ profileSlug: h.profileSlug, fileStem: h.fileStem });
+  const titleOf = (row: HTMLElement) => row.querySelector(".need-title")?.textContent;
+  const detailOf = (row: HTMLElement) => row.querySelector(".need-detail")?.textContent;
+
+  /** Home alone, with a spy for where its rows go. */
+  function renderHome(storage: MemoryStorage) {
+    const navigate = vi.fn<(route: Route) => void>();
+    render(
+      <FolderProvider storage={storage} folder="/data">
+        <NavContext.Provider value={{ route: { view: "home" }, navigate }}>
+          <Home />
+        </NavContext.Provider>
+      </FolderProvider>,
+    );
+    return navigate;
+  }
+
+  it("Covers AE3. Three held replies on one handoff show one row that counts them, drawn as the badge's cartridge", async () => {
+    const held = [await heldReply(opus, review, day(2)), await heldReply(codex, review, day(3)), await heldReply(sonnet, review, day(4))];
+    renderApp(storageWith({ credentials: [review], profiles: [opus, codex, sonnet], held }));
+    const list = await rows();
+    expect(list).toHaveLength(1);
+    const [row] = list;
+    expect(titleOf(row)).toBe("Compare 3 replies");
+    expect(detailOf(row)).toBe("Code review · Skeleton");
+    expect(row.classList.contains("need-held")).toBe(true);
+    expect(row.querySelector("svg.cast-cartridge")).not.toBeNull();
+    expect(row.querySelector("svg.cast-machine-mini")).toBeNull();
+  });
+
+  it("one held reply names its agent and draws its machine idle, and the agent gets no No results yet row", async () => {
+    renderApp(storageWith({ credentials: [review], profiles: [opus], held: [await heldReply(opus, review)] }));
+    const list = await rows();
+    expect(list).toHaveLength(1);
+    const [row] = list;
+    expect(titleOf(row)).toBe("Judge Opus agent's reply");
+    expect(detailOf(row)).toBe("Code review · Skeleton");
+    expect(row.querySelector('svg.cast-machine-mini[data-screen="idle"]')).not.toBeNull();
+    expect(row.querySelector("svg.cast-cartridge")).toBeNull();
+  });
+
+  it("one agent's held replies on two handoffs of a badge show two rows, each with its own key", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const handoffA = "20260901T080000Z";
+      const storage = storageWith({
+        credentials: [review],
+        profiles: [opus],
+        held: [await heldReply(opus, review, day(2)), await heldReply(opus, review, { ...day(3), handoff: { id: handoffA, text: "{{task}}\n" } })],
+      });
+      storage.seed({ [handoffPath("eng", "review", handoffA)]: "{{task}}\n" });
+      renderApp(storage);
+      await waitFor(async () => expect((await rows()).map(detailOf)).toEqual(["Code review · Skeleton", "Code review · Handoff A"]));
+      expect((await rows()).map(titleOf)).toEqual(["Judge Opus agent's reply", "Judge Opus agent's reply"]);
+      expect(errors.mock.calls.some((args) => args.some((a) => /same key/.test(String(a))))).toBe(false);
+    } finally {
+      errors.mockRestore();
+    }
+  });
+
+  it("a held row opens the compare of its replies, oldest first and picked, or the one reply", async () => {
+    const held = [await heldReply(codex, review, day(3)), await heldReply(opus, review, day(2))];
+    let navigate = renderHome(storageWith({ credentials: [review], profiles: [opus, codex], held }));
+    await userEvent.click((await rows())[0]);
+    const takes = [ref(held[1]), ref(held[0])];
+    expect(navigate).toHaveBeenLastCalledWith({ view: "item", item: "compare", credentialKey: "eng/review", takes, picks: takes });
+    cleanup();
+
+    navigate = renderHome(storageWith({ credentials: [review], profiles: [opus], held: [held[1]] }));
+    await userEvent.click((await rows())[0]);
+    expect(navigate).toHaveBeenLastCalledWith({ view: "item", item: "reply", credentialKey: "eng/review", take: ref(held[1]) });
   });
 });

@@ -152,6 +152,9 @@ const RELEASE_TO_REPLY: readonly Step[] = [{ click: { button: "Copy" } }, { wait
 // result with a reading.
 const ANSWER_KEY = "my-credentials/check-an-answer-key";
 const CODEX_ANSWER_KEY = { profileSlug: CODEX, fileStem: "20260927T112000Z" };
+/** The bake-off on Check an answer key: each agent's reply held without a verdict. */
+const CLAUDE_HELD = { profileSlug: CLAUDE, fileStem: "20260929T101500Z" };
+const CODEX_HELD = { profileSlug: CODEX, fileStem: "20260929T114000Z" };
 
 /**
  * A short release note as a terminal shows it: a harness marker, a two-space gutter and
@@ -412,6 +415,38 @@ export const SHOTS: readonly Shot[] = [
     expect: { selector: ".compare-panes" },
   },
   {
+    // Claude Code takes Write a release note and its reply is held: the screen after holding.
+    id: "held",
+    page: "how-to/run-a-bake-off",
+    route: RELEASE_TEST,
+    seed: "full",
+    jev: "off",
+    expect: { text: "Reply held" },
+    steps: [
+      ...RELEASE_TO_REPLY,
+      { click: { button: "Next" } },
+      { waitFor: { text: "Did it meet it" } },
+      { click: { button: "Hold to compare" } },
+      { waitFor: { text: "Test another agent" } },
+    ],
+  },
+  {
+    // The bake-off on Check an answer key, as What needs you opens it, with Codex's Met take
+    // there as a third in the strip: both held replies open, each with Met and Not yet.
+    id: "compare-held",
+    page: "how-to/run-a-bake-off",
+    route: {
+      view: "item",
+      item: "compare",
+      credentialKey: ANSWER_KEY,
+      takes: [CLAUDE_HELD, CODEX_HELD, CODEX_ANSWER_KEY],
+      picks: [CLAUDE_HELD, CODEX_HELD, CODEX_ANSWER_KEY],
+    },
+    seed: "full",
+    jev: "off",
+    expect: { selector: ".compare-strip" },
+  },
+  {
     id: "badge-page",
     page: "how-to/change-a-badge",
     route: { view: "item", item: "badge", credentialKey: RELEASE_NOTE },
@@ -539,7 +574,7 @@ export const COVERAGE: Record<RouteKind, readonly string[] | typeof NOT_PICTURED
   home: ["home-empty", "home", "home-needs"],
   "deck:credential": ["credential-start", "credential-target"],
   "deck:agent": ["first-test-agent", "first-test-hand", "first-test-judge", "first-test-home", "agent-new"],
-  "deck:test": ["test-hand", "test-reply", "judge", "go-to-offer", "jev-ask", "jev-cleanup"],
+  "deck:test": ["test-hand", "test-reply", "judge", "go-to-offer", "held", "jev-ask", "jev-cleanup"],
   "deck:edit-credential": ["edit-retest", "paste-image", "add-video"],
   "deck:edit-agent": ["agent-params"],
   "deck:handoffs": ["handoffs-box"],
@@ -551,5 +586,5 @@ export const COVERAGE: Record<RouteKind, readonly string[] | typeof NOT_PICTURED
   // A handoff opens as its own item only once two or more have results; the sample's has none.
   "item:handoff": NOT_PICTURED,
   "item:reply": ["reply-view", "jev-reading"],
-  "item:compare": ["compare"],
+  "item:compare": ["compare", "compare-held"],
 };

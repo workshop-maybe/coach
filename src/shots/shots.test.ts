@@ -32,7 +32,8 @@ function routeProblems(route: Route | "gate", state: FolderState): string[] {
   const optAgent = () => r.profileSlug !== undefined && needAgent();
   const needTake = (take: unknown) => {
     const t = take as { profileSlug?: unknown; fileStem?: unknown } | undefined;
-    const found = state.assessments.some((a) => a.profileSlug === t?.profileSlug && a.fileStem === t?.fileStem && credentialKey(a) === r.credentialKey);
+    // A take is a result or a reply held without a verdict (hold-and-compare KTD8).
+    const found = [...state.assessments, ...state.held].some((a) => a.profileSlug === t?.profileSlug && a.fileStem === t?.fileStem && credentialKey(a) === r.credentialKey);
     if (!found) out.push(`no take ${JSON.stringify(take)} on ${String(r.credentialKey)}`);
   };
 
@@ -89,7 +90,7 @@ function routeProblems(route: Route | "gate", state: FolderState): string[] {
         break;
       case "compare":
         needKey();
-        if (!Array.isArray(r.takes) || r.takes.length !== 2) out.push("a compare needs two takes");
+        if (!Array.isArray(r.takes) || r.takes.length < 2) out.push("a compare needs two or more takes");
         else r.takes.forEach(needTake);
         break;
     }

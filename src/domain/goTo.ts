@@ -4,11 +4,11 @@
 // never stands in. So a trashed agent stops being the go-to, moving its files back brings
 // it back, and a new agent under a reused slug cannot inherit it.
 
-import { cellKey, type Matrix } from "./matrix";
+import { cellKey, type CellFlag, type Matrix } from "./matrix";
 import { credentialKey, type AgentProfile, type Assessment, type FolderState, type Mark } from "./types";
 
-/** Why a go-to needs a look (KTD4): its latest result there is not Met, or its setup changed since. */
-export type GoToFlag = "not_met" | "setup_mismatch";
+/** Why a go-to needs a look (KTD4): its latest result there is not Met, or the badge's task or the agent's setup changed since (its cell's flags). */
+export type GoToFlag = "not_met" | CellFlag;
 
 export interface GoTo {
   profile: AgentProfile;
@@ -34,12 +34,10 @@ export function goToOf(state: FolderState, key: string): GoTo | null {
   return { profile, mark, result };
 }
 
-/** How the go-to stands on its badge now, read from its agent's cell: whether it still holds the badge, and its flags. */
+/** How the go-to stands on its badge now, read from its agent's cell: whether it still holds the badge, and its flags, "not met" first and then the cell's own in the matrix's order. */
 export function goToStanding(matrix: Matrix, goTo: GoTo): { holds: boolean; flags: GoToFlag[] } {
   const cell = matrix.cells.get(cellKey(goTo.profile.slug, credentialKey(goTo.mark)));
   if (!cell) return { holds: false, flags: [] };
-  const flags: GoToFlag[] = [];
-  if (cell.status !== "met") flags.push("not_met");
-  if (cell.flags.includes("setup_mismatch")) flags.push("setup_mismatch");
-  return { holds: cell.status === "met", flags };
+  const holds = cell.status === "met";
+  return { holds, flags: holds ? [...cell.flags] : ["not_met", ...cell.flags] };
 }

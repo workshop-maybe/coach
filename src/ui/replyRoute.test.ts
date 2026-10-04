@@ -1,16 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { loadFolder } from "../domain/folder";
 import { buildMatrix } from "../domain/matrix";
-import type { Assessment, Handoff } from "../domain/types";
-import { backFromCompare, backFromReply, replyRoute } from "./replyRoute";
+import { judgeHeldReply } from "../domain/operations";
+import type { Assessment, Handoff, HeldReply } from "../domain/types";
+import { backFromCompare, backFromReply, replyRoute, takeOf } from "./replyRoute";
 import type { TakeRef } from "./routes";
-import { opus, result, review, storageWith } from "./testFolder";
+import { heldReply, opus, result, review, storageWith } from "./testFolder";
 
 const codex = { ...opus, slug: "codex", name: "Codex agent", model: "gpt-5" };
 const a: Handoff = { id: "a", collectionSlug: "eng", credentialSlug: "review", text: "# A\n\n{{task}}\n" };
 
-async function load(assessments: Assessment[], profiles = [opus, codex]) {
-  const state = await loadFolder(storageWith({ credentials: [review], profiles, handoffs: [a], assessments }));
+async function load(assessments: Assessment[], profiles = [opus, codex], held: HeldReply[] = []) {
+  const state = await loadFolder(storageWith({ credentials: [review], profiles, handoffs: [a], assessments, held }));
   return { state, matrix: await buildMatrix(state) };
 }
 
@@ -20,6 +21,7 @@ async function route(assessments: Assessment[], slug = opus.slug) {
 }
 
 const day = (n: number) => ({ fileStem: `2026090${n}T090000Z`, recordedAt: `2026-09-0${n}T09:00:00.000Z` });
+const heldDay = (n: number) => ({ fileStem: `2026090${n}T090000Z`, heldAt: `2026-09-0${n}T09:00:00.000Z` });
 const take = (slug: string, n: number): TakeRef => ({ profileSlug: slug, fileStem: day(n).fileStem });
 
 describe("replyRoute", () => {
@@ -142,6 +144,12 @@ describe("backFromCompare", () => {
     });
   });
 
+  it("lets a held take name the page: its handoff's page once two handoffs have run", async () => {
+    const { state, matrix } = await load([await result(opus, review, day(1))], [opus, codex], [await heldReply(codex, review, { ...heldDay(2), handoff: { id: "a", text: "x" } })]);
+    const takes = [take("opus", 9), take("codex", 2)];
+    expect(backFromCompare(matrix, state, "eng/review", takes, takes)).toMatchObject({ item: "handoff", handoffId: "a", picks: takes, focusCompare: true });
+  });
+
   it("lets the take still in the folder name the page when the other is gone, and the badge when both are", async () => {
     const { state, matrix } = await load([
       await result(opus, review, day(1)),
@@ -156,6 +164,36 @@ describe("backFromCompare", () => {
       credentialKey: "eng/review",
       picks: gone,
       focusCompare: true,
+    });
+  });
+});
+
+// A take is a result or a held reply (hold-and-compare KTD8). Judging keeps its reference (KTD3).
+describe("takeOf", () => {
+  it("finds a held reply by agent and stem, and the same reference finds the result once it is judged", async () => {
+    const one = await heldReply(codex, review, heldDay(2));
+    const storage = storageWith({ credentials: [review], profiles: [opus, codex], held: [one] });
+    const state = await loadFolder(storage);
+    const ref = take("codex", 2);
+    expect(takeOf(state, "eng/review", ref)).toEqual({ profile: codex, take: one });
+    const judged = await judgeHeldReply(storage, state, { profileSlug: "codex", collectionSlug: "eng", credentialSlug: "review", fileStem: one.fileStem }, "met");
+    expect(takeOf(judged, "eng/review", ref)?.take).toMatchObject({ result: "met", fileStem: one.fileStem, handBack: one.handBack });
+  });
+
+  it("is null when the take or its agent is gone", async () => {
+    const { state } = await load([], [opus], [await heldReply(codex, review, heldDay(2))]);
+    expect(takeOf(state, "eng/review", take("codex", 2))).toBeNull();
+    expect(takeOf(state, "eng/review", take("opus", 2))).toBeNull();
+  });
+
+  it("the way back from a held reply's view lights it on the page that lists it", async () => {
+    const { state, matrix } = await load([await result(opus, review, day(1))], [opus, codex], [await heldReply(codex, review, heldDay(2))]);
+    expect(backFromReply(matrix, state, "eng/review", take("codex", 2))).toEqual({
+      view: "item",
+      item: "badge",
+      credentialKey: "eng/review",
+      lit: "codex",
+      litTake: day(2).fileStem,
     });
   });
 });

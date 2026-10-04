@@ -5,7 +5,7 @@ order: 55
 description: Mark the agent you'll use for a badge, so home names it when that work comes up.
 ---
 
-{/* How to, the go-to (R11): choosing it after a Met and on a badge's page, and reading it on home. Labels are checked against src/ui/TestDeck.tsx, src/ui/BadgeDetail.tsx and src/ui/format.ts (KTD8, KTD9). */}
+{/* How to, the go-to (R11): choosing it after a Met, on a badge's page and in a compare, and reading it on home. Labels are checked against src/ui/TestDeck.tsx, src/ui/BadgeDetail.tsx, src/ui/takeActions.tsx and src/ui/format.ts (KTD8, KTD9). */}
 
 When several agents hold a badge, home shows who can do the work, not who you use. Your go-to is the agent you chose for the badge. Home names it, so the next time that work comes up you don't have to guess.
 
@@ -26,13 +26,18 @@ Open a badge from home. Under <UI>Holders</UI>, the go-to's row says <UI>Go-to</
 
 Click <UI>Make go-to</UI> under the agent you want. It makes that agent's latest result your choice.
 
+## In a compare
+
+When you read replies side by side, each Met reply has <UI>Make go-to</UI> at its foot. It makes that reply's result your choice, so you can choose from what you just read. [Run a bake-off](/how-to/run-a-bake-off/) walks through it. If you choose an older reply of an agent whose latest result is Not yet, the go-to is flagged at once, as below.
+
 ## On home
 
 A badge with a go-to names it under its holders: <UI>Go-to: \{agent\}</UI>.
 
-The go-to stays yours until you choose another agent. Two things flag it, and the line adds a few words:
+The go-to stays yours until you choose another agent. Three things flag it, and the line adds a few words:
 
 - <UI>not met</UI>: its latest result on the badge is Not yet, so it no longer holds the badge. The badge's page shows it under the holders.
+- <UI>task changed</UI>: the badge's task or rubric changed after its latest result.
 - <UI>setup changed</UI>: the harness, model or effort in the agent's file no longer matches its latest result.
 
 A later Met from the same agent clears the flag. While the agent is in the trash, the badge has no go-to. Moving its files back brings it back.

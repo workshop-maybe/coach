@@ -21,13 +21,16 @@ export interface ContextLine {
   memory: "changed" | "unchanged" | "not-read";
 }
 
-/** The context line for `result`, or null when it has no context. */
-export function contextLine(assessments: readonly Assessment[], result: Assessment): ContextLine | null {
+/** A result or a held reply: whose test it was, and its context. */
+type WithContext = Pick<Assessment, "profileSlug" | "context">;
+
+/** The context line for `result` (or a held reply), or null when it has no context. */
+export function contextLine(assessments: readonly WithContext[], result: WithContext): ContextLine | null {
   const context = result.context;
   if (!context) return null;
   if (context.memory === MEMORY_NOT_READ) return { machine: context.machine, memory: "not-read" };
 
-  let baseline: Assessment["context"];
+  let baseline: TestContext | undefined;
   for (const other of assessments) {
     const c = other.context;
     if (other.profileSlug !== result.profileSlug || !c) continue;

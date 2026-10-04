@@ -18,7 +18,7 @@ import { Cartridge } from "../cast/Cartridge";
 import { Machine } from "../cast/Machine";
 import { Outline } from "../cast/Outline";
 import { machineKeys, type MachineKey } from "../cast/mappings";
-import { FLAG_SHORT, goToLine, plugMark } from "./format";
+import { FLAG_SHORT, goToLine, handoffText, plugMark } from "./format";
 import { useNav } from "./nav";
 import { needsYou, type NeedsYouItem } from "./needsYou";
 import { livePlugs, plugFor, usePendingTests, type PendingTest } from "./pendingTests";
@@ -28,6 +28,8 @@ import { useMatrix } from "./useMatrix";
 const SHOWN = 3;
 
 interface Shelf {
+  /** The folder the shelf was read from. */
+  state: FolderState;
   credentials: { credential: Credential; collection: Collection; key: string }[];
   byKey: Map<string, { credential: Credential; collection: Collection }>;
   profiles: Map<string, AgentProfile>;
@@ -50,6 +52,7 @@ export function Home() {
       credentials.map((credential) => ({ credential, collection, key: credentialKey(credential) })),
     );
     return {
+      state,
       credentials,
       byKey: new Map(credentials.map((c) => [c.key, c])),
       profiles: new Map(state.profiles.map((p) => [p.slug, p])),
@@ -200,13 +203,15 @@ function plugsOf(state: FolderState, pending: PendingTest[]): Shelf["plugs"] {
   return plugs;
 }
 
+/** A row's key. Held rows on one badge are told apart by their handoff (hold-and-compare KTD12). */
 function itemId(item: NeedsYouItem): string {
+  if (item.kind === "held") return `${item.credentialKey}|${item.handoffId}`;
   return "credentialKey" in item ? `${item.credentialKey}|${"profileSlug" in item ? item.profileSlug : ""}` : item.profileSlug;
 }
 
 function NeedRow({ item, shelf, onOpen }: { item: NeedsYouItem; shelf: Shelf; onOpen(): void }) {
   const cred = "credentialKey" in item ? shelf.byKey.get(item.credentialKey) : undefined;
-  const agent = "profileSlug" in item ? shelf.profiles.get(item.profileSlug) : undefined;
+  const agent = "profileSlug" in item && item.profileSlug ? shelf.profiles.get(item.profileSlug) : undefined;
   const name = cred?.credential.name ?? "";
   const who = agent?.name ?? "";
 
@@ -216,6 +221,10 @@ function NeedRow({ item, shelf, onOpen }: { item: NeedsYouItem; shelf: Shelf; on
     case "reply":
       title = `Pull ${who}'s handoff`;
       detail = name;
+      break;
+    case "held":
+      title = item.takes.length > 1 ? `Compare ${item.takes.length} replies` : `Judge ${who}'s reply`;
+      detail = `${name} · ${handoffText(shelf.state, item.credentialKey, item.handoffId)}`;
       break;
     case "retest":
       title = `Re-test ${who}`;
