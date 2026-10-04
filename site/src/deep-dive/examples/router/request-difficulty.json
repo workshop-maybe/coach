@@ -1,0 +1,11 @@
+{
+  "difficulty": {
+    "type": "score",
+    "instructions": "How hard is the work the `job` asks for?",
+    "criteria": [
+      "Routine: a familiar, clearly defined piece of work with an obvious way to do it",
+      "Needs judgment: several steps or choices to weigh, or details the job leaves open",
+      "Unusual or high-stakes: an unfamiliar problem or edge case, or a mistake that would be costly or hard to undo"
+    ]
+  }
+}

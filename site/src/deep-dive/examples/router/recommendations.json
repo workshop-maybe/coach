@@ -1,0 +1,54 @@
+[
+  {
+    "badge": "Say how sure you are",
+    "rating": "routine",
+    "card": {
+      "kind": "pick",
+      "pick": "Claude Code",
+      "basis": "go-to",
+      "step": "none",
+      "cheaper": [],
+      "next_up": null,
+      "other_holders": []
+    }
+  },
+  {
+    "badge": "Say how sure you are",
+    "rating": "high-stakes",
+    "card": {
+      "kind": "pick",
+      "pick": "Claude Code",
+      "basis": "go-to",
+      "step": "nothing-above",
+      "cheaper": [],
+      "next_up": null,
+      "other_holders": []
+    }
+  },
+  {
+    "badge": "Check an answer key",
+    "rating": "routine",
+    "card": {
+      "kind": "pick",
+      "pick": "Codex",
+      "basis": "cheapest",
+      "step": "none",
+      "cheaper": [],
+      "next_up": null,
+      "other_holders": []
+    }
+  },
+  {
+    "badge": "Check an answer key",
+    "rating": "high-stakes",
+    "card": {
+      "kind": "pick",
+      "pick": "Codex",
+      "basis": "cheapest",
+      "step": "nothing-above",
+      "cheaper": [],
+      "next_up": null,
+      "other_holders": []
+    }
+  }
+]

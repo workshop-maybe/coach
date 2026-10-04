@@ -1,0 +1,86 @@
+---
+title: The router, end to end
+part: jev
+order: 80
+description: "Every rule behind finding an agent for a job: the routing request with its one Score, how a job matches a badge, how hard Jev rates it, the cost order, the recommendation and the routing record."
+---
+
+{/* Jev under the hood, the router (coach-desktop#22; docs/plans/2026-10-04-1448-feat-router-plan.md KTD1-KTD11; docs/plans/2026-10-04-1759-fix-jev-round-two-plan.md U10): the rules in the order the app applies them. The worked example and most of the code are on the case study page. Numbers in the prose are tied to code constants by site/tests/deepDive.test.ts. Labels are checked against src/ui/RouterDeck.tsx and src/ui/format.ts. */}
+
+The router hands you one agent for a new job. Jev does two things in it, only when you click <UI>Ask Jev</UI>: it says which of your badges the job is like, and how hard the job is. Everything after that is the app's own rules over your folder: who holds the badge, your go-to, and the cost order you set. [Case study: the router](/jev/router-case-study/) follows one job through every step, with the exact request and the code.
+
+In short:
+
+1. The app builds a routing ask: the job as the state, one yes-or-no question per badge, and one question rating the job on three levels.
+2. Jev answers each badge's question with a probability, and the rating with a probability for each level.
+3. The badge with the strongest yes at or above the match threshold is the match.
+4. The rating is the level nearest the probabilities' expected level.
+5. The card picks the badge's go-to, or the cheapest agent that holds the badge cleanly, and steps up when Jev rates the job unusual or high-stakes.
+6. When you take an agent, the app saves a routing record.
+
+## The request
+
+The state is only the job, under `job`. Each badge goes in its own question, never in the state, so each question sees only its own badge.
+
+- **One match question per badge**, `m1` to `mN` in Home's order: does the job ask for the same kind of work as the badge? Its instructions hold the badge's name, task and learning targets. A badge's rubric never goes.
+- **One difficulty question**, `difficulty`: how hard is the work the job asks for? It is TypeSafe's [Score](https://docs.typesafe.ai/primitives/score), the one question the app asks that isn't a Noul. Its three levels are routine, needs judgment, and unusual or high-stakes, each described as a situation.
+
+The match question's criteria are literal on purpose: a job that only shares a topic, a tool or a word with a badge is a no, since a pasted job can argue for its own match.
+
+<Source file="src/domain/router.ts" symbol="MATCH_QUESTION" to="MATCH_CRITERIA" />
+
+<Source file="src/domain/router.ts" symbol="DIFFICULTY_ID" to="DIFFICULTY_LEVELS" />
+
+The job and each task go without picture and video Markdown and without invisible characters, and otherwise as written. A badge with no task is left out, since nobody can hold it.
+
+## Batches
+
+Every request carries the whole job as its state, and as many match questions as fit Jev's limits. The difficulty question rides in the first request it fits. A badge whose question can't fit beside the job alone is left out, and the ask card says how many. Only when no badge fits does the card say <UI>This job is too long for Jev.</UI>, before anything is sent.
+
+<Source file="src/domain/router.ts" symbol="routeBatches" />
+
+The requests go one at a time. A request TypeSafe answers as busy waits and is tried again, up to 3 times. The ask is all or nothing: a request that still fails, or an answer missing a badge or holding levels that aren't three probabilities, fails the whole ask, and nothing the earlier requests answered is used.
+
+## The match
+
+A badge matches when Jev's yes for it is 70% or more. The badge with the strongest yes is the match, the first on Home on a tie, and any other badge at 70% or more is listed under <UI>Also like:</UI>. Tapping one switches the card to it without asking again. With no badge at 70% or more, the card says <UI>No badge like this job</UI>.
+
+<Source file="src/domain/router.ts" symbol="matchOf" />
+
+70% is the app's default meets cut-off, the high end of the band a second opinion starts with. TypeSafe's [Noul page](https://docs.typesafe.ai/primitives/noul) says to raise the threshold when acting on a false yes is expensive; here a false yes would recommend an agent from the wrong badge's record.
+
+Jev's answers hold for the job they were asked about. Editing the job drops them. A badge that leaves the folder afterward drops out of the match, and the next badge at 70% or more takes its place. A badge added afterward has no answer, so it can't match until you ask again.
+
+## How hard the job is
+
+TypeSafe's Score answer gives a probability for each level. The app works out the expected level itself, the sum of each level's number times its probability, and rounds it to the nearest level: below 0.5 is routine, below 1.5 needs judgment, and 1.5 or more is unusual or high-stakes. Only unusual or high-stakes changes the card.
+
+<Source file="src/domain/router.ts" symbol="ROUTINE_BELOW" to="ratingOf" />
+
+## The recommendation
+
+The card works out its agent from your folder each time it draws, so a reload or a trash changes the card and never breaks it.
+
+- An agent **holds a badge cleanly** when its latest result there is Met, with no <UI>task changed</UI> or <UI>setup changed</UI> flag.
+- Clean holders rank by your **cost order**: agents you placed, cheapest first, then the rest, tied as the most expensive.
+- The **pick** is the badge's go-to when it holds cleanly: <UI>Go-to for \{badge\}</UI>. Otherwise it is the cheapest clean holder, if you placed it: <UI>Cheapest agent holding \{badge\}</UI>. A pick between agents you haven't placed would only be alphabetical, so then there is none.
+- When Jev rates the job unusual or high-stakes, the card **steps up** to the next placed clean holder above the pick: <UI>Stepped up: Jev rates this job unusual or high-stakes</UI>. With none above, the pick stands: <UI>Nothing above \{agent\} holds this badge</UI>. With an unplaced clean holder above, the cost order can't say which is next: <UI>Didn't step up: holders above it aren't in your cost order</UI>.
+
+<Source file="src/domain/recommend.ts" symbol="recommend" />
+
+## The routing record
+
+When you click <UI>Take \{agent\}</UI>, the app saves one file under `routing/`, named for when, and goes home. It keeps:
+
+| Field | What it records |
+|---|---|
+| `job` | The job's first line with words in it, at most 200 characters |
+| `collection`, `credential` | The badge |
+| `agent`, `setup` | The agent you took, with its harness, model and effort as they stood |
+| `recommended`, `basis`, `steppedUp` | The card's pick, why (`go-to`, `cheapest` or `none`), and whether it stepped up |
+| `matched` | How the badge was found: `jev`, `also-like` or `picked` |
+| `difficulty`, `jevModel` | Jev's rating and the model that gave it, when Jev rated the job |
+
+Nothing reads these files yet. They keep what a later count of decisions reused will need, since go-tos and setups change after a choice is made.
+
+<Source file="src/domain/operations.ts" symbol="takeAgentForJob" />

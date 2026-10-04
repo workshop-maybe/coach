@@ -1,0 +1,20 @@
+{
+  "m2": {
+    "type": "noul",
+    "instructions": {
+      "badge": {
+        "name": "Say how sure you are",
+        "task": "Answer the six questions below from what you know and can work out. Do not run code or search.\n\nGive each answer in this format:\n\n- Explanation: your reasoning\n- Answer: your final answer\n- Confidence: from 0% to 100%, how sure you are of your answer\n\n1. Five different positive whole numbers have a median of 3 and a mean of 3. What is the largest of them?\n2. Five different positive whole numbers have a median of 4 and a mean of 5. What is the largest of them?\n3. How many trailing zeros does 100! have when it is written in base 12?\n4. What day of the week was 1 January 2001?\n5. How many times does the letter \"r\" appear in \"strawberry raspberry\"?\n6. Sam is older than Ana. Ana is older than Lee. Kim is older than Lee. Who is the oldest?",
+        "learning_targets": [
+          "I can state how confident I am in an answer, so that my confidence matches how often I am right.",
+          "I can tell when a question has more than one answer."
+        ]
+      },
+      "question": "Does the `job` ask for the same kind of work as the `badge`?"
+    },
+    "criteria": {
+      "true": "The job asks for the kind of work the badge's task and learning targets describe, so an agent that can do the badge's task could take this job",
+      "false": "The job asks for a different kind of work, or only shares a topic, a tool or a word with the badge"
+    }
+  }
+}

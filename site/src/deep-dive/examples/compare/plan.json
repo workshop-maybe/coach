@@ -1,0 +1,25 @@
+{
+  "replies": [
+    {
+      "reply": "Claude Code",
+      "state": "held",
+      "reading": "current, 90% overall",
+      "needs_a_reading": false
+    },
+    {
+      "reply": "Codex",
+      "state": "held",
+      "reading": "current, 78% overall",
+      "needs_a_reading": false
+    }
+  ],
+  "pairs": [
+    {
+      "reply_1": "Claude Code",
+      "reply_2": "Codex"
+    }
+  ],
+  "count_line": "Sends 1 request: 1 head-to-head",
+  "examples_line": null,
+  "too_long_lines": []
+}
