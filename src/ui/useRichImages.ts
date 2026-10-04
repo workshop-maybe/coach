@@ -8,9 +8,16 @@
 // action until they land (R11). When the folder changes under a mounted box (a reply whose
 // agent or badge changed), the images it saved this visit that its text still names are
 // copied into the new folder (R10). Content addressing keeps their names.
+//
+// An add (U7 of the video plan) asks Rust to copy picked, dropped or pasted files into the
+// same folder, so no bytes pass through the page. It counts in `busy` like a paste (R7), and
+// every file it refused goes on one notice that names them (R5). Its files join the same
+// record a carry reads, and a carry moves a video with `copyVideo`, inside Rust (KTD7, R13).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { IMAGE_TOO_LARGE, ONLY_PNG_OR_JPEG, PASTED_IMAGE_MAX_BYTES, dataUriToBytes, folderOf, localImageNames } from "../domain/images";
+import { IMAGE_TOO_LARGE, ONLY_PNG_OR_JPEG, PASTED_IMAGE_MAX_BYTES, dataUriToBytes, folderOf, isLocalImageName, localRefNames } from "../domain/images";
+import { isLocalVideoName } from "../domain/videos";
+import type { AddedFile } from "../storage/storage";
 import { forgetImage, imageSource } from "./imageSource";
 import type { RichImageSource } from "./richImage";
 import type { RichImages } from "./RichText";
@@ -19,6 +26,30 @@ import { describeError, useFolder } from "./useFolderState";
 
 /** With no folder yet: no images, and no videos (they show as placeholders). */
 const NOTHING: RichImageSource = { load: () => Promise.resolve(null) };
+
+/** A refusal with no reason, which Rust never sends, still reads as a sentence. */
+const NOT_ADDED = "It could not be added.";
+
+/** Whether a ref is one a carry may move: a bare-name picture or video. */
+const isLocalFileName = (src: string) => isLocalImageName(src) || isLocalVideoName(src);
+
+/** "a", "a and b", "a, b and c". */
+function listNames(names: string[]): string {
+  return names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
+/**
+ * One notice for every file one add refused (R5): each reason once, after the names of the
+ * files it refused, in the order the files came. "clip.mkv and notes.txt: Only MP4, …".
+ */
+export function refusalNotice(refused: Pick<AddedFile, "name" | "error">[]): string {
+  const byReason = new Map<string, string[]>();
+  for (const { name, error } of refused) {
+    const reason = error ?? NOT_ADDED;
+    byReason.set(reason, [...(byReason.get(reason) ?? []), name]);
+  }
+  return [...byReason].map(([reason, names]) => `${listNames(names)}: ${reason}`).join(" ");
+}
 
 /**
  * The images of a box whose file is in `dir` (null: no folder yet, so nothing saves), and
@@ -69,20 +100,51 @@ export function useRichImages(dir: string | null, text = ""): { images: RichImag
           }
         });
       },
+      // With no folder there is nowhere to copy to, so the box shows no Video key.
+      ...(dir !== null && {
+        add(from) {
+          return track(async () => {
+            let files: AddedFile[];
+            try {
+              files = await storage.addFiles(dir, from);
+            } catch (e) {
+              setNotice(describeError(e));
+              throw e;
+            }
+            const names: string[] = [];
+            for (const { path } of files) {
+              if (path === null) continue;
+              // A picture read as missing before this add is there now.
+              forgetImage(storage, path);
+              const name = fileName(path);
+              saved.current.set(name, path);
+              names.push(name);
+            }
+            const refused = files.filter((f) => f.path === null);
+            if (refused.length > 0) setNotice(refusalNotice(refused));
+            return names;
+          });
+        },
+      }),
     };
   }, [storage, dir, setNotice, track]);
 
-  // A new folder takes the images this box saved that its text still names (R10).
+  // A new folder takes the images and videos this box saved that its text still names (R10,
+  // R13). A video is copied inside Rust; a picture is read and written again.
   const carriedTo = useRef(dir);
   useEffect(() => {
     if (dir === null || carriedTo.current === dir) return;
     carriedTo.current = dir;
-    const names = new Set(localImageNames(latestText.current));
+    const names = new Set(localRefNames(latestText.current, isLocalFileName));
     const moving = [...saved.current].filter(([name, path]) => names.has(name) && folderOf(path) !== dir);
     if (moving.length === 0) return;
     void track(async () => {
       for (const [name, from] of moving) {
         try {
+          if (isLocalVideoName(name)) {
+            saved.current.set(name, await storage.copyVideo(from, "data", dir));
+            continue;
+          }
           const uri = await storage.readDataUri("data", from);
           if (uri === null) continue;
           const path = await storage.saveImage("data", dir, dataUriToBytes(uri));
