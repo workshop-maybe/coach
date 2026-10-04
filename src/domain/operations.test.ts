@@ -16,6 +16,7 @@ import {
   createProfile,
   duplicateProfileDraft,
   holdReply,
+  type HoldInput,
   importBadgeArt,
   isSetupLocked,
   judgeHeldReply,
@@ -430,6 +431,51 @@ describe("recording assessments", () => {
     expect(next.assessments[0].result).toBe("met");
     expect(next.assessments[0]).not.toHaveProperty("jev");
     expect(storage.file(assessmentPath("claude-opus", "go-basics", "write-a-cli", "20260929T084900Z"))).not.toContain("jev");
+  });
+
+  describe("missed points (KTD14)", () => {
+    const rubric = "- Flags parse.\n- Help prints.\n- Errors exit non-zero.\n\nMet when every point holds.";
+    const path = assessmentPath("claude-opus", "go-basics", "write-a-cli", "20260929T084900Z");
+    const at = new Date("2026-09-29T08:49:00Z");
+
+    /** setup() with a rubric of three points. */
+    async function withPoints() {
+      const { storage, state } = await setup();
+      const edited = await updateCredential(storage, { ...state.credentials[0], rubric }, state.raw[credentialPath("go-basics", "write-a-cli")]);
+      return { storage, state: edited };
+    }
+
+    it("keeps a Not met result's missed points that are current rubric points, once each, in rubric order", async () => {
+      const { storage, state } = await withPoints();
+      const missedPoints = ["Errors exit non-zero.", "Flags parse old.", "Flags parse.", "Errors exit non-zero.", "Met when every point holds."];
+      const next = await recordState(storage, state, { ...input, result: "not_met", missedPoints }, at);
+      expect(next.assessments[0].missedPoints).toEqual(["Flags parse.", "Errors exit non-zero."]);
+      expect(storage.file(path)).toContain("missed_points:\n  - Flags parse.\n  - Errors exit non-zero.\n---\n");
+    });
+
+    it("saves missed points with no reading", async () => {
+      const { storage, state } = await withPoints();
+      const next = await recordState(storage, state, { ...input, result: "not_met", missedPoints: ["Help prints."] }, at);
+      expect(next.assessments[0]).not.toHaveProperty("jev");
+      expect(next.assessments[0].missedPoints).toEqual(["Help prints."]);
+    });
+
+    it("drops missed points on a Met result, and writes no key when none match", async () => {
+      const { storage, state } = await withPoints();
+      const met = await recordState(storage, state, { ...input, result: "met", missedPoints: ["Help prints."] }, at);
+      expect(met.assessments[0]).not.toHaveProperty("missedPoints");
+      expect(storage.file(path)).not.toContain("missed_points");
+      const none = await recordState(storage, met, { ...input, result: "not_met", missedPoints: ["Not a point."] }, new Date("2026-09-29T08:50:00Z"));
+      expect(none.assessments.find((a) => a.fileStem === "20260929T085000Z")).not.toHaveProperty("missedPoints");
+    });
+
+    it("drops a point from the rubric before an edit: only the rubric at the version stamped counts", async () => {
+      const { storage, state } = await withPoints();
+      const edited = await updateCredential(storage, { ...state.credentials[0], rubric: "- Flags parse.\n- Help prints in color." }, state.raw[credentialPath("go-basics", "write-a-cli")]);
+      const next = await recordState(storage, edited, { ...input, result: "not_met", missedPoints: ["Help prints.", "Flags parse."] }, at);
+      expect(next.assessments[0].missedPoints).toEqual(["Flags parse."]);
+      expect(next.assessments[0].assignmentVersion).toBe(await assignmentVersion("Build a CLI.", "- Flags parse.\n- Help prints in color."));
+    });
   });
 
   it("stamps the edited assignment version after the credential changes", async () => {
@@ -1024,6 +1070,31 @@ describe("holding and judging replies", () => {
     ]);
     expect(storage.file(heldPath("claude-opus", "go-basics", "write-a-cli", held.fileStem))).toBe(heldText);
     expect((await cellOf(next)).status).toBe("met");
+  });
+
+  it("judging copies a reading's targets and examples sent to the result, with no missed points and an empty note (R8)", async () => {
+    const { storage, state } = await setup();
+    const version = await assignmentVersion("Build a CLI.", "Flags parse.");
+    const jev: JevReading = {
+      model: "jev-1.13.0",
+      assignmentVersion: version,
+      askedAt: "2026-10-01T08:59:00.000Z",
+      seen: "before",
+      overall: 0.2,
+      points: [],
+      targets: [{ text: "I can parse flags", probability: 0.3 }],
+      examplesSent: 2,
+    };
+    const held = await holdReply(storage, state, { ...ids, handBack: "Hmm.", jev, missedPoints: ["Flags parse."] } as HoldInput, at);
+    const heldText = storage.file(heldPath("claude-opus", "go-basics", "write-a-cli", held.fileStem));
+    expect(heldText).not.toContain("missed_points");
+    expect(held.state.held[0].jev).toEqual(jev);
+    const next = await judgeHeldReply(storage, held.state, { ...ids, fileStem: held.fileStem }, "not_met");
+    expect(next.assessments[0].jev).toEqual(jev);
+    expect(next.assessments[0].note).toBe("");
+    expect(next.assessments[0]).not.toHaveProperty("missedPoints");
+    expect(storage.file(assessmentPath("claude-opus", "go-basics", "write-a-cli", held.fileStem))).not.toContain("missed_points");
+    expect(storage.file(heldPath("claude-opus", "go-basics", "write-a-cli", held.fileStem))).toBe(heldText);
   });
 
   it("judging Not yet records Not met", async () => {

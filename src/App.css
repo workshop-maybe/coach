@@ -1733,8 +1733,9 @@ button:focus-visible {
   font-size: 13px;
 }
 
-/* Jev's reading: each point with its probability in the mono, then the whole rubric.
-   Numbers and words only, never a fill. */
+/* Jev's reading (growing context KTD13): each point read as a call, then the whole rubric,
+   then the learning targets. The call is a word in the panel's ink, the probability after
+   it smaller and in the mono. Words and numbers only, never a fill and never good green. */
 .jev-reading {
   display: flex;
   flex-direction: column;
@@ -1742,14 +1743,20 @@ button:focus-visible {
   font-size: 13px;
 }
 
-.jev-reading-head {
+.jev-reading-head,
+.jev-targets-head {
   font-family: var(--font-mono);
   font-size: var(--label);
   letter-spacing: var(--label-tracking);
   color: var(--ink-muted);
 }
 
-.jev-points {
+.jev-targets-head {
+  margin-top: var(--space-sm);
+}
+
+.jev-points,
+.jev-targets {
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
@@ -1766,26 +1773,86 @@ button:focus-visible {
   margin: 0;
 }
 
-.jev-p {
-  font-family: var(--font-mono);
-  letter-spacing: var(--value-tracking);
+.jev-read {
+  white-space: nowrap;
   text-align: right;
 }
 
-.jev-vague {
+/* A can't-call phrase on a point or the overall row takes its own line under the text,
+   so a narrow judge pane never squeezes the text it reads. */
+.jev-read-own-line {
   grid-column: 1 / -1;
+  white-space: normal;
+  text-align: left;
+}
+
+.jev-call {
+  font-weight: 600;
+}
+
+.jev-p {
+  font-family: var(--font-mono);
+  font-size: var(--label);
+  letter-spacing: var(--value-tracking);
   color: var(--ink-muted);
-  font-size: 12px;
 }
 
 .jev-overall {
   padding-top: var(--space-xs);
   border-top: 1px solid var(--cell);
+}
+
+.jev-overall .jev-point-text {
   font-weight: 600;
 }
 
-.jev-overall .jev-vague {
+/* Jev's track record on the badge and the fitted line, quiet under the reading. */
+.jev-note {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 12px;
+}
+
+.jev-reading > :not(.jev-note) + .jev-note {
+  margin-top: var(--space-sm);
+}
+
+/* The points a Not yet reply missed (growing context R6): one toggle per rubric point,
+   its text left as the rubric reads, the tapped ones lit in data blue as a handoff key is.
+   Jev's call sits beside a point quietly, a word in muted ink that never presses it. */
+.missed-points {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin: 0;
+  padding: 0;
+}
+
+.missed-point {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--space-md);
+  align-items: center;
+}
+
+.missed-point button {
+  min-height: 2.5rem;
+  text-align: left;
   font-weight: 400;
+  overflow-wrap: anywhere;
+}
+
+.missed-point button[aria-pressed="true"] {
+  box-shadow: var(--focus-ring);
+  color: var(--data);
+}
+
+.missed-call {
+  min-width: 5.5rem;
+  color: var(--ink-muted);
+  font-size: 13px;
+  white-space: nowrap;
 }
 
 /* Below the stacking width the rubric sits above the reply, takes at most about a third

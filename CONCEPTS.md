@@ -24,7 +24,7 @@ The default handoff every badge starts from, shown as key S. It never locks, so 
 
 ### Result
 
-One agent's verdict on one badge, Met or Not met, recorded by the user with the reply the agent sent back and the handoff text that was copied. Results are never overwritten, so an agent can hold several results on the same badge and the same handoff.
+One agent's verdict on one badge, Met or Not met, recorded by the user with the reply the agent sent back and the handoff text that was copied. A Not met result can also carry the rubric points the user tapped as missed. Results are never overwritten, so an agent can hold several results on the same badge and the same handoff.
 
 ### Reply
 
@@ -54,4 +54,16 @@ The optional setting, off by default, that connects the app to TypeSafe's Jev mo
 
 ### Second opinion
 
-Jev's reading of a reply against a badge's rubric, given only when the user asks: a probability for each rubric point, one overall reading, and a flag on any point it can't call with confidence. The user still records the verdict, and the reading is saved with the result.
+Jev's reading of a reply against a badge's rubric and learning targets, given only when the user asks: a call for each rubric point and learning target, and one for the whole bar. The request also carries the openings of a few earlier replies on that badge and the user's notes on them. The user still records the verdict, and the reading is saved with the result.
+
+### Call
+
+Jev's answer on one rubric point, one learning target or the whole bar, read from its probability as meets, misses or can't call. A badge starts with fixed cut-offs, and they move to fit the user's own verdicts once the badge has enough judged results; moving them re-reads saved readings without asking Jev again.
+
+### Track record
+
+How often Jev's overall call on a badge matched the user's verdicts, counted over the badge's results that carry a reading from the same Jev model, with can't calls counted apart. It shows once there are eight such results, and only where a verdict exists: never before the user picks one, and never on a held reply.
+
+### Overrule
+
+A result whose verdict went against Jev's overall call: Not met against a meets call, or Met against a misses call. Can't call never counts. Overrules lead the examples a second opinion sends.

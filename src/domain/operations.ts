@@ -36,6 +36,7 @@ import { resultOf } from "./goTo";
 import { heldOf } from "./handoffResults";
 import { assignmentVersion } from "./hash";
 import { findPreset, presetCredential } from "./presets";
+import { rubricParts, tappedPoints } from "./secondOpinion";
 import { uniqueSlug } from "./slug";
 import {
   credentialKey,
@@ -430,10 +431,12 @@ export interface AssessmentInput {
   handoff?: Assessment["handoff"];
   /** Jev's reading of this reply, when the user asked. Dropped unless its version is the one stamped (KTD11). */
   jev?: JevReading;
+  /** The rubric points the user tapped as missed. Kept only on a Not met result, and only those in the rubric stamped (KTD14). */
+  missedPoints?: string[];
 }
 
-/** A reply to hold: what a result would record, without the verdict or a note. */
-export type HoldInput = Omit<AssessmentInput, "result" | "note">;
+/** A reply to hold: what a result would record, without the verdict, a note or missed points. */
+export type HoldInput = Omit<AssessmentInput, "result" | "note" | "missedPoints">;
 
 /** What a result or a held reply stamps about the test from the folder as it is now (R16). */
 async function stampTest(state: FolderState, input: HoldInput) {
@@ -463,10 +466,19 @@ function nextResultStem(storage: Storage, ids: Omit<AssessmentIds, "fileStem">, 
 }
 
 /**
+ * The tapped points that are points of `rubric`, once each, in rubric order (KTD14). A point
+ * from an earlier rubric, or text that is not a point, is dropped.
+ */
+function keptMissedPoints(tapped: readonly string[], rubric: string): string[] {
+  return tappedPoints(rubricParts(rubric).points, tapped);
+}
+
+/**
  * Records a result the user chose (R14, R15), stamped with the credential's current
  * assignment version and the profile's current setup (R16). Always a new file, named for
  * `now` or the next free second after it. A Jev reading taken against any other assignment
- * version is left off; the result still saves. Returns the stem it wrote.
+ * version is left off; the result still saves. Missed points are kept only on a Not met
+ * result, and only those that are points of the rubric stamped. Returns the stem it wrote.
  */
 export async function recordAssessment(
   storage: Storage,
@@ -478,8 +490,19 @@ export async function recordAssessment(
     throw new Error('Choose "met" or "not met" before saving.');
   }
   const { ids, ...test } = await stampTest(state, input);
+  // The credential stampTest hashed, so the rubric is the one at the version stamped.
+  const { rubric } = findCredential(state, ids.collectionSlug, ids.credentialSlug);
+  const missed = input.result === "not_met" ? keptMissedPoints(input.missedPoints ?? [], rubric) : [];
   const fileStem = await nextResultStem(storage, ids, now);
-  const assessment: Assessment = { ...ids, fileStem, result: input.result, recordedAt: now.toISOString(), note: input.note ?? "", ...test };
+  const assessment: Assessment = {
+    ...ids,
+    fileStem,
+    result: input.result,
+    recordedAt: now.toISOString(),
+    note: input.note ?? "",
+    ...test,
+    ...(missed.length > 0 ? { missedPoints: missed } : {}),
+  };
   await saveAssessment(storage, assessment);
   return { state: await loadFolder(storage), fileStem };
 }

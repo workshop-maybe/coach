@@ -25,6 +25,14 @@ Not yet isn't a final word. You can test the same agent again, and every result 
 
 ## A second opinion, only if you ask
 
-With [Jev Mode](/help/jev-mode/) on, the judge card offers <UI>Ask Jev</UI>. Jev, TypeSafe's model, reads the reply against the rubric and gives a chance for each rubric point and one for the whole rubric. A point it can't call either way says <UI>Can't call: sharpen this point</UI>.
+With [Jev Mode](/help/jev-mode/) on, the judge card offers <UI>Ask Jev</UI>. Jev, TypeSafe's model, reads the reply against the rubric and the badge's learning targets, and calls each one: <UI>Meets</UI>, <UI>Misses</UI> or <UI>Can't call</UI>. A point it can't call either way says <UI>Can't call: sharpen this point</UI>.
+
+A call says more than a percentage. A 90% chance is enough to say a point is met, but a bare "90%" reads as doubt. So the app turns each chance into a call, and keeps the chance beside it in small type.
 
 Jev's reading doesn't decide anything. You still choose <UI>Met</UI> or <UI>Not yet</UI>, then <UI>Save</UI>, and the reading is kept with your result.
+
+## Your verdicts teach the context
+
+Jev learns nothing on its side. What changes is what the app sends it. Each time you ask, a few of your own earlier verdicts on the same badge go along as examples: replies you judged Met, replies that missed a point you tapped, and first of all replies where you went against Jev, with your note on why. Only the opening of each reply goes, and only replies on this badge, because unrelated text makes Jev's answers worse.
+
+Your verdicts also set where Jev's calls fall. After eight judged readings on a badge, the cut-offs between meets, can't call and misses move to match how you judge there, and the reading shows how often Jev's call has matched yours. That number appears only after you pick, so it can't decide for you.

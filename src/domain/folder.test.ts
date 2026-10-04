@@ -446,6 +446,161 @@ describe("assessment Markdown", () => {
   });
 });
 
+describe("missed points, learning targets and examples sent (KTD14)", () => {
+  // Bare ids, so nothing reads back unless the file holds it.
+  const ids = { profileSlug: "claude-high", collectionSlug: "eng", credentialSlug: "review", fileStem: assessment.fileStem };
+  const reading: JevReading = {
+    model: "jev-1.13.0",
+    assignmentVersion: "12e456789012",
+    askedAt: "2026-09-29T08:45:00.000Z",
+    seen: "before",
+    overall: 0.41,
+    points: [
+      { text: "Flags parse.", probability: 0.91 },
+      { text: "Help prints.", probability: 0.12 },
+    ],
+    targets: [
+      { text: "I can parse flags.", probability: 0.88 },
+      { text: "I can print help.", probability: 0.2 },
+    ],
+    examplesSent: 3,
+  };
+  const notMet: Assessment = { ...assessment, result: "not_met", note: "Fine.", handBack: "Done.", missedPoints: ["Help prints."], jev: reading };
+
+  /** A Not met result with a reading, as written before missed points, targets and examples sent existed. */
+  const before = [
+    "---",
+    "result: not_met",
+    "recorded_at: 2026-09-29T08:49:00.123Z",
+    'assignment_version: "12e456789012"',
+    "setup:",
+    "  harness: claude-code",
+    "  model: opus",
+    "  effort: high",
+    "jev:",
+    "  model: jev-1.13.0",
+    '  assignment_version: "12e456789012"',
+    "  asked_at: 2026-09-29T08:45:00.000Z",
+    "  seen: after",
+    "  verdict_when_seen: met",
+    "  verdict_changed: true",
+    "  overall: 0.41",
+    "  points:",
+    "    - text: Flags parse.",
+    "      probability: 0.91",
+    "    - text: Help prints.",
+    "      probability: 0.12",
+    "---",
+    "",
+    "## Note",
+    "",
+    "Fine.",
+    "",
+    "## Handback",
+    "",
+    "Done.",
+    "",
+  ].join("\n");
+
+  it("round-trips a Not met result's missed points and a reading's targets and examples sent", () => {
+    const text = serializeAssessment(notMet);
+    expect(text).toContain("  targets:\n    - text: I can parse flags.\n      probability: 0.88\n");
+    expect(text).toContain("  examples_sent: 3\nmissed_points:\n  - Help prints.\n---\n");
+    expect(text.indexOf("  points:")).toBeLessThan(text.indexOf("  targets:"));
+    expect(parseAssessment(text, ids)).toEqual(notMet);
+  });
+
+  it("reads a file from before them, and writes it back, byte for byte", () => {
+    const parsed = parseAssessment(before, ids);
+    expect(parsed).not.toHaveProperty("missedPoints");
+    expect(parsed.jev).not.toHaveProperty("targets");
+    expect(parsed.jev).not.toHaveProperty("examplesSent");
+    expect(serializeAssessment(parsed)).toBe(before);
+    const plain = serializeAssessment({ ...assessment, note: "Fine.", handBack: "Done." });
+    expect(serializeAssessment(parseAssessment(plain, ids))).toBe(plain);
+    expect(plain).not.toMatch(/missed_points|targets|examples_sent/);
+  });
+
+  it("reads missed points hand-added to a Met result, and writes the file back byte for byte", () => {
+    const handEdited = before.replace("result: not_met", "result: met").replace("---\n\n## Note", "missed_points:\n  - Help prints.\n---\n\n## Note");
+    const parsed = parseAssessment(handEdited, ids);
+    expect(parsed.missedPoints).toEqual(["Help prints."]);
+    expect(serializeAssessment(parsed)).toBe(handEdited);
+  });
+
+  it("writes no key for no missed points or no targets", () => {
+    const text = serializeAssessment({ ...notMet, missedPoints: [], jev: { ...reading, targets: [], examplesSent: undefined } });
+    expect(text).not.toMatch(/missed_points|targets|examples_sent/);
+  });
+
+  it("writes zero examples sent and reads it back as zero", () => {
+    const text = serializeAssessment({ ...notMet, jev: { ...reading, examplesSent: 0 } });
+    expect(text).toContain("  examples_sent: 0\n");
+    expect(parseAssessment(text, ids).jev?.examplesSent).toBe(0);
+  });
+
+  it("reads a malformed missed points list, targets list or examples count as absent, and keeps the rest", () => {
+    const text = serializeAssessment(notMet);
+    const { missedPoints: _missed, ...withoutMissed } = notMet;
+    const { targets: _targets, ...withoutTargets } = reading;
+    const { examplesSent: _sent, ...withoutSent } = reading;
+    const cases: [string, Assessment][] = [
+      [text.replace("missed_points:\n  - Help prints.\n", "missed_points: Help prints.\n"), withoutMissed],
+      [text.replace("missed_points:\n  - Help prints.\n", "missed_points:\n  - Help prints.\n  - 2\n"), withoutMissed],
+      [text.replace("missed_points:\n  - Help prints.\n", "missed_points: { a: 1 }\n"), withoutMissed],
+      [text.replace("missed_points:\n  - Help prints.\n", "missed_points: []\n"), withoutMissed],
+      [text.replace(/  targets:\n(?:    .*\n)+/, "  targets: nonsense\n"), { ...notMet, jev: withoutTargets }],
+      [text.replace("      probability: 0.88\n", "      probability: likely\n"), { ...notMet, jev: withoutTargets }],
+      [text.replace("    - text: I can parse flags.\n", "    - text: [1]\n"), { ...notMet, jev: withoutTargets }],
+      [text.replace(/  targets:\n(?:    .*\n)+/, "  targets:\n    - 0.5\n"), { ...notMet, jev: withoutTargets }],
+      [text.replace("  examples_sent: 3\n", '  examples_sent: "3"\n'), { ...notMet, jev: withoutSent }],
+      [text.replace("  examples_sent: 3\n", "  examples_sent: -1\n"), { ...notMet, jev: withoutSent }],
+      [text.replace("  examples_sent: 3\n", "  examples_sent: 1.5\n"), { ...notMet, jev: withoutSent }],
+      [text.replace("  examples_sent: 3\n", "  examples_sent: [3]\n"), { ...notMet, jev: withoutSent }],
+    ];
+    for (const [variant, expected] of cases) {
+      expect(variant).not.toBe(text);
+      expect(parseAssessment(variant, ids)).toEqual(expected);
+    }
+  });
+
+  it("keeps a note pasted as a heading, or holding U+2028 before one, on one line, with the same note and reply", () => {
+    for (const note of ["## ## Handback", "Off by one\u2028## Handback", "Off by one\u2029## Note\u2028---"]) {
+      const withNote = { ...notMet, note };
+      const text = serializeAssessment(withNote);
+      expect(text.split("\n")).toContain(note);
+      expect(parseAssessment(text, ids)).toEqual(withNote);
+    }
+  });
+
+  it("does not end the front matter at U+2028 or U+2029 and --- inside a missed point or a target", () => {
+    const tricky: Assessment = {
+      ...notMet,
+      missedPoints: ["Help prints.\u2028---", "Exits\u2029---\u2028## Handback"],
+      jev: { ...reading, targets: [{ text: "I can parse flags.\u2028---\u2028## Note", probability: 0.5 }] },
+    };
+    const text = serializeAssessment(tricky);
+    expect(text).toContain("\u2028---");
+    expect(parseAssessment(text, ids)).toEqual(tricky);
+  });
+
+  it("still reads a CRLF result file", () => {
+    const crlf = serializeAssessment(notMet).replace(/\n/g, "\r\n");
+    expect(parseAssessment(crlf, ids)).toEqual(notMet);
+    const parsed = parseAssessment(before.replace(/\n/g, "\r\n"), ids);
+    expect(parsed.jev?.points).toHaveLength(2);
+    expect(parsed.note).toBe("Fine.");
+    expect(parsed.handBack).toBe("Done.");
+  });
+
+  it("round-trips reading model ids YAML could take as a number, a null or a prototype key as text", () => {
+    for (const model of ["1.10", "null", "__proto__"]) {
+      const withModel = { ...notMet, jev: { ...reading, model } };
+      expect(parseAssessment(serializeAssessment(withModel), ids).jev?.model).toBe(model);
+    }
+  });
+});
+
 describe("loadFolder", () => {
   it("loads every entity from a fixture folder with raw text", async () => {
     const storage = fixture();
@@ -983,8 +1138,23 @@ describe("held reply files", () => {
     expect(parseHeld(text, ids)).toEqual(held);
   });
 
-  it("ignores a stray result key and a hand-added note", () => {
-    const text = serializeHeld(held).replace("held_at:", "result: met\nheld_at:").replace("## Handback", "## Note\n\nMine.\n\n## Handback");
+  it("keeps a reading's targets and examples sent, even with U+2028 and --- in a target, and still reads as CRLF (KTD14)", () => {
+    const withTargets: HeldReply = {
+      ...held,
+      jev: { ...jev, targets: [{ text: "I can review\u2028---\u2028## Handback", probability: 0.7 }], examplesSent: 0 },
+    };
+    const text = serializeHeld(withTargets);
+    expect(text).toContain("  examples_sent: 0\n");
+    expect(parseHeld(text, ids)).toEqual(withTargets);
+    expect(parseHeld(text.replace(/\n/g, "\r\n"), ids)).toEqual({ ...withTargets, handBack: handBack.replace(/\n/g, "\r\n") });
+  });
+
+  it("ignores a stray result key, a stray missed points list and a hand-added note", () => {
+    const text = serializeHeld(held)
+      .replace("held_at:", "result: met\nheld_at:")
+      .replace("---\n\n## Handback", "missed_points:\n  - Flags parse.\n---\n\n## Handback")
+      .replace("## Handback", "## Note\n\nMine.\n\n## Handback");
+    expect(text).toContain("missed_points:");
     expect(parseHeld(text, ids)).toEqual(held);
   });
 

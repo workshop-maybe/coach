@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { FAKE_ANSWER, FAKE_ON, FakeJev } from "../jev/fakeJev";
 import { fitsJev } from "./jevBudget";
-import { JEV_LIMITS } from "./jevRequest";
+import { answeringModel, JEV_LIMITS, JEV_MODEL, type JevExample } from "./jevRequest";
 import { findPreset, presetCredential } from "./presets";
 import {
-  isVague,
   OVERALL_CRITERIA,
   OVERALL_ID,
   OVERALL_QUESTION,
@@ -14,7 +14,9 @@ import {
   readingParts,
   rubricParts,
   secondOpinionRequest,
-  VAGUE_BAND,
+  TARGET_CRITERIA,
+  TARGET_QUESTION,
+  targetId,
 } from "./secondOpinion";
 import type { JevReading } from "./types";
 
@@ -122,6 +124,7 @@ describe("secondOpinionRequest", () => {
       rubric_points: ["One", "Two"],
       rubric_notes: "Intro line.\nMet when both hold.",
       rubric,
+      learning_targets: [],
       reply: "I wrote README.md.",
     });
     expect(Object.keys(req)).toEqual(["kind", "state", "questions"]);
@@ -204,6 +207,92 @@ describe("secondOpinionRequest", () => {
   });
 });
 
+describe("secondOpinionRequest: learning targets", () => {
+  const withTargets = (learningTargets: string[], rubric = "- One\n- Two\n- Three\n- Four") =>
+    secondOpinionRequest({ task: "Write the README.", rubric, reply: "Done.", learningTargets });
+
+  it("covers AE1: three targets and four points ask p1 to p4, t1 to t3 and overall", () => {
+    const req = withTargets(["I can install it", "I can run it", "I can test it"]);
+    expect(Object.keys(req.questions)).toEqual(["p1", "p2", "p3", "p4", "t1", "t2", "t3", "overall"]);
+    expect(req.state.learning_targets).toEqual(["I can install it", "I can run it", "I can test it"]);
+  });
+
+  it("asks each target with its text, the directional question and string criteria", () => {
+    const req = withTargets(["I can install it", "I can run it"]);
+    expect(req.questions.t2).toEqual({
+      type: "noul",
+      instructions: { target: "I can run it", question: TARGET_QUESTION },
+      criteria: TARGET_CRITERIA,
+    });
+    expect(TARGET_QUESTION).toBe("Does `reply` show the work `target` describes, given `task`?");
+    expect(typeof TARGET_CRITERIA.true).toBe("string");
+    expect(typeof TARGET_CRITERIA.false).toBe("string");
+    expect(targetId(0)).toBe("t1");
+    expect(targetId(9)).toBe("t10");
+  });
+
+  it("sends targets trimmed, without blanks or repeats, numbered after the drops (KTD12)", () => {
+    const req = withTargets(["  I can install it ", "", "   ", "I can install it", "I can run it\n", "I can run it"]);
+    expect(req.state.learning_targets).toEqual(["I can install it", "I can run it"]);
+    expect(Object.keys(req.questions)).toEqual(["p1", "p2", "p3", "p4", "t1", "t2", "overall"]);
+  });
+
+  it("sends an empty list and no target questions when there are no targets", () => {
+    expect(withTargets([]).state.learning_targets).toEqual([]);
+    expect(Object.keys(withTargets([]).questions)).toEqual(["p1", "p2", "p3", "p4", "overall"]);
+    expect(ask("- One").state.learning_targets).toEqual([]);
+  });
+
+  it("asks the targets of a rubric with no list beside the overall question", () => {
+    expect(Object.keys(withTargets(["I can install it"], "Met when it installs.").questions)).toEqual(["t1", "overall"]);
+  });
+});
+
+describe("secondOpinionRequest: examples", () => {
+  const yes: JevExample = { reply_opening: "I added README.md with an install section." };
+  const no: JevExample = { reply_opening: "Done, the README is updated.", user_reason: "names no file" };
+  const two = (examples: Parameters<typeof secondOpinionRequest>[0]["examples"]) =>
+    secondOpinionRequest({ task: "Write the README.", rubric: "- One\n- Two", reply: "Done.", learningTargets: ["I can install it"], examples });
+
+  it("turns each side with examples into what and examples, and leaves a side with none as its string", () => {
+    const req = two({ p1: { true: [yes], false: [no] }, p2: { true: [yes] } });
+    expect(req.questions.p1.criteria).toEqual({
+      true: { what: POINT_CRITERIA.true, examples: [yes] },
+      false: { what: POINT_CRITERIA.false, examples: [no] },
+    });
+    expect(req.questions.p2.criteria).toEqual({ true: { what: POINT_CRITERIA.true, examples: [yes] }, false: POINT_CRITERIA.false });
+  });
+
+  it("keeps today's criteria on a question with no examples, so a badge with no history sends today's request plus targets", () => {
+    const req = two({ p1: { true: [yes] } });
+    expect(req.questions.p2.criteria).toBe(POINT_CRITERIA);
+    expect(two({ p1: { true: [], false: [] } }).questions.p1.criteria).toBe(POINT_CRITERIA);
+    expect(two(undefined)).toEqual(two({}));
+    expect(two({}).questions.overall).toEqual({ type: "noul", instructions: OVERALL_QUESTION, criteria: OVERALL_CRITERIA });
+  });
+
+  it("puts examples on the overall question, a reason on either side", () => {
+    const reasoned = { ...yes, user_reason: "shows the install command" };
+    const req = two({ overall: { true: [reasoned, yes], false: [no] } });
+    expect(req.questions.overall.criteria).toEqual({
+      true: { what: OVERALL_CRITERIA.true, examples: [reasoned, yes] },
+      false: { what: OVERALL_CRITERIA.false, examples: [no] },
+    });
+  });
+
+  it("never puts examples on a target question, and makes no question for an id it did not ask", () => {
+    const req = two({ t1: { true: [yes] }, p3: { true: [yes] }, L002: { false: [no] } });
+    expect(req.questions.t1.criteria).toBe(TARGET_CRITERIA);
+    expect(Object.keys(req.questions)).toEqual(["p1", "p2", "t1", "overall"]);
+  });
+
+  it("never puts examples in the state", () => {
+    const req = two({ p1: { true: [yes] } });
+    expect(Object.keys(req.state)).toEqual(["task", "rubric_points", "rubric_notes", "rubric", "learning_targets", "reply"]);
+    expect(JSON.stringify(req.state)).not.toContain(yes.reply_opening);
+  });
+});
+
 describe("the budget of a second opinion", () => {
   it("fits a short reply", () => {
     expect(fitsJev(ask("- One\n- Two", "I wrote README.md."))).toBe(true);
@@ -227,7 +316,40 @@ describe("readingParts", () => {
   });
 
   it("reads a rubric with no points as the overall reading alone", () => {
-    expect(readingParts([], { answers: { overall: 0.9 } })).toEqual({ overall: 0.9, points: [] });
+    expect(readingParts([], { answers: { overall: 0.9 } })).toEqual({ overall: 0.9, points: [], targets: [] });
+  });
+
+  it("puts each target's probability beside its text, in order", () => {
+    const parts = readingParts(["One"], { answers: { p1: 0.9, t1: 0.2, t2: 0.7, overall: 0.8 } }, ["I can install it", "I can run it"]);
+    expect(parts).toEqual({
+      overall: 0.8,
+      points: [{ text: "One", probability: 0.9 }],
+      targets: [
+        { text: "I can install it", probability: 0.2 },
+        { text: "I can run it", probability: 0.7 },
+      ],
+    });
+  });
+
+  it("is null when a target's answer is missing or is not a probability, as for a point (KTD12)", () => {
+    expect(readingParts(["One"], { answers: { p1: 0.9, overall: 0.8 } }, ["I can install it"])).toBeNull();
+    expect(readingParts(["One"], { answers: { p1: 0.9, t1: 1.5, overall: 0.8 } }, ["I can install it"])).toBeNull();
+    expect(readingParts([], { answers: { t1: 0.4, overall: 0.8 } }, ["I can install it", "I can run it"])).toBeNull();
+  });
+
+  it("reads every id FakeJev answers for a request with targets, with the pinned model", async () => {
+    const req = secondOpinionRequest({ task: "Write the README.", rubric: "- One\n- Two", reply: "Done.", learningTargets: ["I can install it"] });
+    const answers = await new FakeJev(FAKE_ON).ask(req);
+    expect(answeringModel(answers)).toBe(JEV_MODEL);
+    expect(answers.model).toBe("jev-1.13.0");
+    expect(readingParts(req.state.rubric_points, answers, req.state.learning_targets)).toEqual({
+      overall: FAKE_ANSWER,
+      points: [
+        { text: "One", probability: FAKE_ANSWER },
+        { text: "Two", probability: FAKE_ANSWER },
+      ],
+      targets: [{ text: "I can install it", probability: FAKE_ANSWER }],
+    });
   });
 
   it("is null when an answer is missing", () => {
@@ -244,9 +366,10 @@ describe("readingParts", () => {
   });
 
   it("accepts the ends of the range and ignores ids it did not ask", () => {
-    expect(readingParts(["One"], { answers: { p1: 0, overall: 1, p2: 0.5 } })).toEqual({
+    expect(readingParts(["One"], { answers: { p1: 0, overall: 1, p2: 0.5, t1: 0.5 } })).toEqual({
       overall: 1,
       points: [{ text: "One", probability: 0 }],
+      targets: [],
     });
   });
 
@@ -258,10 +381,10 @@ describe("readingParts", () => {
   });
 });
 
-describe("isVague", () => {
-  it("is true from 0.30 to 0.70 inclusive, and false outside", () => {
-    expect(VAGUE_BAND).toEqual({ min: 0.3, max: 0.7 });
-    for (const p of [0.3, 0.52, 0.7]) expect(isVague(p)).toBe(true);
-    for (const p of [0.29, 0.71, 0, 1]) expect(isVague(p)).toBe(false);
+describe("answeringModel", () => {
+  it("is the model the answer names, or the pinned one when it names none (KTD3)", () => {
+    expect(JEV_MODEL).toBe("jev-1.13.0");
+    expect(answeringModel({ answers: {}, model: "jev-1.14.0" })).toBe("jev-1.14.0");
+    expect(answeringModel({ answers: {} })).toBe(JEV_MODEL);
   });
 });

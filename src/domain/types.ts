@@ -103,6 +103,8 @@ export interface Assessment {
   handoff?: HandoffTemplate;
   /** Jev's second opinion on this reply (KTD12). Absent when none was asked or it was dropped. */
   jev?: JevReading;
+  /** On a Not met result, the rubric points the user said the reply missed, in rubric order. Absent when none were tapped. */
+  missedPoints?: string[];
 }
 
 /**
@@ -139,7 +141,7 @@ export interface HandoffTemplate {
   text: string;
 }
 
-/** One rubric point as Jev read it. The text is stored so the reading outlives rubric edits. */
+/** One rubric point or learning target as Jev read it. The text is stored so the reading outlives badge edits. */
 export interface JevPoint {
   text: string;
   /** From 0 to 1. */
@@ -163,6 +165,10 @@ export interface JevReading {
   overall: number;
   /** One per rubric point, in rubric order. Empty when the rubric has no list. */
   points: JevPoint[];
+  /** One per learning target asked, in order, read as points are. Absent when none was asked. */
+  targets?: JevPoint[];
+  /** How many distinct earlier replies the ask quoted. Absent on a reading taken before asks quoted any. */
+  examplesSent?: number;
 }
 
 /** One of a badge's handoffs, read from collections/<collection>/handoffs/<credential>/<stem>.md (KTD1). */

@@ -10,9 +10,21 @@ const ON: JevStatus = { on: true, hasKey: true, storage: "keychain", hint: "c0de
 
 const secondOpinion: SecondOpinionRequest = {
   kind: "secondOpinion",
-  state: { task: "Review the diff.", rubric_points: ["Finds the bug"], rubric_notes: "", rubric: "- Finds the bug", reply: "Done" },
+  state: {
+    task: "Review the diff.",
+    rubric_points: ["Finds the bug"],
+    rubric_notes: "",
+    rubric: "- Finds the bug",
+    learning_targets: ["I can find a bug in a diff"],
+    reply: "Done",
+  },
   questions: {
-    p1: { type: "noul", instructions: { point: "Finds the bug", question: "Does the `reply` meet the `point`?" } },
+    p1: {
+      type: "noul",
+      instructions: { point: "Finds the bug", question: "Does the `reply` meet the `point`?" },
+      criteria: { true: { what: "names the bug", examples: [{ reply_opening: "The bug is on line 4." }] }, false: "only asserts it" },
+    },
+    t1: { type: "noul", instructions: { target: "I can find a bug in a diff", question: "Does `reply` show the work `target` describes?" } },
     overall: { type: "noul", instructions: "Does the `reply` meet the rubric?" },
   },
 };
@@ -60,13 +72,20 @@ describe("TauriJev", () => {
   });
 
   it("sends either request shape as `request` and returns the answers", async () => {
-    invoke.mockResolvedValueOnce({ answers: { p1: 0.9, overall: 0.7 } }).mockResolvedValueOnce({ answers: { L002: 0.95 } });
-    expect(await jev.ask(secondOpinion)).toEqual({ answers: { p1: 0.9, overall: 0.7 } });
-    expect(await jev.ask(lineBreaks)).toEqual({ answers: { L002: 0.95 } });
+    invoke
+      .mockResolvedValueOnce({ answers: { p1: 0.9, t1: 0.4, overall: 0.7 }, model: "jev-1.13.0" })
+      .mockResolvedValueOnce({ answers: { L002: 0.95 }, model: "jev-1.13.0" });
+    expect(await jev.ask(secondOpinion)).toEqual({ answers: { p1: 0.9, t1: 0.4, overall: 0.7 }, model: "jev-1.13.0" });
+    expect(await jev.ask(lineBreaks)).toEqual({ answers: { L002: 0.95 }, model: "jev-1.13.0" });
     expect(invoke.mock.calls).toEqual([
       ["jev_ask", { request: secondOpinion }],
       ["jev_ask", { request: lineBreaks }],
     ]);
+  });
+
+  it("passes the model that answered through unchanged (KTD3)", async () => {
+    invoke.mockResolvedValueOnce({ answers: { p1: 0.9, t1: 0.4, overall: 0.7 }, model: "jev-1.14.2" });
+    expect(await jev.ask(secondOpinion)).toEqual({ answers: { p1: 0.9, t1: 0.4, overall: 0.7 }, model: "jev-1.14.2" });
   });
 
   it("passes a native error's kind, status and retry-after through as a JevError", async () => {

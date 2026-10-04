@@ -111,6 +111,6 @@ export interface Jev {
   clearKey(): Promise<JevStatus>;
   /** Turns Jev Mode on or off. Off keeps the key; on with no key rejects as "keyMissing". */
   setOn(on: boolean): Promise<JevStatus>;
-  /** Sends one request and resolves to a probability for every question id. Never retried. */
+  /** Sends one request and resolves to a probability for every question id, and the model that answered. Never retried. */
   ask(request: JevRequest): Promise<JevAnswers>;
 }

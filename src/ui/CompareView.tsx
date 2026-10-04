@@ -148,7 +148,7 @@ export function CompareView({ credentialKey: key, takes, picks }: { credentialKe
             <article key={e.id} className="reply-record" aria-label={`${profile.name}, ${when}`}>
               <TakeBar name={profile.name} take={a} id={headingOf(e.id)} when={when} />
               <RichView aria-label="Reply" value={a.handBack} stored={asStored} images={resultImages(storage, a)} />
-              {a.jev && <SavedReading reading={a.jev} />}
+              {a.jev && <SavedReading reading={a.jev} credentialKey={key} hasVerdict={!isHeld(a)} />}
               <TakeActions
                 take={a}
                 goTo={offer(e)}
