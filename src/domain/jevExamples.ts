@@ -240,6 +240,16 @@ function looksSecret(line: string): boolean {
   return [...line.matchAll(BASE64_RUN)].some(([run]) => /\d/.test(run) && /[a-z]/.test(run) && /[A-Z]/.test(run));
 }
 
+/** A line outside any fence, for `cleanLines` when it isn't reading lines as a reader sees them. */
+const OUTSIDE_FENCE: ReturnType<typeof fenceStep> = { fence: false, inFence: false, open: null };
+
+/**
+ * How much of a line, past its leading space, is read as a reader sees it before the cut: a
+ * reader's form is at least a fifth as long (`&amp;` reads as `&`), so a line long enough to
+ * be cut still is once read.
+ */
+const MAX_READ_UNITS = 5 * MAX_LINE_UNITS;
+
 /**
  * The text's lines as an example may show them (KTD10), leading blank lines dropped: every
  * line break read as `\n`, invisible characters dropped, image Markdown and image data
@@ -252,7 +262,9 @@ function looksSecret(line: string): boolean {
  *
  * With `reader`, each line outside fenced code is then read as a reader sees it
  * (`readerLine`), after images go, since an image is matched on the Markdown the box wrote,
- * and before the secret check, so the patterns see a token the box escaped as it is.
+ * and before the cut and the secret check, so the patterns see a token the box escaped as it
+ * is, and the cut still falls past what an excerpt shows: cut first, a line that reads
+ * shorter could put the cut inside the opening, and split an emoji there.
  */
 function cleanLines(text: string, enough = Infinity, reader = false): string[] {
   const kept: string[] = [];
@@ -262,7 +274,7 @@ function cleanLines(text: string, enough = Infinity, reader = false): string[] {
   for (const raw of text.split(LINE_BREAK)) {
     if (units >= enough) break;
     const line = raw.replace(INVISIBLE, "");
-    const step = fenceStep(line, fence);
+    const step: ReturnType<typeof fenceStep> = reader ? fenceStep(line, fence) : OUTSIDE_FENCE;
     fence = step.open;
     if (inPem || PEM_BEGIN.test(line)) {
       inPem = !PEM_END.test(line);
@@ -271,8 +283,9 @@ function cleanLines(text: string, enough = Infinity, reader = false): string[] {
     if (IMAGE_DEFINITION.test(line)) continue;
     const full = line.replace(IMAGE, "").replace(IMAGE_DATA, "");
     if (full !== line && full.trim() === "") continue;
-    const cut = full.slice(0, Math.max(0, full.search(/\S/)) + MAX_LINE_UNITS);
-    const shown = reader && !step.fence && !step.inFence ? readerLine(cut) : cut;
+    const lead = Math.max(0, full.search(/\S/));
+    const read = reader && !step.fence && !step.inFence ? readerLine(full.slice(0, lead + MAX_READ_UNITS)) : full;
+    const shown = read.slice(0, lead + MAX_LINE_UNITS);
     if (looksSecret(shown)) continue;
     if (kept.length === 0 && shown.trim() === "") continue;
     kept.push(kept.length === 0 ? shown.trimStart() : shown);

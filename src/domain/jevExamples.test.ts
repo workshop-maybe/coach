@@ -354,6 +354,15 @@ describe("an excerpt", () => {
     expect(excerptOf(`${"w".repeat(300)}😀v`)).toBe("w".repeat(300));
   });
 
+  it("reads a long line before cutting it, so a line that reads shorter keeps its whole first line and every emoji", () => {
+    // 110 `&lt;` are 440 units as written and 110 characters as read: cut first, the line's
+    // cut fell inside the opening, on the emoji's first half, and Rust refuses a lone half.
+    const line = `${"<".repeat(110)}${"to the left. ".repeat(12)}zzzzz😀 and more…`;
+    const opening = excerptOf(`${line.replace(/</g, "&lt;")}\n\nSecond paragraph.`);
+    expect(opening).toBe(line);
+    expect(opening).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/);
+  });
+
   it("drops zero-width, bidi and tag characters, and reads every line break as one", () => {
     const reply = "Fi\u200bxed \u202ethe\u202c bug\u{E0041}\u{E0042}.\u2066\u2069\r\nDone\u00ad.\rAll\u2028good\u000Bnow\ufeff.";
     expect(excerptOf(reply)).toBe("Fixed the bug.\nDone.\nAll\ngood\nnow.");
