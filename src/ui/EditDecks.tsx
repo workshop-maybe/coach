@@ -14,7 +14,8 @@ import { useState } from "react";
 import type { KeyboardEvent } from "react";
 import { PALETTES } from "../badge/palettes";
 import type { BadgeSettings, BadgeTitle } from "../badge/settings";
-import { collectionPath, credentialPath, loadFolder, profilePath } from "../domain/folder";
+import { collectionPath, credentialPath, credentialsDir, loadFolder, profilePath } from "../domain/folder";
+import { folderOf } from "../domain/images";
 import { cellKey, type Matrix } from "../domain/matrix";
 import { importBadgeArt, setCredentialBadgeOverride, updateCredential, updateProfile } from "../domain/operations";
 import { checkCriteriaPrompt, refinePrompt, reviewAssignmentPrompt } from "../domain/prompts";
@@ -38,6 +39,7 @@ import type { AgentPart, CredentialPart } from "./routes";
 import { CopyHelper, LineMove, Missing, TargetHint, fileName, paletteName } from "./shared";
 import { describeError, useFolder } from "./useFolderState";
 import { useMatrix } from "./useMatrix";
+import { useRichImages } from "./useRichImages";
 
 // ---------------------------------------------------------------------------
 // Shared pieces
@@ -189,6 +191,9 @@ function EditCredential({ credentialKey: key, part, credential: atOpen, collecti
   const rubricDraft = useRichDraft(c.rubric);
   const task = taskDraft.value;
   const rubric = rubricDraft.value;
+  // Pasted images go beside the credential's file.
+  const taskImages = useRichImages(credentialsDir(collectionSlug), task);
+  const rubricImages = useRichImages(credentialsDir(collectionSlug), rubric);
   const [look, setLook] = useState<BadgeSettings>(() => opened.collection.badgeOverrides?.[slug] ?? {});
   const [artError, setArtError] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
@@ -325,13 +330,13 @@ function EditCredential({ credentialKey: key, part, credential: atOpen, collecti
           id: "task",
           title: "The task",
           forward: warn ? "Next" : "Save",
-          valid: task.trim() !== "" && taskDraft.changed,
+          valid: task.trim() !== "" && taskDraft.changed && !taskImages.busy,
           settled: "Task changed",
           pane: true,
           focusBody: true,
           body: (
             <>
-              <RichText aria-label="Task" placeholder="What the agent is asked to do" value={task} onChange={taskDraft.setValue} onNormalized={taskDraft.onNormalized} />
+              <RichText aria-label="Task" placeholder="What the agent is asked to do" value={task} onChange={taskDraft.setValue} onNormalized={taskDraft.onNormalized} images={taskImages.images} />
               <CopyHelper label="Review this assignment" text={() => reviewAssignmentPrompt({ ...c, task })} />
               <CopyHelper label="Write a refine prompt" text={() => refinePrompt({ ...c, task })} />
             </>
@@ -346,13 +351,13 @@ function EditCredential({ credentialKey: key, part, credential: atOpen, collecti
           id: "rubric",
           title: "What good looks like",
           forward: warn ? "Next" : "Save",
-          valid: rubricDraft.changed,
+          valid: rubricDraft.changed && !rubricImages.busy,
           settled: firstRubric ? "Rubric added" : "Rubric changed",
           pane: true,
           focusBody: true,
           body: (
             <>
-              <RichText aria-label="Rubric" placeholder="How you will judge it" value={rubric} onChange={rubricDraft.setValue} onNormalized={rubricDraft.onNormalized} />
+              <RichText aria-label="Rubric" placeholder="How you will judge it" value={rubric} onChange={rubricDraft.setValue} onNormalized={rubricDraft.onNormalized} images={rubricImages.images} />
               <CopyHelper label="Check my criteria" text={() => checkCriteriaPrompt({ ...c, rubric })} />
             </>
           ),
@@ -473,6 +478,8 @@ function EditAgent({ profileSlug, part, profile: atOpen, state: stateAtOpen }: E
   const [repo, setRepo] = useState(p.repo);
   const notesDraft = useRichDraft(p.notes);
   const notes = notesDraft.value;
+  // Notes save inside agents/<slug>.json, so their images go in agents/.
+  const notesImages = useRichImages(folderOf(path), notes);
   const [params, setParams] = useState(() => Object.entries(p.params).map(([k, v]) => `${k} = ${v}`));
   const [line, setLine] = useState("");
 
@@ -531,10 +538,10 @@ function EditAgent({ profileSlug, part, profile: atOpen, state: stateAtOpen }: E
         id: "notes",
         title: "Notes",
         forward: "Save",
-        valid: notesDraft.changed,
+        valid: notesDraft.changed && !notesImages.busy,
         pane: true,
         focusBody: true,
-        body: <RichText aria-label="Notes" placeholder="Anything worth remembering" value={notes} onChange={notesDraft.setValue} onNormalized={notesDraft.onNormalized} />,
+        body: <RichText aria-label="Notes" placeholder="Anything worth remembering" value={notes} onChange={notesDraft.setValue} onNormalized={notesDraft.onNormalized} images={notesImages.images} />,
       };
       break;
     case "params":

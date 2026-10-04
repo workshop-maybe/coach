@@ -29,6 +29,11 @@ export class TauriStorage implements Storage {
     return invoke<string | null>("import_badge_art", { collectionSlug, credentialSlug });
   }
 
+  saveImage(root: RootKind, dir: string, bytes: Uint8Array): Promise<string> {
+    // The bytes go as the raw body; the folder is percent-encoded, since a header is ASCII.
+    return invoke<string>("save_image", bytes, { headers: { "x-root": root, "x-dir": encodeURIComponent(dir) } });
+  }
+
   readContext(repo: string, harness: string): Promise<ContextReading> {
     return invoke<ContextReading>("read_context", { repo, harness });
   }

@@ -4,6 +4,7 @@ import { handoffKeys } from "../cast/mappings";
 import type { ContextLine } from "../domain/context";
 import type { GoToFlag } from "../domain/goTo";
 import { SKELETON_ID, handoffsFor } from "../domain/handoffs";
+import { isImagesOnlyLine } from "../domain/images";
 import type { CellFlag, CellStatus } from "../domain/matrix";
 import type { AgentSetup, FolderState } from "../domain/types";
 import type { PendingTest } from "./pendingTests";
@@ -75,4 +76,8 @@ export function formatDate(iso: string): string {
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
-export const firstLine = (text: string) => text.trim().split("\n")[0] ?? "";
+/** The text's first line, skipping lines that hold only images, so a preview never shows raw image Markdown. */
+export function firstLine(text: string): string {
+  const lines = text.trim().split("\n");
+  return lines.find((l) => l.trim() !== "" && !isImagesOnlyLine(l))?.trim() ?? lines[0] ?? "";
+}

@@ -24,6 +24,12 @@ export interface Storage {
    */
   importBadgeArt(collectionSlug: string, credentialSlug: string | null): Promise<string | null>;
   /**
+   * Saves a pasted JPEG or PNG (10 MiB max) into `dir` under a content-addressed name and
+   * returns its root-relative path. The same bytes already there are not written again; a
+   * different file at that name is an error, never overwritten.
+   */
+  saveImage(root: RootKind, dir: string, bytes: Uint8Array): Promise<string>;
+  /**
    * This machine plus a fingerprint of the harness's memory for the agent's repo (R1). File
    * contents never cross; only the digest does. Reads outside the chosen folders.
    */

@@ -14,6 +14,7 @@
 import { useState } from "react";
 import { credentialKey } from "../domain/types";
 import { formatDate } from "./format";
+import { resultImages } from "./imageSource";
 import { useNav } from "./nav";
 import { usePane } from "./pane";
 import { backFromCompare, takeOf } from "./replyRoute";
@@ -25,7 +26,7 @@ import { useFolder } from "./useFolderState";
 import { useMatrix } from "./useMatrix";
 
 export function CompareView({ credentialKey: key, takes, picks }: { credentialKey: string; takes: [TakeRef, TakeRef]; picks?: TakeRef[] }) {
-  const { state } = useFolder();
+  const { state, storage } = useFolder();
   const { navigate } = useNav();
   const matrix = useMatrix(state);
   const [asStored, setAsStored] = useState(false);
@@ -62,7 +63,7 @@ export function CompareView({ credentialKey: key, takes, picks }: { credentialKe
           return (
             <article key={i} className="reply-record" aria-label={`${profile.name}, ${date}`}>
               <TakeBar name={profile.name} result={a} focus={i === 0} />
-              <RichView aria-label="Reply" value={a.handBack} stored={asStored} />
+              <RichView aria-label="Reply" value={a.handBack} stored={asStored} images={resultImages(storage, a)} />
               {a.jev && <SavedReading reading={a.jev} />}
             </article>
           );

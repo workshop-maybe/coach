@@ -1,6 +1,7 @@
 // In-memory Storage for tests. One Map of path -> text per root, plus a separate
 // Map of path -> data URI per root for images.
 
+import { IMAGE_TOO_LARGE, NOT_AN_IMAGE, PASTED_IMAGE_MAX_BYTES, bytesToBase64, imageExtension } from "../domain/images";
 import type { ContextReading } from "../domain/types";
 import type { RootKind, Storage } from "./storage";
 
@@ -76,6 +77,22 @@ export class MemoryStorage implements Storage {
     const path = `collections/${collectionSlug}/badge/${credentialSlug ?? "art"}-${hash8(uri)}.${ext}`;
     this.images.data.set(path, uri);
     this.writes.push({ root: "data", path });
+    return path;
+  }
+
+  /** Mirrors the Rust command: magic bytes, the 10 MiB cap, a content-addressed name, no overwrite. */
+  async saveImage(root: RootKind, dir: string, bytes: Uint8Array): Promise<string> {
+    const ext = imageExtension(bytes);
+    if (ext === null) throw new Error(NOT_AN_IMAGE);
+    if (bytes.length > PASTED_IMAGE_MAX_BYTES) throw new Error(IMAGE_TOO_LARGE);
+    const uri = `data:image/${ext === "jpg" ? "jpeg" : "png"};base64,${bytesToBase64(bytes)}`;
+    const name = `image-${hash8(uri)}.${ext}`;
+    const path = dir === "" || dir === "." ? name : `${dir}/${name}`;
+    const existing = this.images[root].get(path);
+    if (existing === uri) return path;
+    if (existing !== undefined || this.roots[root].has(path)) throw new Error(`A different file is already named ${name}.`);
+    this.images[root].set(path, uri);
+    this.writes.push({ root, path });
     return path;
   }
 

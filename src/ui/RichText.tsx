@@ -6,6 +6,12 @@
 // every text paste, a terminal copy that comes with rich text takes the text path, and the
 // box reports each paste to its owner, which can later write a cleaned-up text back the
 // same way (KTD18). Every other box pastes as it always has.
+//
+// A box given `images` also takes pasted images (KTD5, KTD8 of the paste-images plan). An
+// image paste is caught before any of the text handling above, and only when the clipboard
+// carries no real text, so every text paste is unchanged. Each image is saved beside the
+// box's file, then its ref goes in where the paste happened. An image paste is an edit like
+// any other: it reaches `onChange`, never `onPaste`.
 
 import { useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, Ref } from "react";
@@ -13,10 +19,23 @@ import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
 import { Node as PMNode, Slice } from "@tiptap/pm/model";
-import type { EditorState } from "@tiptap/pm/state";
+import { TextSelection, type EditorState, type Transaction } from "@tiptap/pm/state";
+import { Mapping } from "@tiptap/pm/transform";
+import type { EditorView } from "@tiptap/pm/view";
 import { ToolKey, type ToolName } from "../cast/ToolKey";
 import { findJoinCandidates, fixPastedText, looksTerminalCopied } from "../domain/pasteText";
+import { imagePaste } from "./pasteImages";
 import { richExtensions } from "./richExtensions";
+import { refreshImages, type RichImageSource } from "./richImage";
+
+/** A box's images: read for display, and saved when pasted. */
+export interface RichImages extends RichImageSource {
+  /**
+   * Saves a pasted image beside the box's file and resolves to its bare file name. Rejects,
+   * having already told the person why, when the image can't be saved.
+   */
+  save?(file: File): Promise<string>;
+}
 
 export interface RichTextProps {
   /** The text as Markdown. */
@@ -34,6 +53,8 @@ export interface RichTextProps {
   onPaste?(paste: PastePayload): void;
   /** Writes text into the box the way a paste would (KTD18). */
   ref?: Ref<RichTextHandle>;
+  /** The images beside the box's file. Without it, an image paste is not taken and images show as placeholders. */
+  images?: RichImages;
 }
 
 /** What a paste into the reply box did, reported once its transaction has run. */
@@ -82,18 +103,73 @@ function replacesWholeBox(state: EditorState): boolean {
 /** A paste on its way in: what `transformPastedText` saw, until the paste's transaction lands. */
 type PendingPaste = Omit<PastePayload, "markdown" | "candidates">;
 
-export function RichText({ value, onChange, onNormalized, placeholder, autoFocus, cleanPaste = false, onPaste, ref, "aria-label": label }: RichTextProps) {
-  const latest = useRef({ onChange, onNormalized, onPaste, cleanPaste });
-  latest.current = { onChange, onNormalized, onPaste, cleanPaste };
+/**
+ * Puts an image for each name over `from`–`to`. In a code block, where an image can't sit,
+ * they go in a new paragraph after the block. The cursor moves after them only if it is
+ * still where the paste left it; a person who typed or clicked elsewhere meanwhile keeps
+ * their place.
+ */
+function insertImages(view: EditorView, from: number, to: number, names: string[]): void {
+  const { state } = view;
+  const untouched = state.selection.from === from && state.selection.to === to;
+  const nodes = names.map((src) => state.schema.nodes.image.create({ src }));
+  const $from = state.doc.resolve(from);
+  let tr: Transaction;
+  let end: number;
+  if ($from.parent.type.spec.code) {
+    const after = $from.after($from.depth);
+    tr = state.tr.insert(after, state.schema.nodes.paragraph.create(null, nodes));
+    end = after + 1 + nodes.length;
+  } else {
+    tr = state.tr.replaceWith(from, to, nodes);
+    end = tr.mapping.map(to);
+  }
+  view.dispatch(untouched ? tr.setSelection(TextSelection.near(tr.doc.resolve(end))).scrollIntoView() : tr);
+}
+
+export function RichText({ value, onChange, onNormalized, placeholder, autoFocus, cleanPaste = false, onPaste, ref, images, "aria-label": label }: RichTextProps) {
+  const latest = useRef({ onChange, onNormalized, onPaste, cleanPaste, images });
+  latest.current = { onChange, onNormalized, onPaste, cleanPaste, images };
   // The Markdown the editor last showed or sent, so a value that comes back unchanged is not re-parsed.
   const shown = useRef(value);
   const pending = useRef<PendingPaste | null>(null);
   // Set while a terminal copy re-enters the paste as text, and while `replaceAsPaste` writes.
   const rerouting = useRef(false);
   const writing = useRef(false);
+  // Bumped whenever the box's content is replaced from outside, so an image still saving
+  // from before then is not put into content it was never pasted into (KTD8).
+  const replaced = useRef(0);
+  // False once the box unmounts. Tiptap destroys the editor a moment later, so this is the first sign.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  /** Saves pasted images, then puts their refs where the paste happened (KTD8). */
+  async function pasteImages(view: EditorView, files: File[], save: (file: File) => Promise<string>) {
+    const ed = editorRef.current;
+    if (!ed) return;
+    const { from, to } = view.state.selection;
+    const generation = replaced.current;
+    // Typing while the images save moves the paste position along with the text.
+    const mapping = new Mapping();
+    const track = ({ transaction }: { transaction: Transaction }) => mapping.appendMapping(transaction.mapping);
+    ed.on("transaction", track);
+    try {
+      const saved = await Promise.allSettled(files.map((file) => save(file)));
+      const names = saved.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
+      if (names.length === 0 || !mounted.current || ed.isDestroyed || replaced.current !== generation) return;
+      insertImages(ed.view, mapping.map(from, -1), mapping.map(to, -1), names);
+    } finally {
+      ed.off("transaction", track);
+    }
+  }
 
   const editor = useEditor({
-    extensions: richExtensions(placeholder),
+    extensions: richExtensions(placeholder, () => latest.current.images ?? null),
     content: value,
     contentType: "markdown",
     autofocus: autoFocus ? "end" : false,
@@ -112,6 +188,17 @@ export function RichText({ value, onChange, onNormalized, placeholder, autoFocus
       // pane it steps out of the box (U6, R19, KTD8).
       handleDOMEvents: {
         keydown: (_view, event) => event.key === "Escape",
+        // An image paste is taken here, ahead of ProseMirror's own paste and the text
+        // handling below, and only when the clipboard carries no real text (KTD5).
+        paste: (view, event) => {
+          const save = latest.current.images?.save;
+          if (!save || !view.editable) return false;
+          const files = imagePaste(event.clipboardData);
+          if (files.length === 0) return false;
+          event.preventDefault();
+          void pasteImages(view, files, save);
+          return true;
+        },
       },
       // The reply box's fixes see every text paste, Shift-pastes and external text drops
       // included, and leave the dispatch to ProseMirror, so paste rules, a link pasted over a
@@ -176,6 +263,7 @@ export function RichText({ value, onChange, onNormalized, placeholder, autoFocus
     () => ({
       replaceAsPaste(text) {
         if (!editor) return shown.current;
+        replaced.current++;
         // Emptied first, so a lone URL replaces the text instead of linking it.
         writing.current = true;
         try {
@@ -205,8 +293,17 @@ export function RichText({ value, onChange, onNormalized, placeholder, autoFocus
   useEffect(() => {
     if (!editor || value === shown.current) return;
     shown.current = value;
+    replaced.current++;
     editor.commands.setContent(value, { contentType: "markdown", emitUpdate: false });
   }, [editor, value]);
+
+  // Images from a new source (another folder) are read again.
+  const imagesShown = useRef(images);
+  useEffect(() => {
+    if (!editor || imagesShown.current === images) return;
+    imagesShown.current = images;
+    refreshImages(editor);
+  }, [editor, images]);
 
   return (
     <div className="rich">

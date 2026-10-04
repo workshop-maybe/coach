@@ -50,6 +50,7 @@ dependencies = [
  "apple-native-keyring-store",
  "base64 0.22.1",
  "keyring-core",
+ "percent-encoding",
  "reqwest",
  "secret-service",
  "serde",

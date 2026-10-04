@@ -4,10 +4,10 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { createRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import { TextSelection } from "@tiptap/pm/state";
-import { RichText, looksLikeMarkdown, type RichTextHandle } from "./RichText";
+import { RichText, looksLikeMarkdown, type RichImages, type RichTextHandle } from "./RichText";
 import { RichText as StubRichText } from "./richTextStub";
 import { useRichDraft } from "./richDraft";
-import { firePaste } from "../test/paste";
+import { firePaste, pngFile } from "../test/paste";
 
 // The ProseMirror jsdom shims live in src/test/setup.ts (KTD11).
 afterEach(cleanup);
@@ -162,6 +162,54 @@ describe("RichText", () => {
     rerender(<RichText aria-label="Task" value="- Two" onChange={onChange} />);
     expect(box().querySelector("ul li")?.textContent).toBe("Two");
     expect(onChange).not.toHaveBeenCalled();
+  });
+});
+
+describe("images in the Markdown (KTD1, R9)", () => {
+  /** Opens `md`, makes an unrelated edit at the end, and returns what the box saves. */
+  function editedOnce(md: string): string {
+    const { ed, onChange } = setup(md);
+    act(() => {
+      ed.commands.focus("end");
+    });
+    typeInto(ed, " x");
+    const saved = onChange.mock.lastCall?.[0] as string;
+    return saved.endsWith(" x") ? saved.slice(0, -2) : saved;
+  }
+
+  it.each([
+    ["a block image between paragraphs", "Before\n\n![](image-1a2b3c4d.png)\n\nAfter"],
+    ["alt and title", 'See ![alt](a.png "t") here'],
+    ["an inline image mid-sentence", "Look ![](image-1a2b3c4d.png) here"],
+    ["a src with a space", "Shot ![](<Screenshot at 09.12.png>) here"],
+    ["a remote src", "Remote ![a picture](https://example.com/p.png) here"],
+  ])("keeps %s after an edit", (_, md) => {
+    expect(editedOnce(md)).toBe(md);
+    cleanup();
+  });
+
+  it("keeps a paragraph that holds only an image (KTD15)", () => {
+    const { ed } = setup("One\n\n![](image-1a2b3c4d.png)\n\nTwo");
+    expect(ed.getMarkdown()).toBe("One\n\n![](image-1a2b3c4d.png)\n\nTwo");
+  });
+
+  it.each([
+    ["an escaped bracket in alt", "![a\\]b](x.png)", "![a\\]b](x.png)"],
+    ["an escaped backslash in alt", "![a\\\\b](x.png)", "![a\\\\b](x.png)"],
+    ["an escaped underscore in alt", "![a\\_b](x.png)", "![a_b](x.png)"],
+    ["an escaped quote in a title", '![](x.png "say \\"hi\\"")', '![](x.png "say \\"hi\\"")'],
+    ["angle brackets in a bracketed src", "![](<a\\<b\\>.png>)", "![](<a\\<b\\>.png>)"],
+  ])("settles %s after one edit, and a second edit changes nothing more", (_, md, settled) => {
+    const once = editedOnce(md);
+    expect(once).toBe(settled);
+    cleanup();
+    expect(editedOnce(once)).toBe(settled);
+    cleanup();
+  });
+
+  it("copies an image as its Markdown in plain text", () => {
+    const { ed } = setup("![shot](image-1a2b3c4d.png)");
+    expect(ed.getText()).toBe("![shot](image-1a2b3c4d.png)");
   });
 });
 
@@ -401,6 +449,223 @@ describe("the other boxes' paste", () => {
     firePaste(box(), { "text/plain": "⏺ Done.\n  next", "text/html": "<p><b>HTML</b> flavor</p>" });
     expect(box().querySelector("strong")?.textContent).toBe("HTML");
     expect(onPaste).not.toHaveBeenCalled();
+  });
+});
+
+describe("pasting an image (KTD5, KTD8)", () => {
+  /** A box whose images save to the names given, in order, each when its promise is settled by `land`. */
+  function setupImages(value = "", props: { cleanPaste?: boolean; onPaste?: () => void } = {}) {
+    const onChange = vi.fn();
+    const saves: { file: File; resolve: (name: string) => void; reject: (e: Error) => void }[] = [];
+    const images: RichImages = {
+      load: () => Promise.resolve("data:image/png;base64,iVBORw0KGgo="),
+      save: vi.fn(
+        (file: File) =>
+          new Promise<string>((resolve, reject) => {
+            saves.push({ file, resolve, reject });
+          }),
+      ),
+    };
+    const ref = createRef<RichTextHandle>();
+    const label = props.cleanPaste ? "Reply" : "Task";
+    const utils = render(<RichText ref={ref} aria-label={label} value={value} onChange={onChange} images={images} {...props} />);
+    const ed = editorOf(box(label));
+    /** Lets every pending save land with its name, then waits for the inserts. */
+    async function land(...names: string[]) {
+      await act(async () => {
+        names.forEach((name, i) => saves[i].resolve(name));
+        await new Promise((r) => setTimeout(r, 0));
+      });
+    }
+    return { onChange, images, saves, ed, ref, land, label, utils };
+  }
+
+  it("saves a pasted PNG and puts its ref at the cursor (R1)", async () => {
+    const { onChange, images, saves, ed, land } = setupImages("Look here");
+    act(() => {
+      ed.commands.focus("end");
+    });
+    const file = pngFile();
+    expect(firePaste(box(), {}, [file])).toBe(false);
+    expect(images.save).toHaveBeenCalledTimes(1);
+    expect(saves[0].file).toBe(file);
+    await land("image-1a2b3c4d.png");
+    expect(onChange).toHaveBeenLastCalledWith("Look here![](image-1a2b3c4d.png)");
+  });
+
+  it("replaces a selected word with the image", async () => {
+    const { onChange, ed, land } = setupImages("make this bold");
+    act(() => {
+      ed.view.dispatch(ed.state.tr.setSelection(TextSelection.create(ed.state.doc, 6, 10)));
+    });
+    firePaste(box(), {}, [pngFile()]);
+    await land("a.png");
+    expect(onChange).toHaveBeenLastCalledWith("make ![](a.png) bold");
+  });
+
+  it("puts two images in clipboard order", async () => {
+    const { onChange, images, ed, land } = setupImages("");
+    act(() => {
+      ed.commands.focus("end");
+    });
+    firePaste(box(), {}, [pngFile("one.png"), pngFile("two.jpg", "image/jpeg")]);
+    expect(images.save).toHaveBeenCalledTimes(2);
+    await land("one.png", "two.jpg");
+    expect(onChange).toHaveBeenLastCalledWith("![](one.png)![](two.jpg)");
+  });
+
+  it("inserts only the images that saved", async () => {
+    const { onChange, saves, ed } = setupImages("");
+    act(() => {
+      ed.commands.focus("end");
+    });
+    firePaste(box(), {}, [pngFile("one.png"), pngFile("two.gif", "image/gif")]);
+    await act(async () => {
+      saves[0].resolve("one.png");
+      saves[1].reject(new Error("Only PNG and JPEG images can be pasted."));
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(onChange).toHaveBeenLastCalledWith("![](one.png)");
+  });
+
+  it("takes the text path for an image that comes with real text, as an Office copy does (R3)", () => {
+    const { onChange, images } = setupImages("");
+    firePaste(box(), { "text/plain": "Revenue Q3", "text/html": "<table><tr><td>Revenue Q3</td></tr></table>" }, [pngFile()]);
+    expect(images.save).not.toHaveBeenCalled();
+    expect(onChange).toHaveBeenLastCalledWith("Revenue Q3");
+  });
+
+  it("takes the image for a browser's Copy Image, whose HTML is only the image and whose text is its address", async () => {
+    const { images, land } = setupImages("");
+    firePaste(box(), { "text/plain": "https://example.com/p.png", "text/html": '<meta charset="utf-8"><img src="https://example.com/p.png">' }, [pngFile()]);
+    expect(images.save).toHaveBeenCalledTimes(1);
+    await land("image-1a2b3c4d.png");
+  });
+
+  it("hands a GIF to save, which refuses it, and inserts nothing", async () => {
+    const { onChange, images, saves } = setupImages("Before");
+    firePaste(box(), {}, [pngFile("anim.gif", "image/gif")]);
+    expect(images.save).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      saves[0].reject(new Error("Only PNG and JPEG images can be pasted."));
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("is not taken by a box with no images", () => {
+    const onChange = vi.fn();
+    render(<RichText aria-label="Task" value="" onChange={onChange} />);
+    expect(firePaste(box(), {}, [pngFile()])).toBe(true);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("does not report an image paste to the reply box's owner, and leaves its text paste as it was", async () => {
+    const onPaste = vi.fn();
+    const { onChange, images, land, label } = setupImages("", { cleanPaste: true, onPaste });
+    firePaste(box(label), {}, [pngFile()]);
+    await land("image-1a2b3c4d.png");
+    expect(onChange).toHaveBeenLastCalledWith("![](image-1a2b3c4d.png)");
+    expect(onPaste).not.toHaveBeenCalled();
+    firePaste(box(label), { "text/plain": " and more" });
+    expect(onPaste).toHaveBeenCalledTimes(1);
+    expect(images.save).toHaveBeenCalledTimes(1);
+  });
+
+  it("lands at the paste position when the person types while it saves", async () => {
+    const { onChange, ed, land } = setupImages("One two");
+    act(() => {
+      ed.view.dispatch(ed.state.tr.setSelection(TextSelection.create(ed.state.doc, 4)));
+    });
+    firePaste(box(), {}, [pngFile()]);
+    act(() => {
+      ed.commands.focus("end");
+    });
+    typeInto(ed, " three");
+    await land("a.png");
+    expect(onChange).toHaveBeenLastCalledWith("One![](a.png) two three");
+    // The cursor stays where the person was typing, at the end, not back beside the image.
+    expect(ed.state.selection.from).toBe(ed.state.doc.content.size - 1);
+  });
+
+  it("leaves the cursor right after the image when nothing moved it while it saved", async () => {
+    const { ed, land } = setupImages("One two");
+    act(() => {
+      ed.view.dispatch(ed.state.tr.setSelection(TextSelection.create(ed.state.doc, 4)));
+    });
+    firePaste(box(), {}, [pngFile()]);
+    await land("a.png");
+    expect(ed.state.selection.from).toBe(5);
+  });
+
+  it("drops the insert when the box is set from outside while it saves", async () => {
+    const { onChange, ed, land, utils, images } = setupImages("Old reply");
+    act(() => {
+      ed.commands.focus("end");
+    });
+    firePaste(box(), {}, [pngFile()]);
+    utils.rerender(<RichText aria-label="Task" value="" onChange={onChange} images={images} />);
+    await land("a.png");
+    expect(ed.getMarkdown()).toBe("");
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("drops the insert when replaceAsPaste writes the box while it saves", async () => {
+    const { onChange, ed, ref, land } = setupImages("Old reply");
+    firePaste(box(), {}, [pngFile()]);
+    act(() => {
+      ref.current!.replaceAsPaste("New reply.");
+    });
+    await land("a.png");
+    expect(ed.getMarkdown()).toBe("New reply.");
+    expect(onChange).toHaveBeenLastCalledWith("New reply.");
+  });
+
+  it("drops the insert, quietly, when the box closes while it saves", async () => {
+    const { onChange, land, utils } = setupImages("Old reply");
+    firePaste(box(), {}, [pngFile()]);
+    utils.unmount();
+    await land("a.png");
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("puts an image pasted in a code block in a new paragraph after the block", async () => {
+    const { onChange, ed, land } = setupImages("```\nx\n```");
+    act(() => {
+      ed.view.dispatch(ed.state.tr.setSelection(TextSelection.create(ed.state.doc, 2)));
+    });
+    firePaste(box(), {}, [pngFile()]);
+    await land("a.png");
+    expect(onChange).toHaveBeenLastCalledWith("```\nx\n```\n\n![](a.png)");
+  });
+
+  it("still passes Escape through", () => {
+    setupImages("Keep it");
+    expect(fireEvent.keyDown(box(), { key: "Escape", code: "Escape", keyCode: 27 })).toBe(true);
+  });
+});
+
+describe("the flow-test stub's image paste", () => {
+  it("saves the image and splices its ref in at the selection", async () => {
+    const onChange = vi.fn();
+    const save = vi.fn(() => Promise.resolve("image-x.png"));
+    render(<StubRichText aria-label="Task" value="AB" onChange={onChange} images={{ load: () => Promise.resolve(null), save }} />);
+    const el = screen.getByRole("textbox", { name: "Task" }) as HTMLTextAreaElement;
+    el.setSelectionRange(1, 1);
+    firePaste(el, {}, [pngFile()]);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenLastCalledWith("A![](image-x.png)B");
+  });
+
+  it("leaves a text paste with an image to the text path", () => {
+    const onChange = vi.fn();
+    const save = vi.fn(() => Promise.resolve("image-x.png"));
+    render(<StubRichText aria-label="Task" value="" onChange={onChange} images={{ load: () => Promise.resolve(null), save }} />);
+    firePaste(screen.getByRole("textbox", { name: "Task" }), { "text/plain": "Revenue" }, [pngFile()]);
+    expect(save).not.toHaveBeenCalled();
   });
 });
 

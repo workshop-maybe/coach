@@ -175,6 +175,29 @@ async fn read_data_uri(state: State<'_, AppState>, root: String, path: String) -
     files::read_data_uri_in(&state.root(&root)?, &path)
 }
 
+/// One request header as text. A missing header is an error, never a default.
+fn header<'a>(request: &'a tauri::ipc::Request<'_>, name: &str) -> Result<&'a str, String> {
+    request
+        .headers()
+        .get(name)
+        .ok_or_else(|| format!("The request has no {name} header."))?
+        .to_str()
+        .map_err(|_| format!("The {name} header is not percent-encoded."))
+}
+
+/// Saves a pasted or exported image (KTD3). The body is the image's raw bytes,
+/// `x-root` names the root ("data" or "export") and `x-dir` the folder inside
+/// it, percent-encoded. Returns the saved file's root-relative path.
+#[tauri::command]
+async fn save_image(state: State<'_, AppState>, request: tauri::ipc::Request<'_>) -> Result<String, String> {
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err("The image must arrive as raw bytes.".into());
+    };
+    let root = state.root(header(&request, "x-root")?)?;
+    let dir = files::decode_dir_header(header(&request, "x-dir")?)?;
+    files::save_image_in(&root, &dir, bytes)
+}
+
 /// This machine and a fingerprint of the agent's memory for its repo (R1).
 #[tauri::command]
 async fn read_context(state: State<'_, AppState>, repo: String, harness: String) -> Result<ContextReport, String> {
@@ -279,6 +302,7 @@ pub fn run() {
             move_file,
             import_badge_art,
             read_data_uri,
+            save_image,
             read_context,
             jev_status,
             jev_set_key,
