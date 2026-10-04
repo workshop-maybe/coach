@@ -319,7 +319,8 @@ export const SHOTS: readonly Shot[] = [
     expect: { text: "Where to start" },
   },
   {
-    // The target from the old tester's sheet, whose "by" clause the app offers to move.
+    // One target added, and a second being typed: the target from the old tester's sheet,
+    // whose "by" clause the app offers to move.
     id: "credential-target",
     page: "how-to/build-a-credential",
     route: { view: "deck", deck: "credential" },
@@ -330,7 +331,10 @@ export const SHOTS: readonly Shot[] = [
       { click: { button: "Build your own" } },
       { fill: { label: "Name" }, value: "Plan a week of dinners" },
       { click: { button: "Next" } },
-      { fill: { label: "Learning target" }, value: "I can plan a week of dinners by checking what's already in the fridge" },
+      { fill: { label: "New learning target" }, value: "I can choose dinners the whole household will eat" },
+      { click: { button: "Add another" } },
+      { waitFor: { text: "I can choose dinners the whole household will eat" } },
+      { fill: { label: "New learning target" }, value: "I can plan a week of dinners by checking what's already in the fridge" },
       { waitFor: { text: "Move to the rubric" } },
     ],
   },

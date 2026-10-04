@@ -239,7 +239,7 @@ describe("TestDeck", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Build your own" }));
     await userEvent.type(await screen.findByRole("textbox", { name: "Name" }), "Write docs");
     await userEvent.click(screen.getByRole("button", { name: "Next" }));
-    await userEvent.type(screen.getByRole("textbox", { name: "Learning target" }), "I can explain a module");
+    await userEvent.type(screen.getByRole("textbox", { name: "New learning target" }), "I can explain a module");
     await userEvent.click(screen.getByRole("button", { name: "Next" }));
     await userEvent.type(screen.getByRole("textbox", { name: "Task" }), "Document the module");
     await userEvent.click(screen.getByRole("button", { name: "Make the badge" }));
