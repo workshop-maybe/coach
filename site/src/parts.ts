@@ -1,4 +1,4 @@
-// The guide's four parts and the order its pages read in (U2, R4–R7, R13). Plain
+// The guide's five parts and the order its pages read in (U2, R4–R7, R13). Plain
 // TypeScript with no Astro imports, so the collection schema, the navigation and the
 // guide's vitest checks (U3) all read the same list.
 
@@ -6,7 +6,7 @@
 export const SITE_NAME = "Andamio Desktop guide";
 
 /** The parts, in the order navigation lists them. */
-export const PART_IDS = ["getting-started", "ideas", "how-to", "help"] as const;
+export const PART_IDS = ["getting-started", "ideas", "how-to", "help", "jev"] as const;
 
 export type PartId = (typeof PART_IDS)[number];
 
@@ -16,6 +16,7 @@ export const PART_LABELS: Record<PartId, string> = {
   ideas: "Ideas",
   "how-to": "How to",
   help: "Jev Mode, data and help",
+  jev: "Jev under the hood",
 };
 
 /** The feedback page's entry id, which the footer links on every page (R8). */

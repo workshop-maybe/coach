@@ -7,7 +7,8 @@
 // (KTD19), the batches go one at a time, and a rate-limited or overloaded batch waits and
 // retries. The result is all or nothing: a batch that still fails fails the cleanup.
 
-import { JevError, toJevError } from "../jev/jev";
+import { JevError } from "../jev/jev";
+import { askBatches, type BatchOptions } from "./jevBatches";
 import { fitsTokens, jevTokens } from "./jevBudget";
 import { isProbability, type JevAnswers, type JevCriteria, type LineBreaksRequest } from "./jevRequest";
 import { scanLines } from "./markdownLines";
@@ -17,16 +18,6 @@ import { findJoinCandidates } from "./pasteText";
 export const JOIN_AFTER_OPEN = 0.2;
 /** A break joins at this probability or above after a line ending in terminal punctuation. Tunable. */
 export const JOIN_AFTER_STOP = 0.5;
-
-/** How many times a rate-limited or overloaded batch is tried again before the cleanup fails. */
-export const LINE_BREAK_RETRIES = 3;
-/** The first wait before a retry without a Retry-After; each later wait doubles it. */
-export const BACKOFF_MS = 1000;
-/**
- * The longest a batch waits before a retry. Next is disabled while a cleanup runs, so a
- * longer Retry-After fails the cleanup at once with its retryable line instead. Tunable.
- */
-export const MAX_WAIT_MS = 30_000;
 
 /** Every question's criteria, as TypeSafe's autoformat cookbook words them. */
 export const LINE_BREAK_CRITERIA: JevCriteria = Object.freeze({
@@ -98,49 +89,27 @@ export function joinLines(text: string, answers: Record<string, number>): { text
   return { text: out.join("\n"), joined: joins.size };
 }
 
-export interface LineBreakOptions {
-  /** Waits this many milliseconds before a retry. Defaults to a timer; tests pass one that doesn't sleep. */
-  wait?(ms: number): Promise<void>;
-  /** Checked before each ask and after each answer or wait: true stops the cleanup, which then resolves to null. */
-  cancelled?(): boolean;
-}
+/** How a cleanup waits and stops (`askBatches` in ./jevBatches). */
+export type LineBreakOptions = Pick<BatchOptions<LineBreaksRequest>, "wait" | "cancelled">;
 
 /**
- * Sends the batches one at a time and gathers every answer. A rate-limited or overloaded
- * batch waits for its Retry-After, or backs off exponentially without one, and is tried
- * again up to `LINE_BREAK_RETRIES` times; a wait past `MAX_WAIT_MS` fails at once. Rejects with the JevError that ends it, or with
- * kind "other" for an answer that misses an id or is not a probability. Null once cancelled.
+ * Sends the batches by `askBatches` (./jevBatches) and gathers every answer. An answer that
+ * misses an id or is not a probability ends the cleanup as "other" before the next batch goes.
  */
 export async function askLineBreaks(
   batches: readonly LineBreaksRequest[],
   ask: (request: LineBreaksRequest) => Promise<JevAnswers>,
-  { wait = sleep, cancelled = () => false }: LineBreakOptions = {},
+  options: LineBreakOptions = {},
 ): Promise<Record<string, number> | null> {
   const answers: Record<string, number> = {};
-  for (const batch of batches) {
-    for (let retry = 0; ; retry++) {
-      if (cancelled()) return null;
-      let got: JevAnswers;
-      try {
-        got = await ask(batch);
-      } catch (e) {
-        const error = toJevError(e);
-        const busy = error.kind === "rateLimited" || error.kind === "overloaded";
-        const ms = error.retryAfter !== null ? error.retryAfter * 1000 : BACKOFF_MS * 2 ** retry;
-        if (!busy || retry >= LINE_BREAK_RETRIES || ms > MAX_WAIT_MS) throw error;
-        await wait(ms);
-        continue;
-      }
-      if (cancelled()) return null;
-      for (const id of Object.keys(batch.questions)) {
-        const p = (got?.answers as Record<string, unknown> | undefined)?.[id];
-        if (!isProbability(p)) throw new JevError("other");
-        answers[id] = p;
-      }
-      break;
+  const check = (batch: LineBreaksRequest, got: JevAnswers) => {
+    for (const id of Object.keys(batch.questions)) {
+      const p = (got.answers as Record<string, unknown> | undefined)?.[id];
+      if (!isProbability(p)) throw new JevError("other");
+      answers[id] = p;
     }
-  }
-  return answers;
+  };
+  return (await askBatches(batches, ask, { ...options, check })) && answers;
 }
 
 /**
@@ -167,15 +136,11 @@ export async function cleanUpLineBreaks(
 const TERMINAL_PUNCTUATION = /[.!?:;…]["'”’»)\]}]*$/;
 
 /** The probability at or above which the break after this line joins. */
-function cutOffAfter(line: string): number {
+export function cutOffAfter(line: string): number {
   return TERMINAL_PUNCTUATION.test(line.trimEnd()) ? JOIN_AFTER_STOP : JOIN_AFTER_OPEN;
 }
 
 /** The id of the line at this zero-based index: "L" and its number, padded to the line count's digits and at least three. */
-function lineId(index: number, count: number): string {
+export function lineId(index: number, count: number): string {
   return `L${String(index + 1).padStart(Math.max(3, String(count).length), "0")}`;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

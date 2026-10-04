@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { LineBreaksRequest, SecondOpinionRequest } from "../domain/jevRequest";
+import type { LineBreaksRequest, RouteRequest, SecondOpinionRequest } from "../domain/jevRequest";
 import { JEV_ERROR_KINDS, JEV_OFF, JevError, isUsable, toJevError, type JevStatus } from "./jev";
 import { TauriJev } from "./tauriJev";
 
@@ -33,6 +33,22 @@ const lineBreaks: LineBreaksRequest = {
   kind: "lineBreaks",
   state: "L001| a long line that\nL002| wrapped here",
   questions: { L002: { type: "noul", instructions: "Does L002 continue L001?" } },
+};
+
+const route: RouteRequest = {
+  kind: "route",
+  state: { job: "Fix the flaky login test." },
+  questions: {
+    m1: {
+      type: "noul",
+      instructions: {
+        badge: { name: "Find the bug", task: "Review the diff.", learning_targets: ["I can find a bug in a diff"] },
+        question: "Does the `job` ask for the same kind of work as the `badge`?",
+      },
+      criteria: { true: "the same kind of work", false: "a different kind of work" },
+    },
+    difficulty: { type: "score", instructions: "How demanding is the `job`?", criteria: ["routine", "needs judgment", "unusual or high-stakes"] },
+  },
 };
 
 beforeEach(() => {
@@ -81,6 +97,13 @@ describe("TauriJev", () => {
       ["jev_ask", { request: secondOpinion }],
       ["jev_ask", { request: lineBreaks }],
     ]);
+  });
+
+  it("sends a route as `request` and returns its levels beside the answers", async () => {
+    const answered = { answers: { m1: 0.91 }, levels: { difficulty: [0, 0.57, 0.43] }, model: "jev-1.13.0" };
+    invoke.mockResolvedValueOnce(answered);
+    expect(await jev.ask(route)).toEqual(answered);
+    expect(invoke.mock.calls).toEqual([["jev_ask", { request: route }]]);
   });
 
   it("passes the model that answered through unchanged (KTD3)", async () => {

@@ -1,0 +1,24 @@
+{
+  "p2": {
+    "type": "noul",
+    "instructions": {
+      "point": "Wrong. The answer is no. A year divisible by 100 is a leap year only when it is also divisible by 400, and the rationale leaves that rule out.",
+      "rubric_notes": "Met when all five calls are right and each wrong key gets the right answer and the step that fails. Calling a right key wrong fails the test.",
+      "question": "Does `reply` satisfy `point`, read with `rubric_notes`, given `task`?"
+    },
+    "criteria": {
+      "true": {
+        "what": "the reply gives specific, checkable evidence that this point is met: it names the files, commands or output, or shows the content",
+        "examples": [
+          {
+            "reply_opening": "1 holds. 2 wrong: no, 2100 fails the 400 rule. 3 wrong: 671/1296, since adding counts two sixes twice. 4 holds. 5 wrong: 2^100 is larger, as 1,024 > 1,000."
+          },
+          {
+            "reply_opening": "1. Holds. 100 has 20 multiples of 5 and 4 multiples of 25, so 24.\n2. Does not hold. The answer is no: a year divisible by 100 is a leap year only when it is also divisible by 400. The rationale stops at the rule for 4.\n3. Does not hold. The answer is 1 − (5/6)^4 = 671/1296, about 0.52."
+          }
+        ]
+      },
+      "false": "the reply only asserts the point is met in general terms, or does not address it"
+    }
+  }
+}

@@ -241,6 +241,21 @@ describe("Home", () => {
     expect(door.querySelector('svg.cast-outline[data-outline="machine"] [stroke-dasharray]')).not.toBeNull();
   });
 
+  it("Covers R1 (router). Home, empty and full, shows three doors in order, the third a dashed handoff card that opens the router", async () => {
+    for (const storage of [storageWith(), storageWith({ credentials: [review], profiles: [opus] })]) {
+      renderApp(storage);
+      await screen.findByRole("button", { name: "Find an agent for a job" });
+      const doors = [...document.querySelectorAll(".doors > button.door")].map((d) => d.textContent);
+      expect(doors).toEqual(["Create an agent", "Create a credential", "Find an agent for a job"]);
+      const door = screen.getByRole("button", { name: "Find an agent for a job" });
+      expect(door.querySelector('svg.cast-outline[data-outline="handoff"] [stroke-dasharray]')).not.toBeNull();
+      await userEvent.click(door);
+      expect(await screen.findByRole("region", { name: "Find an agent for a job" })).toBeTruthy();
+      expect(screen.getByRole("heading", { name: "The job" })).toBeTruthy();
+      cleanup();
+    }
+  });
+
   it("an agent's machine lights a key for each credential it earned", async () => {
     renderApp(storageWith({ credentials: [review, docs], profiles: [opus, codex], assessments: [await met(opus, review)] }));
     const agents = await screen.findByRole("region", { name: "Agents" });

@@ -27,10 +27,10 @@ import { parse as parseYaml } from "yaml";
 import { SHOTS } from "../../src/shots/shots";
 import { filesUnder } from "../../src/test/files";
 import { PART_IDS, pageHref } from "../src/parts";
+import { guidePages } from "./guidePages";
 
 const ROOT = join(__dirname, "..", "..");
 const SITE = join(ROOT, "site");
-const GUIDE = join(SITE, "src", "content", "guide");
 const PUBLIC = join(SITE, "public");
 const SHOTS_DIR = join(PUBLIC, "shots");
 /** Where the app's labels live (KTD8). */
@@ -262,13 +262,6 @@ export function shotProblems(shots: readonly { id: string; page: string }[], pag
   return out;
 }
 
-/** The guide's pages as the collection reads them: each .md or .mdx file under content/guide. */
-function guidePages(): Page[] {
-  return filesUnder(GUIDE)
-    .filter((f) => /\.mdx?$/.test(f))
-    .map((f) => ({ id: relative(GUIDE, f).replace(/\.mdx?$/, "").split("\\").join("/"), text: readFileSync(f, "utf8") }));
-}
-
 function pictures(): string[] {
   return existsSync(SHOTS_DIR) ? readdirSync(SHOTS_DIR).filter((f) => !f.startsWith(".")) : [];
 }
@@ -409,7 +402,7 @@ describe("the content check, on fixture pages", () => {
   it("fails a page missing its title, part or order", () => {
     expect(pageProblems({ id: "getting-started/fixture", text: "---\ndescription: What it is for.\n---\nText.\n" }, ctx)).toEqual([
       "getting-started/fixture: has no title",
-      "getting-started/fixture: has no part (one of getting-started, ideas, how-to, help)",
+      "getting-started/fixture: has no part (one of getting-started, ideas, how-to, help, jev)",
       "getting-started/fixture: has no order (a whole number)",
     ]);
     expect(pageProblems({ id: "getting-started/fixture", text: "Text.\n" }, ctx)).toEqual(["getting-started/fixture: has no frontmatter"]);

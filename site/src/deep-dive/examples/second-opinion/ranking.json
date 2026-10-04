@@ -1,0 +1,83 @@
+[
+  {
+    "rank": 0,
+    "result": "Codex, 2026-09-21",
+    "verdict": "met",
+    "overall": "5%",
+    "note": "Every call and fix is right, just short.",
+    "ranks_as": "overrule with a reason",
+    "sent": true
+  },
+  {
+    "rank": 1,
+    "result": "Codex, 2026-09-15",
+    "verdict": "not_met",
+    "overall": "72%",
+    "note": "Calls the right key on item 4 wrong.",
+    "ranks_as": "overrule with a reason",
+    "sent": true
+  },
+  {
+    "rank": 2,
+    "result": "Codex, 2026-09-27",
+    "verdict": "met",
+    "overall": "91%",
+    "note": null,
+    "ranks_as": "other",
+    "sent": true
+  },
+  {
+    "rank": 3,
+    "result": "Claude Code, 2026-09-20",
+    "verdict": "not_met",
+    "overall": "35%",
+    "note": null,
+    "ranks_as": "other",
+    "sent": true
+  },
+  {
+    "rank": 4,
+    "result": "Codex, 2026-09-18",
+    "verdict": "not_met",
+    "overall": "15%",
+    "note": null,
+    "ranks_as": "other",
+    "sent": false
+  },
+  {
+    "rank": 5,
+    "result": "Claude Code, 2026-09-17",
+    "verdict": "not_met",
+    "overall": "22%",
+    "note": null,
+    "ranks_as": "other",
+    "sent": false
+  },
+  {
+    "rank": 6,
+    "result": "Claude Code, 2026-09-13",
+    "verdict": "met",
+    "overall": "79%",
+    "note": null,
+    "ranks_as": "other",
+    "sent": false
+  },
+  {
+    "rank": 7,
+    "result": "Codex, 2026-09-11",
+    "verdict": "met",
+    "overall": "84%",
+    "note": null,
+    "ranks_as": "other",
+    "sent": false
+  },
+  {
+    "rank": 8,
+    "result": "Claude Code, 2026-09-10",
+    "verdict": "met",
+    "overall": "88%",
+    "note": null,
+    "ranks_as": "other",
+    "sent": false
+  }
+]

@@ -90,9 +90,10 @@ export interface Shot {
   steps?: readonly Step[];
   /**
    * What Jev answers every ask, as a chance by question id: `p1`… for rubric points,
-   * `overall`, `t1`… for learning targets, and a head-to-head's `a1`… and `b1`… (whether the
-   * first reply covers a point better, and the reverse). An id left out gets FakeJev's default, 0.5,
-   * which reads as can't call. Only with Jev Mode on.
+   * `overall`, `t1`… for learning targets, a head-to-head's `a1`… and `b1`… (whether the
+   * first reply covers a point better, and the reverse), and `m1`… for a routing ask's badges
+   * in the sample's order. An id left out gets FakeJev's default, 0.5, which reads as can't
+   * call, or no match. Only with Jev Mode on.
    */
   jevAnswers?: Readonly<Record<string, number>>;
 }
@@ -133,6 +134,11 @@ const CODEX_HOW_SURE = { profileSlug: CODEX, fileStem: "20260925T100500Z" };
 const CLAUDE_HOW_SURE = { profileSlug: CLAUDE, fileStem: "20260926T164500Z" };
 /** Write a release note's own handoff, A, its default. */
 const RELEASE_NOTE_HANDOFF = "20260928T090000Z";
+
+/** The job the router's pictures paste (router KTD15), as someone would hand it to an agent. */
+const ROUTER_JOB = `Go through the answers to this week's support quiz and say how sure you are of each one.
+
+Mark any answer you would want a second person to check before we publish it.`;
 
 /** How to's test: Claude Code takes Write a release note, which opens at "Hand it over". */
 const RELEASE_TEST: Route = { view: "deck", deck: "test", profileSlug: CLAUDE, credentialKey: RELEASE_NOTE };
@@ -207,7 +213,7 @@ const ANSWER_KEY_CALLS = { p1: 0.91, p2: 0.86, p3: 0.88, p4: 0.58, p5: 0.83, ove
  * A short release note as a terminal shows it: a harness marker, a two-space gutter and
  * lines wrapped at one width mid-sentence, so the paste offers "Clean up with Jev".
  */
-const TERMINAL_REPLY = `⏺ Release notes for 0.9.
+export const TERMINAL_REPLY = `⏺ Release notes for 0.9.
 
   Sync is now on by default. If you sync through your own
   server, add its address under Settings, then Sync, before
@@ -217,6 +223,53 @@ const TERMINAL_REPLY = `⏺ Release notes for 0.9.
   waits and tries again instead of dropping the change. Tags
   have their own column, so searching by tag is faster, and
   every note keeps its tags.`;
+
+// The Jev deep dive's case studies (site/src/content/guide/jev/): one scenario per Jev
+// feature. Their pictures and their generated examples (site/src/deep-dive/examples.ts)
+// read these same values, so a picture and the JSON beside it always agree. The cleanup's
+// scenario is the paste above, which FakeJev's default answer cleans up in full.
+
+/** Claude Code's reply to Check an answer key in the second-opinion case study: right on four keys, and wrong to let key 2 stand. */
+export const CASE_REPLY = `1. Holds. 100 has 20 multiples of 5, and the 4 multiples of 25 add one more each: 24 zeros.
+2. Holds. 2100 is divisible by 4, so it is a leap year.
+3. Does not hold. The chance is 1 − (5/6)^4 = 671/1296, about 0.52. Adding 1/6 four times counts the rolls with more than one six twice.
+4. Holds. Sorting in reverse gives 3, 2, 1, and the slice from 1 drops the 3.
+5. Does not hold. 2^10 = 1,024 is a little more than 10^3, so 2^100 is larger than 10^30.`;
+
+/**
+ * What Jev answers about that reply in the case study. Illustrative, not a real reading:
+ * meets on four points, low on the second, meets overall all the same, and a learning
+ * target it can't call, read with the 40/75 cut-offs the judged sample fits.
+ */
+export const CASE_CALLS = { p1: 0.91, p2: 0.33, p3: 0.86, p4: 0.88, p5: 0.85, overall: 0.77, t1: 0.8, t2: 0.6 };
+
+/** The line written at "What did Jev miss" in the case study. */
+export const CASE_REASON = "Lets key 2 stand, but 2100 is not a leap year.";
+
+/** The rubric point the case study taps as missed: the second, the leap-year key. */
+export const CASE_MISSED_POINT =
+  "Wrong. The answer is no. A year divisible by 100 is a leap year only when it is also divisible by 400, and the rationale leaves that rule out.";
+
+/** The case study's test: Claude Code takes Check an answer key, which opens at "Hand it over". */
+const CASE_TEST: Route = { view: "deck", deck: "test", profileSlug: CLAUDE, credentialKey: ANSWER_KEY };
+
+/** From "Hand it over" to the judge card with the case study's reply. */
+const CASE_TO_JUDGE: readonly Step[] = [
+  { click: { button: "Copy" } },
+  { waitFor: { text: "What came back" } },
+  { paste: CASE_REPLY },
+  { click: { button: "Next" } },
+  { waitFor: { text: "Did it meet it" } },
+];
+
+/** On to Not yet and Jev's reading after Check with Jev, with the fitted cut-offs in force. */
+const CASE_TO_READING: readonly Step[] = [
+  ...CASE_TO_JUDGE,
+  { click: { button: "Not yet" } },
+  { click: { button: "Check with Jev" } },
+  { waitFor: { selector: ".meet-jev .jev-reading" } },
+  { waitFor: { text: "Cut-offs fitted to your verdicts" } },
+];
 
 export const SHOTS: readonly Shot[] = [
   {
@@ -391,6 +444,83 @@ export const SHOTS: readonly Shot[] = [
       { scroll: { text: "Cut-offs fitted to your verdicts" } },
     ],
     clip: { selector: ".meet-text-rubric", pad: 8 },
+  },
+
+  // The Jev deep dive's case studies. The second opinion: Claude Code takes Check an answer
+  // key over the judged sample, picks Not yet, checks with Jev, taps the point the reply
+  // missed and says what Jev missed. Jev answers as CASE_CALLS scripts it.
+  {
+    // Not yet picked, before the check: the line under Check with Jev counts the earlier
+    // replies that go with it. The picture is the rubric's side.
+    id: "case-check",
+    page: "jev/second-opinion-case-study",
+    route: CASE_TEST,
+    seed: "judged",
+    jev: "on",
+    jevAnswers: CASE_CALLS,
+    expect: { selector: ".meet-jev .jev-note" },
+    steps: [...CASE_TO_JUDGE, { click: { button: "Not yet" } }, { waitFor: { text: "Check with Jev" } }],
+    clip: { selector: ".meet-text-rubric", pad: 8 },
+  },
+  {
+    // Jev's reading after the check, with the fitted cut-offs and the track record a pick
+    // brings. The picture is the rubric's side, scrolled to the reading's foot.
+    id: "case-reading",
+    page: "jev/second-opinion-case-study",
+    route: CASE_TEST,
+    seed: "judged",
+    jev: "on",
+    jevAnswers: CASE_CALLS,
+    expect: { text: "Jev matched your verdict 7 of 8 times on this badge, and couldn't call 1" },
+    steps: [...CASE_TO_READING, { scroll: { text: "Cut-offs fitted to your verdicts" } }],
+    clip: { selector: ".meet-text-rubric", pad: 8 },
+  },
+  {
+    // The points step after Not yet, with Jev's call beside each point and none pressed.
+    id: "case-missed",
+    page: "jev/second-opinion-case-study",
+    route: CASE_TEST,
+    seed: "judged",
+    jev: "on",
+    jevAnswers: CASE_CALLS,
+    expect: { selector: ".missed-call" },
+    steps: [...CASE_TO_READING, { click: { button: "Next" } }, { waitFor: { text: "Which points did it miss" } }],
+  },
+  {
+    // The second point tapped, then the step that asks what Jev missed, with the reason typed.
+    id: "case-reason",
+    page: "jev/second-opinion-case-study",
+    route: CASE_TEST,
+    seed: "judged",
+    jev: "on",
+    jevAnswers: CASE_CALLS,
+    expect: { text: "Jev called it meets. You said Not yet." },
+    steps: [
+      ...CASE_TO_READING,
+      { click: { button: "Next" } },
+      { waitFor: { text: "Which points did it miss" } },
+      { click: { button: CASE_MISSED_POINT } },
+      { click: { button: "Next" } },
+      { waitFor: { text: "What did Jev miss" } },
+      { fill: { label: "Reason" }, value: CASE_REASON },
+    ],
+  },
+  {
+    // The paste cleanup: the terminal release note after Clean up with Jev, its wrapped lines
+    // joined, with Put back the paste under the box. FakeJev's 50% joins every candidate.
+    id: "case-cleaned",
+    page: "jev/paste-cleanup-case-study",
+    route: RELEASE_TEST,
+    seed: "full",
+    jev: "on",
+    expect: { text: "Put back the paste" },
+    steps: [
+      { click: { button: "Copy" } },
+      { waitFor: { text: "What came back" } },
+      { paste: TERMINAL_REPLY },
+      { click: { button: "Clean up with Jev" } },
+      { waitFor: { text: "Put back the paste" } },
+    ],
   },
 
   // How to (U7): every picture over the full sample with Jev Mode off (KTD7), except the
@@ -751,6 +881,50 @@ export const SHOTS: readonly Shot[] = [
     expect: { text: "Its handoff is pulled with no result." },
     clip: { selector: ".deck-card", pad: 16 },
   },
+  {
+    // The router (router KTD15): Home's third door, beside the other two.
+    id: "router-door",
+    page: "how-to/find-an-agent-for-a-job",
+    route: { view: "home" },
+    seed: "full",
+    jev: "off",
+    expect: { text: "Find an agent for a job" },
+    clip: { selector: ".doors", pad: 0 },
+  },
+  {
+    // The ask card says what goes before anything is sent, so it needs no answer from Jev.
+    id: "router-ask",
+    page: "how-to/find-an-agent-for-a-job",
+    route: { view: "deck", deck: "router" },
+    seed: "full",
+    jev: "on",
+    expect: { text: "Ask Jev which badge it's like" },
+    steps: [{ paste: ROUTER_JOB }, { click: { button: "Next" } }, { waitFor: { text: "Ask Jev which badge it's like" } }],
+    clip: { selector: ".deck", pad: 8 },
+  },
+  {
+    // Jev matches the job to Say how sure you are, the sample's second badge, so its question
+    // is m2, with Check an answer key (m3) as also like. Claude Code is its go-to.
+    id: "router-card",
+    page: "how-to/find-an-agent-for-a-job",
+    route: { view: "deck", deck: "router" },
+    seed: "full",
+    jev: "on",
+    jevAnswers: { m1: 0.12, m2: 0.93, m3: 0.74, m4: 0.08 },
+    expect: { text: "Go-to for Say how sure you are" },
+    steps: [{ paste: ROUTER_JOB }, { click: { button: "Next" } }, { click: { button: "Ask Jev" } }, { waitFor: { text: "Go-to for Say how sure you are" } }],
+    clip: { selector: ".deck", pad: 8 },
+  },
+  {
+    // The cost order, opened from Home's agent list: Codex first, as the sample folder sets it.
+    id: "cost-order",
+    page: "how-to/find-an-agent-for-a-job",
+    route: { view: "deck", deck: "cost-order" },
+    seed: "full",
+    jev: "off",
+    expect: { text: "Cheapest first" },
+    clip: { selector: ".deck-card", pad: 16 },
+  },
 ];
 
 /** Marks a route kind no shot pictures yet. */
@@ -770,16 +944,18 @@ export function routeKind(route: Route | "gate"): RouteKind {
 /** For each route kind, the shots that picture it, or NOT_PICTURED. Every shot is listed under its own kind. */
 export const COVERAGE: Record<RouteKind, readonly string[] | typeof NOT_PICTURED> = {
   gate: ["first-run"],
-  home: ["home-empty", "home", "home-needs"],
+  home: ["home-empty", "home", "home-needs", "router-door"],
   "deck:credential": ["credential-start", "credential-target"],
   "deck:agent": ["first-test-agent", "first-test-hand", "first-test-judge", "first-test-home", "agent-new"],
-  "deck:test": ["test-hand", "test-reply", "judge", "go-to-offer", "missed-points", "held", "jev-ask", "jev-cleanup", "jev-sends", "jev-calls", "jev-record", "jev-reason"],
+  "deck:test": ["test-hand", "test-reply", "judge", "go-to-offer", "missed-points", "held", "jev-ask", "jev-cleanup", "jev-sends", "jev-calls", "jev-record", "jev-reason", "case-check", "case-reading", "case-missed", "case-reason", "case-cleaned"],
   "deck:edit-credential": ["edit-retest", "go-to-flagged", "paste-image", "add-video"],
   "deck:edit-agent": ["agent-params"],
   "deck:handoffs": ["handoffs-box"],
   "deck:edit-handoff": ["handoff-edit"],
   "deck:trash": ["trash-badge", "trash-agent"],
   "deck:jev": ["jev-off", "jev-on"],
+  "deck:router": ["router-ask", "router-card"],
+  "deck:cost-order": ["cost-order"],
   "item:badge": ["badge-replies", "badge-page", "go-to-badge"],
   "item:agent": ["agent-page"],
   // A handoff opens as its own item only once two or more have results; the sample's has none.

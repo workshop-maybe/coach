@@ -7,10 +7,13 @@
 import type { JevAnswers, JevRequest } from "../domain/jevRequest";
 
 export type {
+  DifficultyQuestion,
   JevAnswers,
   JevCriteria,
   JevRequest,
   LineBreaksRequest,
+  MatchQuestion,
+  RouteRequest,
   SecondOpinionRequest,
 } from "../domain/jevRequest";
 
@@ -111,6 +114,6 @@ export interface Jev {
   clearKey(): Promise<JevStatus>;
   /** Turns Jev Mode on or off. Off keeps the key; on with no key rejects as "keyMissing". */
   setOn(on: boolean): Promise<JevStatus>;
-  /** Sends one request and resolves to a probability for every question id, and the model that answered. Never retried. */
+  /** Sends one request and resolves to a probability for every Noul id, the levels for every Score id, and the model that answered. Never retried. */
   ask(request: JevRequest): Promise<JevAnswers>;
 }

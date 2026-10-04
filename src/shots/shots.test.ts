@@ -14,7 +14,7 @@ import { COVERAGE, NOT_PICTURED, SAMPLE_IMAGES, SHOTS, routeKind, type Shot } fr
 
 const KEBAB = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
-const DECK_KINDS = ["credential", "agent", "test", "edit-credential", "edit-agent", "handoffs", "edit-handoff", "trash", "jev"];
+const DECK_KINDS = ["credential", "agent", "test", "edit-credential", "edit-agent", "handoffs", "edit-handoff", "trash", "jev", "router", "cost-order"];
 const ITEM_KINDS = ["badge", "agent", "handoff", "reply", "compare"];
 const CREDENTIAL_PARTS = ["name", "targets", "task", "rubric", "look"];
 const AGENT_PARTS = ["name", "repo", "notes", "params"];
@@ -112,7 +112,7 @@ describe("the shot manifest", () => {
     for (const id of ids) expect(id).toMatch(KEBAB);
   });
 
-  it("names a guide page in one of the four parts for every shot", () => {
+  it("names a guide page in one of the guide's parts for every shot", () => {
     for (const shot of SHOTS) {
       const [part, ...rest] = shot.page.split("/");
       expect(PART_IDS as readonly string[], shot.id).toContain(part);
@@ -140,7 +140,7 @@ describe("the shot manifest", () => {
       if (!shot.jevAnswers) continue;
       expect(shot.jev, shot.id).toBe("on");
       for (const [id, p] of Object.entries(shot.jevAnswers)) {
-        expect(id, shot.id).toMatch(/^(?:overall|[ptab][1-9]\d*)$/);
+        expect(id, shot.id).toMatch(/^(?:overall|[ptabm][1-9]\d*)$/);
         expect(p >= 0 && p <= 1, `${shot.id}: ${id}`).toBe(true);
       }
     }

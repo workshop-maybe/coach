@@ -27,6 +27,7 @@ import type {
   Mark,
   Rejudge,
   ReplyRef,
+  RoutingRecord,
   Slug,
   TestContext,
 } from "./types";
@@ -145,6 +146,16 @@ export function headToHeadDir(collectionSlug: Slug, credentialSlug: Slug): strin
 /** Where a head-to-head with this id (a stamp) saves. */
 export function headToHeadPath(collectionSlug: Slug, credentialSlug: Slug, id: string): string {
   return `${headToHeadDir(collectionSlug, credentialSlug)}/${id}.json`;
+}
+
+/** The order the user set over their agents, cheapest first (router KTD9). At the root, since every JSON file in agents/ is a profile. */
+export const COST_ORDER_PATH = "cost-order.json";
+
+/** Every time the user took an agent for a job, one file each, named for when (router KTD10). Neither trash moves it. */
+export const ROUTING_DIR = "routing";
+
+export function routingPath(id: string): string {
+  return `${ROUTING_DIR}/${id}.json`;
 }
 
 /** Where a file moved to the trash at `stamp` lands: its own path under trash/<stamp>/. */
@@ -339,6 +350,42 @@ export function parseMark(text: string, ids: Pick<Mark, "collectionSlug" | "cred
 
 export function serializeMark(mark: Mark): string {
   return `${JSON.stringify({ agent: mark.profileSlug, result: mark.fileStem }, null, 2)}\n`;
+}
+
+// ---------------------------------------------------------------------------
+// Cost order JSON: agent slugs, cheapest first (router KTD9). Repeats are kept once.
+
+export function parseCostOrder(text: string): Slug[] {
+  const agents = parseObject(text).agents;
+  if (!Array.isArray(agents) || agents.some((a) => typeof a !== "string")) {
+    throw new Error('Field "agents" must be a list of agent names.');
+  }
+  return [...new Set(agents as string[])];
+}
+
+export function serializeCostOrder(slugs: readonly Slug[]): string {
+  return `${JSON.stringify({ agents: [...new Set(slugs)] }, null, 2)}\n`;
+}
+
+// ---------------------------------------------------------------------------
+// Routing record JSON (router KTD10). Written once; the app does not read it back yet.
+
+export function serializeRoutingRecord(record: RoutingRecord): string {
+  const { harness, model, effort } = record.setup;
+  const body = {
+    job: record.job,
+    collection: record.collectionSlug,
+    credential: record.credentialSlug,
+    agent: record.profileSlug,
+    setup: { harness, model, effort },
+    recommended: record.recommended,
+    basis: record.basis,
+    steppedUp: record.steppedUp,
+    matched: record.matched,
+    ...(record.difficulty ? { difficulty: record.difficulty } : {}),
+    ...(record.jevModel ? { jevModel: record.jevModel } : {}),
+  };
+  return `${JSON.stringify(body, null, 2)}\n`;
 }
 
 // ---------------------------------------------------------------------------
@@ -851,6 +898,7 @@ export async function loadFolder(storage: Storage): Promise<FolderState> {
     skeleton: null,
     handoffs: [],
     marks: [],
+    costOrder: null,
     held: [],
     heldReadings: [],
     headToHeads: [],
@@ -968,6 +1016,10 @@ export async function loadFolder(storage: Storage): Promise<FolderState> {
     if (headToHead) state.headToHeads.push(headToHead);
   }
   state.headToHeads.sort(byBadgeThenId);
+
+  // The cost order (router KTD9): one file at the root. One that cannot be read lands in
+  // errors, reads as no order, and is never written over (R22).
+  state.costOrder = await load(COST_ORDER_PATH, parseCostOrder);
 
   // Agent profiles.
   for (const path of await storage.listFiles("data", AGENTS_DIR)) {

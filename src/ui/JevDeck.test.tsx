@@ -355,6 +355,7 @@ describe("what the deck says leaves the machine", () => {
     // Comparing sends two replies at a time (jev-in-compare R17, KTD17).
     expect(d.getByText("A comparison sends two replies at a time, with the badge's task, rubric and learning targets.")).toBeTruthy();
     expect(d.getByText("A cleanup sends only the text you pasted.")).toBeTruthy();
+    expect(d.getByText("A routing ask sends the job, and the names, tasks and learning targets of your badges.")).toBeTruthy();
     expect(d.getByText(/TypeSafe keeps what it receives under/)).toBeTruthy();
     expect(d.getByRole("link", { name: "its terms" }).getAttribute("href")).toBe(TERMS);
   });

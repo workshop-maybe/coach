@@ -1,6 +1,7 @@
 // Home, the only room (KTD1). Top to bottom: what needs you, your agents (machines, each
-// lighting the keys it earned), your badges (cartridges, each showing who holds it), then
-// the two doors with dashed outlines of what they make (R9, R12). When all three sections
+// lighting the keys it earned, cheapest first once the user set a cost order), your badges
+// (cartridges, each showing who holds it), then the three doors with dashed outlines: an
+// agent, a credential, and a job to find an agent for (R9, R12, router R1). When all three sections
 // show, a wide window puts what needs you beside your agents so home fits one screen; the
 // pairing is a class on one wrapper, so a need coming or going never remounts a shelf or a
 // door (App.css). An empty folder leads with "Try a first test", which runs one preset on
@@ -13,6 +14,7 @@ import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { goToOf, goToStanding } from "../domain/goTo";
 import { cellKey } from "../domain/matrix";
+import { byCost } from "../domain/recommend";
 import { credentialKey, type AgentProfile, type Collection, type Credential, type FolderState } from "../domain/types";
 import { Cartridge } from "../cast/Cartridge";
 import { Machine } from "../cast/Machine";
@@ -77,13 +79,19 @@ export function Home() {
         <Outline kind="cartridge" width={empty ? 110 : 36} />
         <span>Create a credential</span>
       </button>
+      {/* A job is text you hand to an agent, so its door shows the empty handoff card (router KTD13). */}
+      <button type="button" className="door" onClick={() => navigate({ view: "deck", deck: "router" })}>
+        <Outline kind="handoff" width={empty ? 164 : 54} />
+        <span>Find an agent for a job</span>
+      </button>
     </div>
   );
 
   // One tree whatever has loaded, so the doors never remount under a click.
   const holds = (profileSlug: string, key: string) => matrix?.cells.get(cellKey(profileSlug, key))?.status === "met";
   const shown = all ? items : items.slice(0, SHOWN);
-  const profiles = shelf ? (state?.profiles ?? []) : [];
+  // Agents cheapest first once the user set a cost order, the rest after them by name (router R10, R11).
+  const profiles = shelf ? byCost(shelf.state) : [];
   const showNeeds = !!shelf && items.length > 0;
   const showAgents = !!shelf && profiles.length > 0;
   const showBadges = !!shelf && shelf.credentials.length > 0;
@@ -139,6 +147,9 @@ export function Home() {
                   );
                 })}
               </ul>
+              <button type="button" className="link more" onClick={() => navigate({ view: "deck", deck: "cost-order" })}>
+                Order by cost
+              </button>
             </section>
           )}
 

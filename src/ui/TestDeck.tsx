@@ -152,7 +152,7 @@ interface Unedited {
 }
 
 /** Jev's reading in hand, with what it was asked about (KTD11). */
-interface ReadingInHand {
+export interface ReadingInHand {
   round: number;
   reply: string;
   assignmentVersion: string;

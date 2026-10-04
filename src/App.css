@@ -1233,13 +1233,13 @@ button:focus-visible {
   color: var(--ink-muted);
 }
 
-/* The two doors follow the shelves, and stay in view at the window's foot while home runs
+/* The three doors follow the shelves, and stay in view at the window's foot while home runs
    past it. On a tall window they sit under the badges rather than far below them. */
 .doors {
   position: sticky;
   bottom: 0;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: var(--space-base);
   padding: var(--space-base) 0;
   background: var(--bg);
@@ -1258,6 +1258,13 @@ button:focus-visible {
   letter-spacing: var(--heading-tracking);
 }
 
+/* The job door's empty handoff card is drawn from a card a third the width of the others,
+   so its line and dashes are thinned to the other two doors' weight (router KTD13). */
+.door .cast-outline-handoff g {
+  stroke-width: 0.9;
+  stroke-dasharray: 2.6 2.2;
+}
+
 /* A little lift under the pointer, where motion is welcome. */
 @media (prefers-reduced-motion: no-preference) {
   .door,
@@ -1274,8 +1281,8 @@ button:focus-visible {
   }
 }
 
-/* An empty folder: the two doors are the whole screen, each showing what it makes. They keep
-   the measure the content column had before it widened, so two doors never stretch thin. */
+/* An empty folder: the three doors are the whole screen, each showing what it makes. They keep
+   the measure the content column had before it widened, so the doors never stretch thin. */
 .home-empty {
   justify-content: center;
   max-width: calc(62rem - 2 * var(--space-xl));
@@ -2980,6 +2987,127 @@ button:focus-visible {
 
 .edit-holders .cast {
   flex: none;
+}
+
+/* The cost order (router KTD12): one row per agent, cheapest first, its place in mono, its
+   machine and name, and two keys to move it. A record card, so it reads like the needs list. */
+.cost-order {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--surface);
+  border: var(--rule-width) solid var(--rule);
+}
+
+.cost-order-row {
+  display: grid;
+  grid-template-columns: 1.5rem auto 1fr auto;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-base);
+}
+
+.cost-order-row + .cost-order-row {
+  border-top: 1px solid var(--cell);
+}
+
+.cost-order-place {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: var(--value-tracking);
+  color: var(--ink-muted);
+  text-align: right;
+}
+
+.cost-order-agent {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-xs) var(--space-md);
+  min-width: 0;
+}
+
+.cost-order-name {
+  font-weight: 600;
+  letter-spacing: var(--heading-tracking);
+}
+
+.cost-order-setup,
+.cost-order-new {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: var(--value-tracking);
+  color: var(--ink-muted);
+}
+
+.cost-order-keys {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.cost-order-keys button {
+  min-width: 2.25rem;
+}
+
+/* The router's card (router KTD16): a record card. The agent's setup and every reason are
+   mono rows; the lead reason reads first, in the sans; the holders to take are one choice
+   group, the chosen one pressed. */
+.router-ask {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.router-ask p {
+  margin: 0;
+}
+
+.router-record {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-base);
+  background: var(--surface);
+  border: var(--rule-width) solid var(--rule);
+}
+
+.router-record p {
+  margin: 0;
+}
+
+.router-setup,
+.router-lines,
+.router-note,
+.router-also {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: var(--value-tracking);
+}
+
+.router-setup {
+  color: var(--ink-muted);
+}
+
+.router-lead {
+  font-weight: 600;
+  letter-spacing: var(--heading-tracking);
+}
+
+.router-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.router-lines:empty {
+  display: none;
+}
+
+.router-holders {
+  grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
 }
 
 /* ---------------------------------------------------------------------------

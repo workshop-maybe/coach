@@ -1,0 +1,37 @@
+[
+  {
+    "break": "L003 → L004",
+    "first_line_ends": "your own",
+    "cut_off": 0.2,
+    "answer": 0.96,
+    "joins": true
+  },
+  {
+    "break": "L004 → L005",
+    "first_line_ends": "Sync, before",
+    "cut_off": 0.2,
+    "answer": 0.91,
+    "joins": true
+  },
+  {
+    "break": "L007 → L008",
+    "first_line_ends": "The app",
+    "cut_off": 0.2,
+    "answer": 0.94,
+    "joins": true
+  },
+  {
+    "break": "L008 → L009",
+    "first_line_ends": "change. Tags",
+    "cut_off": 0.2,
+    "answer": 0.89,
+    "joins": true
+  },
+  {
+    "break": "L009 → L010",
+    "first_line_ends": "faster, and",
+    "cut_off": 0.2,
+    "answer": 0.93,
+    "joins": true
+  }
+]

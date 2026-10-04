@@ -8,6 +8,8 @@ import type { BadgeSettings } from "../badge/settings";
 import { ChangedOnDiskError, type Storage } from "../storage/storage";
 import {
   ASSESSMENTS_DIR,
+  COST_ORDER_PATH,
+  ROUTING_DIR,
   assessmentDir,
   collectionPath,
   credentialPath,
@@ -22,21 +24,25 @@ import {
   loadFolder,
   markPath,
   marksDir,
+  parseCostOrder,
   profilePath,
   profileResultsDir,
   readingsDir,
   rejudgedDir,
   rejudgedPath,
+  routingPath,
   saveAssessment,
   saveCollection,
   saveCredential,
   saveProfile,
   saveText,
+  serializeCostOrder,
   serializeHeadToHead,
   serializeHeld,
   serializeHeldReading,
   serializeMark,
   serializeRejudge,
+  serializeRoutingRecord,
   SKELETON_PATH,
   trashPath,
   type AssessmentIds,
@@ -47,6 +53,7 @@ import { heldOf, heldReadingOf } from "./handoffResults";
 import { assignmentVersion } from "./hash";
 import { findPreset, presetCredential } from "./presets";
 import { reasonLine } from "./reasonLine";
+import { jobFirstLine } from "./router";
 import { rubricParts, tappedPoints } from "./secondOpinion";
 import { uniqueSlug } from "./slug";
 import {
@@ -65,6 +72,7 @@ import {
   type Mark,
   type Rejudge,
   type ReplyRef,
+  type RoutingRecord,
   type Slug,
   type TestContext,
 } from "./types";
@@ -703,6 +711,54 @@ export async function markGoTo(storage: Storage, state: FolderState, input: Mark
   const id = await nextStamp(storage, dir, ".json", now);
   const mark: Mark = { collectionSlug: credential.collectionSlug, credentialSlug: credential.slug, id, profileSlug: input.profileSlug, fileStem: input.fileStem };
   await saveText(storage, markPath(mark.collectionSlug, mark.credentialSlug, id), serializeMark(mark), null);
+  return loadFolder(storage);
+}
+
+// ---------------------------------------------------------------------------
+// The router (router plan): the cost order and routing records.
+
+/** Why "Save the order" refuses over a cost-order.json the app could not read (router KTD9, R22). */
+export const COST_ORDER_UNREADABLE = "cost-order.json couldn't be read. Fix or remove it, then save.";
+
+/**
+ * Saves the order the user set over their agents, cheapest first (router KTD9, R10). Only
+ * agents still in the folder are kept, each once. The file must still hold `baseText`, the
+ * text the deck opened with, or the save throws ChangedOnDiskError. A file the app could not
+ * read is never written over (R22): the save refuses with COST_ORDER_UNREADABLE instead.
+ */
+export async function saveCostOrder(storage: Storage, state: FolderState, slugs: readonly Slug[], baseText: string | null): Promise<FolderState> {
+  const onDisk = await storage.readText("data", COST_ORDER_PATH);
+  if (onDisk !== null) {
+    try {
+      parseCostOrder(onDisk);
+    } catch {
+      throw new Error(COST_ORDER_UNREADABLE);
+    }
+  }
+  const live = new Set(state.profiles.map((p) => p.slug));
+  await saveText(storage, COST_ORDER_PATH, serializeCostOrder(slugs.filter((s) => live.has(s))), baseText);
+  return loadFolder(storage);
+}
+
+/** What the router's card hands over when the user takes an agent for a job (R14): the record but its setup, with the whole job as pasted. */
+export type RoutingInput = Omit<RoutingRecord, "setup">;
+
+/**
+ * Records that the user took an agent for a job (router R14, KTD10): a new file under
+ * routing/ named for when, never a change to anything else. The job is kept as its first
+ * line, and the agent's setup as it stands now. Checks the agent and the badge against the
+ * folder as given, since the card that asks may hold them across a reload.
+ */
+export async function takeAgentForJob(storage: Storage, state: FolderState, input: RoutingInput, now: Date = new Date()): Promise<FolderState> {
+  const profile = findProfile(state, input.profileSlug);
+  findCredential(state, input.collectionSlug, input.credentialSlug);
+  const record: RoutingRecord = {
+    ...input,
+    job: jobFirstLine(input.job),
+    setup: { harness: profile.harness, model: profile.model, effort: profile.effort },
+  };
+  const id = await nextStamp(storage, ROUTING_DIR, ".json", now);
+  await saveText(storage, routingPath(id), serializeRoutingRecord(record), null);
   return loadFolder(storage);
 }
 

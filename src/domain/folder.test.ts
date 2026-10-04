@@ -3,6 +3,7 @@ import { MemoryStorage } from "../storage/memory";
 import { ChangedOnDiskError } from "../storage/storage";
 import { serializeCredentialMd } from "./credential-md";
 import {
+  COST_ORDER_PATH,
   isCredentialResult,
   MARKER_PATH,
   assessmentPath,
@@ -21,6 +22,7 @@ import {
   marksDir,
   parseAssessment,
   parseCollection,
+  parseCostOrder,
   parseHeadToHead,
   parseHeld,
   parseHeldReading,
@@ -39,6 +41,7 @@ import {
   SKELETON_PATH,
   serializeAssessment,
   serializeCollection,
+  serializeCostOrder,
   serializeHeadToHead,
   serializeHeld,
   serializeHeldReading,
@@ -1102,6 +1105,64 @@ describe("mark files", () => {
     expect(state.errors).toEqual([]);
     expect(state.marks).toEqual([]);
     expect(state.assessments).toHaveLength(1);
+  });
+});
+
+describe("the cost order file (router KTD9)", () => {
+  it("sits at the folder's root, outside agents/, where every JSON file is a profile", () => {
+    expect(COST_ORDER_PATH).toBe("cost-order.json");
+  });
+
+  it("serializes the slugs cheapest first and parses back, each kept once", () => {
+    const text = serializeCostOrder(["sonnet", "codex", "sonnet"]);
+    expect(JSON.parse(text)).toEqual({ agents: ["sonnet", "codex"] });
+    expect(parseCostOrder(text)).toEqual(["sonnet", "codex"]);
+    expect(parseCostOrder('{"agents":["b","a","b"]}')).toEqual(["b", "a"]);
+  });
+
+  it("refuses agents that aren't a list of names", () => {
+    expect(() => parseCostOrder('{"agents":"codex"}')).toThrow(/agents/);
+    expect(() => parseCostOrder('{"agents":["codex",3]}')).toThrow(/agents/);
+    expect(() => parseCostOrder("{}")).toThrow(/agents/);
+    expect(() => parseCostOrder("[]")).toThrow();
+  });
+
+  it("loads as null with no file, and as the list with one, its text kept as the base for a save", async () => {
+    const storage = fixture();
+    expect((await loadFolder(storage)).costOrder).toBeNull();
+    storage.seed({ [COST_ORDER_PATH]: '{"agents":["b","a"]}' });
+    const state = await loadFolder(storage);
+    expect(state.costOrder).toEqual(["b", "a"]);
+    expect(state.raw[COST_ORDER_PATH]).toBe('{"agents":["b","a"]}');
+    expect(state.errors).toEqual([]);
+  });
+
+  it("an unreadable file lands in errors, reads as no order, and is never written", async () => {
+    const storage = fixture();
+    storage.seed({ [COST_ORDER_PATH]: '{"agents":' });
+    const before = storage.files();
+    const state = await loadFolder(storage);
+    expect(state.costOrder).toBeNull();
+    expect(state.errors.map((e) => e.path)).toEqual([COST_ORDER_PATH]);
+    expect(storage.files()).toEqual(before);
+  });
+
+  it("a hand edit shows in the next load", async () => {
+    const storage = fixture();
+    storage.seed({ [COST_ORDER_PATH]: '{"agents":["a"]}' });
+    expect((await loadFolder(storage)).costOrder).toEqual(["a"]);
+    storage.seed({ [COST_ORDER_PATH]: '{"agents":["b","a"]}' });
+    expect((await loadFolder(storage)).costOrder).toEqual(["b", "a"]);
+  });
+
+  it("names like __proto__, constructor or a path load as plain names and build no path", async () => {
+    const storage = fixture();
+    storage.seed({ [COST_ORDER_PATH]: '{"agents":["__proto__","constructor","../agents/x"]}' });
+    const before = Object.keys(storage.files()).sort();
+    const state = await loadFolder(storage);
+    expect(state.costOrder).toEqual(["__proto__", "constructor", "../agents/x"]);
+    expect(state.profiles.map((p) => p.slug)).not.toContain("x");
+    expect(Object.keys(storage.files()).sort()).toEqual(before);
   });
 });
 

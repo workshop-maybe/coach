@@ -3,6 +3,7 @@
 
 import { render } from "@testing-library/react";
 import {
+  COST_ORDER_PATH,
   MARKER_PATH,
   assessmentPath,
   collectionPath,
@@ -17,6 +18,7 @@ import {
   rejudgedPath,
   serializeAssessment,
   serializeCollection,
+  serializeCostOrder,
   serializeHeadToHead,
   serializeHeld,
   serializeHeldReading,
@@ -106,6 +108,8 @@ export function storageWith(
     headToHeads?: HeadToHead[];
     /** Re-judges, each written as its own file (jev-in-compare KTD1). */
     rejudges?: Rejudge[];
+    /** The cost order's agent slugs, cheapest first. Absent means the folder has none. */
+    costOrder?: string[];
   } = {},
 ): MemoryStorage {
   const credentials = opts.credentials ?? [];
@@ -131,6 +135,7 @@ export function storageWith(
   for (const r of opts.heldReadings ?? []) files[heldReadingPath(r.profileSlug, r.collectionSlug, r.credentialSlug, r.id)] = serializeHeldReading(r);
   for (const h of opts.headToHeads ?? []) files[headToHeadPath(h.collectionSlug, h.credentialSlug, h.id)] = serializeHeadToHead(h);
   for (const r of opts.rejudges ?? []) files[rejudgedPath(r.profileSlug, r.collectionSlug, r.credentialSlug, r.id)] = serializeRejudge(r);
+  if (opts.costOrder) files[COST_ORDER_PATH] = serializeCostOrder(opts.costOrder);
   return new MemoryStorage(files);
 }
 

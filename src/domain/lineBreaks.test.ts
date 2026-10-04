@@ -2,12 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import { JevError } from "../jev/jev";
 import { fitsJev } from "./jevBudget";
 import type { JevAnswers, LineBreaksRequest } from "./jevRequest";
+import { BACKOFF_MS, BATCH_RETRIES as LINE_BREAK_RETRIES } from "./jevBatches";
 import {
-  BACKOFF_MS,
   JOIN_AFTER_OPEN,
   JOIN_AFTER_STOP,
   LINE_BREAK_CRITERIA,
-  LINE_BREAK_RETRIES,
   askLineBreaks,
   cleanUpLineBreaks,
   joinLines,

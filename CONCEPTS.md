@@ -75,3 +75,23 @@ A result whose verdict went against Jev's overall call: Not met against a meets 
 ### Head-to-head
 
 Jev's comparison of two replies to one handoff, asked from compare: for each rubric point, whether the first covers it better than the second, and the reverse, in one request. A reply covers a point better only when both answers agree beyond the default 30 to 70 band, which never moves to fit verdicts. Jev never names a winner across all replies, and a head-to-head never makes a verdict an overrule.
+
+### Routing ask
+
+Jev's answer, only when the user asks, to which badge a new job is like and how hard the job is: one yes-or-no question per badge, sent with the badge's name, task and learning targets and never its rubric, and one rating of the job as routine, needing judgment, or unusual or high-stakes.
+
+An answer holds for the job it was asked about, and only editing the job drops it. A badge that leaves the folder afterward drops out of it, and the next badge over the threshold takes its place. A badge added afterward has no answer, so it can't match until the user asks again.
+
+## Finding an agent
+
+### Holds cleanly
+
+An agent holds a badge cleanly when its latest result there is Met with no "task changed" or "setup changed" flag. Home counts a flagged Met as holding; the router counts only a clean one.
+
+### Cost order
+
+The order the user sets over their agents, cheapest first, from Home's agent list. The router picks the cheapest agent that holds a badge cleanly by it, and steps up through it for a job rated unusual or high-stakes. An agent it doesn't name counts as most expensive until the user places it.
+
+### Routing record
+
+What the app keeps each time the user takes an agent for a job: the job's first line, the badge, the agent taken and its setup, the agent the card picked and why, and how the badge was found. One file per decision, written once, so a past choice can later count as a decision reused.

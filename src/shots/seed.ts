@@ -17,6 +17,7 @@
 // copied rather than imported, since that file imports @testing-library/react.
 
 import {
+  COST_ORDER_PATH,
   MARKER_PATH,
   assessmentPath,
   collectionPath,
@@ -28,6 +29,7 @@ import {
   profilePath,
   serializeAssessment,
   serializeCollection,
+  serializeCostOrder,
   serializeHeld,
   serializeHeldReading,
   serializeMark,
@@ -538,6 +540,8 @@ export async function sampleFolder(variant: SeedVariant): Promise<SampleFolder> 
   files[collectionPath(collection.slug)] = serializeCollection(collection);
   for (const c of credentials) files[credentialPath(c.collectionSlug, c.slug)] = serializeCredentialMd(c);
   for (const p of [CLAUDE, CODEX]) files[profilePath(p.slug)] = serializeProfile(p);
+  // Codex is the cheaper of the two (router KTD15), so home lists it first.
+  files[COST_ORDER_PATH] = serializeCostOrder([CODEX.slug, CLAUDE.slug]);
   files[handoffPath(SAMPLE.collection, RELEASE_NOTE.slug, SAMPLE.handoffs.releaseNote)] = RELEASE_NOTE_HANDOFF;
 
   const answerKeyTake = await take(CODEX, answerKey, SAMPLE.takes.codexAnswerKey, {
