@@ -249,11 +249,14 @@ export function CompareView({ credentialKey: key, takes, picks }: { credentialKe
             <article key={e.id} className="reply-record" aria-label={`${profile.name}, ${e.when}`}>
               <TakeBar name={profile.name} take={a} id={headingOf(e.id)} when={e.when} />
               <RichView aria-label="Reply" value={a.handBack} stored={asStored} images={resultImages(storage, a)} />
-              {reading && <SavedReading reading={reading} credentialKey={key} hasVerdict={!isHeld(a)} />}
-              <details className="reply-ran">
-                <summary>{foldName(a)}</summary>
-                <pre className="handback">{textOf(a)}</pre>
-              </details>
+              {/* While the step is open its cards carry Jev's calls and line, so the folds give the reply their room. */}
+              {!step && reading && <SavedReading reading={reading} credentialKey={key} hasVerdict={!isHeld(a)} />}
+              {!step && (
+                <details className="reply-ran">
+                  <summary>{foldName(a)}</summary>
+                  <pre className="handback">{textOf(a)}</pre>
+                </details>
+              )}
               {step ? (
                 <JudgeStep
                   key={`${step.id} ${step.verdict}`}

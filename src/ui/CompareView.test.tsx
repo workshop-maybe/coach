@@ -560,12 +560,18 @@ describe("CompareView with Jev's readings", () => {
     const storage = store({ held: [await held(opus, 1, await reading(0.9)), await held(codex, 2)] });
     const [left] = await opened(storage, [take("opus", 1), take("codex", 2)]);
     const before = await snapshot(storage);
+    expect(left.querySelector(".reply-jev")).not.toBeNull();
     await userEvent.click(within(left).getByRole("button", { name: "Not yet" }));
+    // The step's cards carry Jev's calls, so the reply's folds give it their room while it is open.
+    expect(left.querySelector(".reply-jev")).toBeNull();
+    expect(left.querySelector(".reply-ran")).toBeNull();
     await userEvent.click(within(left).getByRole("button", { name: "Skip" }));
     await userEvent.click(within(left).getByRole("button", { name: "Back" }));
     expect(stepTitle(left)).toBe("Which points did it miss");
     await userEvent.click(within(left).getByRole("button", { name: "Back" }));
     expect(stepTitle(left)).toBeNull();
+    expect(left.querySelector(".reply-jev")).not.toBeNull();
+    expect(left.querySelector(".reply-ran")).not.toBeNull();
     expect(document.activeElement).toBe(within(left).getByRole("button", { name: "Not yet" }));
     expect(await snapshot(storage)).toEqual(before);
   });

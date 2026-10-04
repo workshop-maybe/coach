@@ -2639,7 +2639,8 @@ button:focus-visible {
    button, never the ink block, and the points list scrolls inside a capped height, so the
    reply above keeps its room. */
 .reply-record > .judge-step {
-  flex: none;
+  flex: 0 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
@@ -2663,10 +2664,18 @@ button:focus-visible {
   font-size: 13px;
 }
 
+/* The list gives way first when the pane is short, down to about one point, so the
+   reply above keeps a few lines and the step's actions stay inside the record. */
 .judge-step .missed-points {
+  flex: 0 1 auto;
+  min-height: 3rem;
   max-height: min(12rem, 22vh);
   overflow-y: auto;
   padding: 2px;
+}
+
+.reply-record:has(> .judge-step) > .rich-view {
+  min-height: 5rem;
 }
 
 .judge-step input {
@@ -2804,10 +2813,13 @@ button:focus-visible {
   background: var(--surface);
 }
 
+/* The row-header column keeps its text's set width (width: 1% in an auto table), so any
+   width the box has to spare goes to the reply columns. */
 .compare-grid tbody th,
 .compare-grid .compare-grid-corner {
   position: sticky;
   left: 0;
+  width: 1%;
   border-right: 1px solid var(--cell);
   background: var(--surface);
 }
