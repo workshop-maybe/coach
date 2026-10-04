@@ -26,6 +26,8 @@ tauri-plugin-dialog = "2"
 tauri-plugin-clipboard-manager = "2"
 sha2 = "0.10"
 base64 = "0.22"
+# Decodes save_image's folder header (KTD3). Already in the tree through tauri.
+percent-encoding = "2"
 # Jev Mode (KTD1, KTD2). reqwest is called from Rust, never through tauri-plugin-http,
 # so no capability can make the web view a fetcher; its `rustls` feature verifies TLS
 # with the OS trust store. The key store is chosen per platform below, never keyring's
