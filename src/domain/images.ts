@@ -57,8 +57,10 @@ export function folderOf(path: string): string {
   return i < 0 ? "" : path.slice(0, i);
 }
 
-// A Markdown image: `![alt](src "title")`, where src may be wrapped in <...>.
-const IMAGE = String.raw`(!\[(?:\\.|[^\]\\])*\]\(\s*)(<(?:\\.|[^>\\\n])*>|[^\s)]+)((?:\s+"(?:\\.|[^"\\])*")?\s*\))`;
+// A Markdown image: `![alt](src "title")`, where src may be wrapped in <...>. A bare src may
+// not start with `<` (as in CommonMark), so each ref matches one way only; otherwise a long
+// line of bracketed refs followed by text backtracks for minutes.
+const IMAGE = String.raw`(!\[(?:\\.|[^\]\\])*\]\(\s*)(<(?:\\.|[^>\\\n])*>|[^<\s)][^\s)]*)((?:\s+"(?:\\.|[^"\\])*")?\s*\))`;
 const IMAGE_REF = new RegExp(IMAGE, "g");
 const IMAGES_ONLY = new RegExp(String.raw`^\s*(?:${IMAGE}\s*)+$`);
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bytesToBase64, dataUriToBytes, folderOf, imageExtension, isImageDataUri, isLocalImageName, localImageNames, withAssetsRefs } from "./images";
+import { bytesToBase64, dataUriToBytes, folderOf, imageExtension, isImageDataUri, isImagesOnlyLine, isLocalImageName, localImageNames, withAssetsRefs } from "./images";
 
 const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
 const JPEG_BYTES = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 9]);
@@ -62,6 +62,21 @@ describe("image bytes", () => {
   it("encodes bytes past the size a single string conversion can take", () => {
     const big = new Uint8Array(300_000).map((_, i) => i % 251);
     expect(dataUriToBytes(`data:image/png;base64,${bytesToBase64(big)}`)).toEqual(big);
+  });
+});
+
+describe("isImagesOnlyLine", () => {
+  it("is true for a line of images only, and false once text follows", () => {
+    expect(isImagesOnlyLine("![](a.png) ![alt](<two words.png> \"t\")")).toBe(true);
+    expect(isImagesOnlyLine("![](a.png) and text")).toBe(false);
+  });
+
+  it("answers at once for a long run of bracketed refs followed by text, which once backtracked for minutes", () => {
+    for (const ref of ["![](<a>)", "![](<x\\<y>)"]) {
+      const started = performance.now();
+      expect(isImagesOnlyLine(ref.repeat(40) + " x")).toBe(false);
+      expect(performance.now() - started).toBeLessThan(50);
+    }
   });
 });
 
