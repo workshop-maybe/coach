@@ -1,0 +1,67 @@
+---
+title: Run your first test
+part: getting-started
+order: 30
+description: Set up an agent, hand it a first badge's task, bring back the reply and judge it.
+---
+
+{/* Getting started's last page (U6, R4, F1): the first test and the look at home after it, step by step against a new folder. Labels are checked against the app's source (KTD8). */}
+
+A test hands one badge's task to one agent. You copy the prompt into your assistant, paste its answer back into the app, and decide whether it met the badge's rubric. Your first test does all of that with a badge the app makes for you.
+
+## Start it
+
+In a new folder, home is empty. Click <UI>Try a first test</UI>.
+
+<Shot id="home-empty" alt="Home in an empty folder: the Try a first test button above the two doors, Create an agent and Create a credential" />
+
+## Set up the agent
+
+An agent is the assistant you'll test, as you run it: its harness, its model and its effort.
+
+1. Turn the <UI>Harness</UI>, <UI>Model</UI> and <UI>Effort</UI> dials to match the assistant you use. Click the arrows on either side of a dial, or click the dial and use the arrow keys.
+2. If yours isn't listed, turn the dial to <UI>Other</UI> and type its name.
+3. Some models also have a <UI>Version</UI> dial. Leave it on <UI>latest</UI> unless you use an older version.
+4. Click <UI>Make the agent</UI>.
+
+<Shot id="first-test-agent" alt="The agent card: the agent drawn above its Harness, Model, Version and Effort dials, set to Claude Code, opus, latest and high, with Make the agent below" />
+
+The agent is named for its setup, such as *Claude Code, opus, high*. You can rename it later.
+
+The app also makes your first badge, *Name what matters next*. Its task asks an agent open in a repo to name the three things most worth doing next, with evidence for each.
+
+## Hand it over
+
+<Shot id="first-test-hand" alt="Hand it over: the badge in a box beside the agent, the S · default handoff key lit, and the Copy button" />
+
+1. Click <UI>Copy</UI>. The handoff, the prompt that gives the badge's task to the agent, is now on your clipboard.
+2. Paste it into your assistant and let it work. It does best open in a repo you know.
+3. Wait for its whole answer.
+
+## Bring back the reply
+
+1. Copy your assistant's whole answer.
+2. Paste it into the box under <UI>What came back</UI>.
+3. Click <UI>Next</UI>.
+
+If you need to stop before you have a reply, close the test. The agent keeps the handoff, and home shows <UI>Pull \{agent\}'s handoff</UI> under <UI>What needs you</UI>. Click it to pick up where you left off.
+
+## Judge it
+
+<Shot id="first-test-judge" alt="Did it meet it: the badge's rubric on the left, the pasted reply on the right, and the Met and Not yet buttons below" />
+
+<UI>Did it meet it</UI> shows the badge's rubric beside the reply.
+
+1. Read the rubric.
+2. Check the reply against it. This rubric asks you to look up every file, commit and check the reply names. Only you can judge this one, because you know the repo.
+3. Choose <UI>Met</UI> or <UI>Not yet</UI>.
+
+The app records your verdict with the reply. On <UI>Met</UI>, it shows <UI>\{agent\} holds it</UI>, then returns home. On <UI>Not yet</UI>, click <UI>Done</UI> to go home, or <UI>Try another agent</UI>.
+
+## Look at home
+
+<Shot id="first-test-home" alt="Home after the first test: the agent under Agents, and the Name what matters next badge under Badges with the agent shown as its holder" />
+
+Your agent and your badge are both on home now. If you chose <UI>Met</UI>, the badge shows your agent as its holder, and your agent lights a key for the badge.
+
+That's a whole test. [Ideas](/ideas/credentials/) explains what credentials, agents and judging mean in this app.

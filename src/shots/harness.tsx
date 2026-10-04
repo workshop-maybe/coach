@@ -171,6 +171,11 @@ async function runStep(step: Step, n: number, timeout: number): Promise<void> {
     const data = new DataTransfer();
     data.setData("text/plain", step.paste);
     el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+  } else if ("scroll" in step) {
+    const el = await waitFor(() => find(step.scroll), `${label} found no ${describeTarget(step.scroll)} to scroll to`, timeout);
+    // To the middle of the window, as far as the page scrolls: a target scrolled to an
+    // edge would sit under home's pinned doors. jsdom has no scrolling, so no method.
+    el.scrollIntoView?.({ block: "center", inline: "nearest" });
   } else {
     await waitFor(() => find(step.waitFor), `${label}: ${describeTarget(step.waitFor)} never appeared`, timeout);
   }

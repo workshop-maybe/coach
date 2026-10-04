@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The screenshot manifest and the harness page that renders it (U3, KTD6, KTD7, R19):
+// The screenshot manifest and the harness page that renders it (U3, U6, KTD6, KTD7, R19):
 // every shot is well formed and names things the sample folder holds, every route kind
 // is pictured or marked as not pictured, and the harness reports ready only for a shot
 // it found and finished, never for an unknown id or a step that failed.
@@ -137,7 +137,8 @@ describe("the shot manifest", () => {
     for (const shot of SHOTS) {
       if (shot.clip) expect(shot.clip.selector.trim(), shot.id).not.toBe("");
       for (const step of shot.steps ?? []) {
-        const target = "click" in step ? step.click : "fill" in step ? step.fill : "waitFor" in step ? step.waitFor : (step.into ?? { selector: ".rich-input" });
+        const target =
+          "click" in step ? step.click : "fill" in step ? step.fill : "waitFor" in step ? step.waitFor : "scroll" in step ? step.scroll : (step.into ?? { selector: ".rich-input" });
         expect(Object.values(target).every((v) => typeof v === "string" && v !== ""), `${shot.id}: ${JSON.stringify(step)}`).toBe(true);
       }
     }
@@ -235,6 +236,37 @@ describe("the harness page", () => {
     expect(html.getAttribute("data-window")).toBe("maximized");
     expect(root.textContent).toContain("A new key");
     stop();
+  }, 15000);
+
+  it("scrolls a step's target to the middle of the window before reporting ready", async () => {
+    // jsdom has no scrolling, so the step's call is what can be seen.
+    const calls: { el: Element; options: unknown }[] = [];
+    const had = Object.getOwnPropertyDescriptor(Element.prototype, "scrollIntoView");
+    Element.prototype.scrollIntoView = function (this: Element, options?: unknown) {
+      calls.push({ el: this, options });
+    } as Element["scrollIntoView"];
+    try {
+      const shot: Shot = {
+        id: "home-badges",
+        page: "ideas/your-record",
+        route: { view: "home" },
+        seed: "full",
+        jev: "off",
+        expect: { text: "Badges" },
+        steps: [{ scroll: { selector: 'section[aria-labelledby="home-badges"]' } }],
+      };
+      const root = mountPoint();
+      const stop = await startShot(root, "?shot=home-badges", [shot]);
+      expect(html.getAttribute("data-shot-error")).toBeNull();
+      expect(html.getAttribute("data-shot")).toBe("ready");
+      expect(calls).toHaveLength(1);
+      expect(calls[0].el.getAttribute("aria-labelledby")).toBe("home-badges");
+      expect(calls[0].options).toEqual({ block: "center", inline: "nearest" });
+      stop();
+    } finally {
+      if (had) Object.defineProperty(Element.prototype, "scrollIntoView", had);
+      else delete (Element.prototype as Partial<Element>).scrollIntoView;
+    }
   }, 15000);
 
   it("fails a shot whose step finds nothing, naming the step, and never reports ready", async () => {

@@ -1,4 +1,4 @@
-// The screenshot harness's sample folder (U3, KTD6, R20). Built in the page with the
+// The screenshot harness's sample folder (U3, U6, KTD6, R20). Built in the page with the
 // domain's own serializers and version hash, so every result's assignment version always
 // matches its credential and nothing reads "task changed". Everything here is invented and
 // generic: the folder is /Users/you/Andamio, the machine is "Your Mac", agents have no repo,
@@ -119,7 +119,9 @@ const RELEASE_NOTE: Credential = {
 
 const CLAUDE: AgentProfile = {
   slug: SAMPLE.agents.claude,
-  name: "Claude Code, opus, high",
+  // Short names, as a user renames them: "Pull Codex's handoff" reads better than the
+  // setup-named default in What needs you's rows (U6). The setup stays on the card.
+  name: "Claude Code",
   harness: "claude-code",
   model: "opus",
   effort: "high",
@@ -130,7 +132,7 @@ const CLAUDE: AgentProfile = {
 
 const CODEX: AgentProfile = {
   slug: SAMPLE.agents.codex,
-  name: "Codex, gpt-6-astra, medium",
+  name: "Codex",
   harness: "codex",
   model: "gpt-6-astra",
   effort: "medium",

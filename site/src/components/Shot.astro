@@ -1,0 +1,48 @@
+---
+// One screenshot of the real app (U5, KTD6, KTD7, R18, R19): /shots/<id>.png, which
+// `npm run site:shots` renders from the manifest in src/shots/shots.ts. It sits directly
+// after the step it shows, across the full width of the text column, and tapping it opens
+// the picture at full size (on a phone, the only way to read a whole window). Alt text is
+// required; a caption is optional. Pages use it without importing it ([...slug].astro).
+//
+// The picture's width and height come from its PNG header, halved for the device scale of
+// 2 it is shot at, so the page holds its place while it loads. A missing picture or empty
+// alt text fails the build here and `npm test` in site/tests/content.test.ts.
+//
+// Styles live in styles/guide.css.
+
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+
+interface Props {
+  /** The shot's id in src/shots/shots.ts. */
+  id: string;
+  /** What the picture shows, for a reader who can't see it. */
+  alt: string;
+  /** An optional line under the picture. */
+  caption?: string;
+}
+
+/** The scale every shot is taken at (KTD7): two image pixels per CSS pixel. */
+const SCALE = 2;
+
+const { id, alt, caption } = Astro.props;
+if (!alt || alt.trim() === "") throw new Error(`<Shot id="${id}"> needs alt text.`);
+
+// The npm scripts run Astro from inside site/ (astro.config.mjs), so public/ is here.
+const file = [join(process.cwd(), "public", "shots", `${id}.png`), join(process.cwd(), "site", "public", "shots", `${id}.png`)].find((f) =>
+  existsSync(f),
+);
+if (!file) throw new Error(`<Shot id="${id}"> has no picture. Run npm run site:shots -- --only ${id}.`);
+const png = readFileSync(file);
+const width = Math.round(png.readUInt32BE(16) / SCALE);
+const height = Math.round(png.readUInt32BE(20) / SCALE);
+const src = `/shots/${id}.png`;
+---
+
+<figure class="guide-shot">
+  <a class="guide-shot-open" href={src} title="Open the full-size picture">
+    <img src={src} alt={alt} width={width} height={height} loading="lazy" decoding="async" />
+  </a>
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>

@@ -1,29 +1,58 @@
 ---
-// The guide's home (U2, R9, R13): what the guide is, then each part's pages with the line
-// that says what each one is for. The parts and pages come from the guide collection, so
-// a new page shows up here and in navigation without touching this file.
+// The guide's home (U2, U6, R9, R13): what the app is, the plain notice that it is an early
+// preview James sends to testers, where a new reader starts, then each part with a line on
+// what it covers and its pages. The parts and pages come from the guide collection, so a
+// new page shows up here and in navigation without touching this file; a part shows once
+// it has a page.
 
 import { getCollection } from "astro:content";
 import Guide from "../layouts/Guide.astro";
-import { byPart, pageHref } from "../parts";
+import { byPart, pageHref, type PartId } from "../parts";
 
-const groups = byPart((await getCollection("guide")).map((entry) => ({ id: entry.id, ...entry.data })));
+const pages = (await getCollection("guide")).map((entry) => ({ id: entry.id, ...entry.data }));
+const groups = byPart(pages);
+const start = groups.find((group) => group.part === "getting-started")?.pages[0];
+
+/** What each part is for, in a line. */
+const PART_LINES: Record<PartId, string> = {
+  "getting-started": "From installing the app to your first recorded test.",
+  ideas: "What credentials, agents and judging mean here, and what your record is for.",
+  "how-to": "One page for each thing you can do in the app.",
+  help: "Jev Mode, your data, and what to do when something breaks.",
+};
 ---
 
-<Guide
-  title="Andamio Desktop guide"
-  description="How each part of Andamio Desktop works."
-  current="/"
->
-  <p>How each part of Andamio Desktop works. The app is an early preview, and this guide grows with it.</p>
+<Guide title="Andamio Desktop guide" description="How Andamio Desktop works, from install to your first recorded test." current="/">
+  <p>
+    Andamio Desktop helps you find out which of your AI agents can do the work you care about. You describe a skill as a credential,
+    with a task that proves it. You hand the task to an agent, read what comes back and decide whether it passed. Over time you see
+    which agents hold which badges.
+  </p>
+  <p>
+    Everything stays on your computer unless you turn on Jev Mode, which is off by default. There is no account, and the app never
+    talks to your agents.
+  </p>
+  <p class="guide-notice">
+    The app is an early preview. James sends builds to a small group of testers, and this guide is written for them first. Things
+    will change, and some will break. The guide follows the app as it is built, so now and then it may describe something your
+    build doesn't have yet.
+  </p>
+  {
+    start && (
+      <p>
+        New here? Start with <a href={pageHref(start.id)}>{start.title}</a>. A first run takes about 30 minutes.
+      </p>
+    )
+  }
   {
     groups.map((group) => (
       <section class="guide-contents">
         <h2>{group.label}</h2>
+        <p>{PART_LINES[group.part]}</p>
         <ul>
           {group.pages.map((page) => (
             <li>
-              <a href={pageHref(page.id)}>{page.title}</a>
+              <a href={pageHref(page.id)}>{page.title}</a>{" "}
               <span>{page.description}</span>
             </li>
           ))}

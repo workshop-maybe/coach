@@ -33,8 +33,15 @@ export type Target = { button: string } | { label: string } | { text: string } |
  * `click` waits until the target is enabled. `fill` types a whole value into a field.
  * `paste` pastes text into the rich editor (`.rich-input` unless `into` names another).
  * `waitFor` waits until a target appears, such as a beat that lands after a timer.
+ * `scroll` brings a target to the middle of the window, as far as the page scrolls, for a
+ * screen taller than the window (U6).
  */
-export type Step = { click: Target } | { fill: Target; value: string } | { paste: string; into?: Target } | { waitFor: Target };
+export type Step =
+  | { click: Target }
+  | { fill: Target; value: string }
+  | { paste: string; into?: Target }
+  | { waitFor: Target }
+  | { scroll: Target };
 
 /** What must be on screen once the page is ready: exact text, or a CSS selector that matches. */
 export type Expect = { text: string } | { selector: string };
@@ -58,6 +65,32 @@ export interface Shot {
   clip?: Clip;
   steps?: readonly Step[];
 }
+
+/**
+ * What the first test's agent sends back in Getting started's pictures (U6): an answer to
+ * the Name what matters next preset, about an invented repo.
+ */
+const FIRST_REPLY = `## What matters next
+
+1. **Finish the retry in the sync client.** \`src/sync/client.ts\` has a \`TODO: back off on 429\` above \`pushChanges\`, and two open issues report lost edits. First step: a test that replays a 429. How sure: high.
+2. **Remove the old settings screen.** Nothing has linked to \`src/settings/legacy/\` since the commit "route settings through the new panel". First step: delete the folder and run the build. How sure: high.
+3. **Write the upgrade notes.** \`migrations/0009_tags.sql\` renames a column people query. First step: draft the notes from the merged changes. How sure: medium.
+
+## What I could not see
+
+Whether a release date is set. A roadmap would change the order.`;
+
+/** Getting started's first test (U6), from making the agent to the reply pasted under "What came back". */
+const FIRST_TEST_TO_REPLY: readonly Step[] = [
+  { click: { button: "Make the agent" } },
+  { waitFor: { text: "Hand it over" } },
+  { click: { button: "Copy" } },
+  { waitFor: { text: "What came back" } },
+  { paste: FIRST_REPLY },
+];
+
+/** On from the pasted reply to "Did it meet it", with the reply beside the rubric. */
+const FIRST_TEST_TO_JUDGE: readonly Step[] = [...FIRST_TEST_TO_REPLY, { click: { button: "Next" } }, { waitFor: { text: "Did it meet it" } }];
 
 export const SHOTS: readonly Shot[] = [
   {
@@ -85,12 +118,44 @@ export const SHOTS: readonly Shot[] = [
     expect: { text: "Make the agent" },
   },
   {
+    id: "first-test-hand",
+    page: "getting-started/first-test",
+    route: { view: "deck", deck: "agent", firstTest: true },
+    seed: "empty",
+    jev: "off",
+    expect: { text: "Hand it over" },
+    steps: [{ click: { button: "Make the agent" } }, { waitFor: { text: "Hand it over" } }],
+  },
+  {
+    id: "first-test-judge",
+    page: "getting-started/first-test",
+    route: { view: "deck", deck: "agent", firstTest: true },
+    seed: "empty",
+    jev: "off",
+    expect: { text: "Did it meet it" },
+    steps: FIRST_TEST_TO_JUDGE,
+  },
+  {
+    // Met plays a 1400 ms landing before home returns, so the last step waits for a
+    // holder, which only home shows.
+    id: "first-test-home",
+    page: "getting-started/first-test",
+    route: { view: "deck", deck: "agent", firstTest: true },
+    seed: "empty",
+    jev: "off",
+    expect: { selector: ".holder" },
+    steps: [...FIRST_TEST_TO_JUDGE, { click: { button: "Met" } }, { waitFor: { selector: ".holder" } }],
+  },
+  {
+    // Home is taller than the window and its doors stay pinned to the bottom, so the
+    // picture scrolls the Badges shelf into view above them.
     id: "home",
     page: "ideas/your-record",
     route: { view: "home" },
     seed: "full",
     jev: "off",
-    expect: { text: "What needs you" },
+    expect: { text: "Badges" },
+    steps: [{ scroll: { selector: 'section[aria-labelledby="home-badges"]' } }],
   },
   {
     id: "jev-off",
@@ -129,7 +194,7 @@ export const COVERAGE: Record<RouteKind, readonly string[] | typeof NOT_PICTURED
   gate: ["first-run"],
   home: ["home-empty", "home"],
   "deck:credential": NOT_PICTURED,
-  "deck:agent": ["first-test-agent"],
+  "deck:agent": ["first-test-agent", "first-test-hand", "first-test-judge", "first-test-home"],
   "deck:test": NOT_PICTURED,
   "deck:edit-credential": NOT_PICTURED,
   "deck:edit-agent": NOT_PICTURED,

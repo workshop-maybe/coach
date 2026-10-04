@@ -340,6 +340,54 @@ a:hover {
   border-top: 1px solid var(--cell);
 }
 
+/* One of the app's labels (components/UI.astro, U5): Fragment Mono in a square key, so
+   it reads as the control it names. A placeholder the app fills in is muted. A long
+   label wraps with its key drawn on each line. */
+.guide-ui {
+  padding: 0 5px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-bottom-width: 2px;
+  color: var(--ink);
+  font-size: 0.86em;
+  line-height: 1.5;
+  white-space: normal;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+.guide-ui-slot {
+  font-style: normal;
+  color: var(--ink-muted);
+}
+
+/* A screenshot (components/Shot.astro, U5): the full width of the text column, right
+   after the step it shows. Tapping it opens the picture at full size. */
+.guide-page .guide-shot {
+  margin: 0 0 var(--space-lg);
+}
+
+.guide-shot-open {
+  display: block;
+  cursor: zoom-in;
+}
+
+.guide-shot img {
+  width: 100%;
+}
+
+.guide-shot figcaption {
+  margin-top: var(--space-sm);
+  font-size: 14px;
+  color: var(--ink-muted);
+}
+
+/* The home page: the preview notice, set apart by a rule like a note in the margin. */
+.guide-notice {
+  padding-left: var(--space-base);
+  border-left: var(--rule-width) solid var(--rule);
+}
+
 /* The home page's list of parts: each page's name, then what it is for. */
 .guide-contents ul {
   list-style: none;
