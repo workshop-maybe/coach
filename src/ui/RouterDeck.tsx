@@ -82,10 +82,13 @@ function Router({ resume, state }: { resume?: RouterResume; state: FolderState }
   const keys = useMemo(() => credentials.map(credentialKey), [credentials]);
   const byKey = useMemo(() => new Map(credentials.map((c) => [credentialKey(c), c])), [credentials]);
   const plan = useMemo(() => routeBatches(job, routeBadges(credentials)), [job, credentials]);
-  // An outcome counts only for the job and the badges it was asked about.
-  const answered = !!outcome && outcome.job === job && !!plan && sameKeys(outcome.keys, plan.sent);
+  // An outcome counts for the card only while the job is the one asked about. The card reads it
+  // over the badges still in the folder (KTD4, KTD11). The ask card counts as answered only while
+  // the badges are also the ones asked about, so a changed badge set invites a fresh ask.
+  const forJob = !!outcome && outcome.job === job;
+  const answered = forJob && !!outcome && !!plan && sameKeys(outcome.keys, plan.sent);
 
-  const resumeNow: RouterResume = { job, ...(answered ? { outcome } : {}), ...(picked !== undefined ? { picked } : {}), ...(tapped ? { tapped } : {}) };
+  const resumeNow: RouterResume = { job, ...(forJob ? { outcome } : {}), ...(picked !== undefined ? { picked } : {}), ...(tapped ? { tapped } : {}) };
   const home = () => navigate({ view: "home" });
   const orderByCost = () => navigate({ view: "deck", deck: "cost-order", returnTo: resumeNow });
 
@@ -127,7 +130,7 @@ function Router({ resume, state }: { resume?: RouterResume; state: FolderState }
     if (picked !== undefined) {
       return { key: picked !== NONE_OF_THESE && byKey.has(picked) ? picked : null, matched: "picked", alsoLike: [], rating: null, model: null };
     }
-    if (answered && outcome) {
+    if (forJob && outcome) {
       const m = matchOf(outcome.answers, keys);
       const tap = tapped && byKey.has(tapped) && m.alsoLike.includes(tapped) ? tapped : undefined;
       const key = tap ?? m.best;
@@ -162,7 +165,7 @@ function Router({ resume, state }: { resume?: RouterResume; state: FolderState }
     id: "ask",
     title: "Ask Jev which badge it's like",
     ...(answered ? { forward: "Next" } : {}),
-    settled: answered ? matchedLine(focus.key ? byKey.get(focus.key) : undefined) : undefined,
+    settled: forJob ? matchedLine(focus.key ? byKey.get(focus.key) : undefined) : undefined,
     body: ({ advance }) => (
       <AskCard
         sends={plan?.sent.length ?? 0}

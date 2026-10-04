@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { profilePath } from "../domain/folder";
+import { credentialPath, profilePath } from "../domain/folder";
 import type { JevAnswers, RouteRequest } from "../domain/jevRequest";
 import type { AgentProfile, Assessment, Credential, Mark } from "../domain/types";
 import { FAKE_ON, FakeJev } from "../jev/fakeJev";
@@ -318,6 +318,39 @@ describe("RouterDeck with Jev", () => {
       window.dispatchEvent(new Event("focus"));
     });
     expect(await screen.findByRole("heading", { name: "Codex agent" })).toBeTruthy();
+  });
+
+  it("another badge trashed while the card is open keeps the card's badge", async () => {
+    const storage = await folder();
+    const jev = new FakeJev(FAKE_ON);
+    jev.queue("ask", answer([0.9, 0.1, 0.1]));
+    renderRouter(storage, jev);
+    await pasteJob();
+    await userEvent.click(await screen.findByRole("button", { name: "Ask Jev" }));
+    expect(await screen.findByRole("heading", { name: "Codex agent" })).toBeTruthy();
+    await storage.moveFile("data", credentialPath("eng", "docs"), "trash/x/docs.md");
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    expect(await screen.findByRole("heading", { name: "Codex agent" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "No badge like this job" })).toBeNull();
+    expect(jev.asks).toHaveLength(1);
+  });
+
+  it("the matched badge trashed while the card is open falls through to the next badge over the threshold", async () => {
+    const storage = await folder();
+    const jev = new FakeJev(FAKE_ON);
+    jev.queue("ask", answer([0.9, 0.1, 0.8]));
+    renderRouter(storage, jev);
+    await pasteJob();
+    await userEvent.click(await screen.findByRole("button", { name: "Ask Jev" }));
+    expect(await screen.findByRole("heading", { name: "Codex agent" })).toBeTruthy();
+    await storage.moveFile("data", credentialPath("eng", "migration"), "trash/x/migration.md");
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    expect(await screen.findByRole("heading", { name: "No agent holds Ship a deploy yet" })).toBeTruthy();
+    expect(jev.asks).toHaveLength(1);
   });
 });
 
