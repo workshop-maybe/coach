@@ -10,7 +10,7 @@
 // some column has a current reading, the learning targets as a second opinion sends them and
 // Overall, each group set apart by a rule. A cell holds that reply's call in ink and its
 // percent in small mono, read with the badge's current pair for the reading's model, where
-// the reading holds the row (a point by its place and exact text, a target by its text); on a
+// the reading holds the row (a point or a target by its exact text); on a
 // point row, then, Better than and every reply it covers that point better than, by column
 // name, where both orders of a head-to-head agree. Only what is current shows: a reading or a
 // head-to-head asked at another version of the badge leaves its cells blank. No ranking and
@@ -20,7 +20,7 @@ import { useLayoutEffect, useRef } from "react";
 import { calibrationOf, callOf, type CutOffs } from "../domain/calls";
 import { currentHeadToHead, currentReadingOf, marksOf, type CompareTake } from "../domain/compareJev";
 import type { Take } from "../domain/handoffResults";
-import { rubricParts, targetsToSend } from "../domain/secondOpinion";
+import { rubricParts, savedPointOf, targetsToSend } from "../domain/secondOpinion";
 import type { AgentProfile, Credential, FolderState, JevReading } from "../domain/types";
 import { listNames, setupText, takeWhen } from "./format";
 import { CALL_WORDS, percent } from "./JevReading";
@@ -197,8 +197,8 @@ export function CompareGrid({ grid, columns, open, disabled, onChoose }: AbovePr
                 <RowHead text={point} />
                 {columns.map((c) => {
                   const read = grid.readings.get(c.id);
-                  const at = read?.reading.points[i];
-                  return <Cell key={c.id} probability={at?.text === point ? at.probability : undefined} pair={read?.pair} better={betterAt(c.id, i)} />;
+                  const at = savedPointOf(read?.reading.points, point);
+                  return <Cell key={c.id} probability={at?.probability} pair={read?.pair} better={betterAt(c.id, i)} />;
                 })}
               </tr>
             ))}

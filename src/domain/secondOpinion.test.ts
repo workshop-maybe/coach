@@ -17,6 +17,7 @@ import {
   TARGET_CRITERIA,
   TARGET_QUESTION,
   targetId,
+  tappedPoints,
 } from "./secondOpinion";
 import type { JevReading } from "./types";
 
@@ -38,6 +39,12 @@ describe("rubricParts: points", () => {
       points: ["One", "Two", "Three"],
       notes: "Met when every point holds.",
     });
+  });
+
+  it("keeps a point whose text repeats an earlier point's once, in its first place", () => {
+    expect(rubricParts("1. Holds.\n2. Wrong.\n3. Holds.\n\nMet when all hold.")).toEqual({ points: ["Holds.", "Wrong."], notes: "Met when all hold." });
+    expect(Object.keys(ask("- Holds.\n- Wrong.\n- Holds.").questions)).toEqual(["p1", "p2", "overall"]);
+    expect(tappedPoints(points("- Holds.\n- Wrong.\n- Holds."), ["Holds."])).toEqual(["Holds."]);
   });
 
   it("takes ordered, plus and star items as points", () => {

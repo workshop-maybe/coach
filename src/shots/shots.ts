@@ -204,8 +204,8 @@ const ANSWER_KEY_REPLY = `1. Holds. 100 has 20 multiples of 5 and 4 multiples of
 
 /**
  * What Jev answers about that reply, read with the 40/75 cut-offs the judged sample fits:
- * meets overall and on four points, can't call on the bare "Holds." of point 4, and on the
- * second target, which 30/70 would have read as meets.
+ * meets overall and on four points, can't call on point 4, the slice key, and on the second
+ * target, which 30/70 would have read as meets.
  */
 const ANSWER_KEY_CALLS = { p1: 0.91, p2: 0.86, p3: 0.88, p4: 0.58, p5: 0.83, overall: 0.84, t1: 0.88, t2: 0.72 };
 

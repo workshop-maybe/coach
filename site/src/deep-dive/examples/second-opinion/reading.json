@@ -6,7 +6,7 @@
   "rows": [
     {
       "id": "p1",
-      "text": "Holds.",
+      "text": "Holds. 100 has 20 multiples of 5 and 4 multiples of 25, so 100! has 24 trailing zeros.",
       "percent": 91,
       "default_call": "meets",
       "fitted_call": "meets"
@@ -27,7 +27,7 @@
     },
     {
       "id": "p4",
-      "text": "Holds.",
+      "text": "Holds. Sorting in reverse gives [3, 2, 1], and the slice drops the first item, leaving [2, 1].",
       "percent": 88,
       "default_call": "meets",
       "fitted_call": "meets"

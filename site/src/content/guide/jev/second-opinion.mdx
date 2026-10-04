@@ -31,7 +31,7 @@ The state is an object with six fields. Its field names are the ones the questio
 | `learning_targets` | The badge's learning targets, trimmed, with blanks and repeats left out |
 | `reply` | The reply you're judging, as the Markdown in the reply box |
 
-A rubric's points are its top-level list items, bulleted or numbered. A nested item or an indented line folds into the item above it, a task box (`[ ]` or `[x]`) is dropped, and a list inside fenced code doesn't count. Every other line is a note. A rubric with no list has no points, so its request has no point questions. A numbered answer key in a rubric is a list too, so each of its answers is a point of its own.
+A rubric's points are its top-level list items, bulleted or numbered. A nested item or an indented line folds into the item above it, a task box (`[ ]` or `[x]`) is dropped, and a list inside fenced code doesn't count. A point with the same text as an earlier one counts once, since both would ask Jev the same question. Every other line is a note. A rubric with no list has no points, so its request has no point questions. A numbered answer key in a rubric is a list too, so each of its answers is a point of its own. Written as plain lines, as *Say how sure you are* writes its answers, a key is a note, and reaches every point's question.
 
 The questions are:
 
@@ -152,7 +152,7 @@ The track record is counted with cut-offs fitted to the same verdicts it counts.
 
 ## The steps after your verdict
 
-After <UI>Not yet</UI>, when the rubric has points, the test asks <UI>Which points did it miss</UI>. Every point is a toggle, none pressed. With a reading in hand, Jev's call sits beside each point, and nothing is tapped for you. The points you tap are saved only with Not met, only if they are points of the rubric the result is stamped with, and in rubric order. Points are told apart by their text, so two points with the same text are tapped together.
+After <UI>Not yet</UI>, when the rubric has points, the test asks <UI>Which points did it miss</UI>. Every point is a toggle, none pressed. With a reading in hand, Jev's call sits beside each point, and nothing is tapped for you. The points you tap are saved only with Not met, only if they are points of the rubric the result is stamped with, and in rubric order. Points are told apart by their text, which is why a repeated point counts once: each toggle is one point. A reading taken before a repeat counted once still shows its call beside each point, found by its text.
 
 When your verdict goes against Jev's overall call, read with the pair frozen with the reading, one more step asks <UI>What did Jev miss</UI>. Can't call never asks. The line you write becomes the result's note. Its line breaks become spaces, any leading `#` marks are dropped so it can never read as a heading in the result file, and it is capped at 200 characters.
 

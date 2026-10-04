@@ -9,6 +9,7 @@
 import type { Ref } from "react";
 import { callOf, type CutOffs } from "../domain/calls";
 import { MAX_REASON_CHARS } from "../domain/jevRequest";
+import { savedPointOf } from "../domain/secondOpinion";
 import type { AssessmentResult, JevPoint } from "../domain/types";
 import { CALL_WORDS } from "./JevReading";
 
@@ -38,18 +39,18 @@ export interface MissedPointsListProps {
   disabled?: boolean;
 }
 
-/** Every rubric point as a toggle, with Jev's call beside a point whose text the reading holds at the same place. */
+/** Every rubric point as a toggle, with Jev's call beside a point whose text the reading holds. */
 export function MissedPointsList({ points, readingPoints, pair, picked, onToggle, disabled }: MissedPointsListProps) {
   return (
     <ul className="missed-points" aria-label="Rubric points">
       {points.map((point, i) => {
-        const read = readingPoints?.[i];
+        const read = savedPointOf(readingPoints, point);
         return (
           <li key={i} className="missed-point">
             <button type="button" aria-pressed={picked.includes(point)} disabled={disabled} onClick={() => onToggle(point)}>
               {point}
             </button>
-            {pair && read?.text === point && <span className="missed-call">{CALL_WORDS[callOf(read.probability, pair)]}</span>}
+            {pair && read && <span className="missed-call">{CALL_WORDS[callOf(read.probability, pair)]}</span>}
           </li>
         );
       })}

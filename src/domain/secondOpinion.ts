@@ -5,7 +5,9 @@
 // context KTD2).
 //
 // A point is a top-level list item (`-`, `*`, `+` or ordered). Nested items and indented
-// lines fold into it, task boxes are dropped, and fenced code is skipped. The rest of the
+// lines fold into it, task boxes are dropped, and fenced code is skipped. A point whose text
+// repeats an earlier point's counts once, in its first place, as a repeated learning target
+// does: both would ask Jev the same question, and missed points are kept by text. The rest of the
 // rubric, such as "A rewrite in other words passes" or "Met when every point holds", is
 // its notes, and reaches every point question beside the point (R12). Unlike CommonMark,
 // an unindented line right after an item ends the list instead of continuing the item, so
@@ -26,7 +28,7 @@ import { scanLines } from "./markdownLines";
 import type { JevPoint, JevReading } from "./types";
 
 export interface RubricParts {
-  /** Top-level list items, in order, each as one line of text. */
+  /** Top-level list items, in order, each as one line of text, each text once. */
   points: string[];
   /** Non-blank lines outside the list and outside fences, trimmed, joined with newlines. */
   notes: string;
@@ -89,6 +91,15 @@ export function targetId(index: number): string {
 export function tappedPoints(points: readonly string[], tapped: readonly string[]): string[] {
   const picked = new Set(tapped);
   return points.filter((point, i) => picked.has(point) && points.indexOf(point) === i);
+}
+
+/**
+ * The saved entry for a point, found by its text: the first of `saved` with the same text.
+ * A rubric's points are distinct (`rubricParts`), so the text finds one point, also in a
+ * reading or head-to-head saved before a repeated point counted once.
+ */
+export function savedPointOf<T extends { text: string }>(saved: readonly T[] | null | undefined, point: string): T | undefined {
+  return saved?.find((s) => s.text === point);
 }
 
 /** The rubric's points and notes. A rubric with no list has no points. */
@@ -228,10 +239,10 @@ function dropTaskBox(content: string): string {
   return content.replace(TASK_BOX, "").trim();
 }
 
-/** Adds the item's text to the points unless it is empty, and closes the item. */
+/** Adds the item's text to the points unless it is empty or already a point, and closes the item. */
 function finish(item: { parts: string[] } | null, points: string[]): null {
   const text = item?.parts.filter((p) => p !== "").join(" ") ?? "";
-  if (text !== "") points.push(text);
+  if (text !== "" && !points.includes(text)) points.push(text);
   return null;
 }
 
