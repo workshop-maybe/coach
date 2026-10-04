@@ -2613,16 +2613,70 @@ button:focus-visible {
   background: var(--bg);
 }
 
-/* Inside a compare record it sits within the record's border, and opens shorter, since
-   each record gets half the height once the compare stacks. */
-.reply-record > .reply-jev {
+/* Inside a compare record the reading and the handoff text each sit within the record's
+   border, and open shorter, since each record gets half the height once the compare
+   stacks (jev-in-compare KTD12). */
+.reply-record > .reply-ran {
   margin: 0;
   padding: var(--space-sm) var(--space-base);
   border-top: 1px solid var(--cell);
 }
 
-.reply-record > .reply-jev .reply-jev-body {
+.reply-record > .reply-jev .reply-jev-body,
+.reply-record > .reply-ran .handback {
   max-height: 20vh;
+}
+
+/* What a re-judged reply was just before (jev-in-compare KTD11): quiet, at the actions' end. */
+.take-changed {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+/* The verdict step under a reply (jev-in-compare KTD10): one card at a time in place of the
+   reply's actions, outside the reply's scroll like them. The forward action is a plain
+   button, never the ink block, and the points list scrolls inside a capped height, so the
+   reply above keeps its room. */
+.reply-record > .judge-step {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin: 0;
+  padding: var(--space-sm) var(--space-base);
+  border-top: 1px solid var(--cell);
+}
+
+.judge-step h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.judge-step h3:focus-visible {
+  box-shadow: none;
+  outline: none;
+}
+
+.judge-step > p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.judge-step .missed-points {
+  max-height: min(12rem, 22vh);
+  overflow-y: auto;
+  padding: 2px;
+}
+
+.judge-step input {
+  width: 100%;
+}
+
+.judge-step-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
 }
 
 .compare-top {
@@ -2633,6 +2687,29 @@ button:focus-visible {
 
 .compare-top > .deck-close {
   position: static;
+}
+
+/* Jev's part of the compare (jev-in-compare KTD8, KTD9): the quiet Compare with Jev, its
+   lines and a failure, between the top row and the strip or grid. Empty, it takes no room
+   but stays rendered, so a screen reader hears its first update. */
+.compare-jev {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin: 0 0 var(--space-sm);
+}
+
+.compare-jev:empty {
+  margin: 0;
+}
+
+.compare-jev > p {
+  margin: 0;
+}
+
+.compare-jev .deck-error {
+  font-size: 13px;
 }
 
 /* The strip (hold-and-compare KTD10): every reply in the compare as a small record button,
@@ -2684,6 +2761,96 @@ button:focus-visible {
   letter-spacing: var(--value-tracking);
   color: var(--ink-muted);
   overflow-wrap: anywhere;
+}
+
+/* The grid (jev-in-compare KTD13): a table in the strip's place, in its own box capped at
+   about a third of the window's height that scrolls both ways, the header row of chips and
+   the row-header column sticky on the record surface, so five or more replies, a narrow
+   window or a long point never widen the window. Columns keep one chip's width and row
+   headers a set width, the text clamped to two lines. Calls are words in ink with the
+   percent in small mono, never a fill and never good green. Points, targets and Overall are
+   set apart by rules, with no labels. */
+.compare-grid {
+  flex: none;
+  max-height: 33vh;
+  overflow: auto;
+  margin: var(--space-sm) 0 var(--space-base);
+  border: 1px solid var(--cell);
+  background: var(--surface);
+}
+
+.compare-grid table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+}
+
+.compare-grid th,
+.compare-grid td {
+  padding: var(--space-xs) var(--space-sm);
+  text-align: left;
+  vertical-align: top;
+  font-weight: 400;
+}
+
+.compare-grid thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: var(--space-xs);
+  border-bottom: 1px solid var(--cell);
+  background: var(--surface);
+}
+
+.compare-grid tbody th,
+.compare-grid .compare-grid-corner {
+  position: sticky;
+  left: 0;
+  border-right: 1px solid var(--cell);
+  background: var(--surface);
+}
+
+.compare-grid thead .compare-grid-corner {
+  z-index: 2;
+}
+
+.compare-grid tbody + tbody > tr:first-child > * {
+  border-top: 1px solid var(--cell);
+}
+
+.compare-grid .compare-chip {
+  width: 12rem;
+  max-width: none;
+}
+
+.compare-grid-text {
+  display: -webkit-box;
+  width: clamp(8rem, 24vw, 18rem);
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.compare-grid-read {
+  display: block;
+  white-space: nowrap;
+}
+
+.compare-grid-mark {
+  display: block;
+  max-width: 12rem;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+/* Replies that answered different texts of their handoff (jev-in-compare KTD12). */
+.compare-texts {
+  flex: none;
+  margin: 0 0 var(--space-sm);
+  font-size: 13px;
 }
 
 .compare-error {

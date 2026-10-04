@@ -1,12 +1,15 @@
 // @vitest-environment jsdom
 // The reply view (U5, R11, R12, R15, R16, KTD7): one take opened as its own pane, with its
 // record header, its reply rendered, the handoff text that ran, Jev's saved reading (U7,
-// R14), and the way back it works out from the take each time it closes.
+// R14), and the way back it works out from the take each time it closes. A held reply's
+// reading is the one chosen for the badge's current version, and the verdict step and the
+// change links judge and re-judge here as in compare (jev-in-compare U7, KTD10, KTD11).
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { assessmentPath, profilePath, serializeAssessment, serializeProfile } from "../domain/folder";
-import type { Assessment, FolderState, Handoff, JevReading } from "../domain/types";
+import { assessmentPath, profilePath, rejudgedDir, serializeAssessment, serializeProfile } from "../domain/folder";
+import { assignmentVersion } from "../domain/hash";
+import type { Assessment, Credential, FolderState, Handoff, HeldReading, JevReading } from "../domain/types";
 import { FakeJev } from "../jev/fakeJev";
 import type { MemoryStorage } from "../storage/memory";
 import { AppShell } from "./AppShell";
@@ -470,5 +473,109 @@ describe("ReplyView, a saved reading read as calls", () => {
     open(folder(await judged([[0.12, "not_met"]])));
     await screen.findByRole("heading", { name: "Opus agent" });
     expect(panelIn("Jev's reading, misses overall").querySelector(".jev-overall .jev-call")?.textContent).toBe("Misses");
+  });
+});
+
+// Judging against Jev and re-judging in the reply view (jev-in-compare U7, KTD10, KTD11, and
+// the plan's assumption that the reply view shares compare's verdict step).
+describe("ReplyView, judging against Jev and again", () => {
+  const POINTS = ["Finds the bug.", "Suggests a fix."];
+  const graded: Credential = { ...review, rubric: POINTS.map((p) => `- ${p}`).join("\n") };
+  const heldDay = (n: number) => ({ fileStem: day(n).fileStem, heldAt: day(n).recordedAt });
+  const current = () => assignmentVersion(graded.task, graded.rubric);
+  const jevAt = (overall: number, version: string, askedAt = "2026-09-02T09:05:00.000Z"): JevReading => ({
+    model: "jev-1.13.0",
+    assignmentVersion: version,
+    askedAt,
+    seen: "before",
+    overall,
+    points: POINTS.map((text) => ({ text, probability: overall })),
+  });
+  const bar = () => screen.getByRole("heading", { name: /agent/, level: 2 }).closest<HTMLElement>(".reply-bar")!;
+  const stepTitle = () => screen.queryByRole("heading", { level: 3 })?.textContent ?? null;
+
+  it("shows a held reply's reading taken at the badge's current version over the one it was held with, and judges against it", async () => {
+    const held = await heldReply(codex, graded, { ...heldDay(2), jev: jevAt(0.1, "an-older-version", "2026-09-02T09:05:00.000Z") });
+    const later: HeldReading = {
+      profileSlug: "codex",
+      collectionSlug: "eng",
+      credentialSlug: "review",
+      id: "20260903T090000Z",
+      fileStem: held.fileStem,
+      reading: jevAt(0.9, await current(), "2026-09-01T09:05:00.000Z"),
+    };
+    const storage = storageWith({ credentials: [graded], profiles: [opus, codex], held: [held], heldReadings: [later] });
+    open(storage, take("codex", 2));
+    await screen.findByRole("heading", { name: "Codex agent", level: 2 });
+    await waitFor(() => expect(savedReading("Jev's reading, meets overall")).toBeTruthy());
+
+    await userEvent.click(screen.getByRole("button", { name: "Not yet" }));
+    expect(stepTitle()).toBe("Which points did it miss");
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Which points did it miss", level: 3 }));
+    await userEvent.click(screen.getByRole("button", { name: POINTS[1] }));
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByText("Jev called it meets. You said Not yet.")).toBeTruthy();
+    await userEvent.type(screen.getByRole("textbox", { name: "Reason" }), "No fix offered");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(within(bar()).getByText("Not met")).toBeTruthy());
+    const saved = storage.file(assessmentPath("codex", "eng", "review", held.fileStem))!;
+    expect(saved).toMatch(/^missed_points:\n\s+- Suggests a fix\.$/m);
+    expect(saved).toMatch(/## Note\n\nNo fix offered\n/);
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Codex agent", level: 2 }));
+  });
+
+  it("with a step open, Escape goes back a card and then to the actions, and closes the view only after", async () => {
+    const held = await heldReply(codex, graded, { ...heldDay(2), jev: jevAt(0.9, await current()) });
+    open(storageWith({ credentials: [graded], profiles: [opus, codex], held: [held] }), take("codex", 2));
+    await screen.findByRole("heading", { name: "Codex agent", level: 2 });
+    await waitFor(() => expect(builds.last).not.toBeNull());
+    await userEvent.click(screen.getByRole("button", { name: "Not yet" }));
+    await userEvent.click(screen.getByRole("button", { name: "Skip" }));
+    await userEvent.keyboard("{Escape}");
+    expect(stepTitle()).toBe("Which points did it miss");
+    await userEvent.keyboard("{Escape}");
+    expect(stepTitle()).toBeNull();
+    expect(screen.getByRole("button", { name: "Not yet" })).toBeTruthy();
+    await userEvent.keyboard("{Escape}");
+    expect(await screen.findByRole("heading", { name: "Code review", level: 2 })).toBeTruthy();
+  });
+
+  it("a Met result offers Change to Not yet; with no reading it records at once, and the reply says Changed from Met", async () => {
+    const storage = storageWith({ credentials: [graded], profiles: [opus, codex], assessments: [await result(opus, graded, day(1))] });
+    open(storage);
+    await screen.findByRole("heading", { name: "Opus agent", level: 2 });
+    expect(screen.queryByRole("button", { name: "Met" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Change to Not yet" }));
+    await waitFor(() => expect(within(bar()).getByText("Not met")).toBeTruthy());
+    expect(stepTitle()).toBeNull();
+    expect(screen.getByText("Changed from Met")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Change to Met" })).toBeTruthy();
+    expect(Object.keys(storage.files()).filter((p) => p.startsWith(`${rejudgedDir("opus", "eng", "review")}/`))).toHaveLength(1);
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Opus agent", level: 2 }));
+  });
+
+  it("a Met result whose reading called it meets opens the step on Change to Not yet", async () => {
+    const storage = storageWith({ credentials: [graded], profiles: [opus, codex], assessments: [await result(opus, graded, { ...day(1), jev: jevAt(0.9, await current()) })] });
+    open(storage);
+    await screen.findByRole("heading", { name: "Opus agent", level: 2 });
+    await userEvent.click(screen.getByRole("button", { name: "Change to Not yet" }));
+    expect(stepTitle()).toBe("Which points did it miss");
+    expect(screen.queryByRole("button", { name: "Change to Not yet" })).toBeNull();
+  });
+
+  it("a Not met result whose reading called it misses opens only the reason card on Change to Met", async () => {
+    const storage = storageWith({
+      credentials: [graded],
+      profiles: [opus, codex],
+      assessments: [await result(opus, graded, { ...day(1), result: "not_met", jev: jevAt(0.1, await current()) })],
+    });
+    open(storage);
+    await screen.findByRole("heading", { name: "Opus agent", level: 2 });
+    await userEvent.click(screen.getByRole("button", { name: "Change to Met" }));
+    expect(stepTitle()).toBe("What did Jev miss");
+    expect(screen.getByText("Jev called it misses. You said Met.")).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(within(bar()).getByText("Met")).toBeTruthy());
+    expect(screen.getByText("Changed from Not met")).toBeTruthy();
   });
 });
