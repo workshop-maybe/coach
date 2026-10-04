@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { fitSecondOpinion, fitsJev, fitsTokens, jevTokens } from "./jevBudget";
-import { JEV_LIMITS, type JevExample, type JevExampleEntry, type JevExampleMap, type LineBreaksRequest, type SecondOpinionRequest } from "./jevRequest";
+import { JEV_LIMITS, type JevExample, type JevExampleEntry, type JevExampleMap, type LineBreaksRequest, type RouteRequest, type SecondOpinionRequest } from "./jevRequest";
 import { secondOpinionRequest, type SecondOpinionInput } from "./secondOpinion";
 
 // The cases mirror the native side's budget test in src-tauri/src/jev.rs, so the two
@@ -112,6 +112,45 @@ describe("fitsJev: a second opinion's examples", () => {
     expect(fitsJev(withExamples(126_535))).toBe(true);
     expect(fitsJev(withExamples(126_536))).toBe(false);
     expect(fitsJev(withExamples(126_536, false))).toBe(true);
+  });
+});
+
+// The native side's budget test for a route uses this same request (`route` in
+// src-tauri/src/jev.rs), written out the same way, so the two checks refuse it alike.
+function route(matches: number, difficulty: boolean, job = "Fix the flaky login test."): RouteRequest {
+  const questions: RouteRequest["questions"] = {};
+  for (let i = 1; i <= matches; i++) {
+    questions[`m${i}`] = {
+      type: "noul",
+      instructions: {
+        badge: { name: `Badge ${i}`, task: "Review the diff and name the bug.", learning_targets: ["I can find a bug in a diff", "I can point to the line"] },
+        question: "Does the `job` ask for the same kind of work as the `badge`?",
+      },
+      criteria: {
+        true: "the work the badge's task and learning targets describe",
+        false: "a different kind of work, or one that only shares a topic, a tool or a word with the badge",
+      },
+    };
+  }
+  if (difficulty) {
+    questions.difficulty = { type: "score", instructions: "How demanding is the `job` for an agent?", criteria: ["routine", "needs judgment", "unusual or high-stakes"] };
+  }
+  return { kind: "route", state: { job }, questions };
+}
+
+describe("fitsJev: a route", () => {
+  it("refuses more than 256 questions, counting the difficulty question among them", () => {
+    expect(fitsJev(route(JEV_LIMITS.maxQuestions + 1, false))).toBe(false);
+    expect(fitsJev(route(JEV_LIMITS.maxQuestions, true))).toBe(false);
+    expect(fitsJev(route(JEV_LIMITS.maxQuestions - 1, true))).toBe(true);
+  });
+
+  it("refuses a job too long beside its longest question, at the same length as the native check", () => {
+    // m1 is 108 tokens, longer than the difficulty question; the state is 10 characters plus the job.
+    expect(jevTokens(route(1, true).questions.m1)).toBe(108);
+    expect(fitsJev(route(1, true, "x".repeat(127_558)))).toBe(true);
+    expect(fitsJev(route(1, true, "x".repeat(127_559)))).toBe(false);
+    expect(fitsJev(route(1, false, "x".repeat(4 * JEV_LIMITS.stateAndLongest)))).toBe(false);
   });
 });
 
