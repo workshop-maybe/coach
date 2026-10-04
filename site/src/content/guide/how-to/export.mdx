@@ -29,6 +29,7 @@ my-credentials/
     badge.svg
     assets/
       image-1a2b3c4d.png
+      video-5e6f7a8b.mp4
   2/
     …
 my-credentials.json
@@ -37,7 +38,7 @@ my-credentials.json
 - `outline.md` holds the credential's name and its learning targets.
 - `assignment.md` holds its name and its task.
 - `badge.svg` is its badge, in the colors, art and title you gave it.
-- `assets/` holds the pictures pasted into its task, and `assignment.md` names them there. A credential with no pictures has no `assets/`.
+- `assets/` holds the pictures and videos added to its task, and `assignment.md` names them there. A credential with neither has no `assets/`. The Andamio command-line tool uploads pictures only, so on import it reports each video as a file it couldn't upload, and the video doesn't show in Andamio.
 - The JSON file holds every credential in the collection, with the same names, learning targets and tasks.
 
 Each credential keeps its number from one export to the next.
@@ -47,4 +48,4 @@ Each credential keeps its number from one export to the next.
 - **The rubric.** No exported file holds it. It stays in your folder, so the bar you judge by stays yours.
 - **Your agents, results and handoffs.** Export covers credentials only. Everything else is already plain text in your folder, as [Your data](/help/your-data/) shows.
 
-If a badge's art can't be read, the export writes that badge without its art and the line under the top bar says so. A task's picture that can't be read stays named as it was, and the line names it too. If a collection's file can't be read, the export skips that collection and names it.
+If a badge's art can't be read, the export writes that badge without its art and the line under the top bar says so. A task's picture or video that can't be read stays named as it was, and the line names it too. If a collection's file can't be read, the export skips that collection and names it.

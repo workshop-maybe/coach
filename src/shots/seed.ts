@@ -46,6 +46,7 @@ import {
 import { FAKE_ON, FakeJev } from "../jev/fakeJev";
 import { JEV_OFF } from "../jev/jev";
 import { MemoryStorage } from "../storage/memory";
+import type { AddFrom, AddedFile, VideoUrl } from "../storage/storage";
 import type { PendingTest } from "../ui/pendingTests";
 import type { JevState, SeedVariant } from "./shots";
 
@@ -86,10 +87,39 @@ export interface SampleFolder {
   pending: PendingTest[];
 }
 
-/** MemoryStorage that answers context reads with the sample machine instead of the test one. */
+/**
+ * MemoryStorage that answers context reads with the sample machine instead of the test one.
+ * Given a sample clip's address, a pick adds that clip and every video plays it (the video
+ * plan's KTD12), since the harness has no media scheme.
+ */
 export class SampleStorage extends MemoryStorage {
+  private clip: { url: string; bytes?: Promise<Uint8Array>; blobUrl?: Promise<string> } | null = null;
+
   override async readContext(_repo: string, harness: string): Promise<ContextReading> {
     return { ...SAMPLE_READING, memory: MEMORY[harness] ?? SAMPLE_READING.memory };
+  }
+
+  /** Uses the clip at `url` for the Video key's picker and for every player. */
+  useSampleClip(url: string): void {
+    this.clip = { url };
+  }
+
+  override async addFiles(dir: string, from: AddFrom): Promise<AddedFile[]> {
+    if (from.kind === "pick" && this.clip) {
+      this.clip.bytes ??= fetch(this.clip.url).then(async (r) => new Uint8Array(await r.arrayBuffer()));
+      this.queueAdd([{ name: "clip.webm", bytes: await this.clip.bytes }]);
+    }
+    return super.addFiles(dir, from);
+  }
+
+  override async videoUrl(path: string): Promise<VideoUrl | null> {
+    const handle = await super.videoUrl(path);
+    if (!handle || !this.clip) return handle;
+    handle.release();
+    const clip = this.clip;
+    clip.blobUrl ??= fetch(clip.url).then(async (r) => URL.createObjectURL(await r.blob()));
+    // The page keeps one blob for the whole shot, so its release does nothing.
+    return { url: await clip.blobUrl, release: () => {} };
   }
 }
 

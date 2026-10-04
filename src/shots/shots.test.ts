@@ -138,7 +138,17 @@ describe("the shot manifest", () => {
       if (shot.clip) expect(shot.clip.selector.trim(), shot.id).not.toBe("");
       for (const step of shot.steps ?? []) {
         const target =
-          "click" in step ? step.click : "fill" in step ? step.fill : "waitFor" in step ? step.waitFor : "scroll" in step ? step.scroll : (step.into ?? { selector: ".rich-input" });
+          "click" in step
+            ? step.click
+            : "fill" in step
+              ? step.fill
+              : "waitFor" in step
+                ? step.waitFor
+                : "scroll" in step
+                  ? step.scroll
+                  : "focusEnd" in step
+                    ? step.focusEnd
+                    : (step.into ?? { selector: ".rich-input" });
         if ("pasteImage" in step) expect(SAMPLE_IMAGES, `${shot.id}: ${step.pasteImage}`).toContain(step.pasteImage);
         expect(Object.values(target).every((v) => typeof v === "string" && v !== ""), `${shot.id}: ${JSON.stringify(step)}`).toBe(true);
       }

@@ -1,0 +1,45 @@
+---
+title: Add a video
+part: how-to
+order: 66
+description: Drop, pick or paste a short video into a task, a rubric, an agent's notes or a reply, and keep it as a file beside the text it belongs to.
+---
+
+{/* How to (the video plan, U9, R15): the three ways in, where the file goes, what plays where, and what to know about a video in your folder. Labels are checked against src/ui/RichText.tsx and src/domain/videos.ts. */}
+
+A short clip shows what words can't: a screen that moves, a bug that appears only while scrolling, or what an agent's work actually did. You can put one in a <UI>Task</UI>, <UI>Rubric</UI>, <UI>Notes</UI> or <UI>Reply</UI> box in three ways:
+
+- Drag a video file from Finder onto the box. It lands where you drop it.
+- Click <UI>Video</UI> at the end of the box's formatting bar and choose a file. It lands at the cursor.
+- Copy a video in Finder, click in the box and paste.
+
+The box shows <UI>Saving the file</UI> while the file is copied. Then the video shows as a player.
+
+<Shot id="add-video" alt="The task card for Write a release note, with a video player below the task's text showing a terminal listing four merged changes" />
+
+A clip dragged straight from Photos or a browser isn't a file yet. Save it to a file first, then drag that in.
+
+## Where it goes
+
+The app copies the video beside the file the box saves to, with a name such as `video-1a2b3c4d.mp4`. The text names that file in a Markdown image, so it stays plain Markdown. The video you started from stays where it was.
+
+- A task or a rubric: in the collection's `credentials/` folder, beside the badge's file.
+- Notes: in `agents/`, beside the agent's file.
+- A reply: in the result's folder, beside the file the result is saved in when you record it.
+
+The file's name comes from the video itself, so adding the same video twice saves one file. [Your data](/help/your-data/) shows the folders.
+
+## What plays
+
+- An MP4, MOV, M4V or WebM file, up to 100 MB. Anything else shows <UI>Only MP4, MOV, M4V and WebM videos, and PNG and JPEG images, can be added.</UI>
+- MP4 with H.264 is the safest choice: it plays on a Mac and on most Linux systems. A screen recording made on a Mac is a MOV, and plays on a Mac.
+- On Linux, video plays through your system's GStreamer. Some systems, Fedora for one, don't play MP4 or MOV until you install more of it (gst-libav), but do play WebM.
+- A video the app can't play, or can't find, shows as its file name. A video from the web never loads.
+- A picture you drop or paste along with a video is added as a picture, as in [Paste an image](/how-to/paste-an-image/).
+
+## Good to know
+
+- When you copy a handoff, your agent gets the video's file name, not the video, and most agents can't watch a video even when you give them the file. Put whatever the agent needs into words in the task. The clip is for you, and for whoever reviews the work.
+- The video is saved the moment you add it. If you take it out of the text, or leave the card before it has saved, its file stays in your folder. Videos are large, so check before you put the folder under git: GitHub refuses files over 100 MB.
+- A video in a reply doesn't load until you press play.
+- [Export](/how-to/export/) puts a task's videos in each module's `assets/` folder, beside its pictures.
