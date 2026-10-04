@@ -25,6 +25,7 @@ import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { parse as parseYaml } from "yaml";
 import { SHOTS } from "../../src/shots/shots";
+import { filesUnder } from "../../src/test/files";
 import { PART_IDS, pageHref } from "../src/parts";
 
 const ROOT = join(__dirname, "..", "..");
@@ -102,15 +103,6 @@ export function sourceLabels(path: string, text: string): string[] {
   };
   visit(file);
   return out;
-}
-
-/** Every file under `dir`, recursively. */
-function filesUnder(dir: string): string[] {
-  if (!existsSync(dir)) return [];
-  return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
-    const path = join(dir, e.name);
-    return e.isDirectory() ? filesUnder(path) : [path];
-  });
 }
 
 /** The labels a set of source files can show, skipping test files. */
@@ -281,9 +273,13 @@ function pictures(): string[] {
   return existsSync(SHOTS_DIR) ? readdirSync(SHOTS_DIR).filter((f) => !f.startsWith(".")) : [];
 }
 
+/** The app's labels, read and parsed once per run: both the fixture and the real-page checks use them. */
+let appLabels: Set<string> | undefined;
+const labelsInApp = () => (appLabels ??= labelSet(appSources()));
+
 function realContext(pages: readonly Page[]): Context {
   return {
-    labels: labelSet(appSources()),
+    labels: labelsInApp(),
     shots: new Set(SHOTS.map((s) => s.id)),
     hasPublic: (address) => existsSync(join(PUBLIC, ...address.split("/").filter(Boolean))),
     pages: new Set(pages.map((p) => p.id)),
@@ -296,7 +292,7 @@ function realContext(pages: readonly Page[]): Context {
 const FRONT = (title = "A page", extra = "") => `---\ntitle: ${title}\npart: getting-started\norder: 1\ndescription: What it is for.\n${extra}---\n`;
 
 describe("the content check, on fixture pages", () => {
-  const labels = labelSet(appSources());
+  const labels = labelsInApp();
   const ctx: Context = {
     labels,
     shots: new Set(["home", "first-run"]),

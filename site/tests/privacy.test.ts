@@ -5,9 +5,10 @@
 // script, stylesheet, image, @import or url() at an absolute http(s) or protocol-relative
 // address. Links a reader follows (<a href>) are not requests and stay allowed.
 
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
+import { filesUnder } from "../../src/test/files";
 
 const SITE = join(__dirname, "..");
 const TEXT = /\.(astro|mdx?|tsx?|jsx?|mjs|cjs|css|html|json)$/;
@@ -40,16 +41,8 @@ function offsiteLoads(text: string): string[] {
 
 /** The site's source files: everything under src/, and the Astro config. */
 function siteSources(site: string): string[] {
-  const walk = (dir: string): string[] =>
-    !existsSync(dir)
-      ? []
-      : readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
-          const path = join(dir, e.name);
-          if (e.isDirectory()) return walk(path);
-          return TEXT.test(e.name) ? [path] : [];
-        });
   const config = join(site, "astro.config.mjs");
-  return [...(existsSync(config) ? [config] : []), ...walk(join(site, "src"))];
+  return [...(existsSync(config) ? [config] : []), ...filesUnder(join(site, "src"), (name) => TEXT.test(name))];
 }
 
 describe("offsiteLoads", () => {

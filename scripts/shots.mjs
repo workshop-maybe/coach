@@ -29,7 +29,6 @@ const OUT = join(ROOT, "site", "public", "shots");
 
 // KTD7.
 const VIEWPORT = { width: 1100, height: 760 };
-const SCALE = 2;
 /** After every seeded date, so nothing in the sample reads as in the future. */
 const FIXED_NOW = new Date("2026-10-01T09:00:00.000Z");
 
@@ -152,7 +151,7 @@ async function main() {
   const failed = [];
   try {
     await server.listen();
-    const { SHOTS } = await server.ssrLoadModule("/src/shots/shots.ts");
+    const { SHOTS, SHOT_SCALE } = await server.ssrLoadModule("/src/shots/shots.ts");
     const unknown = only.filter((id) => !SHOTS.some((s) => s.id === id));
     if (unknown.length > 0) throw new Error(`No shot named ${unknown.map((id) => `"${id}"`).join(", ")} in src/shots/shots.ts.`);
     const shots = only.length > 0 ? SHOTS.filter((s) => only.includes(s.id)) : SHOTS;
@@ -160,7 +159,7 @@ async function main() {
     browser = await chromium.launch();
     const context = await browser.newContext({
       viewport: VIEWPORT,
-      deviceScaleFactor: SCALE,
+      deviceScaleFactor: SHOT_SCALE,
       locale: "en-US",
       timezoneId: "UTC",
       reducedMotion: "reduce",

@@ -52,6 +52,13 @@ export interface Clip {
   pad?: number;
 }
 
+/**
+ * The device scale every shot is taken at (KTD7): two image pixels per CSS pixel.
+ * scripts/shots.mjs shoots at it, and site/src/components/Shot.astro divides by it to size
+ * the picture on the page.
+ */
+export const SHOT_SCALE = 2;
+
 export interface Shot {
   /** The picture's file name under site/public/shots, kebab-case and unique. */
   id: string;

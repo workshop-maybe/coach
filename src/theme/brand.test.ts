@@ -5,26 +5,15 @@
 // own styles under site/src hold to the same rules (U2, R16), and the guide never
 // takes the app shell's App.css (KTD3).
 
-import { existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
+import { filesUnder } from "../test/files";
 
 const SRC = join(__dirname, "..");
 const SITE = join(SRC, "..", "site", "src");
 const EXEMPT = ["theme", "badge"];
-
-/** Every file under root whose name passes `keep`, skipping exempt folders (relative to root). */
-function filesUnder(root: string, keep: (name: string) => boolean, exempt: string[] = []): string[] {
-  if (!existsSync(root)) return [];
-  const walk = (dir: string): string[] =>
-    readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
-      const path = join(dir, e.name);
-      if (e.isDirectory()) return exempt.includes(relative(root, path)) ? [] : walk(path);
-      return keep(e.name) ? [path] : [];
-    });
-  return walk(root);
-}
 
 function cssFiles(root: string, exempt: string[] = []): string[] {
   return filesUnder(root, (name) => name.endsWith(".css"), exempt);

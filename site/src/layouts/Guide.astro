@@ -19,13 +19,13 @@ import "../../../src/theme/app-tokens.css";
 import "../../../src/cast/cast.css";
 import "../styles/guide.css";
 
-import { getCollection } from "astro:content";
 import { InkDefs } from "../../../src/cast/InkDefs";
 import { Lockup } from "../../../src/ui/Lockup";
 import favicon from "../../../public/favicon.png";
 import Nav from "../components/Nav.astro";
 import Search from "../components/Search.astro";
-import { FEEDBACK_ID, nextInPart, pageHref } from "../parts";
+import { guidePages } from "../guidePages";
+import { FEEDBACK_ID, SITE_NAME, nextInPart, pageHref } from "../parts";
 
 interface Props {
   /** The page's one h1, and its tab title. */
@@ -38,10 +38,9 @@ interface Props {
   unindexed?: boolean;
 }
 
-const SITE_NAME = "Andamio Desktop guide";
 const { title, description, current, unindexed = false } = Astro.props;
 
-const pages = (await getCollection("guide")).map((entry) => ({ id: entry.id, ...entry.data }));
+const pages = await guidePages();
 const here = pages.find((page) => pageHref(page.id) === current);
 const next = here && nextInPart(pages, here.id);
 const feedback = pages.find((page) => page.id === FEEDBACK_ID);

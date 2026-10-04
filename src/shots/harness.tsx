@@ -141,7 +141,10 @@ function find(target: Target): HTMLElement | null {
   return matches.find((el) => ![...el.children].some((child) => norm(child.textContent) === target.text)) ?? null;
 }
 
-const describeTarget = (target: Target) => Object.entries(target).map(([kind, value]) => `${kind} "${value}"`)[0];
+const describeTarget = (target: Target) => {
+  const [[kind, value]] = Object.entries(target);
+  return `${kind} "${value}"`;
+};
 
 const isEnabled = (el: HTMLElement) => !(el as HTMLButtonElement).disabled && el.getAttribute("aria-disabled") !== "true";
 

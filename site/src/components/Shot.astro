@@ -13,6 +13,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { SHOT_SCALE } from "../../../src/shots/shots";
 
 interface Props {
   /** The shot's id in src/shots/shots.ts. */
@@ -23,8 +24,6 @@ interface Props {
   caption?: string;
 }
 
-/** The scale every shot is taken at (KTD7): two image pixels per CSS pixel. */
-const SCALE = 2;
 
 const { id, alt, caption } = Astro.props;
 if (!alt || alt.trim() === "") throw new Error(`<Shot id="${id}"> needs alt text.`);
@@ -35,8 +34,8 @@ const file = [join(process.cwd(), "public", "shots", `${id}.png`), join(process.
 );
 if (!file) throw new Error(`<Shot id="${id}"> has no picture. Run npm run site:shots -- --only ${id}.`);
 const png = readFileSync(file);
-const width = Math.round(png.readUInt32BE(16) / SCALE);
-const height = Math.round(png.readUInt32BE(20) / SCALE);
+const width = Math.round(png.readUInt32BE(16) / SHOT_SCALE);
+const height = Math.round(png.readUInt32BE(20) / SHOT_SCALE);
 const src = `/shots/${id}.png`;
 ---
 
