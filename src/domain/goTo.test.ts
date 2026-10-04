@@ -54,6 +54,7 @@ function folder(parts: Partial<FolderState>): FolderState {
     credentials: [review, docs],
     profiles: [claude, codex],
     assessments: [],
+    held: [],
     skeleton: null,
     handoffs: [],
     marks: [],

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { SKELETON_ID } from "./handoffs";
 import { handoffRuns, latestRunId } from "./handoffResults";
 import { buildMatrix } from "./matrix";
-import { credentialKey, type AgentProfile, type Assessment, type Credential, type FolderState, type Handoff } from "./types";
+import { credentialKey, type AgentProfile, type Assessment, type Credential, type FolderState, type Handoff, type HeldReply } from "./types";
 
 const review: Credential = {
   slug: "review",
@@ -45,12 +45,13 @@ function result(profile: AgentProfile, handoffId: string | null, overrides: Part
   };
 }
 
-function folder(opts: { profiles?: AgentProfile[]; assessments?: Assessment[]; handoffs?: Handoff[] }): FolderState {
+function folder(opts: { profiles?: AgentProfile[]; assessments?: Assessment[]; held?: HeldReply[]; handoffs?: Handoff[] }): FolderState {
   return {
     collections: [{ slug: "eng", name: "Engineering", description: "", order: ["review"], codes: { review: 1 } }],
     credentials: [review],
     profiles: opts.profiles ?? [opus, codex, haiku],
     assessments: opts.assessments ?? [],
+    held: opts.held ?? [],
     handoffs: opts.handoffs ?? [],
     marks: [],
     skeleton: null,

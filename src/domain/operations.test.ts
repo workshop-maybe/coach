@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { ChangedOnDiskError } from "../storage/storage";
 import { MemoryStorage } from "../storage/memory";
 import { assignmentVersion } from "./hash";
-import { assessmentPath, collectionPath, credentialPath, handoffPath, loadFolder, markPath, marksDir, profilePath, serializeMark, SKELETON_PATH } from "./folder";
+import { assessmentPath, collectionPath, credentialPath, handoffPath, heldPath, loadFolder, markPath, marksDir, profilePath, serializeMark, SKELETON_PATH } from "./folder";
+import { buildMatrix, cellKey } from "./matrix";
 import { BUILT_IN_HANDOFF, defaultHandoff, handoffsFor, isHandoffLocked, SKELETON_ID, winnerFor } from "./handoffs";
 import {
   HandoffLockedError,
@@ -14,8 +15,10 @@ import {
   createPresetCredential,
   createProfile,
   duplicateProfileDraft,
+  holdReply,
   importBadgeArt,
   isSetupLocked,
+  judgeHeldReply,
   markGoTo,
   recordAssessment,
   reorderCredentials,
@@ -31,6 +34,11 @@ import {
 } from "./operations";
 import { findPreset, presetCredential } from "./presets";
 import { credentialKey, type AgentProfile, type AssessmentResult, type FolderState, type JevReading } from "./types";
+
+/** Records a result and returns only the folder, as most tests here need. */
+async function recordState(...args: Parameters<typeof recordAssessment>): Promise<FolderState> {
+  return (await recordAssessment(...args)).state;
+}
 
 const baseProfile: Omit<AgentProfile, "slug"> = {
   name: "Claude Opus",
@@ -63,7 +71,7 @@ async function setup(): Promise<{ storage: MemoryStorage; state: FolderState }> 
 
 async function withOneAssessment() {
   const { storage, state } = await setup();
-  const next = await recordAssessment(
+  const next = await recordState(
     storage,
     state,
     { profileSlug: "claude-opus", collectionSlug: "go-basics", credentialSlug: "write-a-cli", result: "met", note: "", handBack: "Done." },
@@ -345,7 +353,7 @@ describe("recording assessments", () => {
   it("carries the credential's current version and the profile's setup at record time", async () => {
     const { storage, state } = await setup();
     const now = new Date("2026-09-29T08:49:00.123Z");
-    const next = await recordAssessment(storage, state, { ...input, result: "not_met" }, now);
+    const next = await recordState(storage, state, { ...input, result: "not_met" }, now);
     expect(next.assessments).toHaveLength(1);
     expect(next.assessments[0]).toEqual({
       profileSlug: "claude-opus",
@@ -364,9 +372,9 @@ describe("recording assessments", () => {
   it("saves the context the test started with, and none when there was none", async () => {
     const { storage, state } = await setup();
     const context = { machineId: "m1", machine: "Studio Mac", memory: "0123456789ab", capturedAt: "2026-09-29T08:40:00.000Z" };
-    const withIt = await recordAssessment(storage, state, { ...input, result: "met", context }, new Date("2026-09-29T08:49:00Z"));
+    const withIt = await recordState(storage, state, { ...input, result: "met", context }, new Date("2026-09-29T08:49:00Z"));
     expect(withIt.assessments[0].context).toEqual(context);
-    const without = await recordAssessment(storage, withIt, { ...input, result: "met" }, new Date("2026-09-29T08:50:00Z"));
+    const without = await recordState(storage, withIt, { ...input, result: "met" }, new Date("2026-09-29T08:50:00Z"));
     const second = without.assessments.find((a) => a.fileStem === "20260929T085000Z");
     expect(second).not.toHaveProperty("context");
   });
@@ -375,12 +383,12 @@ describe("recording assessments", () => {
     const { storage, state } = await setup();
     const made = await createHandoff(storage, state, "go-basics", "write-a-cli", "A {{task}}", new Date("2026-10-01T09:00:00Z"));
     const handoff = { id: made.id, text: "A Build a CLI.\n---\n## Handback\n" };
-    const withIt = await recordAssessment(storage, made.state, { ...input, result: "met", handoff }, new Date("2026-10-01T09:30:00Z"));
+    const withIt = await recordState(storage, made.state, { ...input, result: "met", handoff }, new Date("2026-10-01T09:30:00Z"));
     expect(withIt.assessments[0].handoff).toEqual(handoff);
     expect(withIt.assessments[0].handBack).toBe(input.handBack);
     expect(isHandoffLocked(withIt, "go-basics/write-a-cli", made.id)).toBe(true);
     expect(await loadFolder(storage)).toEqual(withIt);
-    const without = await recordAssessment(storage, withIt, { ...input, result: "met" }, new Date("2026-10-01T09:40:00Z"));
+    const without = await recordState(storage, withIt, { ...input, result: "met" }, new Date("2026-10-01T09:40:00Z"));
     const second = without.assessments.find((a) => a.fileStem === "20261001T094000Z");
     expect(second).not.toHaveProperty("handoff");
   });
@@ -402,11 +410,11 @@ describe("recording assessments", () => {
   it("saves Jev's reading taken against the version stamped at save, and none when there was none", async () => {
     const { storage, state } = await setup();
     const jev = reading(await assignmentVersion("Build a CLI.", "Flags parse."));
-    const withIt = await recordAssessment(storage, state, { ...input, result: "met", jev }, new Date("2026-09-29T08:49:00Z"));
+    const withIt = await recordState(storage, state, { ...input, result: "met", jev }, new Date("2026-09-29T08:49:00Z"));
     expect(withIt.assessments[0].jev).toEqual(jev);
     expect(storage.file(assessmentPath("claude-opus", "go-basics", "write-a-cli", "20260929T084900Z"))).toContain("jev:");
     expect(await loadFolder(storage)).toEqual(withIt);
-    const without = await recordAssessment(storage, withIt, { ...input, result: "met" }, new Date("2026-09-29T08:50:00Z"));
+    const without = await recordState(storage, withIt, { ...input, result: "met" }, new Date("2026-09-29T08:50:00Z"));
     const second = without.assessments.find((a) => a.fileStem === "20260929T085000Z");
     expect(second).not.toHaveProperty("jev");
     expect(storage.file(assessmentPath("claude-opus", "go-basics", "write-a-cli", "20260929T085000Z"))).not.toContain("jev");
@@ -417,7 +425,7 @@ describe("recording assessments", () => {
     const jev = reading(await assignmentVersion("Build a CLI.", "Flags parse."));
     const path = credentialPath("go-basics", "write-a-cli");
     const edited = await updateCredential(storage, { ...state.credentials[0], rubric: "Flags parse and help prints." }, state.raw[path]);
-    const next = await recordAssessment(storage, edited, { ...input, result: "met", jev }, new Date("2026-09-29T08:49:00Z"));
+    const next = await recordState(storage, edited, { ...input, result: "met", jev }, new Date("2026-09-29T08:49:00Z"));
     expect(next.assessments).toHaveLength(1);
     expect(next.assessments[0].result).toBe("met");
     expect(next.assessments[0]).not.toHaveProperty("jev");
@@ -428,7 +436,7 @@ describe("recording assessments", () => {
     const { storage, state } = await setup();
     const path = credentialPath("go-basics", "write-a-cli");
     const edited = await updateCredential(storage, { ...state.credentials[0], rubric: "Flags parse and help prints." }, state.raw[path]);
-    const next = await recordAssessment(storage, edited, { ...input, result: "met" });
+    const next = await recordState(storage, edited, { ...input, result: "met" });
     expect(next.assessments[0].assignmentVersion).toBe(await assignmentVersion("Build a CLI.", "Flags parse and help prints."));
   });
 
@@ -630,7 +638,7 @@ describe("moving to trash", () => {
   it("moves an agent and its results into the trash, and leaves the rest", async () => {
     const { storage, state } = await withOneAssessment();
     const other = await createProfile(storage, state, { ...baseProfile, name: "Other" });
-    const kept = await recordAssessment(storage, other.state, { profileSlug: "other", collectionSlug: "go-basics", credentialSlug: "write-a-cli", result: "met", note: "", handBack: "Mine." });
+    const kept = await recordState(storage, other.state, { profileSlug: "other", collectionSlug: "go-basics", credentialSlug: "write-a-cli", result: "met", note: "", handBack: "Mine." });
     const keptPath = "assessments/other/go-basics/write-a-cli/" + kept.assessments.find((a) => a.profileSlug === "other")!.fileStem + ".md";
     const result = "assessments/claude-opus/go-basics/write-a-cli/20260929T084900Z.md";
     const agentText = storage.file(profilePath("claude-opus"));
@@ -647,7 +655,7 @@ describe("moving to trash", () => {
   it("moves a credential and every agent's results for it, and drops it from its collection", async () => {
     const { storage, state: first } = await withOneAssessment();
     const second = await createCredential(storage, first, "go-basics", "Read a file");
-    const withOther = await recordAssessment(storage, second.state, { profileSlug: "claude-opus", collectionSlug: "go-basics", credentialSlug: "read-a-file", result: "met", note: "", handBack: "Read." });
+    const withOther = await recordState(storage, second.state, { profileSlug: "claude-opus", collectionSlug: "go-basics", credentialSlug: "read-a-file", result: "met", note: "", handBack: "Read." });
     const otherResult = "assessments/claude-opus/go-basics/read-a-file/" + withOther.assessments.find((a) => a.credentialSlug === "read-a-file")!.fileStem + ".md";
     let state = await setCredentialBadgeOverride(storage, withOther, "go-basics", "write-a-cli", { palette: "ink" }, withOther.raw[collectionPath("go-basics")]);
     const credText = storage.file(credentialPath("go-basics", "write-a-cli"));
@@ -698,7 +706,7 @@ describe("moving to trash", () => {
       if (++calls === 2) throw new Error("disk full");
       return storage.moveFile(root, from, to);
     };
-    const withTwo = await recordAssessment(storage, state, { profileSlug: "claude-opus", collectionSlug: "go-basics", credentialSlug: "write-a-cli", result: "met", note: "", handBack: "Again." }, new Date("2026-09-30T09:00:00Z"));
+    const withTwo = await recordState(storage, state, { profileSlug: "claude-opus", collectionSlug: "go-basics", credentialSlug: "write-a-cli", result: "met", note: "", handBack: "Again." }, new Date("2026-09-30T09:00:00Z"));
     await expect(trashProfile(failing, withTwo, "claude-opus", now)).rejects.toThrow("disk full");
     const between = await loadFolder(storage);
     expect(between.profiles.map((p) => p.slug)).toEqual(["claude-opus"]);
@@ -719,7 +727,7 @@ describe("moving to trash", () => {
   it("trashing a badge moves its marks under the same stamp, and leaves another badge's marks", async () => {
     const { storage, state: first } = await withOneAssessment();
     const second = await createCredential(storage, first, "go-basics", "Read a file");
-    const other = await recordAssessment(storage, second.state, { profileSlug: "claude-opus", collectionSlug: "go-basics", credentialSlug: "read-a-file", result: "met", note: "", handBack: "Read." }, new Date("2026-09-29T09:00:00Z"));
+    const other = await recordState(storage, second.state, { profileSlug: "claude-opus", collectionSlug: "go-basics", credentialSlug: "read-a-file", result: "met", note: "", handBack: "Read." }, new Date("2026-09-29T09:00:00Z"));
     let state = await markGoTo(storage, other, { profileSlug: "claude-opus", collectionSlug: "go-basics", credentialSlug: "write-a-cli", fileStem: "20260929T084900Z" }, new Date("2026-09-29T09:30:00Z"));
     state = await markGoTo(storage, state, { profileSlug: "claude-opus", collectionSlug: "go-basics", credentialSlug: "read-a-file", fileStem: "20260929T090000Z" }, new Date("2026-09-29T09:30:00Z"));
     const moved = markPath("go-basics", "write-a-cli", "20260929T093000Z");
@@ -764,7 +772,7 @@ describe("go-to marks", () => {
 
   it("refuses a Not met result and writes nothing (R3)", async () => {
     const { storage, state } = await setup();
-    const notMet = await recordAssessment(storage, state, { ...ref, result: "not_met", note: "", handBack: "Tried." }, new Date("2026-09-29T08:49:00Z"));
+    const notMet = await recordState(storage, state, { ...ref, result: "not_met", note: "", handBack: "Tried." }, new Date("2026-09-29T08:49:00Z"));
     await expect(markGoTo(storage, notMet, ref, now)).rejects.toThrow(/Met/);
     expect(markFiles(storage)).toEqual([]);
   });
@@ -785,7 +793,7 @@ describe("handoffs", () => {
   /** Records a result, run with the handoff when one is named. */
   function recordWith(storage: MemoryStorage, state: FolderState, result: AssessmentResult, when: Date, handoffId?: string): Promise<FolderState> {
     const handoff = handoffId === undefined ? undefined : { id: handoffId, text: "filled" };
-    return recordAssessment(storage, state, { profileSlug: "claude-opus", collectionSlug: "go-basics", credentialSlug: "write-a-cli", result, note: "", handBack: "Done.", handoff }, when);
+    return recordState(storage, state, { profileSlug: "claude-opus", collectionSlug: "go-basics", credentialSlug: "write-a-cli", result, note: "", handBack: "Done.", handoff }, when);
   }
 
   it("a folder with no skeleton file uses the built-in skeleton, and saving writes handoffs/skeleton.md", async () => {
@@ -921,5 +929,179 @@ describe("handoffs", () => {
     const { storage, state } = await setup();
     const met = await recordWith(storage, state, "met", new Date("2026-10-01T09:30:00Z"));
     expect(winnerFor(met, "claude-opus", KEY)).toBe(SKELETON_ID);
+  });
+});
+
+describe("holding and judging replies", () => {
+  const KEY = "go-basics/write-a-cli";
+  const ids = { profileSlug: "claude-opus", collectionSlug: "go-basics", credentialSlug: "write-a-cli" };
+  const handoff = { id: SKELETON_ID, text: "Build a CLI." };
+  const context = { machineId: "m-1", machine: "Studio", memory: "4c1e9a7b20d3", capturedAt: "2026-10-01T08:50:00.000Z" };
+  const at = new Date("2026-10-01T09:00:00.123Z");
+  const heldFiles = (storage: MemoryStorage) => Object.keys(storage.files()).filter((p) => p.includes("/held/")).sort();
+  const resultFiles = (storage: MemoryStorage) =>
+    Object.keys(storage.files())
+      .filter((p) => p.startsWith("assessments/") && !p.includes("/held/"))
+      .sort();
+  const cellOf = async (state: FolderState, profileSlug = "claude-opus") => (await buildMatrix(state)).cells.get(cellKey(profileSlug, KEY))!;
+
+  it("holds a reply as a new file one folder below the results, with what a result would record, and writes no result", async () => {
+    const { storage, state } = await setup();
+    const { state: next, fileStem } = await holdReply(storage, state, { ...ids, handBack: "Here it is.", handoff, context }, at);
+    expect(fileStem).toBe("20261001T090000Z");
+    expect(heldFiles(storage)).toEqual([heldPath("claude-opus", "go-basics", "write-a-cli", fileStem)]);
+    expect(resultFiles(storage)).toEqual([]);
+    expect(next.assessments).toEqual([]);
+    expect(next.held).toEqual([
+      {
+        ...ids,
+        fileStem,
+        heldAt: "2026-10-01T09:00:00.123Z",
+        assignmentVersion: await assignmentVersion("Build a CLI.", "Flags parse."),
+        setup: { harness: "claude-code", model: "opus", effort: "high" },
+        handBack: "Here it is.",
+        handoff,
+        context,
+      },
+    ]);
+  });
+
+  it("a held reply holds no badge, flags nothing and locks neither the setup nor the handoff (KTD6)", async () => {
+    const { storage, state } = await setup();
+    const a = await createHandoff(storage, state, "go-basics", "write-a-cli", "A {{task}}", new Date("2026-09-30T08:00:00Z"));
+    const { state: next } = await holdReply(storage, a.state, { ...ids, handBack: "Here it is.", handoff: { id: a.id, text: "A Build a CLI." } }, at);
+    expect((await cellOf(next)).status).toBe("untested");
+    expect(isSetupLocked(next, "claude-opus")).toBe(false);
+    expect(isHandoffLocked(next, KEY, a.id)).toBe(false);
+  });
+
+  it("keeps a reading only when it was taken against the version stamped", async () => {
+    const { storage, state } = await setup();
+    const version = await assignmentVersion("Build a CLI.", "Flags parse.");
+    const jev: JevReading = { model: "jev-1", assignmentVersion: version, askedAt: "2026-10-01T08:59:00.000Z", seen: "before", overall: 0.8, points: [] };
+    const kept = await holdReply(storage, state, { ...ids, handBack: "One.", jev }, at);
+    const dropped = await holdReply(storage, kept.state, { ...ids, handBack: "Two.", jev: { ...jev, assignmentVersion: "old" } }, at);
+    expect(dropped.state.held.map((h) => h.jev)).toEqual([jev, undefined]);
+  });
+
+  it("Covers AE6. Two holds by one agent in the same second are two held replies", async () => {
+    const { storage, state } = await setup();
+    const one = await holdReply(storage, state, { ...ids, handBack: "One." }, at);
+    const two = await holdReply(storage, one.state, { ...ids, handBack: "Two." }, at);
+    expect([one.fileStem, two.fileStem]).toEqual(["20261001T090000Z", "20261001T090001Z"]);
+    expect(two.state.held.map((h) => h.handBack)).toEqual(["One.", "Two."]);
+  });
+
+  it("refuses an empty reply, an unknown agent or an unknown badge, and writes nothing", async () => {
+    const { storage, state } = await setup();
+    const before = Object.keys(storage.files()).length;
+    await expect(holdReply(storage, state, { ...ids, handBack: "  \n" }, at)).rejects.toThrow();
+    await expect(holdReply(storage, state, { ...ids, profileSlug: "nope", handBack: "Hi." }, at)).rejects.toThrow();
+    await expect(holdReply(storage, state, { ...ids, credentialSlug: "nope", handBack: "Hi." }, at)).rejects.toThrow();
+    expect(Object.keys(storage.files()).length).toBe(before);
+  });
+
+  it("Covers AE2. Judging Met writes a result under the held stem and time, leaves the held file, and the agent holds the badge", async () => {
+    const { storage, state } = await setup();
+    const held = await holdReply(storage, state, { ...ids, handBack: "Here it is.", handoff, context }, at);
+    const heldText = storage.file(heldPath("claude-opus", "go-basics", "write-a-cli", held.fileStem));
+    expect((await cellOf(held.state)).status).toBe("untested");
+    const next = await judgeHeldReply(storage, held.state, { ...ids, fileStem: held.fileStem }, "met");
+    expect(next.held).toEqual([]);
+    expect(next.assessments).toEqual([
+      {
+        ...ids,
+        fileStem: held.fileStem,
+        result: "met",
+        recordedAt: "2026-10-01T09:00:00.123Z",
+        assignmentVersion: held.state.held[0].assignmentVersion,
+        setup: held.state.held[0].setup,
+        note: "",
+        handBack: "Here it is.",
+        handoff,
+        context,
+      },
+    ]);
+    expect(storage.file(heldPath("claude-opus", "go-basics", "write-a-cli", held.fileStem))).toBe(heldText);
+    expect((await cellOf(next)).status).toBe("met");
+  });
+
+  it("judging Not yet records Not met", async () => {
+    const { storage, state } = await setup();
+    const held = await holdReply(storage, state, { ...ids, handBack: "Hmm." }, at);
+    const next = await judgeHeldReply(storage, held.state, { ...ids, fileStem: held.fileStem }, "not_met");
+    expect(next.assessments.map((a) => a.result)).toEqual(["not_met"]);
+    expect((await cellOf(next)).status).toBe("not_met");
+  });
+
+  it("refuses a reply that is no longer held, an unknown reference or a bad verdict, and writes nothing", async () => {
+    const { storage, state } = await setup();
+    const held = await holdReply(storage, state, { ...ids, handBack: "Hi." }, at);
+    const judged = await judgeHeldReply(storage, held.state, { ...ids, fileStem: held.fileStem }, "met");
+    const before = resultFiles(storage);
+    await expect(judgeHeldReply(storage, judged, { ...ids, fileStem: held.fileStem }, "not_met")).rejects.toThrow();
+    await expect(judgeHeldReply(storage, held.state, { ...ids, fileStem: "20200101T000000Z" }, "met")).rejects.toThrow();
+    await expect(judgeHeldReply(storage, held.state, { ...ids, fileStem: held.fileStem }, "maybe" as never)).rejects.toThrow();
+    expect(resultFiles(storage)).toEqual(before);
+  });
+
+  it("fails as changed on disk, writing nothing, when a file is already at the result's path", async () => {
+    const { storage, state } = await setup();
+    const held = await holdReply(storage, state, { ...ids, handBack: "Hi." }, at);
+    const path = assessmentPath("claude-opus", "go-basics", "write-a-cli", held.fileStem);
+    storage.seed({ [path]: "someone else's" });
+    await expect(judgeHeldReply(storage, held.state, { ...ids, fileStem: held.fileStem }, "met")).rejects.toBeInstanceOf(ChangedOnDiskError);
+    expect(storage.file(path)).toBe("someone else's");
+  });
+
+  it("judging an older held reply after a newer Met result leaves the newer Met as the agent's latest", async () => {
+    const { storage, state } = await setup();
+    const held = await holdReply(storage, state, { ...ids, handBack: "Old." }, at);
+    const met = await recordState(storage, held.state, { ...ids, result: "met", note: "", handBack: "New." }, new Date("2026-10-02T09:00:00Z"));
+    const next = await judgeHeldReply(storage, met, { ...ids, fileStem: held.fileStem }, "not_met");
+    const cell = await cellOf(next);
+    expect(cell.status).toBe("met");
+    expect(cell.latest?.handBack).toBe("New.");
+  });
+
+  it("a setup change between hold and judge: the result keeps the setup the reply came from, flagged setup changed", async () => {
+    const { storage, state } = await setup();
+    const held = await holdReply(storage, state, { ...ids, handBack: "Hi." }, at);
+    const profile = held.state.profiles[0];
+    const changed = await updateProfile(storage, held.state, { ...profile, model: "sonnet" }, held.state.raw[profilePath("claude-opus")]);
+    const next = await judgeHeldReply(storage, changed, { ...ids, fileStem: held.fileStem }, "met");
+    expect(next.assessments[0].setup.model).toBe("opus");
+    expect((await cellOf(next)).flags).toContain("setup_mismatch");
+  });
+
+  it("recordAssessment returns the stem it wrote, bumped past a reply held in the same second, which stays held", async () => {
+    const { storage, state } = await setup();
+    const held = await holdReply(storage, state, { ...ids, handBack: "Held." }, at);
+    const recorded = await recordAssessment(storage, held.state, { ...ids, result: "met", note: "", handBack: "Recorded." }, at);
+    expect(recorded.fileStem).toBe("20261001T090001Z");
+    expect(recorded.state.assessments.map((a) => a.fileStem)).toEqual([recorded.fileStem]);
+    expect(recorded.state.held.map((h) => h.fileStem)).toEqual([held.fileStem]);
+  });
+
+  it("two results in the same second get two stems", async () => {
+    const { storage, state } = await setup();
+    const one = await recordAssessment(storage, state, { ...ids, result: "met", note: "", handBack: "One." }, at);
+    const two = await recordAssessment(storage, one.state, { ...ids, result: "not_met", note: "", handBack: "Two." }, at);
+    expect([one.fileStem, two.fileStem]).toEqual(["20261001T090000Z", "20261001T090001Z"]);
+  });
+
+  it("Covers AE6. Trashing the agent moves its held replies, and trashing the badge moves every agent's", async () => {
+    const { storage, state } = await setup();
+    const other = await createProfile(storage, state, { ...baseProfile, name: "Other" });
+    const mine = await holdReply(storage, other.state, { ...ids, handBack: "Mine." }, at);
+    const theirs = await holdReply(storage, mine.state, { ...ids, profileSlug: "other", handBack: "Theirs." }, at);
+    const now = new Date("2026-10-02T10:00:00Z");
+    const afterAgent = await trashProfile(storage, theirs.state, "claude-opus", now);
+    expect(storage.file(`trash/20261002T100000Z/${heldPath("claude-opus", "go-basics", "write-a-cli", mine.fileStem)}`)).toBeDefined();
+    expect(afterAgent.held.map((h) => h.profileSlug)).toEqual(["other"]);
+    const afterBadge = await trashCredential(storage, afterAgent, "go-basics", "write-a-cli", new Date("2026-10-02T11:00:00Z"));
+    expect(storage.file(`trash/20261002T110000Z/${heldPath("other", "go-basics", "write-a-cli", theirs.fileStem)}`)).toBeDefined();
+    expect(heldFiles(storage).filter((p) => !p.startsWith("trash/"))).toEqual([]);
+    expect(afterBadge.held).toEqual([]);
   });
 });

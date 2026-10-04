@@ -9,16 +9,18 @@ import {
   SKELETON_PATH,
   credentialPath,
   handoffPath,
+  heldPath,
   markPath,
   profilePath,
   serializeAssessment,
   serializeCollection,
+  serializeHeld,
   serializeMark,
   serializeProfile,
 } from "../domain/folder";
 import { serializeCredentialMd } from "../domain/credential-md";
 import { assignmentVersion } from "../domain/hash";
-import type { AgentProfile, Assessment, Credential, Handoff, Mark } from "../domain/types";
+import type { AgentProfile, Assessment, Credential, Handoff, HeldReply, Mark } from "../domain/types";
 import { MemoryStorage } from "../storage/memory";
 import { AppShell, type Route } from "./AppShell";
 import { FolderProvider } from "./useFolderState";
@@ -62,11 +64,28 @@ export async function result(profile: AgentProfile, credential: Credential, over
   };
 }
 
+/** A held reply by `profile` on `credential`, stamped as holdReply would stamp it. */
+export async function heldReply(profile: AgentProfile, credential: Credential, overrides: Partial<HeldReply> = {}): Promise<HeldReply> {
+  return {
+    profileSlug: profile.slug,
+    collectionSlug: credential.collectionSlug,
+    credentialSlug: credential.slug,
+    fileStem: "20260902T090000Z",
+    heldAt: "2026-09-02T09:00:00.000Z",
+    assignmentVersion: await assignmentVersion(credential.task, credential.rubric),
+    setup: { harness: profile.harness, model: profile.model, effort: profile.effort },
+    handBack: "Held",
+    ...overrides,
+  };
+}
+
 export function storageWith(
   opts: {
     credentials?: Credential[];
     profiles?: AgentProfile[];
     assessments?: Assessment[];
+    /** Held replies, each written as its own file. */
+    held?: HeldReply[];
     /** Badge handoff files, written verbatim. */
     handoffs?: Handoff[];
     /** An edited skeleton. Absent means the built-in one. */
@@ -91,6 +110,7 @@ export function storageWith(
   for (const a of opts.assessments ?? []) {
     files[assessmentPath(a.profileSlug, a.collectionSlug, a.credentialSlug, a.fileStem)] = serializeAssessment(a);
   }
+  for (const h of opts.held ?? []) files[heldPath(h.profileSlug, h.collectionSlug, h.credentialSlug, h.fileStem)] = serializeHeld(h);
   for (const h of opts.handoffs ?? []) files[handoffPath(h.collectionSlug, h.credentialSlug, h.id)] = h.text;
   if (opts.skeleton !== undefined) files[SKELETON_PATH] = opts.skeleton;
   for (const m of opts.marks ?? []) files[markPath(m.collectionSlug, m.credentialSlug, m.id)] = serializeMark(m);

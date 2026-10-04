@@ -17,6 +17,7 @@ import type {
   Credential,
   FolderState,
   Handoff,
+  HeldReply,
   JevPoint,
   JevReading,
   LoadError,
@@ -63,6 +64,22 @@ export function assessmentDir(profileSlug: Slug, collectionSlug: Slug, credentia
 
 export function assessmentPath(profileSlug: Slug, collectionSlug: Slug, credentialSlug: Slug, fileStem: string): string {
   return `${assessmentDir(profileSlug, collectionSlug, credentialSlug)}/${fileStem}.md`;
+}
+
+/** The folder name, inside an agent's results for a badge, that holds its held replies. */
+const HELD_DIR = "held";
+
+/**
+ * One agent's held replies on one badge (hold-and-compare KTD1): one folder below the results
+ * they will join, so the result loader never reads them and both trash actions move them. Their
+ * pasted images sit in the results folder above, beside the result each one becomes.
+ */
+export function heldDir(profileSlug: Slug, collectionSlug: Slug, credentialSlug: Slug): string {
+  return `${assessmentDir(profileSlug, collectionSlug, credentialSlug)}/${HELD_DIR}`;
+}
+
+export function heldPath(profileSlug: Slug, collectionSlug: Slug, credentialSlug: Slug, fileStem: string): string {
+  return `${heldDir(profileSlug, collectionSlug, credentialSlug)}/${fileStem}.md`;
 }
 
 /** Every handoff file for one badge, parsed or not. */
@@ -280,25 +297,31 @@ const HANDBACK_HEADING = "## Handback";
 
 export type AssessmentIds = Pick<Assessment, "profileSlug" | "collectionSlug" | "credentialSlug" | "fileStem">;
 
-export function serializeAssessment(a: Assessment): string {
-  const front = YAML.stringify({
-    result: a.result,
-    recorded_at: a.recordedAt,
-    assignment_version: a.assignmentVersion,
-    setup: { harness: a.setup.harness, model: a.setup.model, effort: a.setup.effort },
-    ...(a.context
+/** What a result and a held reply both record about the test that produced the reply. */
+type TestRecord = Pick<Assessment, "assignmentVersion" | "setup" | "context" | "handoff" | "jev">;
+
+/** The front matter fields a result and a held reply share, after each one's time field. */
+function testFields(r: TestRecord): Json {
+  return {
+    assignment_version: r.assignmentVersion,
+    setup: { harness: r.setup.harness, model: r.setup.model, effort: r.setup.effort },
+    ...(r.context
       ? {
           context: {
-            machine_id: a.context.machineId,
-            machine: a.context.machine,
-            memory: a.context.memory,
-            captured_at: a.context.capturedAt,
+            machine_id: r.context.machineId,
+            machine: r.context.machine,
+            memory: r.context.memory,
+            captured_at: r.context.capturedAt,
           },
         }
       : {}),
-    ...(a.handoff ? { handoff: { id: a.handoff.id, text: a.handoff.text } } : {}),
-    ...(a.jev ? { jev: serializeJev(a.jev) } : {}),
-  });
+    ...(r.handoff ? { handoff: { id: r.handoff.id, text: r.handoff.text } } : {}),
+    ...(r.jev ? { jev: serializeJev(r.jev) } : {}),
+  };
+}
+
+export function serializeAssessment(a: Assessment): string {
+  const front = YAML.stringify({ result: a.result, recorded_at: a.recordedAt, ...testFields(a) });
   const note = a.note.replace(/\r\n?/g, "\n").trim();
   return [
     "---\n",
@@ -398,27 +421,31 @@ function parseJev(raw: unknown): JevReading | undefined {
   return { ...base, seen: "after", verdictWhenSeen: verdict, verdictChanged: obj.verdict_changed };
 }
 
-export function parseAssessment(text: string, ids: AssessmentIds): Assessment {
+/** Splits a Markdown file into its YAML front matter mapping and the body after it. `kind` names the file in errors. */
+function splitFrontMatter(text: string, kind: string): { fm: Json; body: string } {
   const open = /^---[ \t]*\r?\n/.exec(text);
-  if (!open) throw new Error("Assessment file has no YAML frontmatter (expected it to start with ---).");
+  if (!open) throw new Error(`${kind} file has no YAML frontmatter (expected it to start with ---).`);
   const rest = text.slice(open[0].length);
   const close = /^---[ \t]*(?:\r?\n|$)/m.exec(rest);
-  if (!close) throw new Error("Assessment frontmatter is not closed with ---.");
+  if (!close) throw new Error(`${kind} frontmatter is not closed with ---.`);
 
   const front: unknown = YAML.parse(rest.slice(0, close.index));
   if (typeof front !== "object" || front === null || Array.isArray(front)) {
-    throw new Error("Assessment frontmatter must be a YAML mapping.");
+    throw new Error(`${kind} frontmatter must be a YAML mapping.`);
   }
-  const fm = front as Json;
+  return { fm: front as Json, body: rest.slice(close.index + close[0].length) };
+}
 
-  const result = fm.result;
-  if (result !== "met" && result !== "not_met") {
-    throw new Error('Frontmatter "result" must be "met" or "not_met".');
-  }
-  const recorded = fm.recorded_at;
-  const recordedAt =
-    recorded instanceof Date ? recorded.toISOString() : typeof recorded === "string" ? recorded : null;
-  if (recordedAt === null) throw new Error('Frontmatter "recorded_at" must be an ISO time.');
+/** A required ISO time field. YAML may have read it as a date. */
+function isoTime(fm: Json, key: string): string {
+  const v = fm[key];
+  const time = v instanceof Date ? v.toISOString() : typeof v === "string" ? v : null;
+  if (time === null) throw new Error(`Frontmatter "${key}" must be an ISO time.`);
+  return time;
+}
+
+/** The fields a result and a held reply share. Optional mappings that are malformed read as absent. */
+function parseTestRecord(fm: Json): TestRecord {
   const version = fm.assignment_version;
   if (typeof version !== "string" && typeof version !== "number") {
     throw new Error('Frontmatter "assignment_version" must be text.');
@@ -432,39 +459,79 @@ export function parseAssessment(text: string, ids: AssessmentIds): Assessment {
     model: setupString(setupRaw as Json, "model"),
     effort: setupString(setupRaw as Json, "effort"),
   };
-
-  const body = rest.slice(close.index + close[0].length);
-  const noteMatch = /^## Note[ \t]*\r?$/m.exec(body);
-  const afterNoteStart = noteMatch ? noteMatch.index + noteMatch[0].length : 0;
-  const handMatch = /^## Handback[ \t]*\r?$/m.exec(body.slice(afterNoteStart));
-
-  let note: string;
-  let handBack: string;
-  if (handMatch) {
-    const handStart = afterNoteStart + handMatch.index;
-    note = body.slice(afterNoteStart, handStart);
-    handBack = body.slice(handStart + handMatch[0].length);
-    // Drop the heading's line break, the one blank line after it and the final newline.
-    handBack = handBack.replace(/^\n(?:\r?\n)?/, "").replace(/\r?\n$/, "");
-  } else {
-    note = body.slice(afterNoteStart);
-    handBack = "";
-  }
-
   const context = parseContext(fm.context);
   const handoff = parseHandoff(fm.handoff);
   const jev = parseJev(fm.jev);
   return {
-    ...ids,
-    result: result as AssessmentResult,
-    recordedAt,
     assignmentVersion: String(version),
     setup,
-    note: note.replace(/\r\n?/g, "\n").trim(),
-    handBack,
     ...(context ? { context } : {}),
     ...(handoff ? { handoff } : {}),
     ...(jev ? { jev } : {}),
+  };
+}
+
+/** The reply after a `## Handback` heading at `match`, minus the blank line and final newline the serializer adds. */
+function handBackAfter(body: string, match: RegExpExecArray, offset = 0): string {
+  return body.slice(offset + match.index + match[0].length).replace(/^\n(?:\r?\n)?/, "").replace(/\r?\n$/, "");
+}
+
+const HANDBACK_LINE = /^## Handback[ \t]*\r?$/m;
+
+export function parseAssessment(text: string, ids: AssessmentIds): Assessment {
+  const { fm, body } = splitFrontMatter(text, "Assessment");
+
+  const result = fm.result;
+  if (result !== "met" && result !== "not_met") {
+    throw new Error('Frontmatter "result" must be "met" or "not_met".');
+  }
+  const recordedAt = isoTime(fm, "recorded_at");
+  const record = parseTestRecord(fm);
+
+  const noteMatch = /^## Note[ \t]*\r?$/m.exec(body);
+  const afterNoteStart = noteMatch ? noteMatch.index + noteMatch[0].length : 0;
+  const handMatch = HANDBACK_LINE.exec(body.slice(afterNoteStart));
+  const note = handMatch ? body.slice(afterNoteStart, afterNoteStart + handMatch.index) : body.slice(afterNoteStart);
+  const handBack = handMatch ? handBackAfter(body, handMatch, afterNoteStart) : "";
+
+  return {
+    ...ids,
+    result: result as AssessmentResult,
+    recordedAt,
+    assignmentVersion: record.assignmentVersion,
+    setup: record.setup,
+    note: note.replace(/\r\n?/g, "\n").trim(),
+    handBack,
+    ...(record.context ? { context: record.context } : {}),
+    ...(record.handoff ? { handoff: record.handoff } : {}),
+    ...(record.jev ? { jev: record.jev } : {}),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Held reply Markdown (hold-and-compare KTD2): a result's front matter without a
+// verdict, `held_at` in place of `recorded_at`, then `## Handback`. No note.
+
+export function serializeHeld(h: HeldReply): string {
+  const front = YAML.stringify({ held_at: h.heldAt, ...testFields(h) });
+  return ["---\n", front, "---\n\n", `${HANDBACK_HEADING}\n\n`, h.handBack, "\n"].join("");
+}
+
+/** Parses a held reply. A stray `result` key or a hand-added `## Note` before the reply is ignored. */
+export function parseHeld(text: string, ids: AssessmentIds): HeldReply {
+  const { fm, body } = splitFrontMatter(text, "Held reply");
+  const heldAt = isoTime(fm, "held_at");
+  const record = parseTestRecord(fm);
+  const handMatch = HANDBACK_LINE.exec(body);
+  return {
+    ...ids,
+    heldAt,
+    assignmentVersion: record.assignmentVersion,
+    setup: record.setup,
+    handBack: handMatch ? handBackAfter(body, handMatch) : "",
+    ...(record.context ? { context: record.context } : {}),
+    ...(record.handoff ? { handoff: record.handoff } : {}),
+    ...(record.jev ? { jev: record.jev } : {}),
   };
 }
 
@@ -503,6 +570,16 @@ function compare(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
+/** By collection, credential, agent, then stem. */
+function byBadgeAgentStem(a: AssessmentIds, b: AssessmentIds): number {
+  return (
+    compare(a.collectionSlug, b.collectionSlug) ||
+    compare(a.credentialSlug, b.credentialSlug) ||
+    compare(a.profileSlug, b.profileSlug) ||
+    compare(a.fileStem, b.fileStem)
+  );
+}
+
 function message(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
@@ -517,6 +594,7 @@ export async function loadFolder(storage: Storage): Promise<FolderState> {
     skeleton: null,
     handoffs: [],
     marks: [],
+    held: [],
     errors: [],
     warnings: [],
     raw: {},
@@ -632,8 +710,10 @@ export async function loadFolder(storage: Storage): Promise<FolderState> {
   }
   state.profiles.sort(byName);
 
-  // Assessments.
-  for (const path of await storage.listFiles("data", ASSESSMENTS_DIR)) {
+  // Assessments, and the held replies one folder below them (hold-and-compare KTD1).
+  const assessmentFiles = await storage.listFiles("data", ASSESSMENTS_DIR);
+  const listed = new Set(assessmentFiles);
+  for (const path of assessmentFiles) {
     const parts = path.split("/");
     if (parts.length !== 5 || parts.slice(1, 4).some(isIgnoredName)) continue;
     const fileStem = stem(parts[4], ".md");
@@ -642,6 +722,20 @@ export async function loadFolder(storage: Storage): Promise<FolderState> {
     const a = await load(path, (t) => parseAssessment(t, ids));
     if (a) state.assessments.push(a);
   }
+
+  // A held reply is judged once a result file has its stem, whether or not that result
+  // parses, and a judged one is never read (KTD4): the held file stays as the record.
+  for (const path of assessmentFiles) {
+    const parts = path.split("/");
+    if (parts.length !== 6 || parts[4] !== HELD_DIR || parts.slice(1, 4).some(isIgnoredName)) continue;
+    const fileStem = stem(parts[5], ".md");
+    if (fileStem === null) continue;
+    const ids: AssessmentIds = { profileSlug: parts[1], collectionSlug: parts[2], credentialSlug: parts[3], fileStem };
+    if (listed.has(assessmentPath(ids.profileSlug, ids.collectionSlug, ids.credentialSlug, fileStem))) continue;
+    const h = await load(path, (t) => parseHeld(t, ids));
+    if (h) state.held.push(h);
+  }
+  state.held.sort(byBadgeAgentStem);
 
   return state;
 }

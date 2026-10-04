@@ -45,7 +45,6 @@ import { sameSetup } from "../domain/matrix";
 import { fitsJev } from "../domain/jevBudget";
 import { assessmentDir, credentialsDir } from "../domain/folder";
 import { cleanUpLineBreaks, lineBreakBatches } from "../domain/lineBreaks";
-import { fileStemFor } from "../domain/folder";
 import { goToOf, resultOf } from "../domain/goTo";
 import { markGoTo, recordAssessment } from "../domain/operations";
 import { readingParts, secondOpinionRequest, type JevReadingParts } from "../domain/secondOpinion";
@@ -323,30 +322,24 @@ export function TestDeck(props: TestDeckProps) {
     const jevReading = shown ? savedReading(shown, verdict) : undefined;
     dropAsk();
     setRecording(true);
-    // The result's file stem comes from this time, so the Met screen can name that result.
-    const now = new Date();
     try {
-      const next = await recordAssessment(
-        storage,
-        state,
-        {
-          profileSlug: profile.slug,
-          collectionSlug: credential.collectionSlug,
-          credentialSlug: credential.slug,
-          result: verdict,
-          note: "",
-          handBack: reply,
-          ...(waiting?.context ? { context: waiting.context } : {}),
-          ...(handoff ? { handoff } : {}),
-          ...(jevReading ? { jev: jevReading } : {}),
-        },
-        now,
-      );
+      // The Met screen names the result by the stem the save wrote.
+      const { state: next, fileStem } = await recordAssessment(storage, state, {
+        profileSlug: profile.slug,
+        collectionSlug: credential.collectionSlug,
+        credentialSlug: credential.slug,
+        result: verdict,
+        note: "",
+        handBack: reply,
+        ...(waiting?.context ? { context: waiting.context } : {}),
+        ...(handoff ? { handoff } : {}),
+        ...(jevReading ? { jev: jevReading } : {}),
+      });
       // The plug comes out only once the result is written.
       remove(profile.slug, credentialKey(credential));
       apply(next);
       const plugId = handoff?.id ?? SKELETON_ID;
-      setOutcome(verdict === "met" ? { kind: "met", plugId, fileStem: fileStemFor(now) } : { kind: "not-yet", plugId });
+      setOutcome(verdict === "met" ? { kind: "met", plugId, fileStem } : { kind: "not-yet", plugId });
     } finally {
       setRecording(false);
     }
