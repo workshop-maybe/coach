@@ -102,6 +102,7 @@ function routeProblems(route: Route | "gate", state: FolderState): string[] {
 const folders: Record<Shot["seed"], Promise<FolderState>> = {
   empty: sampleFolder("empty").then((s) => loadFolder(sampleStorage(s))),
   full: sampleFolder("full").then((s) => loadFolder(sampleStorage(s))),
+  judged: sampleFolder("judged").then((s) => loadFolder(sampleStorage(s))),
 };
 
 describe("the shot manifest", () => {
@@ -129,8 +130,19 @@ describe("the shot manifest", () => {
     for (const shot of SHOTS) {
       const want = "text" in shot.expect ? shot.expect.text : shot.expect.selector;
       expect(typeof want === "string" && want.trim() !== "", shot.id).toBe(true);
-      expect(["empty", "full"], shot.id).toContain(shot.seed);
+      expect(["empty", "full", "judged"], shot.id).toContain(shot.seed);
       expect(["off", "on"], shot.id).toContain(shot.jev);
+    }
+  });
+
+  it("scripts Jev's answers only where Jev Mode is on, as chances by question id", () => {
+    for (const shot of SHOTS) {
+      if (!shot.jevAnswers) continue;
+      expect(shot.jev, shot.id).toBe("on");
+      for (const [id, p] of Object.entries(shot.jevAnswers)) {
+        expect(id, shot.id).toMatch(/^(?:overall|[pt][1-9]\d*)$/);
+        expect(p >= 0 && p <= 1, `${shot.id}: ${id}`).toBe(true);
+      }
     }
   });
 

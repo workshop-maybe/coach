@@ -49,7 +49,7 @@ describe("adding a video to each box (R12)", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Build your own" }));
     await userEvent.type(await screen.findByRole("textbox", { name: "Name" }), "Fix the layout");
     await userEvent.click(screen.getByRole("button", { name: "Next" }));
-    await userEvent.type(screen.getByRole("textbox", { name: "Learning target" }), "I can fix a layout");
+    await userEvent.type(screen.getByRole("textbox", { name: "New learning target" }), "I can fix a layout");
     await userEvent.click(screen.getByRole("button", { name: "Next" }));
     await userEvent.type(screen.getByRole("textbox", { name: "Task" }), "Do what this shows: ");
     const name = await addVideo(storage, "Task");

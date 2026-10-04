@@ -1,5 +1,6 @@
 // Create a credential (U3, R9-R12, R20): where to start, then three beats of your own or
-// one card for a preset, then its badge. Nothing is written until "Make the badge". The
+// one card for a preset, then its badge. Your own takes its learning targets as lines, one
+// added on each Enter, as the badge's own targets part does. Nothing is written until "Make the badge". The
 // credential goes into the folder's first collection, or a new "My credentials" when
 // there is none (KTD6). Opened from a test that is missing its credential, it hands the
 // new one straight back to that test (AE2).
@@ -22,7 +23,8 @@ import { Deck, type Beat } from "./Deck";
 import { useNav } from "./nav";
 import type { TestPick } from "./routes";
 import { useRichDraft } from "./richDraft";
-import { CopyHelper, TargetHint, focusOnMount } from "./shared";
+import { Lines } from "./EditDecks";
+import { CopyHelper, focusOnMount } from "./shared";
 import { RichText } from "./RichText";
 import { useFolder } from "./useFolderState";
 import { useRichImages } from "./useRichImages";
@@ -35,10 +37,13 @@ export function CredentialDeck({ returnTo }: { returnTo?: TestPick }) {
   const { navigate } = useNav();
   const [start, setStart] = useState<string | null>(null);
   const [name, setName] = useState("");
-  const [target, setTarget] = useState("");
+  // The targets added so far, and the line being typed, which counts as the last one.
+  const [targets, setTargets] = useState<string[]>([]);
+  const [line, setLine] = useState("");
+  const allTargets = line.trim() ? [...targets, line.trim()] : targets;
   const taskDraft = useRichDraft("");
   const task = taskDraft.value;
-  // Detail the target check moved out of the target. There is no rubric card here, so it waits.
+  // Detail the target check moved out of a target. There is no rubric card here, so it waits.
   const [rubric, setRubric] = useState("");
   const [made, setMade] = useState<string | null>(null);
   // Set once the credential file exists, so a retry after a failed second save never makes a second one.
@@ -55,7 +60,7 @@ export function CredentialDeck({ returnTo }: { returnTo?: TestPick }) {
     slug: "",
     collectionSlug: "",
     name: name.trim(),
-    learningTargets: target.trim() ? [target.trim()] : [],
+    learningTargets: allTargets,
     task,
     rubric,
     extraSections: [],
@@ -193,22 +198,22 @@ export function CredentialDeck({ returnTo }: { returnTo?: TestPick }) {
           body: <input aria-label="Name" value={name} autoComplete="off" onChange={(e) => setName(e.target.value)} />,
         },
         {
-          id: "target",
-          title: "One thing its holder can do",
+          id: "targets",
+          title: "What its holder can do",
           forward: "Next",
-          valid: target.trim() !== "",
-          settled: target.trim(),
+          valid: allTargets.length > 0,
+          // A pane keeps its trail to one line, so several targets settle as their count.
+          settled: allTargets.length > 1 ? `${allTargets.length} learning targets` : allTargets[0],
           body: (
-            <>
-              <input aria-label="Learning target" value={target} autoComplete="off" placeholder="I can…" onChange={(e) => setTarget(e.target.value)} />
-              <TargetHint
-                text={target}
-                onMove={(m) => {
-                  setTarget(m.target);
-                  setRubric((r) => appendToRubric(r, m.rubricLine));
-                }}
-              />
-            </>
+            <Lines
+              lines={targets}
+              onChange={setTargets}
+              line={line}
+              onLine={setLine}
+              label="Learning targets"
+              placeholder="I can…"
+              onMove={(rubricLine) => setRubric((r) => appendToRubric(r, rubricLine))}
+            />
           ),
         },
         {

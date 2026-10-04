@@ -41,7 +41,7 @@ describe("pasting an image into each box (R8)", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Build your own" }));
     await userEvent.type(await screen.findByRole("textbox", { name: "Name" }), "Fix the layout");
     await userEvent.click(screen.getByRole("button", { name: "Next" }));
-    await userEvent.type(screen.getByRole("textbox", { name: "Learning target" }), "I can fix a layout");
+    await userEvent.type(screen.getByRole("textbox", { name: "New learning target" }), "I can fix a layout");
     await userEvent.click(screen.getByRole("button", { name: "Next" }));
     await userEvent.type(screen.getByRole("textbox", { name: "Task" }), "Make it look like this: ");
     const name = await pasteImage("Task");

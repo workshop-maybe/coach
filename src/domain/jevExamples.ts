@@ -182,16 +182,46 @@ const TOKEN =
 const ASSIGNMENT = /\b[A-Z][A-Z0-9_]+[ \t]*=[ \t]*["']?[^\s"']{16,}/;
 const HEX_RUN = /[0-9A-Fa-f]{32,}/;
 /**
+ * A password-like key given a value, in any case: `password = hunter2`, `db_password: x`,
+ * `"passphrase": "correct horse battery staple"`. With `=` any value counts. With `:` only a
+ * quoted value, spaces and all, or one word that ends the line (a comment after it aside),
+ * so "Password: at least 12 characters" stays. Bare `pass` and `pwd` are left out: "passed:
+ * 42" and `pwd` output are common. The key name may sit anywhere in a longer key
+ * (`db_password`), so the pattern starts at the name itself, and the rest of the key is
+ * capped: an open-ended run before or after the name would be rescanned for every name in
+ * a long line. No two runs of spaces sit side by side, for the same reason.
+ */
+const NAMED_SECRET = new RegExp(
+  String.raw`(?:passw(?:or)?d|passphrase|secret|api[_-]?key|access[_-]?key|private[_-]?key)[\w.-]{0,40}["']?[ \t]*` +
+    String.raw`(?:=(?!=)[ \t]*["']?[^\s"']|:[ \t]*(?:"[^"]+"|'[^']+'|[^\s"']+[,;]?(?:[ \t]+(?:#|\/\/).*)?[ \t]*$))`,
+  "i",
+);
+/** Markdown emphasis and code marks, which can sit between a key and its value: `**Password:** x`. */
+const MARKS = /[*`]/g;
+/**
+ * A link that carries a password, with or without a user: `https://me:pass@host`,
+ * `redis://:pass@host`. It starts at the `://`, whatever the scheme, so a long line is read once.
+ */
+const URL_CREDENTIAL = /:\/\/[^\s/?#@:]*:[^\s/?#@]+@/;
+/**
  * A run of base64 or base64url characters. It reads as a key only with a digit and both
  * cases, so a long file path or URL, which uses the same characters, is kept.
  */
 const BASE64_RUN = /[A-Za-z0-9+/_-]{32,}/g;
 
+/**
+ * How much of a line, past its leading space, is checked for secrets and kept: twice the
+ * opening's cap in UTF-16 units, at least one code point past what an excerpt or a reason
+ * (MAX_REASON_CHARS, under MAX_OPENING_CHARS) can show, so a cut line shows the same text.
+ */
+const MAX_LINE_UNITS = 2 * (MAX_OPENING_CHARS + 1);
+
 const SENTENCE_END = /[.!?…]/;
 const CLOSER = /["'”’)\]*_`]/;
 
 function looksSecret(line: string): boolean {
-  if (TOKEN.test(line) || ASSIGNMENT.test(line) || HEX_RUN.test(line)) return true;
+  if (TOKEN.test(line) || ASSIGNMENT.test(line) || HEX_RUN.test(line) || URL_CREDENTIAL.test(line)) return true;
+  if (NAMED_SECRET.test(line.replace(MARKS, ""))) return true;
   return [...line.matchAll(BASE64_RUN)].some(([run]) => /\d/.test(run) && /[a-z]/.test(run) && /[A-Z]/.test(run));
 }
 
@@ -201,7 +231,9 @@ function looksSecret(line: string): boolean {
  * removed (a line left blank by that goes), and lines that look like secrets dropped, a
  * PEM block from its BEGIN line to its END line. Images go before the secret check, since
  * a data URI is itself a long base64 run and would take the line's words with it.
- * Stops once the kept lines reach `enough` UTF-16 units.
+ * Stops once the kept lines reach `enough` UTF-16 units. Each line is checked and kept only
+ * up to MAX_LINE_UNITS past its leading space, so the secret patterns never read an
+ * unbounded line: some are slower than linear on a long line made to defeat them.
  */
 function cleanLines(text: string, enough = Infinity): string[] {
   const kept: string[] = [];
@@ -215,8 +247,10 @@ function cleanLines(text: string, enough = Infinity): string[] {
       continue;
     }
     if (IMAGE_DEFINITION.test(line)) continue;
-    const shown = line.replace(IMAGE, "").replace(IMAGE_DATA, "");
-    if ((shown !== line && shown.trim() === "") || looksSecret(shown)) continue;
+    const full = line.replace(IMAGE, "").replace(IMAGE_DATA, "");
+    if (full !== line && full.trim() === "") continue;
+    const shown = full.slice(0, Math.max(0, full.search(/\S/)) + MAX_LINE_UNITS);
+    if (looksSecret(shown)) continue;
     if (kept.length === 0 && shown.trim() === "") continue;
     kept.push(kept.length === 0 ? shown.trimStart() : shown);
     units += kept[kept.length - 1].length + 1;
