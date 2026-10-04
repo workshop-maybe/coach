@@ -821,12 +821,12 @@ export const SHOTS: readonly Shot[] = [
     // reply is wrong or bare (jev-in-compare R3, R4, R7).
     id: "compare-grid",
     page: "how-to/run-a-bake-off",
-    route: { view: "item", item: "compare", credentialKey: ANSWER_KEY, takes: [CLAUDE_HELD, CODEX_HELD], picks: [CLAUDE_HELD, CODEX_HELD] },
+    route: COMPARE_ROUTE,
     seed: "full",
     jev: "on",
     jevAnswers: HEAD_TO_HEAD_CALLS,
     expect: { text: "Better than Codex" },
-    steps: [{ click: { button: "Compare with Jev" } }, { waitFor: { text: "Better than Codex" } }],
+    steps: COMPARE_ASKED,
   },
   {
     // After Compare with Jev, Not yet under Codex's held reply, which Jev's reading calls meets:

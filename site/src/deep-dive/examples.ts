@@ -24,7 +24,7 @@ import YAML from "yaml";
 import { planCompareJev, type CompareTake } from "../../../src/domain/compareJev";
 import { readingOfTake } from "../../../src/domain/handoffResults";
 import { betterReply, headToHeadPoints } from "../../../src/domain/headToHead";
-import { buildMatrix } from "../../../src/domain/matrix";
+import { buildMatrix, type Matrix } from "../../../src/domain/matrix";
 import { recommend, type CleanHolder, type Recommendation } from "../../../src/domain/recommend";
 import {
   DIFFICULTY_ID,
@@ -33,6 +33,7 @@ import {
   MATCH_THRESHOLD,
   ROUTINE_BELOW,
   askRoute,
+  expectedLevel,
   matchOf,
   ratingOf,
   routeBadges,
@@ -40,7 +41,7 @@ import {
 } from "../../../src/domain/router";
 import type { MemoryStorage } from "../../../src/storage/memory";
 import { columnsOf, compareGridOf } from "../../../src/ui/CompareGrid";
-import { CALL_WORDS } from "../../../src/ui/JevReading";
+import { CALL_WORDS, percent } from "../../../src/ui/JevReading";
 import { overruled } from "../../../src/ui/JudgeStep";
 import { DEFAULT_CUT_OFFS, calibrationOf, callOf, candidate, isOverrule, ranksAsOverrule, tally, wholePercent, type Calibration, type CutOffs, type JudgedReading } from "../../../src/domain/calls";
 import { ROUTING_DIR, assessmentPath, headToHeadDir, loadFolder, rejudgedDir } from "../../../src/domain/folder";
@@ -55,7 +56,7 @@ import { judgeHeldReply, recordAssessment, rejudgeResult, saveHeadToHead, takeAg
 import { findJoinCandidates, fixPastedText, looksTerminalCopied, wrapWidth } from "../../../src/domain/pasteText";
 import { reasonLine } from "../../../src/domain/reasonLine";
 import { readingParts, rubricParts, tappedPoints } from "../../../src/domain/secondOpinion";
-import { credentialKey, type Assessment, type AssessmentResult, type FolderState, type HeldReply, type Rating } from "../../../src/domain/types";
+import { credentialKey, type Assessment, type AssessmentResult, type Credential, type FolderState, type HeldReply, type Rating } from "../../../src/domain/types";
 import { SAMPLE, SAMPLE_READING, sampleFolder, sampleStorage } from "../../../src/shots/seed";
 import {
   CASE_CALLS,
@@ -108,6 +109,7 @@ export const COMPARE_REJUDGED_AT = "2026-10-01T09:40:00.000Z";
 /** Jev in compare, as the app builds and saves it. */
 export interface CompareCase {
   key: string;
+  credential: Credential;
   version: string;
   /** Claude Code's and Codex's held replies, in strip order, as the compare names them. */
   takes: CompareTake[];
@@ -132,6 +134,9 @@ export interface RouterCase {
   state: FolderState;
   plan: NonNullable<ReturnType<typeof routeBatches>>;
   answers: JevAnswers;
+  /** What the routing ask found, as the card reads it, and the folder's matrix the card recommends from. */
+  outcome: NonNullable<Awaited<ReturnType<typeof askRoute>>>;
+  matrix: Matrix;
   /** The routing record file as `takeAgentForJob` wrote it. */
   recordFile: string;
 }
@@ -471,16 +476,15 @@ async function buildCompareCase(): Promise<CompareCase> {
     new Date(COMPARE_REJUDGED_AT),
   );
   const rejudgeFile = await onlyFileUnder(storage, rejudgedDir(codexHeld.profileSlug, codexHeld.collectionSlug, codexHeld.credentialSlug));
-  return { key, version, takes, plan, answers, state, afterPair, headToHeadFile, afterClaudeMet, afterMet, codexResultFile, afterRejudge, rejudgeFile };
+  return { key, credential, version, takes, plan, answers, state, afterPair, headToHeadFile, afterClaudeMet, afterMet, codexResultFile, afterRejudge, rejudgeFile };
 }
 
 async function compareExamples(): Promise<Record<string, string>> {
   const c = await compareCase();
-  const credential = c.state.credentials.find((x) => credentialKey(x) === c.key)!;
+  const { credential } = c;
   const [pair] = c.plan.pairs;
   const q = pair.request.questions;
   const nameOf = (id: string) => c.takes.find((t) => t.id === id)!.name;
-  const percent = (p: number) => `${wholePercent(p)}%`;
 
   // What one press asks for: whether each held reply needs a reading, and the pairs.
   const plan = {
@@ -577,7 +581,8 @@ async function buildRouterCase(): Promise<RouterCase> {
   const outcome = (await askRoute(ROUTER_JOB, plan, async () => answers))!;
   const rating = ratingOf(outcome.levels);
   const credential = state.credentials.find((c) => credentialKey(c) === ROUTER_TAPPED)!;
-  const rec = recommend(state, await buildMatrix(state), ROUTER_TAPPED, rating);
+  const matrix = await buildMatrix(state);
+  const rec = recommend(state, matrix, ROUTER_TAPPED, rating);
   if (rec.kind !== "pick" || !matchOf(outcome.answers, state.credentials.map(credentialKey)).alsoLike.includes(ROUTER_TAPPED)) {
     throw new Error("The router case study expects its tapped badge under Also like, with a pick.");
   }
@@ -593,7 +598,7 @@ async function buildRouterCase(): Promise<RouterCase> {
     ...(rating ? { difficulty: rating } : {}),
     jevModel: outcome.model,
   });
-  return { state, plan, answers, recordFile: await onlyFileUnder(storage, ROUTING_DIR) };
+  return { state, plan, answers, outcome, matrix, recordFile: await onlyFileUnder(storage, ROUTING_DIR) };
 }
 
 /** A recommendation as the card states it, agents by name. */
@@ -616,11 +621,10 @@ async function routerExamples(): Promise<Record<string, string>> {
   const r = await routerCase();
   const [batch] = r.plan.batches;
   const nameOf = (key: string) => r.state.credentials.find((c) => credentialKey(c) === key)!.name;
-  const outcome = (await askRoute(ROUTER_JOB, r.plan, async () => r.answers))!;
+  const { outcome, matrix } = r;
   const match = matchOf(outcome.answers, r.state.credentials.map(credentialKey));
   const levels = outcome.levels!;
   const rating = ratingOf(levels)!;
-  const matrix = await buildMatrix(r.state);
   const ratings: Rating[] = [rating, "high-stakes"];
   const recommendations = [match.best!, ...match.alsoLike].flatMap((key) =>
     ratings.map((asRated) => ({ badge: nameOf(key), rating: asRated, card: cardOf(recommend(r.state, matrix, key, asRated)) })),
@@ -636,13 +640,13 @@ async function routerExamples(): Promise<Record<string, string>> {
       badges: Object.entries(batch.keys).map(([id, key]) => ({
         id,
         badge: nameOf(key),
-        yes: `${wholePercent(outcome.answers[key])}%`,
+        yes: percent(outcome.answers[key]),
         role: key === match.best ? "match" : match.alsoLike.includes(key) ? "also like" : null,
       })),
     }),
     "router/rating.json": json({
       levels: Object.fromEntries(DIFFICULTY_LEVELS.map((level, i) => [level.slice(0, level.indexOf(":")), levels[i]])),
-      expected_level: Math.round(levels.reduce((sum, p, i) => sum + i * p, 0) * 100) / 100,
+      expected_level: Math.round(expectedLevel(levels) * 100) / 100,
       routine_below: ROUTINE_BELOW,
       judgment_below: JUDGMENT_BELOW,
       rating,

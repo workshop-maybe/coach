@@ -29,7 +29,9 @@ const ENTITY = /&(?:amp|lt|gt);/y;
  * literal backticks. Linear in the line's length.
  */
 export function readerLine(line: string): string {
-  const runs = backtickRuns(line);
+  // With no backslash and no ampersand there is nothing to read differently: code spans and backticks copy as they are.
+  if (!/[\\&]/.test(line)) return line;
+  let runs: ReturnType<typeof backtickRuns> | null = null;
   let out = "";
   let i = 0;
   while (i < line.length) {
@@ -44,6 +46,7 @@ export function readerLine(line: string): string {
     } else if (ch === "`") {
       let n = 1;
       while (line[i + n] === "`") n++;
+      runs ??= backtickRuns(line);
       const close = runs.next(n, i + n);
       const end = close >= 0 ? close + n : i + n;
       out += line.slice(i, end);
