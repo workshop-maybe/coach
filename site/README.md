@@ -20,7 +20,7 @@ Under a coding agent, Astro runs dev and preview in the background. Stop them wi
 
 ## Add a page
 
-Pages are MDX files in `src/content/guide/<part>/`. The four parts are `getting-started`, `ideas`, `how-to` and `help`, and `src/parts.ts` names them. A page's address is its path without the extension, such as `/how-to/hand-off-a-test/`.
+Pages are MDX files in `src/content/guide/<part>/`. The five parts are `getting-started`, `ideas`, `how-to`, `help` and `jev`, and `src/parts.ts` names them. A page's address is its path without the extension, such as `/how-to/hand-off-a-test/`.
 
 Frontmatter:
 

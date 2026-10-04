@@ -409,7 +409,7 @@ describe("the content check, on fixture pages", () => {
   it("fails a page missing its title, part or order", () => {
     expect(pageProblems({ id: "getting-started/fixture", text: "---\ndescription: What it is for.\n---\nText.\n" }, ctx)).toEqual([
       "getting-started/fixture: has no title",
-      "getting-started/fixture: has no part (one of getting-started, ideas, how-to, help)",
+      "getting-started/fixture: has no part (one of getting-started, ideas, how-to, help, jev)",
       "getting-started/fixture: has no order (a whole number)",
     ]);
     expect(pageProblems({ id: "getting-started/fixture", text: "Text.\n" }, ctx)).toEqual(["getting-started/fixture: has no frontmatter"]);
