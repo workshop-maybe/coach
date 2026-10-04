@@ -1258,6 +1258,13 @@ button:focus-visible {
   letter-spacing: var(--heading-tracking);
 }
 
+/* The job door's empty handoff card is drawn from a card a third the width of the others,
+   so its line and dashes are thinned to the other two doors' weight (router KTD13). */
+.door .cast-outline-handoff g {
+  stroke-width: 0.9;
+  stroke-dasharray: 2.6 2.2;
+}
+
 /* A little lift under the pointer, where motion is welcome. */
 @media (prefers-reduced-motion: no-preference) {
   .door,

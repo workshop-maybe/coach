@@ -90,8 +90,9 @@ export interface Shot {
   steps?: readonly Step[];
   /**
    * What Jev answers every ask, as a chance by question id: `p1`… for rubric points,
-   * `overall`, `t1`… for learning targets. An id left out gets FakeJev's default, 0.5,
-   * which reads as can't call. Only with Jev Mode on.
+   * `overall`, `t1`… for learning targets, `m1`… for a routing ask's badges in the sample's
+   * order. An id left out gets FakeJev's default, 0.5, which reads as can't call, or no
+   * match. Only with Jev Mode on.
    */
   jevAnswers?: Readonly<Record<string, number>>;
 }
@@ -132,6 +133,11 @@ const CODEX_HOW_SURE = { profileSlug: CODEX, fileStem: "20260925T100500Z" };
 const CLAUDE_HOW_SURE = { profileSlug: CLAUDE, fileStem: "20260926T164500Z" };
 /** Write a release note's own handoff, A, its default. */
 const RELEASE_NOTE_HANDOFF = "20260928T090000Z";
+
+/** The job the router's pictures paste (router KTD15), as someone would hand it to an agent. */
+const ROUTER_JOB = `Go through the answers to this week's support quiz and say how sure you are of each one.
+
+Mark any answer you would want a second person to check before we publish it.`;
 
 /** How to's test: Claude Code takes Write a release note, which opens at "Hand it over". */
 const RELEASE_TEST: Route = { view: "deck", deck: "test", profileSlug: CLAUDE, credentialKey: RELEASE_NOTE };
@@ -717,6 +723,50 @@ export const SHOTS: readonly Shot[] = [
     expect: { text: "Its handoff is pulled with no result." },
     clip: { selector: ".deck-card", pad: 16 },
   },
+  {
+    // The router (router KTD15): Home's third door, beside the other two.
+    id: "router-door",
+    page: "how-to/find-an-agent-for-a-job",
+    route: { view: "home" },
+    seed: "full",
+    jev: "off",
+    expect: { text: "Find an agent for a job" },
+    clip: { selector: ".doors", pad: 0 },
+  },
+  {
+    // The ask card says what goes before anything is sent, so it needs no answer from Jev.
+    id: "router-ask",
+    page: "how-to/find-an-agent-for-a-job",
+    route: { view: "deck", deck: "router" },
+    seed: "full",
+    jev: "on",
+    expect: { text: "Ask Jev which badge it's like" },
+    steps: [{ paste: ROUTER_JOB }, { click: { button: "Next" } }, { waitFor: { text: "Ask Jev which badge it's like" } }],
+    clip: { selector: ".deck", pad: 8 },
+  },
+  {
+    // Jev matches the job to Say how sure you are, the sample's second badge, so its question
+    // is m2, with Check an answer key (m3) as also like. Claude Code is its go-to.
+    id: "router-card",
+    page: "how-to/find-an-agent-for-a-job",
+    route: { view: "deck", deck: "router" },
+    seed: "full",
+    jev: "on",
+    jevAnswers: { m1: 0.12, m2: 0.93, m3: 0.74, m4: 0.08 },
+    expect: { text: "Go-to for Say how sure you are" },
+    steps: [{ paste: ROUTER_JOB }, { click: { button: "Next" } }, { click: { button: "Ask Jev" } }, { waitFor: { text: "Go-to for Say how sure you are" } }],
+    clip: { selector: ".deck", pad: 8 },
+  },
+  {
+    // The cost order, opened from Home's agent list: Codex first, as the sample folder sets it.
+    id: "cost-order",
+    page: "how-to/find-an-agent-for-a-job",
+    route: { view: "deck", deck: "cost-order" },
+    seed: "full",
+    jev: "off",
+    expect: { text: "Cheapest first" },
+    clip: { selector: ".deck-card", pad: 16 },
+  },
 ];
 
 /** Marks a route kind no shot pictures yet. */
@@ -736,7 +786,7 @@ export function routeKind(route: Route | "gate"): RouteKind {
 /** For each route kind, the shots that picture it, or NOT_PICTURED. Every shot is listed under its own kind. */
 export const COVERAGE: Record<RouteKind, readonly string[] | typeof NOT_PICTURED> = {
   gate: ["first-run"],
-  home: ["home-empty", "home", "home-needs"],
+  home: ["home-empty", "home", "home-needs", "router-door"],
   "deck:credential": ["credential-start", "credential-target"],
   "deck:agent": ["first-test-agent", "first-test-hand", "first-test-judge", "first-test-home", "agent-new"],
   "deck:test": ["test-hand", "test-reply", "judge", "go-to-offer", "missed-points", "held", "jev-ask", "jev-cleanup", "jev-sends", "jev-calls", "jev-record", "jev-reason"],
@@ -746,8 +796,8 @@ export const COVERAGE: Record<RouteKind, readonly string[] | typeof NOT_PICTURED
   "deck:edit-handoff": ["handoff-edit"],
   "deck:trash": ["trash-badge", "trash-agent"],
   "deck:jev": ["jev-off", "jev-on"],
-  "deck:router": NOT_PICTURED,
-  "deck:cost-order": NOT_PICTURED,
+  "deck:router": ["router-ask", "router-card"],
+  "deck:cost-order": ["cost-order"],
   "item:badge": ["badge-replies", "badge-page", "go-to-badge"],
   "item:agent": ["agent-page"],
   // A handoff opens as its own item only once two or more have results; the sample's has none.

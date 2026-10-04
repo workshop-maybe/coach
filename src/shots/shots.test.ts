@@ -140,7 +140,7 @@ describe("the shot manifest", () => {
       if (!shot.jevAnswers) continue;
       expect(shot.jev, shot.id).toBe("on");
       for (const [id, p] of Object.entries(shot.jevAnswers)) {
-        expect(id, shot.id).toMatch(/^(?:overall|[pt][1-9]\d*)$/);
+        expect(id, shot.id).toMatch(/^(?:overall|[ptm][1-9]\d*)$/);
         expect(p >= 0 && p <= 1, `${shot.id}: ${id}`).toBe(true);
       }
     }
