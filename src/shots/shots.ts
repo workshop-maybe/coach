@@ -693,7 +693,8 @@ export const SHOTS: readonly Shot[] = [
   {
     // Claude Code is Say how sure you are's go-to. Saving a changed rubric opens the badge's
     // page, and closing it shows home's Badges with the go-to's line flagged. The sample
-    // folder stays unflagged, so no other picture changes.
+    // folder stays unflagged, so no other picture changes. Home keeps the badge page's scroll,
+    // so the last step brings Badges back into view above the pinned doors.
     id: "go-to-flagged",
     page: "how-to/choose-a-go-to",
     route: { view: "deck", deck: "edit-credential", credentialKey: HOW_SURE, part: "rubric" },
@@ -708,6 +709,7 @@ export const SHOTS: readonly Shot[] = [
       { waitFor: { selector: 'section[aria-labelledby="badge-holders"]' } },
       { click: { button: "Close" } },
       { waitFor: { text: "Go-to: Claude Code · task changed" } },
+      { scroll: { selector: 'section[aria-labelledby="home-badges"]' } },
     ],
     clip: { selector: 'section[aria-labelledby="home-badges"]', pad: 8 },
   },
