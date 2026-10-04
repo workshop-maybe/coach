@@ -3,10 +3,10 @@
 // the two doors with dashed outlines of what they make (R9, R12). When all three sections
 // show, a wide window puts what needs you beside your agents so home fits one screen; the
 // pairing is a class on one wrapper, so a need coming or going never remounts a shelf or a
-// door (App.css). An empty folder leads
-// with "Try a first test", which runs one preset on an agent made on the spot. An agent holding a
-// handoff shows it plugged in wherever it stands (R15). The cast is hidden from
-// assistive tech, so names and what each agent earned stay in text.
+// door (App.css). An empty folder leads with "Try a first test", which runs one preset on
+// an agent made on the spot. An agent holding a handoff shows it plugged in wherever it
+// stands (R15). The cast is hidden from assistive tech, so names and what each agent earned
+// stay in text.
 
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";

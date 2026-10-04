@@ -1,9 +1,9 @@
 // A badge, opened (U6, R4, R7, R12, R18). The credential as its cartridge and its parts as
 // small cards (each opens a one-beat edit deck) in one column, its replies and its holders
-// in the other, stacked below the stacking width (App.css). While
-// one handoff has run, the replies are every agent's reply to it, each opening as its own
-// view and coming back here with its take lit and the picks kept (U5, R16); once two or
-// more have, each handoff that ran is a row that opens it as its own item (R1, R3, R5).
+// in the other, stacked below the stacking width (App.css). While one handoff has run, the
+// replies are every agent's reply to it, each opening as its own view and coming back here
+// with its take lit and the picks kept (U5, R16); once two or more have, each handoff that
+// ran is a row that opens it as its own item (R1, R3, R5).
 // The holders are small machines, the agents whose latest result met it, each naming the
 // handoff that earned it; opening one goes to the reply that earned it (R4).
 
