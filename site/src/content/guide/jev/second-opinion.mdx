@@ -29,7 +29,7 @@ The state is an object with six fields. Its field names are the ones the questio
 | `rubric_points` | The rubric's points, in order |
 | `rubric_notes` | The rubric's other lines, such as "Met when every point holds." |
 | `learning_targets` | The badge's learning targets, trimmed, with blanks and repeats left out |
-| `reply` | The reply you're judging, as the Markdown in the reply box |
+| `reply` | The reply you're judging, as it reads: its Markdown without the reply box's escapes, such as the backslash it puts before a square bracket |
 
 A rubric's points are its top-level list items, bulleted or numbered. A nested item or an indented line folds into the item above it, a task box (`[ ]` or `[x]`) is dropped, and a list inside fenced code doesn't count. A point with the same text as an earlier one counts once, since both would ask Jev the same question. Every other line is a note. A rubric with no list has no points, so its request has no point questions. A numbered answer key in a rubric is a list too, so each of its answers is a point of its own. Written as plain lines, as *Say how sure you are* writes its answers, a key is a note, and reaches every point's question.
 
@@ -71,6 +71,7 @@ The opening is cleaned before it is cut:
 
 - Every line break reads as a newline, and control and format characters other than tab are dropped, zero-width and direction marks among them. You judged the reply as it rendered and never saw them.
 - Picture and video Markdown, and any picture or video data, are removed. A line left blank by that goes.
+- The reply box's escapes are undone, as they are for the reply you're judging: `\[` reads `[`, and `&lt;` reads `<`. Code keeps its characters as written.
 - Lines that look like secrets are dropped: a PEM block from its BEGIN line to its END line; a known token prefix followed by a token (such as `sk-`, `ghp_`, `xoxb-`, `AKIA` or `AIza`); an `UPPER_NAME=` assignment with a long value; a run of 32 or more hex characters; a long base64 run holding a digit and both cases; a password-like key given a value (`password`, `passphrase`, `secret`, `api_key`, `access_key`, `private_key`, in any case); and a link carrying a password, such as `https://user:pass@host`. Each line is checked only up to twice the opening's cap, so a long line can't slow the check down. It is a heuristic, not a guarantee.
 
 Then the cleaned text is cut to its first 300 characters, counted as whole code points so an emoji is never split, and cut back to the last line break or sentence end inside them. A reply that fits whole stays whole. Your note is cleaned the same way, its line breaks become spaces, and it is capped at 200 characters.

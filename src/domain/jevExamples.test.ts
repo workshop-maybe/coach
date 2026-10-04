@@ -306,6 +306,14 @@ describe("an excerpt", () => {
     expect(excerptOf(`One. Two "three." ${"x".repeat(400)}`)).toBe('One. Two "three."');
   });
 
+  it("shows an earlier reply as a reader sees it, without the reply box's escapes, code as written", () => {
+    expect(excerptOf("Fixed \\[the parser\\] in `a\\_b` &amp; snake\\_case.")).toBe("Fixed [the parser] in `a\\_b` & snake_case.");
+    expect(excerptOf("```\n\\[x\\]\n```\nThen \\[y\\].")).toBe("```\n\\[x\\]\n```\nThen [y].");
+    // A picture whose alt the box escaped still goes, and a token the box escaped is still a secret.
+    expect(excerptOf("Shot ![a\\]b](x.png) here.")).toBe("Shot  here.");
+    expect(excerptOf(`Pushed.\ntoken ghp\\_${"a1B2".repeat(6)}\nDone.`)).toBe("Pushed.\nDone.");
+  });
+
   it("never ends on a list marker with nothing after it, though the cut falls right after one", () => {
     // The cut lands after "3.", which reads as a sentence end; the excerpt stops at item 2.
     const second = `2. ${"step ".repeat(50)}done.`;
@@ -418,6 +426,8 @@ describe("an excerpt", () => {
       "password".repeat(25_000),
       `password: x${" ".repeat(100_000)}y`,
       `${"password:x".repeat(20_000)} y`,
+      "\\".repeat(100_000),
+      "`\\_".repeat(30_000),
     ];
     // One at a time, since an excerpt stops reading once it has enough.
     for (const line of lines) {

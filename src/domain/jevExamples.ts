@@ -10,7 +10,9 @@
 
 import { calibrationsOf, ranksAsOverrule } from "./calls";
 import { LINE_BREAK, MAX_EXAMPLES_PER_SIDE, MAX_OPENING_CHARS, MAX_REASON_CHARS, type CriteriaSide, type JevExample, type JevExampleEntry } from "./jevRequest";
+import { fenceStep, type OpenFence } from "./markdownLines";
 import { newestFirst } from "./matrix";
+import { readerLine } from "./readerText";
 import { OVERALL_ID, pointId, rubricParts } from "./secondOpinion";
 import { credentialKey, type Assessment, type FolderState } from "./types";
 
@@ -103,7 +105,8 @@ export function examplesFor(ranked: readonly ExampleCandidate[], reply: string):
 }
 
 /**
- * The opening of a reply as an example shows it (KTD10): cleaned (see `cleanLines`), then
+ * The opening of a reply as an example shows it (KTD10): cleaned and read as a reader sees
+ * it, without the reply box's escapes (see `cleanLines`), then
  * its first 300 code points, cut back to the last line or sentence end inside them when
  * there is one. A reply of 300 code points or fewer is kept whole. Either way, lines at its
  * end that hold only a list marker are dropped, so an opening never stops on "3." (the cut
@@ -113,7 +116,7 @@ export function examplesFor(ranked: readonly ExampleCandidate[], reply: string):
 export function excerptOf(reply: string): string {
   // Lines are cleaned only until enough are kept for the cut: twice the cap in UTF-16
   // units is at least one code point past it, the most the cut ever looks at.
-  const text = cleanLines(reply, 2 * (MAX_OPENING_CHARS + 1)).join("\n").trim();
+  const text = cleanLines(reply, 2 * (MAX_OPENING_CHARS + 1), true).join("\n").trim();
   const head: string[] = [];
   for (const ch of text) {
     head.push(ch);
@@ -246,14 +249,21 @@ function looksSecret(line: string): boolean {
  * Stops once the kept lines reach `enough` UTF-16 units. Each line is checked and kept only
  * up to MAX_LINE_UNITS past its leading space, so the secret patterns never read an
  * unbounded line: some are slower than linear on a long line made to defeat them.
+ *
+ * With `reader`, each line outside fenced code is then read as a reader sees it
+ * (`readerLine`), after images go, since an image is matched on the Markdown the box wrote,
+ * and before the secret check, so the patterns see a token the box escaped as it is.
  */
-function cleanLines(text: string, enough = Infinity): string[] {
+function cleanLines(text: string, enough = Infinity, reader = false): string[] {
   const kept: string[] = [];
   let units = 0;
   let inPem = false;
+  let fence: OpenFence | null = null;
   for (const raw of text.split(LINE_BREAK)) {
     if (units >= enough) break;
     const line = raw.replace(INVISIBLE, "");
+    const step = fenceStep(line, fence);
+    fence = step.open;
     if (inPem || PEM_BEGIN.test(line)) {
       inPem = !PEM_END.test(line);
       continue;
@@ -261,7 +271,8 @@ function cleanLines(text: string, enough = Infinity): string[] {
     if (IMAGE_DEFINITION.test(line)) continue;
     const full = line.replace(IMAGE, "").replace(IMAGE_DATA, "");
     if (full !== line && full.trim() === "") continue;
-    const shown = full.slice(0, Math.max(0, full.search(/\S/)) + MAX_LINE_UNITS);
+    const cut = full.slice(0, Math.max(0, full.search(/\S/)) + MAX_LINE_UNITS);
+    const shown = reader && !step.fence && !step.inFence ? readerLine(cut) : cut;
     if (looksSecret(shown)) continue;
     if (kept.length === 0 && shown.trim() === "") continue;
     kept.push(kept.length === 0 ? shown.trimStart() : shown);

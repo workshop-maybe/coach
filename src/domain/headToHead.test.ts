@@ -117,9 +117,15 @@ describe("headToHeadRequest", () => {
     expect(pair("- One")?.state.learning_targets).toEqual([]);
   });
 
-  it("passes the task, the rubric and both replies through verbatim, uncleaned", () => {
+  it("passes the task, the rubric and both replies through uncleaned, spaces and blank lines and all", () => {
     const req = headToHeadRequest({ task: "  Task\n", rubric: "- One  \n", first: "\n First \n", second: "Second\n\n\n" });
     expect(req?.state).toMatchObject({ task: "  Task\n", rubric: "- One  \n", reply_1: "\n First \n", reply_2: "Second\n\n\n" });
+  });
+
+  it("sends both replies as a reader sees them, without the reply box's escapes, code as written", () => {
+    const req = headToHeadRequest({ task: "T.", rubric: "- One", first: "Key: \\[2, 1\\] &lt;ok&gt;", second: "Ran `a\\_b` and snake\\_case" });
+    expect(req?.state.reply_1).toBe("Key: [2, 1] <ok>");
+    expect(req?.state.reply_2).toBe("Ran `a\\_b` and snake_case");
   });
 
   it("is null for a rubric with no points, which has no head-to-head (KTD6)", () => {

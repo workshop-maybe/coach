@@ -117,6 +117,11 @@ describe("rubricParts: points", () => {
 });
 
 describe("secondOpinionRequest", () => {
+  it("sends the reply as a reader sees it, without the reply box's escapes, fenced code as written", () => {
+    const reply = "Key: \\[2, 1\\], a\\_b &amp; c\n```\n\\[x\\]\n```";
+    expect(ask("- One", reply).state.reply).toBe("Key: [2, 1], a_b & c\n```\n\\[x\\]\n```");
+  });
+
   it("covers AE4: three point questions plus an overall question", () => {
     const req = ask("- One\n- Two\n- Three\n\nMet when every point holds.");
     expect(req.kind).toBe("secondOpinion");

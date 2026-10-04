@@ -21,24 +21,36 @@ export interface ScannedLine {
 /** Every line of the text, in order, marked for fenced code. An empty text is one empty line. */
 export function scanLines(text: string): ScannedLine[] {
   const out: ScannedLine[] = [];
-  /** The open fence's mark and run length, or null outside a fence. */
-  let open: { mark: string; length: number } | null = null;
+  let open: OpenFence | null = null;
   for (const line of text.split(/\r?\n/)) {
-    const indent = indentOf(line);
-    if (open) {
-      const close = CLOSING.exec(line);
-      const closes = close !== null && close[1][0] === open.mark && close[1].length >= open.length;
-      out.push({ text: line, indent, fence: closes, inFence: !closes });
-      if (closes) open = null;
-      continue;
-    }
-    const m = OPENING.exec(line);
-    // A backtick run whose info string holds a backtick is an inline code span, not a fence.
-    const opens = m !== null && !(m[1][0] === "`" && m[2].includes("`"));
-    if (opens) open = { mark: m[1][0], length: m[1].length };
-    out.push({ text: line, indent, fence: opens, inFence: false });
+    const step = fenceStep(line, open);
+    open = step.open;
+    out.push({ text: line, indent: indentOf(line), fence: step.fence, inFence: step.inFence });
   }
   return out;
+}
+
+/** An open fence: its mark and the length of its run. */
+export interface OpenFence {
+  mark: string;
+  length: number;
+}
+
+/**
+ * One line read against the fence open before it, for a caller that splits its own lines:
+ * whether the line opens or closes a fence, whether it sits inside one, and the fence open
+ * after it (null outside a fence).
+ */
+export function fenceStep(line: string, open: OpenFence | null): { fence: boolean; inFence: boolean; open: OpenFence | null } {
+  if (open) {
+    const close = CLOSING.exec(line);
+    const closes = close !== null && close[1][0] === open.mark && close[1].length >= open.length;
+    return { fence: closes, inFence: !closes, open: closes ? null : open };
+  }
+  const m = OPENING.exec(line);
+  // A backtick run whose info string holds a backtick is an inline code span, not a fence.
+  if (m === null || (m[1][0] === "`" && m[2].includes("`"))) return { fence: false, inFence: false, open: null };
+  return { fence: true, inFence: false, open: { mark: m[1][0], length: m[1].length } };
 }
 
 // ---------------------------------------------------------------------------

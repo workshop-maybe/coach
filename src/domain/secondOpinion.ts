@@ -25,6 +25,7 @@ import {
   type SecondOpinionRequest,
 } from "./jevRequest";
 import { scanLines } from "./markdownLines";
+import { readerText } from "./readerText";
 import type { JevPoint, JevReading } from "./types";
 
 export interface RubricParts {
@@ -39,7 +40,7 @@ export interface SecondOpinionInput {
   task: string;
   /** The badge's rubric, in full. */
   rubric: string;
-  /** The agent's reply. */
+  /** The agent's reply, as the reply box holds it. It is sent as a reader sees it (`readerText`). */
   reply: string;
   /** The badge's learning targets. Sent trimmed, without blanks or repeats (KTD12). */
   learningTargets?: readonly string[];
@@ -143,8 +144,9 @@ export function rubricParts(rubric: string): RubricParts {
 /**
  * The request for Jev's second opinion: one question per rubric point ("p1" … "pN"), one
  * per learning target ("t1" … "tM"), plus one overall. The state holds only the task, the
- * rubric, the learning targets and the reply (R5). Examples go on the point and overall
- * questions they are keyed to; one keyed to any other id is not sent.
+ * rubric, the learning targets and the reply (R5), the reply as a reader sees it, without the
+ * reply box's escapes. Examples go on the point and overall questions they are keyed to; one
+ * keyed to any other id is not sent.
  */
 export function secondOpinionRequest({ task, rubric, reply, learningTargets = [], examples = {} }: SecondOpinionInput): SecondOpinionRequest {
   const { points, notes } = rubricParts(rubric);
@@ -167,7 +169,7 @@ export function secondOpinionRequest({ task, rubric, reply, learningTargets = []
   questions[OVERALL_ID] = withExamples({ type: "noul", instructions: OVERALL_QUESTION, criteria: OVERALL_CRITERIA }, examples[OVERALL_ID]);
   return {
     kind: "secondOpinion",
-    state: { task, rubric_points: points, rubric_notes: notes, rubric, learning_targets: targets, reply },
+    state: { task, rubric_points: points, rubric_notes: notes, rubric, learning_targets: targets, reply: readerText(reply) },
     questions,
   };
 }
