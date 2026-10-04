@@ -823,6 +823,8 @@ export function TestDeck(props: TestDeckProps) {
   if (holder && profile) {
     const plugBadge = state.credentials.find((c) => credentialKey(c) === holder.credentialKey);
     const plugLabel = plugBadge ? (handoffLabel(state, holder.credentialKey, holder.handoff?.id) ?? undefined) : undefined;
+    // The way back lights the handoff carried from the last round, else the route's.
+    const backHandoff = carry ?? props.handoffId;
     beats.push({
       id: "pull-first",
       title: "Pull that handoff first",
@@ -834,7 +836,7 @@ export function TestDeck(props: TestDeckProps) {
           profileSlug: profile.slug,
           credentialKey: holder.credentialKey,
           resume: true,
-          returnTo: { profileSlug: profile.slug, credentialKey: key, ...((carry ?? props.handoffId) ? { handoffId: carry ?? props.handoffId } : {}) },
+          returnTo: { profileSlug: profile.slug, credentialKey: key, ...(backHandoff ? { handoffId: backHandoff } : {}) },
         }),
       body: (
         <>

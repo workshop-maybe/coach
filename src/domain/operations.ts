@@ -29,9 +29,11 @@ import {
   serializeMark,
   SKELETON_PATH,
   trashPath,
+  type AssessmentIds,
 } from "./folder";
 import { checkHandoff, isHandoffLocked, type HandoffProblem } from "./handoffs";
 import { resultOf } from "./goTo";
+import { heldOf } from "./handoffResults";
 import { assignmentVersion } from "./hash";
 import { findPreset, presetCredential } from "./presets";
 import { uniqueSlug } from "./slug";
@@ -430,11 +432,11 @@ export interface AssessmentInput {
   jev?: JevReading;
 }
 
+/** A reply to hold: what a result would record, without the verdict or a note. */
+export type HoldInput = Omit<AssessmentInput, "result" | "note">;
+
 /** What a result or a held reply stamps about the test from the folder as it is now (R16). */
-async function stampTest(
-  state: FolderState,
-  input: Pick<AssessmentInput, "profileSlug" | "collectionSlug" | "credentialSlug" | "handBack" | "context" | "handoff" | "jev">,
-) {
+async function stampTest(state: FolderState, input: HoldInput) {
   if (typeof input.handBack !== "string" || input.handBack.trim() === "") {
     throw new Error("Paste the agent's hand-back before saving.");
   }
@@ -456,7 +458,7 @@ async function stampTest(
  * A stem later than every result and held reply of this agent on this badge (hold-and-compare
  * KTD5), so no new result can take the stem of a reply still held, which would read as its verdict.
  */
-function nextResultStem(storage: Storage, ids: { profileSlug: Slug; collectionSlug: Slug; credentialSlug: Slug }, now: Date): Promise<string> {
+function nextResultStem(storage: Storage, ids: Omit<AssessmentIds, "fileStem">, now: Date): Promise<string> {
   return nextStamp(storage, assessmentDir(ids.profileSlug, ids.collectionSlug, ids.credentialSlug), ".md", now);
 }
 
@@ -485,9 +487,6 @@ export async function recordAssessment(
 // ---------------------------------------------------------------------------
 // Held replies (hold-and-compare KTD1 to KTD5)
 
-/** A reply to hold: what a result would record, without the verdict or a note. */
-export type HoldInput = Omit<AssessmentInput, "result" | "note">;
-
 /**
  * Holds a reply without a verdict (R1, R2): a new file one folder below the agent's results
  * on the badge, stamped as a result would be. It is not a result and holds no badge.
@@ -500,26 +499,17 @@ export async function holdReply(storage: Storage, state: FolderState, input: Hol
   return { state: await loadFolder(storage), fileStem };
 }
 
-/** A held reply: its agent, its badge and its file stem. */
-export interface HeldRef {
-  profileSlug: Slug;
-  collectionSlug: Slug;
-  credentialSlug: Slug;
-  fileStem: string;
-}
-
 /**
- * Judges a held reply (R6, R9, R10): a new result under the held reply's own stem and time,
- * with what it recorded about its test (KTD3). The held file is never touched; the folder
- * stops listing it as held once the result is there (KTD4). Refuses a reply no longer held.
+ * Judges a held reply, named by its agent, badge and stem (R6, R9, R10): a new result under
+ * the held reply's own stem and time, with what it recorded about its test (KTD3). The held
+ * file is never touched; the folder stops listing it as held once the result is there
+ * (KTD4). Refuses a reply no longer held.
  */
-export async function judgeHeldReply(storage: Storage, state: FolderState, ref: HeldRef, result: AssessmentResult): Promise<FolderState> {
+export async function judgeHeldReply(storage: Storage, state: FolderState, ref: AssessmentIds, result: AssessmentResult): Promise<FolderState> {
   if (result !== "met" && result !== "not_met") throw new Error('Choose "met" or "not met" before saving.');
   findProfile(state, ref.profileSlug);
-  findCredential(state, ref.collectionSlug, ref.credentialSlug);
-  const held = state.held.find(
-    (h) => h.profileSlug === ref.profileSlug && h.collectionSlug === ref.collectionSlug && h.credentialSlug === ref.credentialSlug && h.fileStem === ref.fileStem,
-  );
+  const credential = findCredential(state, ref.collectionSlug, ref.credentialSlug);
+  const held = heldOf(state, ref.profileSlug, credentialKey(credential), ref.fileStem);
   if (!held) throw new Error("That reply is no longer held.");
   const { heldAt, ...rest } = held;
   await saveAssessment(storage, { ...rest, result, recordedAt: heldAt, note: "" });

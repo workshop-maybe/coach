@@ -494,18 +494,7 @@ export function parseAssessment(text: string, ids: AssessmentIds): Assessment {
   const note = handMatch ? body.slice(afterNoteStart, afterNoteStart + handMatch.index) : body.slice(afterNoteStart);
   const handBack = handMatch ? handBackAfter(body, handMatch, afterNoteStart) : "";
 
-  return {
-    ...ids,
-    result: result as AssessmentResult,
-    recordedAt,
-    assignmentVersion: record.assignmentVersion,
-    setup: record.setup,
-    note: note.replace(/\r\n?/g, "\n").trim(),
-    handBack,
-    ...(record.context ? { context: record.context } : {}),
-    ...(record.handoff ? { handoff: record.handoff } : {}),
-    ...(record.jev ? { jev: record.jev } : {}),
-  };
+  return { ...ids, result: result as AssessmentResult, recordedAt, ...record, note: note.replace(/\r\n?/g, "\n").trim(), handBack };
 }
 
 // ---------------------------------------------------------------------------
@@ -523,16 +512,7 @@ export function parseHeld(text: string, ids: AssessmentIds): HeldReply {
   const heldAt = isoTime(fm, "held_at");
   const record = parseTestRecord(fm);
   const handMatch = HANDBACK_LINE.exec(body);
-  return {
-    ...ids,
-    heldAt,
-    assignmentVersion: record.assignmentVersion,
-    setup: record.setup,
-    handBack: handMatch ? handBackAfter(body, handMatch) : "",
-    ...(record.context ? { context: record.context } : {}),
-    ...(record.handoff ? { handoff: record.handoff } : {}),
-    ...(record.jev ? { jev: record.jev } : {}),
-  };
+  return { ...ids, heldAt, ...record, handBack: handMatch ? handBackAfter(body, handMatch) : "" };
 }
 
 // ---------------------------------------------------------------------------

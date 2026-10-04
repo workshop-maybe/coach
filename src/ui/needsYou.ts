@@ -6,8 +6,7 @@
 // those, each credential appears at most once, at its most urgent item. Every item carries
 // the one route its row opens.
 
-import { SKELETON_ID, handoffsFor } from "../domain/handoffs";
-import { heldOn, runIdOf } from "../domain/handoffResults";
+import { heldOn, runIdOf, runRank } from "../domain/handoffResults";
 import type { CellFlag, Matrix } from "../domain/matrix";
 import { credentialKey, type FolderState, type Slug } from "../domain/types";
 import { livePlugs, plugFor, type PendingTest } from "./pendingTests";
@@ -51,11 +50,12 @@ export function needsYou(state: FolderState, matrix: Matrix, pending: PendingTes
     const byRun = new Map<string, TakeRef[]>();
     for (const h of held) {
       const id = runIdOf(h);
-      byRun.set(id, [...(byRun.get(id) ?? []), { profileSlug: h.profileSlug, fileStem: h.fileStem }]);
+      const takes = byRun.get(id) ?? [];
+      takes.push({ profileSlug: h.profileSlug, fileStem: h.fileStem });
+      byRun.set(id, takes);
     }
-    // The skeleton first, then the badge's handoffs in creation order; an id with no file comes last.
-    const order = [SKELETON_ID, ...handoffsFor(state, key).map((h) => h.id)];
-    const rank = (id: string) => (order.includes(id) ? order.indexOf(id) : order.length);
+    // In the badge's run order, as its page lists them.
+    const rank = runRank(state, key);
     for (const [handoffId, takes] of [...byRun].sort(([a], [b]) => rank(a) - rank(b))) items.push(heldItem(key, handoffId, takes));
   }
 

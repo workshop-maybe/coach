@@ -67,6 +67,17 @@ export function heldOn(state: FolderState, key: string): HeldReply[] {
   return state.held.filter((h) => credentialKey(h) === key && agents.has(h.profileSlug)).sort((a, b) => takesNewestFirst(b, a));
 }
 
+/** One agent's held reply on a badge by its file stem, while it is still held. */
+export function heldOf(state: FolderState, profileSlug: Slug, key: string, fileStem: string): HeldReply | undefined {
+  return state.held.find((h) => h.profileSlug === profileSlug && credentialKey(h) === key && h.fileStem === fileStem);
+}
+
+/** A badge's runs in order: the skeleton first, then its handoffs in creation order; an id with no file comes last. */
+export function runRank(state: FolderState, key: string): (id: string) => number {
+  const order = [SKELETON_ID, ...handoffsFor(state, key).map((h) => h.id)];
+  return (id) => (order.includes(id) ? order.indexOf(id) : order.length);
+}
+
 export function handoffRuns(matrix: Matrix, state: FolderState, key: string): BadgeRuns {
   const shown = matrix.columns.some((g) => g.credentials.some((c) => credentialKey(c) === key));
   const rows = new Map(matrix.rows.map((p) => [p.slug, p]));
@@ -82,8 +93,7 @@ export function handoffRuns(matrix: Matrix, state: FolderState, key: string): Ba
     byRun.set(id, agents);
   }
 
-  const order = [SKELETON_ID, ...handoffsFor(state, key).map((h) => h.id)];
-  const rank = (id: string) => (order.includes(id) ? order.indexOf(id) : order.length);
+  const rank = runRank(state, key);
   const runs = [...byRun.entries()]
     .sort(([a], [b]) => rank(a) - rank(b))
     .map(([id, agents]): HandoffRun => {
@@ -94,16 +104,19 @@ export function handoffRuns(matrix: Matrix, state: FolderState, key: string): Ba
         })
         .sort((x, y) => takesNewestFirst(x.latest, y.latest));
       const met = entries.filter((e) => latestResult(e)?.result === "met").length;
-      const held = entries.reduce((n, e) => n + [e.latest, ...e.older].filter(isHeld).length, 0);
+      const held = entries.reduce((n, e) => n + takesOf(e).filter(isHeld).length, 0);
       return { id, agents: entries, met, held };
     });
 
   return { mode: runs.length >= 2 ? "multi" : "single", runs };
 }
 
+/** An agent's takes on a run, newest first. */
+const takesOf = (e: AgentReplies): Take[] => [e.latest, ...e.older];
+
 /** An agent's newest result among its takes on a run, held replies skipped. */
 function latestResult(e: AgentReplies): Assessment | undefined {
-  return [e.latest, ...e.older].find((t): t is Assessment => !isHeld(t));
+  return takesOf(e).find((t): t is Assessment => !isHeld(t));
 }
 
 /** The handoff of the agent's latest result on the badge, across all handoffs, or null (R14). */

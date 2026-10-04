@@ -11,9 +11,10 @@
 // The way back from a compare (U9, R17, KTD10) is the same page, named by the first of its
 // takes still in the folder, with the picks kept and Compare focused.
 
-import { handoffRuns, latestRunId, runIdOf, type Take } from "../domain/handoffResults";
+import { resultOf } from "../domain/goTo";
+import { handoffRuns, heldOf, latestRunId, runIdOf, type Take } from "../domain/handoffResults";
 import type { Matrix } from "../domain/matrix";
-import { credentialKey, type AgentProfile, type FolderState, type Slug } from "../domain/types";
+import type { AgentProfile, FolderState, Slug } from "../domain/types";
 import type { ItemRoute, ReplyListState, TakeRef } from "./routes";
 
 export function replyRoute(matrix: Matrix, state: FolderState, key: string, profileSlug: Slug): ItemRoute {
@@ -31,10 +32,12 @@ export function replyRoute(matrix: Matrix, state: FolderState, key: string, prof
  */
 export function takeOf(state: FolderState, key: string, ref: TakeRef): { profile: AgentProfile; take: Take } | null {
   const profile = state.profiles.find((p) => p.slug === ref.profileSlug);
-  const same = (t: Take) => t.profileSlug === ref.profileSlug && t.fileStem === ref.fileStem && credentialKey(t) === key;
-  const take: Take | undefined = state.assessments.find(same) ?? state.held.find(same);
+  const take: Take | undefined = resultOf(state, ref.profileSlug, key, ref.fileStem) ?? heldOf(state, ref.profileSlug, key, ref.fileStem);
   return profile && take ? { profile, take } : null;
 }
+
+/** A take's identity in a list: file stems can repeat across agents, so the agent comes with it. */
+export const takeIdOf = (ref: TakeRef): string => `${ref.profileSlug}/${ref.fileStem}`;
 
 /** Where closing a take's reply view goes: the page that holds the take now, with the take lit and the picks kept (R16, KTD7). */
 export function backFromReply(matrix: Matrix | null, state: FolderState, key: string, take: TakeRef, picks?: TakeRef[]): ItemRoute {
