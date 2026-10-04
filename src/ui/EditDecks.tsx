@@ -69,7 +69,7 @@ function cleanSettings(s: BadgeSettings): BadgeSettings {
  * a line with text adds it; Enter on an empty line moves the deck on. With `onMove`, the
  * lines are learning targets and each offers to move its detail to the rubric.
  */
-function Lines({
+export function Lines({
   lines,
   onChange,
   line,

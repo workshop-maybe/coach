@@ -66,7 +66,7 @@ Jev's answer on one rubric point, one learning target or the whole bar, read fro
 
 ### Track record
 
-How often Jev's overall call on a badge matched the user's verdicts, counted over the badge's results that carry a reading from the same Jev model, with can't calls counted apart. It shows once there are eight such results, and only where a verdict exists: never before the user picks one, and never on a held reply.
+How often Jev's overall call on a badge matched the user's verdicts, counted over the badge's results that carry a reading from the same Jev model, with can't calls counted apart. It shows once there are enough such results, and only where a verdict exists: never before the user picks one, and never on a held reply.
 
 ### Overrule
 

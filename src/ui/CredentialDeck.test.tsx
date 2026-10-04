@@ -26,22 +26,22 @@ async function walk(name: string, target: string, task: string) {
   await userEvent.click(await screen.findByRole("button", { name: "Build your own" }));
   await userEvent.type(await screen.findByRole("textbox", { name: "Name" }), name);
   await userEvent.click(screen.getByRole("button", { name: "Next" }));
-  await userEvent.type(screen.getByRole("textbox", { name: "Learning target" }), target);
+  await userEvent.type(screen.getByRole("textbox", { name: "New learning target" }), target);
   await userEvent.click(screen.getByRole("button", { name: "Next" }));
   if (task) await userEvent.type(screen.getByRole("textbox", { name: "Task" }), task);
 }
 
 describe("CredentialDeck", () => {
-  it("asks one thing per card: where to start, its name, one thing its holder can do, then the task", async () => {
+  it("asks one thing per card: where to start, its name, what its holder can do, then the task", async () => {
     renderApp(storageWith(), { view: "deck", deck: "credential" });
     expect(await screen.findByRole("heading", { name: "Where to start" })).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Build your own" }));
     expect(await screen.findByRole("heading", { name: "What is it called" })).toBeTruthy();
     await userEvent.type(screen.getByRole("textbox", { name: "Name" }), "Code review");
     await userEvent.click(screen.getByRole("button", { name: "Next" }));
-    expect(screen.getByRole("heading", { name: "One thing its holder can do" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "What its holder can do" })).toBeTruthy();
     expect(screen.getByRole("list", { name: "Answered" }).textContent).toContain("Code review");
-    await userEvent.type(screen.getByRole("textbox", { name: "Learning target" }), "I can find bugs");
+    await userEvent.type(screen.getByRole("textbox", { name: "New learning target" }), "I can find bugs");
     await userEvent.click(screen.getByRole("button", { name: "Next" }));
     expect(screen.getByRole("heading", { name: "The task" })).toBeTruthy();
     expect((screen.getByRole("button", { name: "Make the badge" }) as HTMLButtonElement).disabled).toBe(true);
@@ -83,12 +83,77 @@ describe("CredentialDeck", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Build your own" }));
     await userEvent.type(await screen.findByRole("textbox", { name: "Name" }), "Code review");
     await userEvent.click(screen.getByRole("button", { name: "Next" }));
-    const box = screen.getByRole("textbox", { name: "Learning target" }) as HTMLInputElement;
+    const box = screen.getByRole("textbox", { name: "New learning target" }) as HTMLInputElement;
     await userEvent.type(box, "I can review a PR (tests, types, docs).");
     await userEvent.click(screen.getByRole("button", { name: "Move to the rubric" }));
     expect(box.value).toBe("I can review a PR.");
     expect(screen.getByRole("status").textContent).toBe("Moved to the rubric");
     await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    await userEvent.type(screen.getByRole("textbox", { name: "Task" }), "Review the diff");
+    await userEvent.click(screen.getByRole("button", { name: "Make the badge" }));
+    await screen.findByRole("button", { name: "Test it on an agent" });
+    const [saved] = (await loadFolder(storage)).credentials;
+    expect(saved).toMatchObject({ learningTargets: ["I can review a PR."], rubric: "- Tests, types, docs" });
+  });
+
+  it("takes several targets, Enter adding each line and Enter on an empty line moving on", async () => {
+    const storage = storageWith();
+    renderApp(storage, { view: "deck", deck: "credential" });
+    await userEvent.click(await screen.findByRole("button", { name: "Build your own" }));
+    await userEvent.type(await screen.findByRole("textbox", { name: "Name" }), "Code review");
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    const next = () => screen.getByRole("button", { name: "Next" }) as HTMLButtonElement;
+    expect(next().disabled).toBe(true);
+    const box = screen.getByRole("textbox", { name: "New learning target" }) as HTMLInputElement;
+    await userEvent.type(box, "I can find bugs in a diff{Enter}");
+    expect(screen.getByRole("heading", { name: "What its holder can do" })).toBeTruthy();
+    expect(box.value).toBe("");
+    expect(next().disabled).toBe(false);
+    await userEvent.type(box, "I can suggest a fix{Enter}");
+    expect(within(screen.getByRole("list", { name: "Learning targets" })).getAllByRole("listitem").map((li) => li.querySelector("span")?.textContent)).toEqual([
+      "I can find bugs in a diff",
+      "I can suggest a fix",
+    ]);
+    await userEvent.type(box, "{Enter}");
+    expect(screen.getByRole("heading", { name: "The task" })).toBeTruthy();
+    expect(screen.getByRole("list", { name: "Answered" }).textContent).toContain("2 learning targets");
+    await userEvent.type(screen.getByRole("textbox", { name: "Task" }), "Review the diff");
+    await userEvent.click(screen.getByRole("button", { name: "Make the badge" }));
+    await screen.findByRole("button", { name: "Test it on an agent" });
+    const [saved] = (await loadFolder(storage)).credentials;
+    expect(saved.learningTargets).toEqual(["I can find bugs in a diff", "I can suggest a fix"]);
+  });
+
+  it("keeps a line still in the box as the last target, and a removed line goes", async () => {
+    const storage = storageWith();
+    renderApp(storage, { view: "deck", deck: "credential" });
+    await userEvent.click(await screen.findByRole("button", { name: "Build your own" }));
+    await userEvent.type(await screen.findByRole("textbox", { name: "Name" }), "Code review");
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    const box = screen.getByRole("textbox", { name: "New learning target" });
+    await userEvent.type(box, "I can read a diff{Enter}");
+    await userEvent.type(box, "I can find bugs{Enter}");
+    await userEvent.click(screen.getByRole("button", { name: "Remove I can read a diff" }));
+    await userEvent.type(box, "I can suggest a fix");
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    await userEvent.type(screen.getByRole("textbox", { name: "Task" }), "Review the diff");
+    await userEvent.click(screen.getByRole("button", { name: "Make the badge" }));
+    await screen.findByRole("button", { name: "Test it on an agent" });
+    const [saved] = (await loadFolder(storage)).credentials;
+    expect(saved.learningTargets).toEqual(["I can find bugs", "I can suggest a fix"]);
+  });
+
+  it("offers to move detail out of a target already added, and the rubric keeps it", async () => {
+    const storage = storageWith();
+    renderApp(storage, { view: "deck", deck: "credential" });
+    await userEvent.click(await screen.findByRole("button", { name: "Build your own" }));
+    await userEvent.type(await screen.findByRole("textbox", { name: "Name" }), "Code review");
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    await userEvent.type(screen.getByRole("textbox", { name: "New learning target" }), "I can review a PR (tests, types, docs).{Enter}");
+    await userEvent.click(screen.getByRole("button", { name: /^Move to the rubric: / }));
+    expect(within(screen.getByRole("list", { name: "Learning targets" })).getByText("I can review a PR.")).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByRole("list", { name: "Answered" }).textContent).toContain("I can review a PR.");
     await userEvent.type(screen.getByRole("textbox", { name: "Task" }), "Review the diff");
     await userEvent.click(screen.getByRole("button", { name: "Make the badge" }));
     await screen.findByRole("button", { name: "Test it on an agent" });
@@ -123,7 +188,7 @@ describe("CredentialDeck", () => {
     expect(createDeck().classList.contains("pane")).toBe(false);
     expect(barActions()).toEqual(FOLDER_ACTIONS);
     await userEvent.click(screen.getByRole("button", { name: "Next" }));
-    await userEvent.type(screen.getByRole("textbox", { name: "Learning target" }), "I can find bugs");
+    await userEvent.type(screen.getByRole("textbox", { name: "New learning target" }), "I can find bugs");
     expect(createDeck().classList.contains("pane")).toBe(false);
     await userEvent.click(screen.getByRole("button", { name: "Next" }));
     expect(screen.getByRole("heading", { name: "The task" })).toBeTruthy();
@@ -140,10 +205,10 @@ describe("CredentialDeck", () => {
     await userEvent.keyboard("{Escape}");
     expect(screen.getByRole("heading", { name: "The task" })).toBeTruthy();
     await userEvent.keyboard("{Escape}");
-    expect(screen.getByRole("heading", { name: "One thing its holder can do" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "What its holder can do" })).toBeTruthy();
     expect(barActions()).toEqual(FOLDER_ACTIONS);
     await userEvent.keyboard("{Escape}");
-    expect(screen.getByRole("heading", { name: "One thing its holder can do" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "What its holder can do" })).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Next" }));
     expect((screen.getByRole("textbox", { name: "Task" }) as HTMLTextAreaElement).value).toBe("Review the diff");
     expect(await snapshot(storage)).toEqual(before);

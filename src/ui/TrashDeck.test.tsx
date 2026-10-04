@@ -4,7 +4,7 @@ import { cleanup, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { collectionPath, loadFolder } from "../domain/folder";
 import { addPending, readPending } from "./pendingTests";
-import { FOLDER, opus, renderApp, result, review, storageWith } from "./testFolder";
+import { FOLDER, heldReply, opus, renderApp, result, review, storageWith } from "./testFolder";
 
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ writeText: vi.fn() }));
 
@@ -82,5 +82,44 @@ describe("Move to trash", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Move to trash" }));
     await screen.findAllByRole("button", { name: /Create a credential/ });
     expect(readPending(FOLDER)).toEqual([]);
+  });
+  describe("counts held replies beside results", () => {
+    const codex = { ...opus, slug: "codex", name: "Codex agent", harness: "codex", model: "gpt-5" };
+    const docs = { ...review, slug: "docs", name: "Write docs", task: "Document the module." };
+    const line = async (opts: Parameters<typeof storageWith>[0], item: { kind: "agent"; profileSlug: string } | { kind: "badge"; credentialKey: string }) => {
+      renderApp(storageWith(opts), { view: "deck", deck: "trash", item });
+      await screen.findByRole("heading", { name: /^Move .* to trash$/ });
+      return screen.getAllByText(/(goes|go) with it\.$|has no results\.$/).map((p) => p.textContent);
+    };
+
+    it("an agent with a result and a held reply names both", async () => {
+      expect(await line({ credentials: [review], profiles: [opus], assessments: [await result(opus, review)], held: [await heldReply(opus, review)] }, { kind: "agent", profileSlug: "opus" })).toEqual([
+        "Its result and its held reply go with it.",
+      ]);
+    });
+
+    it("a badge with two results and two held replies from different agents counts each", async () => {
+      const assessments = [await result(opus, review), await result(codex, review, { result: "not_met" })];
+      const held = [await heldReply(opus, review), await heldReply(codex, review)];
+      expect(await line({ credentials: [review], profiles: [opus, codex], assessments, held }, { kind: "badge", credentialKey: "eng/review" })).toEqual([
+        "Its 2 results and 2 held replies go with it.",
+      ]);
+    });
+
+    it("an agent with only held replies names them, and counts none on other agents", async () => {
+      const held = [await heldReply(opus, review), await heldReply(opus, docs), await heldReply(codex, review)];
+      expect(await line({ credentials: [review, docs], profiles: [opus, codex], held }, { kind: "agent", profileSlug: "opus" })).toEqual(["Its 2 held replies go with it."]);
+    });
+
+    it("an agent with one held reply and two results names the held reply as its", async () => {
+      const assessments = [await result(opus, review), await result(opus, docs)];
+      expect(await line({ credentials: [review, docs], profiles: [opus], assessments, held: [await heldReply(opus, docs)] }, { kind: "agent", profileSlug: "opus" })).toEqual([
+        "Its 2 results and its held reply go with it.",
+      ]);
+    });
+
+    it("an agent with nothing keeps the plain line", async () => {
+      expect(await line({ credentials: [review], profiles: [opus] }, { kind: "agent", profileSlug: "opus" })).toEqual(["It has no results."]);
+    });
   });
 });
