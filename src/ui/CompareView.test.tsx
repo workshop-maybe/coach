@@ -1,17 +1,18 @@
 // @vitest-environment jsdom
-// The compare (U9, R11, R12, R17, KTD10): two takes opened side by side in the full window,
-// each a record with its reply rendered and its saved reading from Jev (U7, R14), one switch
-// to show both as stored, and the way back to the page that lists them, with both still
-// picked and Compare focused.
+// The compare (U9, R11, R12, R17, KTD10): takes under a strip, two opened side by side in the
+// full window, each a record with its reply rendered and its saved reading from Jev (U7,
+// R14), one switch to show both as stored, and the way back to the page that lists them,
+// still picked and Compare focused. Held replies are judged and a go-to chosen in place
+// (hold-and-compare R7-R11).
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { assessmentPath, profilePath } from "../domain/folder";
-import type { Assessment, FolderState, Handoff, JevReading } from "../domain/types";
+import type { Assessment, FolderState, Handoff, HeldReply, JevReading, Mark } from "../domain/types";
 import type { MemoryStorage } from "../storage/memory";
 import { formatDate } from "./format";
 import type { TakeRef } from "./routes";
-import { opus, renderApp, result, review, storageWith } from "./testFolder";
+import { heldReply, opus, renderApp, result, review, storageWith } from "./testFolder";
 
 // Each finished matrix build is noted, so a test can wait for the matrix before closing.
 const builds = vi.hoisted(() => ({ last: null as FolderState | null }));
@@ -44,11 +45,11 @@ const ranA = { id: "a", text: "Filled A" };
 const FOLDER_ACTIONS = ["Change folder", "Reload", "Export"];
 const barActions = () => FOLDER_ACTIONS.filter((name) => within(screen.getByRole("banner")).queryByRole("button", { name }) !== null);
 
-function folder(assessments: Assessment[], profiles = [opus, codex]) {
-  return storageWith({ credentials: [review], profiles, handoffs: [a], assessments });
+function folder(assessments: Assessment[], profiles = [opus, codex], held: HeldReply[] = [], marks: Mark[] = []) {
+  return storageWith({ credentials: [review], profiles, handoffs: [a], assessments, held, marks });
 }
 
-function open(storage: MemoryStorage, takes: [TakeRef, TakeRef], key = "eng/review") {
+function open(storage: MemoryStorage, takes: TakeRef[], key = "eng/review") {
   return renderApp(storage, { view: "item", item: "compare", credentialKey: key, takes, picks: takes });
 }
 
@@ -245,5 +246,152 @@ describe("CompareView", () => {
     expect(await screen.findByRole("heading", { name: "Not in the folder" })).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Home" }));
     expect(await screen.findByRole("region", { name: "Badges" })).toBeTruthy();
+  });
+});
+
+// The strip and the judging in place (hold-and-compare R7-R11, KTD10, KTD11).
+describe("CompareView under a strip", () => {
+  const haiku = { ...opus, slug: "haiku", name: "Haiku agent", model: "haiku", effort: "low" };
+  const heldDay = (n: number) => ({ fileStem: day(n).fileStem, heldAt: day(n).recordedAt });
+  const strip = () => within(screen.getByRole("list", { name: "Replies" }));
+  const chip = (name: RegExp) => strip().getByRole("button", { name });
+  const openNames = () => panes().map((p) => within(p).getByRole("heading").textContent);
+
+  async function threeHeld() {
+    return folder([], [opus, codex, haiku], [
+      await heldReply(opus, review, { ...heldDay(1), handBack: "Opus held" }),
+      await heldReply(codex, review, { ...heldDay(2), handBack: "Codex held" }),
+      await heldReply(haiku, review, { ...heldDay(3), handBack: "Haiku held" }),
+    ]);
+  }
+
+  it("Covers AE3. three held replies are all in the strip, each with its agent, setup and state, and the first two open", async () => {
+    open(await threeHeld(), [take("opus", 1), take("codex", 2), take("haiku", 3)]);
+    await screen.findByRole("region", { name: "Compare replies" });
+    expect(strip().getAllByRole("button")).toHaveLength(3);
+    expect(chip(/Haiku agent/).textContent).toContain("claude-code · haiku · low");
+    expect(chip(/Haiku agent/).textContent).toContain("Held");
+    expect(openNames()).toEqual(["Opus agent", "Codex agent"]);
+    expect(chip(/Opus agent/).getAttribute("aria-pressed")).toBe("true");
+    expect(chip(/Haiku agent/).getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("Covers AE4. four takes, two held and two judged, are all in the strip with their states", async () => {
+    const storage = folder(
+      [await result(opus, review, day(1)), await result(codex, review, { ...day(2), result: "not_met" })],
+      [opus, codex, haiku],
+      [await heldReply(haiku, review, heldDay(3)), await heldReply(opus, review, heldDay(4))],
+    );
+    open(storage, [take("opus", 1), take("codex", 2), take("haiku", 3), take("opus", 4)]);
+    await screen.findByRole("region", { name: "Compare replies" });
+    expect(strip().getAllByRole("button").map((b) => b.querySelector(".verdict")?.textContent)).toEqual(["Met", "Not met", "Held", "Held"]);
+  });
+
+  it("a closed reply chosen in the strip opens on the right and the left holds; the right one swaps sides; the left one stays", async () => {
+    open(await threeHeld(), [take("opus", 1), take("codex", 2), take("haiku", 3)]);
+    await screen.findByRole("region", { name: "Compare replies" });
+    await userEvent.click(chip(/Haiku agent/));
+    expect(openNames()).toEqual(["Opus agent", "Haiku agent"]);
+    // Focus stays on the strip button that was pressed.
+    expect(document.activeElement).toBe(chip(/Haiku agent/));
+    await userEvent.click(chip(/Haiku agent/));
+    expect(openNames()).toEqual(["Haiku agent", "Opus agent"]);
+    await userEvent.click(chip(/Haiku agent/));
+    expect(openNames()).toEqual(["Haiku agent", "Opus agent"]);
+    await userEvent.click(chip(/Codex agent/));
+    expect(openNames()).toEqual(["Haiku agent", "Codex agent"]);
+  });
+
+  it("Covers AE5. only a Met reply offers Make go-to; marking the held one Met records it and offers it there too", async () => {
+    const held = await heldReply(codex, review, { ...heldDay(2), handBack: "Codex held" });
+    const storage = folder([await result(opus, review, day(1))], [opus, codex], [held]);
+    open(storage, [take("opus", 1), take("codex", 2)]);
+    await screen.findByRole("region", { name: "Compare replies" });
+    const [left, right] = panes();
+    expect(within(left).getByRole("button", { name: "Make go-to" })).toBeTruthy();
+    expect(within(right).queryByRole("button", { name: "Make go-to" })).toBeNull();
+    await userEvent.click(within(right).getByRole("button", { name: "Met" }));
+    await waitFor(() => expect(within(panes()[1]).getByRole("button", { name: "Make go-to" })).toBeTruthy());
+    expect(storage.file(assessmentPath("codex", "eng", "review", held.fileStem))).toMatch(/^result: met$/m);
+    expect(chip(/Codex agent/).querySelector(".verdict")?.textContent).toBe("Met");
+    // The pressed button is gone; focus is on that reply's heading, not on Make go-to.
+    expect(document.activeElement).toBe(within(panes()[1]).getByRole("heading", { name: "Codex agent" }));
+  });
+
+  it("Make go-to marks that result, and the reply then says Go-to", async () => {
+    const storage = folder([await result(opus, review, day(1)), await result(codex, review, day(2))]);
+    open(storage, [take("opus", 1), take("codex", 2)]);
+    await screen.findByRole("region", { name: "Compare replies" });
+    await userEvent.click(within(panes()[1]).getByRole("button", { name: "Make go-to" }));
+    await waitFor(() => expect(within(panes()[1]).getByText("Go-to")).toBeTruthy());
+    const marks = Object.keys(storage.files()).filter((p) => p.startsWith("collections/eng/marks/review/"));
+    expect(marks).toHaveLength(1);
+    expect(JSON.parse(storage.file(marks[0])!)).toEqual({ agent: "codex", result: day(2).fileStem });
+    expect(within(panes()[0]).getByRole("button", { name: "Make go-to" })).toBeTruthy();
+  });
+
+  it("a reply the go-to's mark names says Go-to from the start", async () => {
+    const mark: Mark = { collectionSlug: "eng", credentialSlug: "review", id: "20260905T090000Z", profileSlug: "opus", fileStem: day(1).fileStem };
+    open(folder([await result(opus, review, day(1)), await result(codex, review, day(2))], [opus, codex], [], [mark]), [take("opus", 1), take("codex", 2)]);
+    await screen.findByRole("region", { name: "Compare replies" });
+    expect(within(panes()[0]).getByText("Go-to")).toBeTruthy();
+    expect(within(panes()[0]).queryByRole("button", { name: "Make go-to" })).toBeNull();
+  });
+
+  it("Not yet on a held reply records Not met and offers no go-to", async () => {
+    const storage = folder([await result(opus, review, day(1))], [opus, codex], [await heldReply(codex, review, heldDay(2))]);
+    open(storage, [take("opus", 1), take("codex", 2)]);
+    await screen.findByRole("region", { name: "Compare replies" });
+    await userEvent.click(within(panes()[1]).getByRole("button", { name: "Not yet" }));
+    await waitFor(() => expect(within(panes()[1]).getByText("Not met")).toBeTruthy());
+    expect(within(panes()[1]).queryByRole("button", { name: "Make go-to" })).toBeNull();
+  });
+
+  it("while a judgment saves every action is disabled and Escape does nothing; a failure shows inline and records nothing", async () => {
+    const held = await heldReply(codex, review, heldDay(2));
+    const storage = folder([await result(opus, review, day(1))], [opus, codex], [held]);
+    open(storage, [take("opus", 1), take("codex", 2)]);
+    await screen.findByRole("region", { name: "Compare replies" });
+    // Something else wrote a file at the result's path since the folder was read.
+    const path = assessmentPath("codex", "eng", "review", held.fileStem);
+    storage.seed({ [path]: "someone else's" });
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const readText = storage.readText.bind(storage);
+    storage.readText = async (root, p) => {
+      if (p === path) await gate;
+      return readText(root, p);
+    };
+    await userEvent.click(within(panes()[1]).getByRole("button", { name: "Met" }));
+    expect((within(panes()[0]).getByRole("button", { name: "Make go-to" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((within(panes()[1]).getByRole("button", { name: "Not yet" }) as HTMLButtonElement).disabled).toBe(true);
+    await userEvent.keyboard("{Escape}");
+    expect(screen.getByRole("region", { name: "Compare replies" })).toBeTruthy();
+    release();
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(storage.file(path)).toBe("someone else's");
+  });
+
+  it("an open reply removed by a reload is replaced by the next one in the strip", async () => {
+    const storage = await threeHeld();
+    open(storage, [take("opus", 1), take("codex", 2), take("haiku", 3)]);
+    await screen.findByRole("region", { name: "Compare replies" });
+    reloadAfter(() => storage.remove(profilePath("codex")));
+    await waitFor(() => expect(openNames()).toEqual(["Opus agent", "Haiku agent"]));
+    expect(strip().getAllByRole("button")).toHaveLength(2);
+  });
+
+  it("two held replies by one agent on one day are told apart by their time", async () => {
+    const storage = folder([], [opus, codex], [
+      await heldReply(codex, review, { fileStem: "20260903T090000Z", heldAt: "2026-09-03T09:00:00.000Z" }),
+      await heldReply(codex, review, { fileStem: "20260903T150000Z", heldAt: "2026-09-03T15:00:00.000Z" }),
+    ]);
+    open(storage, [
+      { profileSlug: "codex", fileStem: "20260903T090000Z" },
+      { profileSlug: "codex", fileStem: "20260903T150000Z" },
+    ]);
+    await screen.findByRole("region", { name: "Compare replies" });
+    const labels = panes().map((p) => p.getAttribute("aria-label"));
+    expect(new Set(labels).size).toBe(2);
   });
 });
