@@ -12,6 +12,10 @@ import react from "@astrojs/react";
 
 export default defineConfig({
   integrations: [react(), mdx()],
+  // Fenced code renders as plain <pre><code>, ink on paper from guide.css's tokens, like the
+  // deep dive's excerpts. Shiki would write a dark theme's colors inline on every block, and
+  // the world's color rules leave no hue for token kinds anyway. MDX inherits this setting.
+  markdown: { syntaxHighlight: false },
   // Caches go in the repo's one node_modules, so site/ never grows a second one (KTD2).
   cacheDir: "../node_modules/.astro-site",
   vite: { cacheDir: "../node_modules/.vite-site" },
