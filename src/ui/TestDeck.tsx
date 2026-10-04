@@ -41,8 +41,9 @@
 // reply with no verdict, through the deck's finish as they do, and frees the agent. The
 // screen after it says how many replies to this handoff are held, and "Test another agent"
 // starts this deck over in place at "Who takes it" with the handoff that ran carried to
-// the box, through the doors out of that card and back. In a Jev round it is a third choice
-// that Save holds; a reading in hand goes with the held reply, seen before any verdict.
+// the box, through the doors out of that card and back. "Try another agent" after Not yet
+// does the same. In a Jev round it is a third choice that Save holds; a reading in hand
+// goes with the held reply, seen before any verdict.
 //
 // Growing context (growing context R1-R8, R11, KTD4, KTD6, KTD7, KTD11). A second opinion
 // also sends the badge's learning targets and the openings of the user's own judged replies
@@ -804,7 +805,7 @@ export function TestDeck(props: TestDeckProps) {
                 <button type="button" className="ghost" onClick={home}>
                   Done
                 </button>
-                <button type="button" className="primary" onClick={tryAnother}>
+                <button type="button" className="primary" onClick={() => testAnother(outcome.plugId)}>
                   Try another agent
                 </button>
               </>

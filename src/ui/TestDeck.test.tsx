@@ -1774,6 +1774,15 @@ describe("TestDeck's Hold to compare", () => {
     await screen.findByRole("heading", { name: "Did it meet it" });
   }
 
+  /** From the box with a key lit: copies, pastes and reaches the judge card. */
+  async function runFromCopy(reply: string) {
+    await userEvent.click(screen.getByRole("button", { name: "Copy" }));
+    await screen.findByRole("heading", { name: "What came back" });
+    await userEvent.type(replyBox(), reply);
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    await screen.findByRole("heading", { name: "Did it meet it" });
+  }
+
   it("Covers AE7. Hold to compare is offered only on the judge card, which an empty reply box never reaches", async () => {
     renderApp(storageWith({ credentials: [review], profiles: [opus] }), fromBadge);
     await takeAndCopy();
@@ -1830,6 +1839,38 @@ describe("TestDeck's Hold to compare", () => {
     await userEvent.click(screen.getByRole("button", { name: "Next" }));
     await userEvent.click(await screen.findByRole("button", { name: "Hold to compare" }));
     expect(await screen.findByText("2 replies held to compare")).toBeTruthy();
+  });
+
+  it("Try another agent after Not yet starts over at Who takes it, and the box lights the handoff that ran", async () => {
+    // B is the default; the test runs A, so the carry has to win over the default.
+    const storage = storageWith({ credentials: [review], profiles: [opus, codex], handoffs: [handoffA, handoffB] });
+    renderApp(storage, fromBadge);
+    await userEvent.click(await screen.findByRole("button", { name: "Opus agent" }));
+    await screen.findByRole("heading", { name: "Hand it over" });
+    await userEvent.click(within(keysList()).getByRole("button", { name: "A" }));
+    await runFromCopy("Opus on A.");
+    await userEvent.click(screen.getByRole("button", { name: "Not yet" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Try another agent" }));
+    expect(await screen.findByRole("heading", { name: "Who takes it" })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Codex agent" }));
+    await screen.findByRole("heading", { name: "Hand it over" });
+    expect(pressedKeys()).toEqual(["A"]);
+
+    // The next Not yet carries the handoff that ran in that round, here B.
+    await userEvent.click(within(keysList()).getByRole("button", { name: "B · default" }));
+    await runFromCopy("Codex on B.");
+    await userEvent.click(screen.getByRole("button", { name: "Not yet" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Try another agent" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Opus agent" }));
+    await screen.findByRole("heading", { name: "Hand it over" });
+    expect(pressedKeys()).toEqual(["B · default"]);
+    const folder = await loaded(storage);
+    expect(folder.assessments.map((a) => [a.profileSlug, a.result, a.handoff?.id])).toEqual(
+      expect.arrayContaining([
+        ["opus", "not_met", A],
+        ["codex", "not_met", B],
+      ]),
+    );
   });
 
   it("Covers AE1. the carried handoff outlives a pull-first detour and a new agent made from Who takes it", async () => {
