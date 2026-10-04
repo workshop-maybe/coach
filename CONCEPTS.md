@@ -38,6 +38,10 @@ A handoff that has at least one result on a badge. A badge with zero or one run 
 
 One of an agent's results within a run. The reply list shows each agent's latest take with its older takes below, and any two takes can be compared side by side.
 
+### Go-to
+
+The agent the user chose for a badge, even when several hold it. The user marks a Met result to choose it, and every mark stays in the record; a badge's go-to is the agent of its most recent mark. A go-to that no longer holds the badge stays its go-to, flagged, until the user marks another.
+
 ## Jev Mode
 
 ### Jev Mode
