@@ -3,7 +3,7 @@ import { needsYou } from "./needsYou";
 import type { PendingTest } from "./pendingTests";
 import { buildMatrix } from "../domain/matrix";
 import { assignmentVersion } from "../domain/hash";
-import type { AgentProfile, Assessment, Collection, Credential, FolderState } from "../domain/types";
+import type { AgentProfile, Assessment, Collection, Credential, FolderState, Handoff, HeldReply } from "../domain/types";
 
 const eng: Collection = { slug: "eng", name: "Engineering", description: "", order: ["review", "docs"], codes: { review: 1, docs: 2 } };
 const review: Credential = {
@@ -35,6 +35,21 @@ async function met(profile: AgentProfile, credential: Credential, overrides: Par
     setup: { harness: profile.harness, model: profile.model, effort: profile.effort },
     note: "",
     handBack: "Done",
+    ...overrides,
+  };
+}
+
+/** A reply held without a verdict, stamped as holdReply would stamp it. */
+async function hold(profile: AgentProfile, credential: Credential, overrides: Partial<HeldReply> = {}): Promise<HeldReply> {
+  return {
+    profileSlug: profile.slug,
+    collectionSlug: credential.collectionSlug,
+    credentialSlug: credential.slug,
+    fileStem: "20260902T090000Z",
+    heldAt: "2026-09-02T09:00:00.000Z",
+    assignmentVersion: await assignmentVersion(credential.task, credential.rubric),
+    setup: { harness: profile.harness, model: profile.model, effort: profile.effort },
+    handBack: "Held",
     ...overrides,
   };
 }
@@ -210,5 +225,139 @@ describe("needsYou", () => {
   it("a plug whose badge is gone leaves its agent unplugged, so it is half-made again", async () => {
     const items = await run(folder({ credentials: [review], profiles: [codex] }), [plug("codex", "eng/gone")]);
     expect(items.map((i) => i.kind)).toEqual(["half-agent", "unheld"]);
+  });
+});
+
+// Held replies (hold-and-compare KTD12): one row per handoff with held replies, after the
+// waiting tests' rows, opening the compare of them all, or the one reply.
+describe("needsYou's held replies", () => {
+  const sonnet: AgentProfile = { ...opus, slug: "sonnet", name: "Sonnet agent", model: "sonnet" };
+  const day = (d: number) => ({ fileStem: `202609${String(d).padStart(2, "0")}T090000Z`, heldAt: `2026-09-${String(d).padStart(2, "0")}T09:00:00.000Z` });
+  const ref = (h: HeldReply) => ({ profileSlug: h.profileSlug, fileStem: h.fileStem });
+  const handoffB: Handoff = { collectionSlug: "eng", credentialSlug: "review", id: "20260901T080000Z", text: "{{task}}\n" };
+  const plug = (profileSlug: string, credentialKey: string): PendingTest => ({
+    profileSlug,
+    credentialKey,
+    copiedAt: "2026-09-29T10:00:00.000Z",
+    assignmentVersion: "x",
+    setup: { harness: "claude-code", model: "opus", effort: "high" },
+    handoff: { id: "skeleton", text: "This is a test." },
+  });
+
+  it("Covers AE3. Three held replies on one handoff give one row that opens the compare of all three, oldest first, picked", async () => {
+    const held = [await hold(codex, review, day(3)), await hold(opus, review, day(2)), await hold(sonnet, review, day(4))];
+    const items = await run(folder({ credentials: [review], profiles: [opus, codex, sonnet], held }));
+    const takes = [ref(held[1]), ref(held[0]), ref(held[2])];
+    expect(items).toEqual([
+      {
+        kind: "held",
+        credentialKey: "eng/review",
+        handoffId: "skeleton",
+        takes,
+        route: { view: "item", item: "compare", credentialKey: "eng/review", takes, picks: takes },
+      },
+    ]);
+    // With more than one held, the row draws the badge, not an agent.
+    expect("profileSlug" in items[0]).toBe(false);
+  });
+
+  it("one held reply opens that reply's view and names its agent", async () => {
+    const held = await hold(opus, review);
+    const items = await run(folder({ credentials: [review], profiles: [opus], held: [held] }));
+    expect(items).toEqual([
+      {
+        kind: "held",
+        credentialKey: "eng/review",
+        handoffId: "skeleton",
+        takes: [ref(held)],
+        profileSlug: "opus",
+        route: { view: "item", item: "reply", credentialKey: "eng/review", take: ref(held) },
+      },
+    ]);
+  });
+
+  it("held replies on several handoffs give a row each: badges in order, the skeleton first, unknown handoffs last", async () => {
+    const onB = { handoff: { id: handoffB.id, text: handoffB.text } };
+    const held = [
+      await hold(opus, docs, day(1)),
+      await hold(codex, review, { ...day(2), handoff: { id: "20260801T000000Z", text: "gone" } }),
+      await hold(opus, review, { ...day(3), ...onB }),
+      await hold(codex, review, { ...day(4), ...onB }),
+      await hold(sonnet, review, day(5)),
+    ];
+    // The matrix keeps the folder's order, so review's rows come first though docs' reply is the oldest.
+    const items = await run(folder({ credentials: [review, docs], profiles: [opus, codex, sonnet], handoffs: [handoffB], held }));
+    expect(items.map((i) => (i.kind === "held" ? [i.credentialKey, i.handoffId, i.takes.length] : i.kind))).toEqual([
+      ["eng/review", "skeleton", 1],
+      ["eng/review", handoffB.id, 2],
+      ["eng/review", "20260801T000000Z", 1],
+      ["eng/docs", "skeleton", 1],
+    ]);
+  });
+
+  it("a held row ranks after the waiting tests' rows and before re-tests, and its badge gets no re-test or unheld row", async () => {
+    const third: Credential = { ...review, slug: "third", name: "Third" };
+    const fourth: Credential = { ...review, slug: "fourth", name: "Fourth" };
+    const state = folder({
+      credentials: [docs, fourth, review, third],
+      profiles: [opus, codex],
+      assessments: [await met(opus, review, { assignmentVersion: "old" }), await met(opus, docs, { assignmentVersion: "old" })],
+      held: [await hold(codex, review)],
+    });
+    const items = await run(state, [plug("opus", "eng/third")]);
+    expect(items.map((i) => [i.kind, "credentialKey" in i ? i.credentialKey : ""])).toEqual([
+      ["reply", "eng/third"],
+      ["held", "eng/review"],
+      ["retest", "eng/docs"],
+      ["unheld", "eng/fourth"],
+    ]);
+  });
+
+  it("Covers F1. With one agent's reply held and the next agent's test waiting on the same badge, both rows show", async () => {
+    const held = await hold(opus, review);
+    const items = await run(folder({ credentials: [review], profiles: [opus, codex], held: [held] }), [plug("codex", "eng/review")]);
+    expect(items).toEqual([
+      {
+        kind: "reply",
+        profileSlug: "codex",
+        credentialKey: "eng/review",
+        route: { view: "deck", deck: "test", profileSlug: "codex", credentialKey: "eng/review", resume: true },
+      },
+      {
+        kind: "held",
+        credentialKey: "eng/review",
+        handoffId: "skeleton",
+        takes: [ref(held)],
+        profileSlug: "opus",
+        route: { view: "item", item: "reply", credentialKey: "eng/review", take: ref(held) },
+      },
+    ]);
+  });
+
+  it("the row follows its held replies as they are judged, and is gone once all are", async () => {
+    const a = await hold(opus, review, day(2));
+    const b = await hold(codex, review, day(3));
+    const judged = (h: HeldReply, p: AgentProfile) => met(p, review, { fileStem: h.fileStem, recordedAt: h.heldAt, handBack: h.handBack });
+    const one = await run(folder({ credentials: [review], profiles: [opus, codex], assessments: [await judged(a, opus)], held: [b] }));
+    expect(one).toEqual([expect.objectContaining({ kind: "held", takes: [ref(b)], profileSlug: "codex" })]);
+    const none = await run(folder({ credentials: [review], profiles: [opus, codex], assessments: [await judged(a, opus), await judged(b, codex)] }));
+    expect(none.filter((i) => i.kind === "held")).toEqual([]);
+  });
+
+  it("an agent whose only test is held gets no half-agent row", async () => {
+    const items = await run(folder({ credentials: [review], profiles: [opus, codex], assessments: [await met(opus, review)], held: [await hold(codex, review)] }));
+    expect(items.map((i) => i.kind)).toEqual(["held"]);
+  });
+
+  it("held replies of an agent not in the folder, or on a badge the matrix does not show, give no row", async () => {
+    const ghost: AgentProfile = { ...opus, slug: "ghost", name: "Ghost" };
+    const essay: Credential = { ...review, collectionSlug: "words", slug: "essay", name: "Essay" };
+    const state = folder({
+      credentials: [review],
+      profiles: [opus],
+      assessments: [await met(opus, review)],
+      held: [await hold(ghost, review), await hold(opus, essay)],
+    });
+    expect(await run(state)).toEqual([]);
   });
 });
