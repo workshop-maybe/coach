@@ -143,7 +143,7 @@ interface Unedited {
 }
 
 /** Jev's reading in hand, with what it was asked about (KTD11). */
-interface ReadingInHand {
+export interface ReadingInHand {
   round: number;
   reply: string;
   assignmentVersion: string;
@@ -1274,7 +1274,7 @@ function readingBeforeVerdict(reading: ReadingInHand): JevReading {
 }
 
 /** The reading as the result keeps it. One seen after a pick says whether the saved verdict differs (R13). */
-function savedReading(reading: ReadingInHand, verdict: AssessmentResult): JevReading {
+export function savedReading(reading: ReadingInHand, verdict: AssessmentResult): JevReading {
   const base = readingFields(reading);
   return reading.verdictWhenSeen === null
     ? { ...base, seen: "before" }

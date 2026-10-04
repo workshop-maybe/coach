@@ -1,0 +1,48 @@
+[
+  {
+    "kind": "lineBreaks",
+    "state": "L001| Release notes for 0.9.\nL002| \nL003| Sync is now on by default. If you sync through your own\nL004| server, add its address under Settings, then Sync, before\nL005| you update.\nL006| \nL007| Edits no longer go missing when the server is busy. The app\nL008| waits and tries again instead of dropping the change. Tags\nL009| have their own column, so searching by tag is faster, and\nL010| every note keeps its tags.",
+    "questions": {
+      "L004": {
+        "type": "noul",
+        "instructions": "Does line L004 pick up mid-sentence, continuing a sentence left unfinished at the end of line L003?",
+        "criteria": {
+          "true": "The line starts in the middle of a sentence that began on the previous line - the line break tore the sentence apart",
+          "false": "The line begins a new sentence, item, heading, or thought of its own"
+        }
+      },
+      "L005": {
+        "type": "noul",
+        "instructions": "Does line L005 pick up mid-sentence, continuing a sentence left unfinished at the end of line L004?",
+        "criteria": {
+          "true": "The line starts in the middle of a sentence that began on the previous line - the line break tore the sentence apart",
+          "false": "The line begins a new sentence, item, heading, or thought of its own"
+        }
+      },
+      "L008": {
+        "type": "noul",
+        "instructions": "Does line L008 pick up mid-sentence, continuing a sentence left unfinished at the end of line L007?",
+        "criteria": {
+          "true": "The line starts in the middle of a sentence that began on the previous line - the line break tore the sentence apart",
+          "false": "The line begins a new sentence, item, heading, or thought of its own"
+        }
+      },
+      "L009": {
+        "type": "noul",
+        "instructions": "Does line L009 pick up mid-sentence, continuing a sentence left unfinished at the end of line L008?",
+        "criteria": {
+          "true": "The line starts in the middle of a sentence that began on the previous line - the line break tore the sentence apart",
+          "false": "The line begins a new sentence, item, heading, or thought of its own"
+        }
+      },
+      "L010": {
+        "type": "noul",
+        "instructions": "Does line L010 pick up mid-sentence, continuing a sentence left unfinished at the end of line L009?",
+        "criteria": {
+          "true": "The line starts in the middle of a sentence that began on the previous line - the line break tore the sentence apart",
+          "false": "The line begins a new sentence, item, heading, or thought of its own"
+        }
+      }
+    }
+  }
+]

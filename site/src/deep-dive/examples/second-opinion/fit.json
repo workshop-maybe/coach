@@ -1,0 +1,85 @@
+{
+  "readings": [
+    {
+      "verdict": "met",
+      "overall": 88,
+      "default_call": "meets",
+      "fitted_call": "meets"
+    },
+    {
+      "verdict": "met",
+      "overall": 84,
+      "default_call": "meets",
+      "fitted_call": "meets"
+    },
+    {
+      "verdict": "met",
+      "overall": 79,
+      "default_call": "meets",
+      "fitted_call": "meets"
+    },
+    {
+      "verdict": "not_met",
+      "overall": 72,
+      "default_call": "meets",
+      "fitted_call": "cant_call"
+    },
+    {
+      "verdict": "not_met",
+      "overall": 22,
+      "default_call": "misses",
+      "fitted_call": "misses"
+    },
+    {
+      "verdict": "not_met",
+      "overall": 15,
+      "default_call": "misses",
+      "fitted_call": "misses"
+    },
+    {
+      "verdict": "not_met",
+      "overall": 35,
+      "default_call": "cant_call",
+      "fitted_call": "misses"
+    },
+    {
+      "verdict": "met",
+      "overall": 5,
+      "default_call": "misses",
+      "fitted_call": "misses"
+    },
+    {
+      "verdict": "met",
+      "overall": 91,
+      "default_call": "meets",
+      "fitted_call": "meets"
+    }
+  ],
+  "default_pair": {
+    "pair": {
+      "low": 30,
+      "high": 70
+    },
+    "matches": 6,
+    "wrong": 2,
+    "cant_calls": 1,
+    "score": 2
+  },
+  "fitted_pair": {
+    "pair": {
+      "low": 40,
+      "high": 75
+    },
+    "matches": 7,
+    "wrong": 1,
+    "cant_calls": 1,
+    "score": 5
+  },
+  "fitted": true,
+  "judged": 9,
+  "track_record": {
+    "matches": 7,
+    "calls": 8,
+    "cantCalls": 1
+  }
+}

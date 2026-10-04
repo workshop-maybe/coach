@@ -1,0 +1,28 @@
+---
+// A short excerpt of the app's source, read from the file as it is now (the deep dive's
+// KTD1): `<Source file="src/domain/calls.ts" symbol="callOf" />`, or `to="…"` for a run of
+// declarations from one symbol to another. The caption names the file and the lines. A
+// symbol that no longer resolves fails the build, and site/tests/deepDive.test.ts checks
+// every excerpt for length and for anything the guide never shows. Pages use it without
+// importing it ([...slug].astro). Styles live in styles/guide.css.
+
+import { excerpt } from "../deep-dive/excerpt";
+
+interface Props {
+  /** The file, relative to the repo root. */
+  file: string;
+  /** The declaration to show: a function, const, type or method, or a Rust item. */
+  symbol: string;
+  /** The last declaration to show, when the excerpt runs from `symbol` to it. */
+  to?: string;
+}
+
+const { file, symbol, to } = Astro.props;
+const found = excerpt(file, symbol, to);
+const lines = found.start === found.end ? `line ${found.start}` : `lines ${found.start}–${found.end}`;
+---
+
+<figure class="guide-code">
+  <figcaption><code>{file}</code>, {lines}</figcaption>
+  <pre><code>{found.text}</code></pre>
+</figure>

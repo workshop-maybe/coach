@@ -167,7 +167,7 @@ export async function cleanUpLineBreaks(
 const TERMINAL_PUNCTUATION = /[.!?:;…]["'”’»)\]}]*$/;
 
 /** The probability at or above which the break after this line joins. */
-function cutOffAfter(line: string): number {
+export function cutOffAfter(line: string): number {
   return TERMINAL_PUNCTUATION.test(line.trimEnd()) ? JOIN_AFTER_STOP : JOIN_AFTER_OPEN;
 }
 

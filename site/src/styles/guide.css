@@ -382,6 +382,47 @@ a:hover {
   color: var(--ink-muted);
 }
 
+/* A deep-dive code excerpt or generated example (components/Source.astro and
+   Example.astro): ink on paper like any code block, captioned with its file above it. Long
+   lines scroll inside the block, never the page. */
+.guide-page .guide-code {
+  margin: 0 0 var(--space-lg);
+}
+
+.guide-code figcaption {
+  margin-bottom: var(--space-xs);
+  font-size: 14px;
+  color: var(--ink-muted);
+}
+
+.guide-code figcaption code {
+  padding: 0;
+  background: none;
+}
+
+.guide-page .guide-code pre {
+  margin: 0;
+  font-size: 13px;
+  /* Fragment Mono draws `===` and `=>` as single signs; code reads as it was typed. */
+  font-variant-ligatures: none;
+}
+
+.guide-page .guide-code-wrap pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* A folded long example on a deep-dive page: the summary reads as a quiet link. */
+.guide-page details.guide-fold {
+  margin: 0 0 var(--space-lg);
+}
+
+.guide-fold > summary {
+  cursor: pointer;
+  color: var(--data);
+  margin-bottom: var(--space-sm);
+}
+
 /* The home page: the preview notice, set apart by a rule like a note in the margin. */
 .guide-notice {
   padding-left: var(--space-base);

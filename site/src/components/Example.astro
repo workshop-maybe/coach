@@ -1,0 +1,31 @@
+---
+// One of the deep dive's generated examples (KTD2): a request, a reading, a saved file or a
+// cleanup, as site/src/deep-dive/examples.ts builds it from the app's own code. The file
+// lives under site/src/deep-dive/examples/, and `npm run site:examples` rewrites it after an
+// intended change; site/tests/deepDive.test.ts fails when it drifts. An optional caption
+// says what the example is, and `wrap` wraps a prose example's long lines. Pages use it
+// without importing it ([...slug].astro). Styles live in styles/guide.css.
+
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { repoRoot } from "../deep-dive/excerpt";
+
+interface Props {
+  /** The example's path under site/src/deep-dive/examples/. */
+  file: string;
+  /** An optional line saying what it is. */
+  caption?: string;
+  /** Wrap long lines, for prose such as a reply; code and JSON keep theirs and scroll. */
+  wrap?: boolean;
+}
+
+const { file, caption, wrap = false } = Astro.props;
+const path = join(repoRoot(), "site", "src", "deep-dive", "examples", file);
+if (!existsSync(path)) throw new Error(`<Example file="${file}"> has no file. Run npm run site:examples.`);
+const text = readFileSync(path, "utf8").replace(/\n$/, "");
+---
+
+<figure class={wrap ? "guide-code guide-code-wrap" : "guide-code"}>
+  {caption && <figcaption>{caption}</figcaption>}
+  <pre><code>{text}</code></pre>
+</figure>
