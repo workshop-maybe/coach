@@ -5,7 +5,7 @@ order: 40
 description: Read the reply beside the badge's rubric, then record Met or Not yet, or hold it to compare.
 ---
 
-{/* How to, fourth page (U7, R6, R11): the judge pane and what each verdict does. Jev Mode only in passing; help/jev-mode covers it, and these pictures are taken with it off (KTD7). Labels are checked against src/ui/TestDeck.tsx and src/ui/shared.tsx (KTD8). */}
+{/* How to, fourth page (U7, R6, R11): the judge pane and what each verdict does. Jev Mode only in passing; help/jev-mode covers it, and these pictures are taken with it off (KTD7), except the one of the What did Jev miss step. Labels are checked against src/ui/TestDeck.tsx and src/ui/shared.tsx (KTD8). */}
 
 After you bring back a reply and click <UI>Next</UI>, the test asks <UI>Did it meet it</UI>. The badge's rubric is on the left and the reply is on the right.
 
@@ -26,7 +26,7 @@ A badge with no rubric shows only the reply. Give it one before you rely on its 
 ## Record your verdict
 
 - Click <UI>Met</UI> when the reply meets the rubric as written. The app shows <UI>\{agent\} holds it</UI> and waits. Click <UI>Make \{agent\} the go-to</UI> to choose this agent for the badge, or <UI>Home</UI> to leave it. [Choose a go-to](/how-to/choose-a-go-to/) explains the choice.
-- Click <UI>Not yet</UI> when it doesn't. When the rubric lists points, the test then asks <UI>Which points did it miss</UI> and lists them. Tap the ones the reply missed, or none, and click <UI>Save</UI>. The card says <UI>\{agent\} does not hold it</UI>. Click <UI>Done</UI> to go home, or <UI>Try another agent</UI> to give the same badge to another of your agents.
+- Click <UI>Not yet</UI> when it doesn't. When the rubric lists points, the test then asks <UI>Which points did it miss</UI> and lists them. Tap the ones the reply missed, or none, and click <UI>Save</UI>. The card says <UI>\{agent\} does not hold it</UI>. Click <UI>Done</UI> to go home, or <UI>Try another agent</UI> to give the same badge and the same handoff to another of your agents.
 - Click <UI>Hold to compare</UI> to judge it later, beside other agents' replies to the same handoff. The app saves the reply with no verdict and shows <UI>Reply held</UI>. <UI>Test another agent</UI> runs the same handoff on another agent. [Run a bake-off](/how-to/run-a-bake-off/) takes it from there.
 
 <Shot id="missed-points" alt="Which points did it miss, after Not yet: the Write a release note rubric's points as buttons, none pressed, and Save" />
@@ -42,3 +42,5 @@ A result is never overwritten. To judge an agent again, test it again. Its newes
 With [Jev Mode](/help/jev-mode/) on, the card can also offer <UI>Ask Jev</UI>, and <UI>Met</UI>, <UI>Not yet</UI> and <UI>Hold to compare</UI> become choices you confirm with <UI>Save</UI>, or <UI>Next</UI> when a step follows. Jev Mode is off by default, and you can judge every reply without it. [Judging a result](/ideas/judging/) explains why the call is always yours.
 
 When you asked Jev, the points step shows Jev's call beside each point, with none of them tapped for you. When your verdict goes against Jev's call on the whole bar, one more step asks <UI>What did Jev miss</UI>. Write a line, such as "skips the rollback", or leave it empty, and click <UI>Save</UI>. The line becomes the result's note, and Jev sees it beside that reply the next time you ask about this badge.
+
+<Shot id="jev-reason" alt="What did Jev miss, after Jev called Claude Code's release note meets and the verdict was Not yet: the line Jev called it meets. You said Not yet., a reason typed in the box, and Save" />

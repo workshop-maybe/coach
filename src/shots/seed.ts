@@ -4,15 +4,17 @@
 // generic: the folder is /Users/you/Andamio, the machine is "Your Mac", agents have no repo,
 // and Jev Mode is FakeJev's, whose only key trace is its sample hint (AE4).
 //
-// Two variants. "empty" is a first run's folder: only the marker file. "full" holds one
+// Three variants. "empty" is a first run's folder: only the marker file. "full" holds one
 // collection (three presets and one hand-built credential), two agents with different
 // setups, dated results (two takes on one badge for the compare, one with a saved Jev
 // reading), one waiting test for What needs you, one handoff of the hand-built
 // credential's own that no result has run, for How to's handoff pictures (U7), one go-to
 // mark, Claude Code on the badge with two takes, and a bake-off waiting to be judged: both
-// agents' replies to Check an answer key held without a verdict. Values follow
-// src/ui/testFolder.tsx, copied rather than imported, since that file imports
-// @testing-library/react.
+// agents' replies to Check an answer key held without a verdict. "judged" is "full" file for
+// file, plus eight older judged results on Check an answer key, each with a reading from
+// Jev's pinned model, so the badge shows Jev's track record and fitted cut-offs; it is a
+// variant of its own so no other picture changes. Values follow src/ui/testFolder.tsx,
+// copied rather than imported, since that file imports @testing-library/react.
 
 import {
   MARKER_PATH,
@@ -33,6 +35,7 @@ import {
 import { serializeCredentialMd } from "../domain/credential-md";
 import { BUILT_IN_HANDOFF, SKELETON_ID, fillHandoff } from "../domain/handoffs";
 import { assignmentVersion } from "../domain/hash";
+import { JEV_MODEL } from "../domain/jevRequest";
 import { findPreset, presetCredential } from "../domain/presets";
 import { rubricParts } from "../domain/secondOpinion";
 import {
@@ -134,9 +137,9 @@ export function sampleStorage(sample: SampleFolder): SampleStorage {
   return new SampleStorage(sample.files);
 }
 
-/** Jev Mode for a shot: off with no key, or on with FakeJev's sample key hint. */
-export function sampleJev(state: JevState): FakeJev {
-  return new FakeJev(state === "on" ? FAKE_ON : JEV_OFF);
+/** Jev Mode for a shot: off with no key, or on with FakeJev's sample key hint, answering as `answers` scripts it. */
+export function sampleJev(state: JevState, answers?: Readonly<Record<string, number>>): FakeJev {
+  return new FakeJev(state === "on" ? FAKE_ON : JEV_OFF, answers);
 }
 
 const COLLECTION_NAME = "My credentials";
@@ -321,6 +324,162 @@ async function heldTake(
   };
 }
 
+/**
+ * One judged take on Check an answer key for the "judged" variant: who, when, the verdict,
+ * Jev's overall chance, one chance per rubric point and per learning target, the user's
+ * note, and the reply.
+ */
+interface JudgedTake {
+  profile: AgentProfile;
+  stem: string;
+  result: Assessment["result"];
+  overall: number;
+  points: readonly number[];
+  targets: readonly [number, number];
+  note: string;
+  reply: string;
+}
+
+/**
+ * The "judged" variant's results, oldest first, before the full folder's own. With Codex's
+ * reading of 0.91 on its Met take they make nine from one model. Under 30/70 the Not met at
+ * 72% is a wrong call and the Not met at 35% is can't call; the fit moves the pair to 40/75,
+ * where the first is can't call and the second a match. The Met at 5% is a wrong call no
+ * pair can fix, so the record reads 7 of 8 with 1 can't call. The two overrules carry the
+ * note a "What did Jev miss" answer leaves.
+ */
+const JUDGED_TAKES: readonly JudgedTake[] = [
+  {
+    profile: CLAUDE,
+    stem: "20260910T101500Z",
+    result: "met",
+    overall: 0.88,
+    points: [0.92, 0.9, 0.86, 0.81, 0.9],
+    targets: [0.87, 0.74],
+    note: "",
+    reply: `1. Holds. 20 multiples of 5, plus one more for each of the 4 multiples of 25: 24.
+2. Does not hold. 2100 is not a leap year: a century year must also divide by 400.
+3. Does not hold. The chance is 1 − (5/6)^4 = 671/1296, about 0.52. Adding the chances counts two sixes twice.
+4. Holds. Reverse sorting gives [3, 2, 1], and the slice drops the 3.
+5. Does not hold. 2^10 is 1,024, a little more than 10^3, so 2^100 is larger.`,
+  },
+  {
+    profile: CODEX,
+    stem: "20260911T143000Z",
+    result: "met",
+    overall: 0.84,
+    points: [0.9, 0.85, 0.83, 0.79, 0.86],
+    targets: [0.82, 0.7],
+    note: "",
+    reply: `1. Holds: 24.
+2. Does not hold. No: divisible by 100 and not by 400, so 2100 is not a leap year.
+3. Does not hold. 1 − (5/6)^4 = 671/1296. The rationale adds overlapping chances.
+4. Holds. [2, 1].
+5. Does not hold. 2^100 is about 1.27 × 10^30, so it is larger.`,
+  },
+  {
+    profile: CLAUDE,
+    stem: "20260913T092000Z",
+    result: "met",
+    overall: 0.79,
+    points: [0.88, 0.82, 0.8, 0.66, 0.84],
+    targets: [0.8, 0.69],
+    note: "",
+    reply: `1. Holds. Count the 5s: 20, and 4 more from 25, 50, 75 and 100.
+2. Does not hold. The rule for 4 has an exception for 100, and 2100 is not divisible by 400.
+3. Does not hold. Take one minus the chance of no six: 671/1296, about 0.52.
+4. Holds.
+5. Does not hold. The rationale has the direction backward: 1,024 is more than 1,000.`,
+  },
+  {
+    profile: CODEX,
+    stem: "20260915T160500Z",
+    result: "not_met",
+    overall: 0.72,
+    points: [0.85, 0.8, 0.77, 0.3, 0.82],
+    targets: [0.76, 0.6],
+    note: "Calls the right key on item 4 wrong.",
+    reply: `1. Holds. 24 trailing zeros.
+2. Does not hold. 2100 is not a leap year, since it is not divisible by 400.
+3. Does not hold. The answer is 671/1296, about 0.52.
+4. Does not hold. The slice [1:] keeps the first item, so the answer is [3, 2].
+5. Does not hold. 2^100 is larger than 10^30.`,
+  },
+  {
+    profile: CLAUDE,
+    stem: "20260917T110000Z",
+    result: "not_met",
+    overall: 0.22,
+    points: [0.7, 0.18, 0.25, 0.6, 0.2],
+    targets: [0.4, 0.2],
+    note: "",
+    reply: `1. Holds.
+2. Holds. 2100 is divisible by 4.
+3. Holds. Four rolls at 1/6 each give 2/3.
+4. Holds.
+5. Does not hold. 2^100 is larger.`,
+  },
+  {
+    profile: CODEX,
+    stem: "20260918T134500Z",
+    result: "not_met",
+    overall: 0.15,
+    points: [0.6, 0.2, 0.12, 0.5, 0.15],
+    targets: [0.3, 0.15],
+    note: "",
+    reply: "All five keys hold. Each rationale follows from its first step.",
+  },
+  {
+    profile: CLAUDE,
+    stem: "20260920T100000Z",
+    result: "not_met",
+    overall: 0.35,
+    points: [0.75, 0.62, 0.3, 0.55, 0.4],
+    targets: [0.5, 0.35],
+    note: "",
+    reply: `1. Holds.
+2. Does not hold. 2100 is not a leap year.
+3. Does not hold. The answer is 1/2.
+4. Holds.
+5. Does not hold. 2^100 is larger.`,
+  },
+  {
+    profile: CODEX,
+    stem: "20260921T151500Z",
+    result: "met",
+    overall: 0.05,
+    points: [0.2, 0.1, 0.08, 0.15, 0.1],
+    targets: [0.12, 0.08],
+    note: "Every call and fix is right, just short.",
+    reply: "1 holds. 2 wrong: no, 2100 fails the 400 rule. 3 wrong: 671/1296, since adding counts two sixes twice. 4 holds. 5 wrong: 2^100 is larger, as 1,024 > 1,000.",
+  },
+];
+
+/** The "judged" variant's results, each stamped as recordAssessment writes it, with its saved reading. */
+async function judgedTakes(answerKey: Credential): Promise<Assessment[]> {
+  const points = rubricParts(answerKey.rubric).points;
+  return Promise.all(
+    JUDGED_TAKES.map(async (t) => {
+      const day = `${t.stem.slice(0, 4)}-${t.stem.slice(4, 6)}-${t.stem.slice(6, 8)}`;
+      const at = `${day}T${t.stem.slice(9, 11)}:${t.stem.slice(11, 13)}:00.000Z`;
+      const a = await take(t.profile, answerKey, t.stem, { result: t.result, recordedAt: at, copiedAt: `${day}T08:00:00.000Z`, note: t.note, handBack: t.reply });
+      a.jev = {
+        model: JEV_MODEL,
+        assignmentVersion: a.assignmentVersion,
+        askedAt: at,
+        seen: "after",
+        verdictWhenSeen: t.result,
+        verdictChanged: false,
+        overall: t.overall,
+        points: points.map((text, i) => ({ text, probability: t.points[i] })),
+        targets: answerKey.learningTargets.map((text, i) => ({ text, probability: t.targets[i] })),
+        examplesSent: 0,
+      };
+      return a;
+    }),
+  );
+}
+
 function preset(id: string): Credential {
   const found = findPreset(id);
   if (!found) throw new Error(`The sample folder needs the preset "${id}".`);
@@ -422,6 +581,12 @@ export async function sampleFolder(variant: SeedVariant): Promise<SampleFolder> 
     fileStem: SAMPLE.takes.claudeHowSure,
   };
   files[markPath(goTo.collectionSlug, goTo.credentialSlug, goTo.id)] = serializeMark(goTo);
+
+  if (variant === "judged") {
+    for (const a of await judgedTakes(answerKey)) {
+      files[assessmentPath(a.profileSlug, a.collectionSlug, a.credentialSlug, a.fileStem)] = serializeAssessment(a);
+    }
+  }
 
   // Codex holds Name what matters next's handoff, waiting on its reply.
   const copiedAt = "2026-09-30T08:15:00.000Z";

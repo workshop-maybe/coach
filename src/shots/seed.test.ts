@@ -3,13 +3,16 @@
 // waiting test reaches What needs you, and nothing in it looks like a real key or a path
 // outside the sample folder.
 import { describe, expect, it } from "vitest";
+import { calibrationOf } from "../domain/calls";
 import { loadFolder } from "../domain/folder";
 import { assignmentVersion } from "../domain/hash";
 import { defaultHandoff, isHandoffLocked } from "../domain/handoffs";
 import { buildMatrix } from "../domain/matrix";
 import { PRESETS } from "../domain/presets";
+import { JEV_MODEL } from "../domain/jevRequest";
+import { OVERALL_ID, pointId } from "../domain/secondOpinion";
 import { credentialKey } from "../domain/types";
-import { FAKE_ON } from "../jev/fakeJev";
+import { FAKE_ANSWER, FAKE_ON } from "../jev/fakeJev";
 import { JEV_OFF } from "../jev/jev";
 import { needsYou } from "../ui/needsYou";
 import { pendingStorageKey, readPending } from "../ui/pendingTests";
@@ -31,7 +34,7 @@ function storeWith(entries: Record<string, string>): globalThis.Storage {
   };
 }
 
-async function loadSample(variant: "empty" | "full") {
+async function loadSample(variant: "empty" | "full" | "judged") {
   const sample = await sampleFolder(variant);
   const storage = sampleStorage(sample);
   const state = await loadFolder(storage);
@@ -163,11 +166,53 @@ describe("the empty sample folder", () => {
   });
 });
 
+describe("the judged sample folder", () => {
+  it("holds every file of the full folder as it is, and adds only results", async () => {
+    const full = await sampleFolder("full");
+    const judged = await sampleFolder("judged");
+    for (const [path, text] of Object.entries(full.files)) expect(judged.files[path], path).toBe(text);
+    const added = Object.keys(judged.files).filter((path) => !(path in full.files));
+    expect(added).toHaveLength(8);
+    for (const path of added) expect(path).toMatch(/^assessments\/[^/]+\/my-credentials\/check-an-answer-key\/[^/]+\.md$/);
+    expect(judged.pending).toEqual(full.pending);
+  });
+
+  it("loads cleanly, and its readings on Check an answer key fit the cut-offs to 40/75 with a record of 7 of 8 and 1 can't call", async () => {
+    const { state } = await loadSample("judged");
+    expect(state.errors).toEqual([]);
+    expect(state.warnings).toEqual([]);
+    expect(calibrationOf(state, SAMPLE.badges.answerKey, JEV_MODEL)).toEqual({
+      pair: { low: 40, high: 75 },
+      fitted: true,
+      judged: 9,
+      trackRecord: { matches: 7, calls: 8, cantCalls: 1 },
+    });
+  });
+
+  it("matches every result's assignment version to its credential", async () => {
+    const { state } = await loadSample("judged");
+    for (const a of state.assessments) {
+      const c = state.credentials.find((x) => credentialKey(x) === credentialKey(a))!;
+      expect(a.assignmentVersion, a.fileStem).toBe(await assignmentVersion(c.task, c.rubric));
+    }
+  });
+});
+
 describe("Jev Mode in the sample (AE4)", () => {
   it("is off with no key, or on with FakeJev's sample hint", () => {
     expect(sampleJev("off").current).toEqual(JEV_OFF);
     expect(sampleJev("on").current).toEqual(FAKE_ON);
     expect(FAKE_ON.hint).toMatch(/^[a-z0-9]{4}$/);
+  });
+
+  it("answers a shot's scripted ids as scripted, and every other id with the fake's default", async () => {
+    const request = {
+      kind: "secondOpinion",
+      questions: { [pointId(0)]: {}, [pointId(1)]: {}, [OVERALL_ID]: {} },
+    } as unknown as Parameters<ReturnType<typeof sampleJev>["ask"]>[0];
+    const scripted = await sampleJev("on", { [pointId(0)]: 0.91, [OVERALL_ID]: 0.84 }).ask(request);
+    expect(scripted.answers).toEqual({ [pointId(0)]: 0.91, [pointId(1)]: FAKE_ANSWER, [OVERALL_ID]: 0.84 });
+    expect((await sampleJev("on").ask(request)).answers).toEqual({ [pointId(0)]: FAKE_ANSWER, [pointId(1)]: FAKE_ANSWER, [OVERALL_ID]: FAKE_ANSWER });
   });
 });
 
@@ -184,7 +229,7 @@ describe("what the sample shows (R20, AE4)", () => {
   });
 
   it("holds no key-like string and no path outside the sample folder, in the seed or the manifest", async () => {
-    for (const variant of ["empty", "full"] as const) {
+    for (const variant of ["empty", "full", "judged"] as const) {
       const sample = await sampleFolder(variant);
       const texts = [...Object.entries(sample.files).flat(), JSON.stringify(sample.pending), JSON.stringify(SAMPLE_READING)];
       for (const text of texts) {
