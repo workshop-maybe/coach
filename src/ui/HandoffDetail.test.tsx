@@ -35,6 +35,20 @@ function open(assessments: Assessment[], route: Partial<Extract<Route, { item: "
   });
 }
 
+describe("HandoffDetail's two columns", () => {
+  it("puts the handoff, Test it and its folded text on one side, and its replies on the other", async () => {
+    open(await multi());
+    const heading = await screen.findByRole("heading", { name: "Handoff A" });
+    const main = document.querySelector<HTMLElement>(".detail-split > .detail-main")!;
+    const side = document.querySelector<HTMLElement>(".detail-split > .detail-side")!;
+    expect(main.contains(heading)).toBe(true);
+    expect(within(main).getByRole("button", { name: "Test it on an agent" })).toBeTruthy();
+    expect(main.querySelector("details.handoff-text")).not.toBeNull();
+    expect(within(side).getByRole("region", { name: "Replies" })).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "Close" })).toHaveLength(1);
+  });
+});
+
 describe("HandoffDetail", () => {
   it("Covers F2. A handoff opens with its name, its text and every agent that ran it", async () => {
     open(await multi());

@@ -1,5 +1,6 @@
-// A badge, opened (U6, R4, R7, R12, R18). The credential as its cartridge, its parts as
-// small cards (each opens a one-beat edit deck), then its replies and its holders. While
+// A badge, opened (U6, R4, R7, R12, R18). The credential as its cartridge and its parts as
+// small cards (each opens a one-beat edit deck) in one column, its replies and its holders
+// in the other, stacked below the stacking width (App.css). While
 // one handoff has run, the replies are every agent's reply to it, each opening as its own
 // view and coming back here with its take lit and the picks kept (U5, R16); once two or
 // more have, each handoff that ran is a row that opens it as its own item (R1, R3, R5).
@@ -52,86 +53,90 @@ export function BadgeDetail({ credentialKey: key, lit, litTake, picks, focusComp
   const plugged = (slug: string) => plugMark(state, plugFor(live, slug));
 
   return (
-    <section className="detail" aria-label={credential.name}>
+    <section className="detail detail-split" aria-label={credential.name}>
       <button type="button" className="deck-close ghost" aria-label="Close" onClick={home}>
         ×
       </button>
-      <div className="detail-head">
-        <Cartridge collection={collection} credential={credential} width={136} />
-        <h2 tabIndex={-1} ref={focusOnMount}>
-          {credential.name}
-        </h2>
-        <button type="button" className="primary" onClick={() => navigate({ view: "deck", deck: "test", credentialKey: key })}>
-          Test it on an agent
-        </button>
+      <div className="detail-main">
+        <div className="detail-head">
+          <Cartridge collection={collection} credential={credential} width={136} />
+          <h2 tabIndex={-1} ref={focusOnMount}>
+            {credential.name}
+          </h2>
+          <button type="button" className="primary" onClick={() => navigate({ view: "deck", deck: "test", credentialKey: key })}>
+            Test it on an agent
+          </button>
+        </div>
+
+        <ul className="parts" aria-label="Parts">
+          <PartCard name="Name" value={credential.name} onOpen={() => edit("name")} />
+          <PartCard name="Learning targets" value={targets.length === 0 ? "None yet" : targets.length === 1 ? targets[0] : `${targets.length} targets`} onOpen={() => edit("targets")} />
+          <PartCard name="Task" value={firstLine(credential.task) || "None yet"} onOpen={() => edit("task")} />
+          <PartCard name="Rubric" value={firstLine(credential.rubric) || "None yet"} onOpen={() => edit("rubric")} />
+          <PartCard name="Look" value={[paletteName(look.palette), look.art ? fileName(look.art) : ""].filter(Boolean).join(" · ")} onOpen={() => edit("look")} />
+          <PartCard
+            name="Handoffs"
+            value={handoffs === 0 ? "Skeleton" : handoffs === 1 ? "1 handoff" : `${handoffs} handoffs`}
+            onOpen={() => navigate({ view: "deck", deck: "handoffs", credentialKey: key })}
+          />
+        </ul>
       </div>
 
-      <ul className="parts" aria-label="Parts">
-        <PartCard name="Name" value={credential.name} onOpen={() => edit("name")} />
-        <PartCard name="Learning targets" value={targets.length === 0 ? "None yet" : targets.length === 1 ? targets[0] : `${targets.length} targets`} onOpen={() => edit("targets")} />
-        <PartCard name="Task" value={firstLine(credential.task) || "None yet"} onOpen={() => edit("task")} />
-        <PartCard name="Rubric" value={firstLine(credential.rubric) || "None yet"} onOpen={() => edit("rubric")} />
-        <PartCard name="Look" value={[paletteName(look.palette), look.art ? fileName(look.art) : ""].filter(Boolean).join(" · ")} onOpen={() => edit("look")} />
-        <PartCard
-          name="Handoffs"
-          value={handoffs === 0 ? "Skeleton" : handoffs === 1 ? "1 handoff" : `${handoffs} handoffs`}
-          onOpen={() => navigate({ view: "deck", deck: "handoffs", credentialKey: key })}
-        />
-      </ul>
+      <div className="detail-side">
+        {matrix && runs && runs.runs.length > 0 && (
+          <section className="detail-section" aria-labelledby="badge-replies">
+            <h3 id="badge-replies">Replies</h3>
+            {runs.mode === "single" ? (
+              <>
+                <p className="muted">{handoffText(state, key, runs.runs[0].id)}</p>
+                <ReplyList credentialKey={key} run={runs.runs[0]} state={state} matrix={matrix} lit={lit} litTake={litTake} picks={picks} focusCompare={focusCompare} />
+              </>
+            ) : (
+              <ul className="handoff-runs">
+                {runs.runs.map((run) => (
+                  <li key={run.id}>
+                    <RunRow state={state} credentialKey={key} run={run} onOpen={() => navigate({ view: "item", item: "handoff", credentialKey: key, handoffId: run.id })} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
 
-      {matrix && runs && runs.runs.length > 0 && (
-        <section className="detail-section" aria-labelledby="badge-replies">
-          <h3 id="badge-replies">Replies</h3>
-          {runs.mode === "single" ? (
-            <>
-              <p className="muted">{handoffText(state, key, runs.runs[0].id)}</p>
-              <ReplyList credentialKey={key} run={runs.runs[0]} state={state} matrix={matrix} lit={lit} litTake={litTake} picks={picks} focusCompare={focusCompare} />
-            </>
+        <section className="detail-section" aria-labelledby="badge-holders">
+          <h3 id="badge-holders">Holders</h3>
+          {holders.length === 0 ? (
+            <p className="muted">{matrix ? "Nobody holds it yet" : ""}</p>
           ) : (
-            <ul className="handoff-runs">
-              {runs.runs.map((run) => (
-                <li key={run.id}>
-                  <RunRow state={state} credentialKey={key} run={run} onOpen={() => navigate({ view: "item", item: "handoff", credentialKey: key, handoffId: run.id })} />
+            <ul className="detail-holders">
+              {holders.map(({ profile, cell }) => (
+                <li key={profile.slug}>
+                  <button
+                    type="button"
+                    className={`detail-holder${cell.flags.length > 0 ? " flagged" : ""}`}
+                    onClick={() => matrix && navigate(replyRoute(matrix, state, key, profile.slug))}
+                  >
+                    {matrix && <Machine mini setup={profile} keys={machineKeys(matrix, profile.slug)} plugged={plugged(profile.slug)} width={64} />}
+                    <span className="detail-holder-name">{profile.name}</span>
+                    <span className="detail-holder-latest">
+                      {[
+                        resultLabel(cell.status),
+                        cell.latest ? formatDate(cell.latest.recordedAt) : "",
+                        cell.latest ? handoffText(state, key, cell.latest.handoff?.id) : "",
+                        ...cell.flags.map((f) => FLAG_SHORT[f]),
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </span>
+                  </button>
                 </li>
               ))}
             </ul>
           )}
         </section>
-      )}
 
-      <section className="detail-section" aria-labelledby="badge-holders">
-        <h3 id="badge-holders">Holders</h3>
-        {holders.length === 0 ? (
-          <p className="muted">{matrix ? "Nobody holds it yet" : ""}</p>
-        ) : (
-          <ul className="detail-holders">
-            {holders.map(({ profile, cell }) => (
-              <li key={profile.slug}>
-                <button
-                  type="button"
-                  className={`detail-holder${cell.flags.length > 0 ? " flagged" : ""}`}
-                  onClick={() => matrix && navigate(replyRoute(matrix, state, key, profile.slug))}
-                >
-                  {matrix && <Machine mini setup={profile} keys={machineKeys(matrix, profile.slug)} plugged={plugged(profile.slug)} width={64} />}
-                  <span className="detail-holder-name">{profile.name}</span>
-                  <span className="detail-holder-latest">
-                    {[
-                      resultLabel(cell.status),
-                      cell.latest ? formatDate(cell.latest.recordedAt) : "",
-                      cell.latest ? handoffText(state, key, cell.latest.handoff?.id) : "",
-                      ...cell.flags.map((f) => FLAG_SHORT[f]),
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <TrashLink onOpen={() => navigate({ view: "deck", deck: "trash", item: { kind: "badge", credentialKey: key } })} />
+        <TrashLink onOpen={() => navigate({ view: "deck", deck: "trash", item: { kind: "badge", credentialKey: key } })} />
+      </div>
     </section>
   );
 }

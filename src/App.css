@@ -1907,9 +1907,21 @@ button:focus-visible {
   grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
 }
 
-/* At the stacking width and below, the card centers over everything else, as it always has. */
+/* A badge or a handoff, opened, on a wide window (KTD5): the badge, its main action and its
+   parts in one column, its replies and holders in the other. The first column never gets so
+   narrow that a badge's parts fall to one in a row. */
+.detail-split {
+  display: grid;
+  grid-template-columns: minmax(23rem, 2fr) minmax(0, 3fr);
+  align-items: start;
+  column-gap: var(--space-2xl);
+  max-width: none;
+}
+
+/* At the stacking width and below, each opened item is one column again, as it always has
+   been: the agent's card centers over everything else, a badge's replies follow its parts. */
 @media (max-width: 56rem) {
-  .agent-detail {
+  :is(.agent-detail, .detail-split) {
     display: flex;
     align-items: stretch;
     max-width: 40rem;
@@ -2310,7 +2322,9 @@ button:focus-visible {
   margin-top: var(--space-md);
 }
 
-.reply-ran summary {
+/* The handoff page's own text (KTD7) reads as the reply view's does: folded in the mono,
+   and once open, wrapped in a box that scrolls on its own rather than widening the page. */
+:is(.reply-ran, details.handoff-text) summary {
   cursor: pointer;
   font-family: var(--font-mono);
   font-size: 12px;
@@ -2318,7 +2332,7 @@ button:focus-visible {
   color: var(--ink-muted);
 }
 
-.reply-ran .handback {
+:is(.reply-ran, details.handoff-text) .handback {
   max-height: 30vh;
   margin: var(--space-sm) 0 0;
   padding: var(--space-sm) var(--space-base);
