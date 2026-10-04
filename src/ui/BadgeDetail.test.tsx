@@ -748,6 +748,13 @@ describe("BadgeDetail's go-to", () => {
     expect((await row("Codex agent")).textContent).toContain("setup changed");
   });
 
+  it("Covers AE9. A go-to whose badge's task changed since its Met says Go-to on its row, flagged", async () => {
+    const earned = await result(codex, review);
+    renderApp(storageWith({ credentials: [{ ...review, task: "Review the diff, then its tests." }], profiles: [opus, codex], assessments: [earned], marks: [markOn("codex")] }), badge);
+    await waitFor(async () => expect(within(await item("Codex agent")).getByText("Go-to").classList.contains("flagged")).toBe(true));
+    expect((await row("Codex agent")).textContent).toContain("task changed");
+  });
+
   it("Covers AE8. A go-to agent in the trash leaves the badge page with no go-to", async () => {
     renderApp(storageWith({ credentials: [review], profiles: [opus], assessments: [await result(opus, review), await result(codex, review)], marks: [markOn("codex")] }), badge);
     await row("Opus agent");

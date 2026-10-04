@@ -119,10 +119,19 @@ describe("a badge's go-to", () => {
     expect(await standing(state)).toEqual({ name: "Codex", holds: true, flags: ["setup_mismatch"] });
   });
 
-  it("a go-to whose latest result was recorded against an earlier task is not flagged (KTD4)", async () => {
+  it("Covers AE9. A go-to whose latest result was recorded against an earlier task is flagged task changed, and its later Met clears the flag", async () => {
     const met = result(codex, "met", "20260901T090000Z", { assignmentVersion: "000000000000" });
-    const state = folder({ assessments: [met], marks: [mark(codex, met.fileStem, "20260901T091000Z")] });
-    expect(await standing(state)).toEqual({ name: "Codex", holds: true, flags: [] });
+    const marks = [mark(codex, met.fileStem, "20260901T091000Z")];
+    expect(await standing(folder({ assessments: [met], marks }))).toEqual({ name: "Codex", holds: true, flags: ["earlier_version"] });
+    const again = result(codex, "met", "20260909T090000Z");
+    expect(await standing(folder({ assessments: [met, again], marks }))).toEqual({ name: "Codex", holds: true, flags: [] });
+  });
+
+  it("a go-to's flags keep the matrix's order: not met, then task changed, then setup changed (KTD4)", async () => {
+    const met = result(codex, "met", "20260901T090000Z");
+    const notMet = result(codex, "not_met", "20260905T090000Z", { assignmentVersion: "000000000000", setup: { harness: "codex", model: "gpt", effort: "low" } });
+    const state = folder({ assessments: [met, notMet], marks: [mark(codex, met.fileStem, "20260901T091000Z")] });
+    expect(await standing(state)).toEqual({ name: "Codex", holds: false, flags: ["not_met", "earlier_version", "setup_mismatch"] });
   });
 
   it("Covers AE8. A trashed go-to leaves no go-to, even when an older mark names an agent who still holds", () => {
