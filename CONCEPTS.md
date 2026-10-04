@@ -32,11 +32,11 @@ The text an agent sent back for a test, pasted into the app and saved on its res
 
 ### Run
 
-A handoff that has at least one result on a badge. A badge with zero or one run shows its replies on the badge page; with two or more, each run opens as its own item.
+A handoff that has at least one result or held reply on a badge. A badge with zero or one run shows its replies on the badge page; with two or more, each run opens as its own item.
 
 ### Take
 
-One of an agent's results within a run. The reply list shows each agent's latest take with its older takes below, and any two takes can be compared side by side.
+One of an agent's replies within a run, a result or a held reply. The reply list shows each agent's latest take with its older takes below, and any number of takes can be compared, two side by side at a time.
 
 ### Held reply
 

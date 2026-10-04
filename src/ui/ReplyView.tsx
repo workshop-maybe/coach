@@ -46,7 +46,7 @@ export function ReplyView({ credentialKey: key, take, picks }: { credentialKey: 
   if (!credential) return <Missing onHome={close} />;
   if (!found) return <Missing onHome={close} label="Back to the badge" />;
 
-  const { profile, result: a } = found;
+  const { profile, take: a } = found;
   const date = formatDate(a.recordedAt);
   const note = a.note.trim();
   return (

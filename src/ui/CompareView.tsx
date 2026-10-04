@@ -58,7 +58,7 @@ export function CompareView({ credentialKey: key, takes, picks }: { credentialKe
         </button>
       </div>
       <div className="compare-panes">
-        {found.map(({ profile, result: a }, i) => {
+        {found.map(({ profile, take: a }, i) => {
           const date = formatDate(a.recordedAt);
           return (
             <article key={i} className="reply-record" aria-label={`${profile.name}, ${date}`}>
