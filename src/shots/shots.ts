@@ -175,6 +175,27 @@ const HOW_SURE_REPLY = `1. Answer: 5. Confidence: 95%
 3. Answer: 48. Confidence: 80%`;
 
 /**
+ * What Jev answers about Claude Code's release note: meets on every point but the first,
+ * which it can't call (it can't tell from the reply that nothing is invented), and meets
+ * overall and on both targets, under the default 30/70.
+ */
+const RELEASE_CALLS = { p1: 0.45, p2: 0.88, p3: 0.93, overall: 0.81, t1: 0.86, t2: 0.77 };
+
+/** What Claude Code sends back for Check an answer key in the track-record picture: every call right. */
+const ANSWER_KEY_REPLY = `1. Holds. 100 has 20 multiples of 5 and 4 multiples of 25, so 24 zeros.
+2. Does not hold. 2100 is divisible by 100 but not by 400, so it is not a leap year. The rationale stops at the rule for 4.
+3. Does not hold. The chance is 1 − (5/6)^4 = 671/1296, about 0.52. Adding 1/6 four times counts the rolls with two or more sixes more than once.
+4. Holds. reverse=True gives [3, 2, 1], and [1:] drops the 3, leaving [2, 1].
+5. Does not hold. 2^10 = 1,024 is a little more than 10^3, so 2^100 is larger than 10^30.`;
+
+/**
+ * What Jev answers about that reply, read with the 40/75 cut-offs the judged sample fits:
+ * meets overall and on four points, can't call on the bare "Holds." of point 4, and on the
+ * second target, which 30/70 would have read as meets.
+ */
+const ANSWER_KEY_CALLS = { p1: 0.91, p2: 0.86, p3: 0.88, p4: 0.58, p5: 0.83, overall: 0.84, t1: 0.88, t2: 0.72 };
+
+/**
  * A short release note as a terminal shows it: a harness marker, a two-space gutter and
  * lines wrapped at one width mid-sentence, so the paste offers "Clean up with Jev".
  */
@@ -321,8 +342,51 @@ export const SHOTS: readonly Shot[] = [
     ],
     clip: { selector: ".meet-text-rubric", pad: 8 },
   },
+  {
+    // Jev's reading of the release note on the judge card, before a verdict: real calls, read
+    // with the default cut-offs. The picture is the rubric's side.
+    id: "jev-calls",
+    page: "help/jev-mode",
+    route: RELEASE_TEST,
+    seed: "full",
+    jev: "on",
+    jevAnswers: RELEASE_CALLS,
+    expect: { selector: ".meet-jev .jev-overall" },
+    steps: [
+      ...RELEASE_TO_REPLY,
+      { click: { button: "Next" } },
+      { click: { button: "Ask Jev" } },
+      { waitFor: { selector: ".meet-jev .jev-reading" } },
+    ],
+    clip: { selector: ".meet-text-rubric", pad: 8 },
+  },
+  {
+    // Check an answer key over the judged sample, whose readings fit the cut-offs to 40/75.
+    // After Met, the reading shows Jev's track record on the badge and says the cut-offs
+    // were fitted. The picture is the rubric's side, scrolled to the reading's foot.
+    id: "jev-record",
+    page: "help/jev-mode",
+    route: { view: "deck", deck: "test", profileSlug: CLAUDE, credentialKey: ANSWER_KEY },
+    seed: "judged",
+    jev: "on",
+    jevAnswers: ANSWER_KEY_CALLS,
+    expect: { text: "Jev matched your verdict 7 of 8 times on this badge, and couldn't call 1" },
+    steps: [
+      { click: { button: "Copy" } },
+      { waitFor: { text: "What came back" } },
+      { paste: ANSWER_KEY_REPLY },
+      { click: { button: "Next" } },
+      { click: { button: "Ask Jev" } },
+      { waitFor: { selector: ".meet-jev .jev-reading" } },
+      { click: { button: "Met" } },
+      { waitFor: { text: "Cut-offs fitted to your verdicts" } },
+      { scroll: { text: "Cut-offs fitted to your verdicts" } },
+    ],
+    clip: { selector: ".meet-text-rubric", pad: 8 },
+  },
 
-  // How to (U7): every picture over the full sample with Jev Mode off (KTD7).
+  // How to (U7): every picture over the full sample with Jev Mode off (KTD7), except the
+  // one of Jev's call going against the verdict, which needs Jev Mode on.
   {
     id: "credential-start",
     page: "how-to/build-a-credential",
@@ -492,6 +556,30 @@ export const SHOTS: readonly Shot[] = [
     ],
   },
   {
+    // With Jev Mode on, Jev calls the release note meets and the verdict is Not yet: one point
+    // tapped as missed, then the step that asks what Jev missed, with a reason typed.
+    id: "jev-reason",
+    page: "how-to/judge-a-reply",
+    route: RELEASE_TEST,
+    seed: "full",
+    jev: "on",
+    jevAnswers: RELEASE_CALLS,
+    expect: { text: "Jev called it meets. You said Not yet." },
+    steps: [
+      ...RELEASE_TO_REPLY,
+      { click: { button: "Next" } },
+      { click: { button: "Ask Jev" } },
+      { waitFor: { selector: ".meet-jev .jev-reading" } },
+      { click: { button: "Not yet" } },
+      { click: { button: "Next" } },
+      { waitFor: { text: "Which points did it miss" } },
+      { click: { button: "Every change a user would notice is in the note, and nothing is invented." } },
+      { click: { button: "Next" } },
+      { waitFor: { text: "What did Jev miss" } },
+      { fill: { label: "Reason" }, value: "Leaves out that saved searches break with the column rename" },
+    ],
+  },
+  {
     // Claude Code takes Write a release note and its reply is held: the screen after holding.
     id: "held",
     page: "how-to/run-a-bake-off",
@@ -651,7 +739,7 @@ export const COVERAGE: Record<RouteKind, readonly string[] | typeof NOT_PICTURED
   home: ["home-empty", "home", "home-needs"],
   "deck:credential": ["credential-start", "credential-target"],
   "deck:agent": ["first-test-agent", "first-test-hand", "first-test-judge", "first-test-home", "agent-new"],
-  "deck:test": ["test-hand", "test-reply", "judge", "go-to-offer", "missed-points", "held", "jev-ask", "jev-cleanup", "jev-sends"],
+  "deck:test": ["test-hand", "test-reply", "judge", "go-to-offer", "missed-points", "held", "jev-ask", "jev-cleanup", "jev-sends", "jev-calls", "jev-record", "jev-reason"],
   "deck:edit-credential": ["edit-retest", "go-to-flagged", "paste-image", "add-video"],
   "deck:edit-agent": ["agent-params"],
   "deck:handoffs": ["handoffs-box"],

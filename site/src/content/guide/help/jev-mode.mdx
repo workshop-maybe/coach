@@ -5,7 +5,7 @@ order: 10
 description: Turn on Jev Mode with your own TypeSafe key, what each use sends, and how to change the key or turn it off.
 ---
 
-{/* Jev Mode (U5, U6, U8, R7, R11, AE4): what it is, turning it on, what each use sends in the Jev Mode card's own words, the judge card and the reply box with Jev Mode on, a saved reading, the key, and turning it off. Labels are checked against src/ui/JevDeck.tsx, src/ui/TestDeck.tsx and src/ui/JevReading.tsx (KTD8). */}
+{/* Jev Mode (U5, U6, U8, R7, R11, AE4): what it is, turning it on, what each use sends in the Jev Mode card's own words, the judge card and the reply box with Jev Mode on, a reading with its calls, the track record and fitted cut-offs, a saved reading, the key, and turning it off. Labels are checked against src/ui/JevDeck.tsx, src/ui/TestDeck.tsx and src/ui/JevReading.tsx (KTD8). */}
 
 Jev Mode connects the app to Jev, TypeSafe's model, with your own TypeSafe key. It is off by default, and it is the app's only network connection. Jev acts only when you ask, in two places: a second opinion on a reply, and a cleanup of a reply pasted from a terminal.
 
@@ -45,11 +45,17 @@ Jev sees them as examples of your own verdicts: a reply you judged Met, and a re
 
 Jev's reading shows below the rubric as calls. Each rubric point, the <UI>Overall</UI> bar and each of the badge's learning targets reads <UI>Meets</UI>, <UI>Misses</UI> or <UI>Can't call</UI>, with Jev's chance beside it in small type. A point Jev can't call either way says <UI>Can't call: sharpen this point</UI>. You still make the call, and the reading is saved with your result. If you hold the reply to compare instead, the reading stays with it and goes into the result when you judge it.
 
+<Shot id="jev-calls" alt="Jev's reading under the Write a release note rubric: Can't call: sharpen this point at 45% on the first point, Meets on the other two, Meets overall at 81%, and Meets on both learning targets" />
+
 ### How a call is read
 
 A new badge reads anything above 70% as meets, anything below 30% as misses, and everything from 30% to 70% as can't call. Once a badge has eight results judged with Jev's reading, at least two of them Met and two Not met, the app fits those cut-offs to your verdicts there. When that moves them, the reading says <UI>Cut-offs fitted to your verdicts</UI>. Rubric points and learning targets use the same cut-offs as the whole bar, since only the whole bar has your verdict on every result. Moving the cut-offs re-reads past readings without asking Jev again.
 
-Once the badge has eight judged readings, and after you pick <UI>Met</UI> or <UI>Not yet</UI>, the reading also shows how often Jev's call on this badge has matched yours, such as <UI>Jev matched your verdict \{k\} of \{c\} times on this badge</UI>. It waits for your pick so it can't lean on your verdict.
+Once the badge has eight judged readings, and after you pick <UI>Met</UI> or <UI>Not yet</UI>, the reading also shows how often Jev's call on this badge has matched yours, such as <UI>Jev matched your verdict \{k\} of \{c\} times on this badge</UI>, with the times it couldn't call counted apart. It waits for your pick so it can't lean on your verdict.
+
+<Shot id="jev-record" alt="The foot of Jev's reading on Check an answer key after Met: Can't call: sharpen this point on the fourth point, Meets overall at 84%, one learning target Meets and one Can't call at 72%, then Jev matched your verdict 7 of 8 times on this badge, and couldn't call 1, and Cut-offs fitted to your verdicts" />
+
+Here the fit has moved the cut-offs to 40% and 75%, so the second learning target's 72% reads as can't call.
 
 To see a reading again, open the reply from the badge's <UI>Replies</UI>, as [Compare takes](/how-to/compare-takes/) shows. The reading is folded under the reply, with its overall call on the fold. Click the fold to open it.
 
