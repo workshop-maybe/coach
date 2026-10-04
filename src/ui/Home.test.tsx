@@ -401,8 +401,8 @@ describe("Home", () => {
   });
 });
 
-// The go-to on a badge's card (U4, R7, R9, KTD8): one line under its holders, flagged when
-// the go-to's latest result there is not Met or its setup changed.
+// The go-to on a badge's card (U4, U7, R7, R9, KTD8): one line under its holders, flagged when
+// the go-to's latest result there is not Met, or the badge's task or the go-to's setup changed since.
 describe("Home's go-to", () => {
   const day2 = { fileStem: "20260902T090000Z", recordedAt: "2026-09-02T09:00:00.000Z" };
   const markOn = (profile: AgentProfile, fileStem = "20260901T090000Z"): Mark => ({
@@ -455,6 +455,15 @@ describe("Home's go-to", () => {
     const held = await card(/Code review/);
     await waitFor(() => expect(goToLineOf(held)?.textContent).toBe("Go-to: Codex agent · setup changed"));
     expect(goToLineOf(held)!.classList.contains("flagged")).toBe(true);
+  });
+
+  it("Covers AE9. A go-to whose badge's task changed since its Met still holds it and is flagged task changed", async () => {
+    const earned = await met(codex, review);
+    renderApp(storageWith({ credentials: [{ ...review, task: "Review the diff, then its tests." }], profiles: [opus, codex], assessments: [earned], marks: [markOn(codex)] }));
+    const held = await card(/Code review/);
+    await waitFor(() => expect(goToLineOf(held)?.textContent).toBe("Go-to: Codex agent · task changed"));
+    expect(goToLineOf(held)!.classList.contains("flagged")).toBe(true);
+    expect(within(held).getByText("Codex agent").classList.contains("visually-hidden")).toBe(true);
   });
 
   it("Covers AE8. A go-to agent in the trash leaves its badge with no go-to line", async () => {
