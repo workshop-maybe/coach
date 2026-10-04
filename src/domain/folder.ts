@@ -17,11 +17,16 @@ import type {
   Credential,
   FolderState,
   Handoff,
+  HeadToHead,
+  HeadToHeadPoint,
+  HeldReading,
   HeldReply,
   JevPoint,
   JevReading,
   LoadError,
   Mark,
+  Rejudge,
+  ReplyRef,
   Slug,
   TestContext,
 } from "./types";
@@ -82,6 +87,35 @@ export function heldPath(profileSlug: Slug, collectionSlug: Slug, credentialSlug
   return `${heldDir(profileSlug, collectionSlug, credentialSlug)}/${fileStem}.md`;
 }
 
+/** The folder name, inside an agent's results for a badge, that holds its re-judges. */
+const REJUDGED_DIR = "rejudged";
+
+/**
+ * One agent's re-judges on one badge (jev-in-compare KTD1): one folder below the results they
+ * re-judge, like held replies, so older app versions skip them and both trash actions move them.
+ */
+export function rejudgedDir(profileSlug: Slug, collectionSlug: Slug, credentialSlug: Slug): string {
+  return `${assessmentDir(profileSlug, collectionSlug, credentialSlug)}/${REJUDGED_DIR}`;
+}
+
+/** Where a re-judge with this id (a stamp) saves. */
+export function rejudgedPath(profileSlug: Slug, collectionSlug: Slug, credentialSlug: Slug, id: string): string {
+  return `${rejudgedDir(profileSlug, collectionSlug, credentialSlug)}/${id}.md`;
+}
+
+/** The folder name, inside an agent's results for a badge, that holds readings of its held replies. */
+const READINGS_DIR = "readings";
+
+/** One agent's readings of its held replies on one badge (jev-in-compare KTD3), placed as re-judges are. */
+export function readingsDir(profileSlug: Slug, collectionSlug: Slug, credentialSlug: Slug): string {
+  return `${assessmentDir(profileSlug, collectionSlug, credentialSlug)}/${READINGS_DIR}`;
+}
+
+/** Where a held reply's reading with this id (a stamp) saves. */
+export function heldReadingPath(profileSlug: Slug, collectionSlug: Slug, credentialSlug: Slug, id: string): string {
+  return `${readingsDir(profileSlug, collectionSlug, credentialSlug)}/${id}.json`;
+}
+
 /** Every handoff file for one badge, parsed or not. */
 export function handoffsDir(collectionSlug: Slug, credentialSlug: Slug): string {
   return `${COLLECTIONS_DIR}/${collectionSlug}/handoffs/${credentialSlug}`;
@@ -98,6 +132,19 @@ export function marksDir(collectionSlug: Slug, credentialSlug: Slug): string {
 
 export function markPath(collectionSlug: Slug, credentialSlug: Slug, id: string): string {
   return `${marksDir(collectionSlug, credentialSlug)}/${id}.json`;
+}
+
+/**
+ * Every head-to-head file for one badge, parsed or not (jev-in-compare KTD4). Kept with the
+ * badge beside its marks, since each names two agents, so trashing an agent leaves them.
+ */
+export function headToHeadDir(collectionSlug: Slug, credentialSlug: Slug): string {
+  return `${COLLECTIONS_DIR}/${collectionSlug}/head-to-head/${credentialSlug}`;
+}
+
+/** Where a head-to-head with this id (a stamp) saves. */
+export function headToHeadPath(collectionSlug: Slug, credentialSlug: Slug, id: string): string {
+  return `${headToHeadDir(collectionSlug, credentialSlug)}/${id}.json`;
 }
 
 /** Where a file moved to the trash at `stamp` lands: its own path under trash/<stamp>/. */
@@ -141,6 +188,13 @@ function parseObject(text: string): Json {
 function requiredString(obj: Json, key: string): string {
   const v = obj[key];
   if (typeof v !== "string") throw new Error(`Field "${key}" must be a string.`);
+  return v;
+}
+
+/** A required string that is not empty, such as a file stem or a model id. */
+function requiredText(obj: Json, key: string): string {
+  const v = requiredString(obj, key);
+  if (v === "") throw new Error(`Field "${key}" must not be empty.`);
   return v;
 }
 
@@ -531,18 +585,27 @@ function handBackAfter(text: string, end: number): string {
   return text.slice(end).replace(/^\n(?:\r?\n)?/, "").replace(/\r?\n$/, "");
 }
 
-export function parseAssessment(text: string, ids: AssessmentIds): Assessment {
-  const { fm, body } = splitFrontMatter(text, "Assessment");
-
+/** The required `result` field of a result or a re-judge. */
+function verdictOf(fm: Json): AssessmentResult {
   const result = fm.result;
   if (result !== "met" && result !== "not_met") {
     throw new Error('Frontmatter "result" must be "met" or "not_met".');
   }
+  return result;
+}
+
+/** The optional `missed_points` list. Anything but a non-empty list of text reads as none, never as a load error (KTD14). */
+function parseMissedPoints(missed: unknown): string[] | null {
+  return Array.isArray(missed) && missed.length > 0 && missed.every((p) => typeof p === "string") ? (missed as string[]) : null;
+}
+
+export function parseAssessment(text: string, ids: AssessmentIds): Assessment {
+  const { fm, body } = splitFrontMatter(text, "Assessment");
+
+  const result = verdictOf(fm);
   const recordedAt = isoTime(fm, "recorded_at");
   const record = parseTestRecord(fm);
-  const missed = fm.missed_points;
-  // Anything but a non-empty list of text reads as no missed points, never as a load error (KTD14).
-  const missedPoints = Array.isArray(missed) && missed.length > 0 && missed.every((p) => typeof p === "string") ? (missed as string[]) : null;
+  const missedPoints = parseMissedPoints(fm.missed_points);
 
   const noteLine = findLine(body, NOTE_LINE);
   const afterNote = body.slice(noteLine ? noteLine.end : 0);
@@ -552,7 +615,7 @@ export function parseAssessment(text: string, ids: AssessmentIds): Assessment {
 
   return {
     ...ids,
-    result: result as AssessmentResult,
+    result,
     recordedAt,
     ...record,
     ...(missedPoints ? { missedPoints } : {}),
@@ -577,6 +640,121 @@ export function parseHeld(text: string, ids: AssessmentIds): HeldReply {
   const record = parseTestRecord(fm);
   const handLine = findLine(body, HANDBACK_LINE);
   return { ...ids, heldAt, ...record, handBack: handLine ? handBackAfter(body, handLine.end) : "" };
+}
+
+// ---------------------------------------------------------------------------
+// Re-judge Markdown (jev-in-compare KTD1): front matter naming the result by its stem, the
+// new verdict, its time and any missed points, then `## Note` and the note, which runs to the
+// end of the file. No reply: the result keeps it.
+
+export type RejudgeIds = Pick<Rejudge, "profileSlug" | "collectionSlug" | "credentialSlug" | "id">;
+
+export function serializeRejudge(r: Rejudge): string {
+  const front = YAML.stringify({
+    reply: r.fileStem,
+    result: r.result,
+    judged_at: r.judgedAt,
+    ...(r.missedPoints && r.missedPoints.length > 0 ? { missed_points: r.missedPoints } : {}),
+  });
+  const note = r.note.replace(/\r\n?/g, "\n").trim();
+  return ["---\n", front, "---\n\n", `${NOTE_HEADING}\n`, note === "" ? "" : `\n${note}\n`].join("");
+}
+
+/** Parses a re-judge. A missing or malformed reply, verdict or time throws; malformed missed points read as none, as on a result. */
+export function parseRejudge(text: string, ids: RejudgeIds): Rejudge {
+  const { fm, body } = splitFrontMatter(text, "Re-judge");
+  const fileStem = jevText(fm.reply);
+  if (fileStem === null) throw new Error('Frontmatter "reply" must be the file stem of the result it re-judges.');
+  const result = verdictOf(fm);
+  const judgedAt = isoTime(fm, "judged_at");
+  const missedPoints = parseMissedPoints(fm.missed_points);
+  const noteLine = findLine(body, NOTE_LINE);
+  const note = body.slice(noteLine ? noteLine.end : 0);
+  return {
+    ...ids,
+    fileStem,
+    result,
+    judgedAt,
+    note: note.replace(/\r\n?/g, "\n").trim(),
+    ...(missedPoints ? { missedPoints } : {}),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Held reading JSON (jev-in-compare KTD3): the held reply's stem and the reading, written as
+// a result's `jev` mapping is.
+
+export type HeldReadingIds = Pick<HeldReading, "profileSlug" | "collectionSlug" | "credentialSlug" | "id">;
+
+export function serializeHeldReading(h: HeldReading): string {
+  return `${JSON.stringify({ reply: h.fileStem, jev: serializeJev(h.reading) }, null, 2)}\n`;
+}
+
+/** Parses a held reading. A missing reply, or a reading that won't read, throws. */
+export function parseHeldReading(text: string, ids: HeldReadingIds): HeldReading {
+  const obj = parseObject(text);
+  const fileStem = requiredText(obj, "reply");
+  const reading = parseJev(obj.jev);
+  if (!reading) throw new Error('Field "jev" must be a Jev reading.');
+  return { ...ids, fileStem, reading };
+}
+
+// ---------------------------------------------------------------------------
+// Head-to-head JSON (jev-in-compare KTD4): the model, version and time of the ask, the two
+// replies by agent and stem, and each point's raw answers in both orders. Parsed strictly.
+
+export type HeadToHeadIds = Pick<HeadToHead, "collectionSlug" | "credentialSlug" | "id">;
+
+export function serializeHeadToHead(h: HeadToHead): string {
+  const out = {
+    model: h.model,
+    assignment_version: h.assignmentVersion,
+    asked_at: h.askedAt,
+    first: serializeReplyRef(h.first),
+    second: serializeReplyRef(h.second),
+    points: h.points.map((p) => ({ text: p.text, first_over: p.firstOver, second_over: p.secondOver })),
+  };
+  return `${JSON.stringify(out, null, 2)}\n`;
+}
+
+/** Parses a head-to-head. A missing field, a point that is not text, or a probability outside 0 to 1 throws. */
+export function parseHeadToHead(text: string, ids: HeadToHeadIds): HeadToHead {
+  const obj = parseObject(text);
+  return {
+    ...ids,
+    model: requiredText(obj, "model"),
+    assignmentVersion: requiredText(obj, "assignment_version"),
+    askedAt: requiredText(obj, "asked_at"),
+    first: parseReplyRef(obj, "first"),
+    second: parseReplyRef(obj, "second"),
+    points: parseHeadToHeadPoints(obj.points),
+  };
+}
+
+function serializeReplyRef(r: ReplyRef): Json {
+  return { agent: r.profileSlug, reply: r.fileStem };
+}
+
+function parseReplyRef(obj: Json, key: string): ReplyRef {
+  const v = obj[key];
+  const bad = new Error(`Field "${key}" must name an agent and a reply.`);
+  if (typeof v !== "object" || v === null || Array.isArray(v)) throw bad;
+  const { agent, reply } = v as Json;
+  if (typeof agent !== "string" || agent === "" || typeof reply !== "string" || reply === "") throw bad;
+  return { profileSlug: agent, fileStem: reply };
+}
+
+function parseHeadToHeadPoints(raw: unknown): HeadToHeadPoint[] {
+  const bad = new Error('Field "points" must be a list of texts, each with two probabilities from 0 to 1.');
+  if (!Array.isArray(raw)) throw bad;
+  return raw.map((p: unknown) => {
+    if (typeof p !== "object" || p === null || Array.isArray(p)) throw bad;
+    const point = p as Json;
+    const firstOver = point.first_over;
+    const secondOver = point.second_over;
+    if (typeof point.text !== "string" || !isProbability(firstOver) || !isProbability(secondOver)) throw bad;
+    return { text: point.text, firstOver, secondOver };
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -624,6 +802,41 @@ function byBadgeAgentStem(a: AssessmentIds, b: AssessmentIds): number {
   );
 }
 
+type AgentBadgeFile = Pick<HeldReading, "profileSlug" | "collectionSlug" | "credentialSlug" | "id">;
+
+/** By collection, credential, agent, then id. */
+function byBadgeAgentId(a: AgentBadgeFile, b: AgentBadgeFile): number {
+  return (
+    compare(a.collectionSlug, b.collectionSlug) ||
+    compare(a.credentialSlug, b.credentialSlug) ||
+    compare(a.profileSlug, b.profileSlug) ||
+    compare(a.id, b.id)
+  );
+}
+
+/**
+ * Lays each re-judge over the result it names, in place so the results keep their order
+ * (jev-in-compare KTD1). A result's re-judges apply oldest first by id: each sets the verdict,
+ * note and missed points, and adds the verdict it replaced to `earlierVerdicts`. Everything
+ * else stays the result's own: stem, time, reply, setup, context, handoff, version and reading.
+ * A re-judge naming no result of its agent on its badge changes nothing.
+ */
+function layRejudges(results: Assessment[], rejudges: Rejudge[]): void {
+  const at = new Map(results.map((a, i) => [assessmentPath(a.profileSlug, a.collectionSlug, a.credentialSlug, a.fileStem), i]));
+  for (const r of [...rejudges].sort(byBadgeAgentId)) {
+    const i = at.get(assessmentPath(r.profileSlug, r.collectionSlug, r.credentialSlug, r.fileStem));
+    if (i === undefined) continue;
+    const { missedPoints: _replaced, ...result } = results[i];
+    results[i] = {
+      ...result,
+      result: r.result,
+      note: r.note,
+      ...(r.missedPoints && r.missedPoints.length > 0 ? { missedPoints: r.missedPoints } : {}),
+      earlierVerdicts: [...(result.earlierVerdicts ?? []), result.result],
+    };
+  }
+}
+
 function message(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
@@ -639,6 +852,8 @@ export async function loadFolder(storage: Storage): Promise<FolderState> {
     handoffs: [],
     marks: [],
     held: [],
+    heldReadings: [],
+    headToHeads: [],
     errors: [],
     warnings: [],
     raw: {},
@@ -673,6 +888,7 @@ export async function loadFolder(storage: Storage): Promise<FolderState> {
   const credentialFiles = new Map<Slug, { slug: Slug; path: string }[]>();
   const handoffFiles: (BadgeFile & { path: string })[] = [];
   const markFiles: (BadgeFile & { path: string })[] = [];
+  const headToHeadFiles: (BadgeFile & { path: string })[] = [];
   for (const path of await storage.listFiles("data", COLLECTIONS_DIR)) {
     const parts = path.split("/");
     if (parts.length === 3 && parts[2] === "collection.json" && !isIgnoredName(parts[1])) {
@@ -689,6 +905,9 @@ export async function loadFolder(storage: Storage): Promise<FolderState> {
     } else if (parts.length === 5 && parts[2] === "marks" && !isIgnoredName(parts[1]) && !isIgnoredName(parts[3])) {
       const id = stem(parts[4], ".json");
       if (id !== null) markFiles.push({ collectionSlug: parts[1], credentialSlug: parts[3], id, path });
+    } else if (parts.length === 5 && parts[2] === "head-to-head" && !isIgnoredName(parts[1]) && !isIgnoredName(parts[3])) {
+      const id = stem(parts[4], ".json");
+      if (id !== null) headToHeadFiles.push({ collectionSlug: parts[1], credentialSlug: parts[3], id, path });
     }
   }
 
@@ -743,6 +962,13 @@ export async function loadFolder(storage: Storage): Promise<FolderState> {
   }
   state.marks.sort(byBadgeThenId);
 
+  // Head-to-heads (jev-in-compare KTD4), read as marks are. Whether one is current is decided where it is used.
+  for (const { path, ...ids } of headToHeadFiles) {
+    const headToHead = await load(path, (t) => parseHeadToHead(t, ids));
+    if (headToHead) state.headToHeads.push(headToHead);
+  }
+  state.headToHeads.sort(byBadgeThenId);
+
   // Agent profiles.
   for (const path of await storage.listFiles("data", AGENTS_DIR)) {
     const parts = path.split("/");
@@ -754,7 +980,8 @@ export async function loadFolder(storage: Storage): Promise<FolderState> {
   }
   state.profiles.sort(byName);
 
-  // Assessments, and the held replies one folder below them (hold-and-compare KTD1).
+  // Assessments, and the held replies, re-judges and readings one folder below them
+  // (hold-and-compare KTD1, jev-in-compare KTD1 and KTD3).
   const assessmentFiles = await storage.listFiles("data", ASSESSMENTS_DIR);
   const listed = new Set(assessmentFiles);
   for (const path of assessmentFiles) {
@@ -766,6 +993,20 @@ export async function loadFolder(storage: Storage): Promise<FolderState> {
     const a = await load(path, (t) => parseAssessment(t, ids));
     if (a) state.assessments.push(a);
   }
+
+  // Re-judges lay the newest verdict over the result they name, which is never rewritten
+  // (jev-in-compare KTD1). One that cannot be read lands in errors and changes nothing.
+  const rejudges: Rejudge[] = [];
+  for (const path of assessmentFiles) {
+    const parts = path.split("/");
+    if (parts.length !== 6 || parts[4] !== REJUDGED_DIR || parts.slice(1, 4).some(isIgnoredName)) continue;
+    const id = stem(parts[5], ".md");
+    if (id === null) continue;
+    const ids: RejudgeIds = { profileSlug: parts[1], collectionSlug: parts[2], credentialSlug: parts[3], id };
+    const r = await load(path, (t) => parseRejudge(t, ids));
+    if (r) rejudges.push(r);
+  }
+  layRejudges(state.assessments, rejudges);
 
   // A held reply is judged once a result file has its stem, whether or not that result
   // parses, and a judged one is never read (KTD4): the held file stays as the record.
@@ -780,6 +1021,19 @@ export async function loadFolder(storage: Storage): Promise<FolderState> {
     if (h) state.held.push(h);
   }
   state.held.sort(byBadgeAgentStem);
+
+  // Readings taken after a reply was held (jev-in-compare KTD3). Each loads whether its reply is
+  // still held, judged or gone: which reading a held reply shows is decided where it is used.
+  for (const path of assessmentFiles) {
+    const parts = path.split("/");
+    if (parts.length !== 6 || parts[4] !== READINGS_DIR || parts.slice(1, 4).some(isIgnoredName)) continue;
+    const id = stem(parts[5], ".json");
+    if (id === null) continue;
+    const ids: HeldReadingIds = { profileSlug: parts[1], collectionSlug: parts[2], credentialSlug: parts[3], id };
+    const reading = await load(path, (t) => parseHeldReading(t, ids));
+    if (reading) state.heldReadings.push(reading);
+  }
+  state.heldReadings.sort(byBadgeAgentId);
 
   return state;
 }

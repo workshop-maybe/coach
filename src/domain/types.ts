@@ -105,6 +105,83 @@ export interface Assessment {
   jev?: JevReading;
   /** On a Not met result, the rubric points the user said the reply missed, in rubric order. Absent when none were tapped. */
   missedPoints?: string[];
+  /**
+   * The verdicts re-judges replaced, oldest first (jev-in-compare KTD1). Set only by the loader
+   * when it lays a re-judge over this result, and never written to a file.
+   */
+  earlierVerdicts?: AssessmentResult[];
+}
+
+/**
+ * A new verdict on a result (jev-in-compare KTD1). Read from
+ * assessments/<agent>/<collection>/<credential>/rejudged/<stamp>.md. The loader lays the newest
+ * one over the result it names, which keeps its stem, time and reply; the result file never changes.
+ */
+export interface Rejudge {
+  profileSlug: Slug;
+  collectionSlug: Slug;
+  credentialSlug: Slug;
+  /** The file stem, a stamp. A result's re-judges apply in this order, the newest last. */
+  id: string;
+  /** The file stem of the result it re-judges. */
+  fileStem: string;
+  result: AssessmentResult;
+  /** Full ISO 8601 time of the re-judge. */
+  judgedAt: string;
+  note: string;
+  /** As on a result: the rubric points the reply missed. Absent when none. */
+  missedPoints?: string[];
+}
+
+/**
+ * Jev's reading of a held reply, taken after it was held (jev-in-compare KTD3). Read from
+ * assessments/<agent>/<collection>/<credential>/readings/<stamp>.json. Loaded whether or not
+ * the reply is still held; which reading a held reply shows is decided where it is used.
+ */
+export interface HeldReading {
+  profileSlug: Slug;
+  collectionSlug: Slug;
+  credentialSlug: Slug;
+  /** The file stem, a stamp. */
+  id: string;
+  /** The file stem of the held reply it reads. */
+  fileStem: string;
+  /** Always seen "before": a held reply has no verdict. */
+  reading: JevReading;
+}
+
+/** A reply named by its agent and file stem. A held reply's stem, which its result keeps. */
+export interface ReplyRef {
+  profileSlug: Slug;
+  fileStem: string;
+}
+
+/** One rubric point a head-to-head asked about, with both orders' raw answers, from 0 to 1 (jev-in-compare KTD4). */
+export interface HeadToHeadPoint {
+  text: string;
+  firstOver: number;
+  secondOver: number;
+}
+
+/**
+ * Jev's point-by-point comparison of two replies to one badge (jev-in-compare KTD4). Read from
+ * collections/<collection>/head-to-head/<credential>/<stamp>.json, beside the badge's marks,
+ * since it names two agents.
+ */
+export interface HeadToHead {
+  collectionSlug: Slug;
+  credentialSlug: Slug;
+  /** The file stem, a stamp. */
+  id: string;
+  model: string;
+  /** The assignment version the pair was asked against. */
+  assignmentVersion: string;
+  /** Full ISO 8601 time of the ask. */
+  askedAt: string;
+  first: ReplyRef;
+  second: ReplyRef;
+  /** One per rubric point, in rubric order. */
+  points: HeadToHeadPoint[];
 }
 
 /**
@@ -213,6 +290,10 @@ export interface FolderState {
   handoffs: Handoff[];
   /** Every badge's go-to marks, by collection, credential, then id (oldest first). */
   marks: Mark[];
+  /** Readings taken after a reply was held, by collection, credential, agent, then id (jev-in-compare KTD3). */
+  heldReadings: HeldReading[];
+  /** Every badge's head-to-heads, by collection, credential, then id (jev-in-compare KTD4). */
+  headToHeads: HeadToHead[];
   errors: LoadError[];
   /** Readable files with settings that fall back to defaults (KTD3). Never gate anything. */
   warnings: LoadError[];

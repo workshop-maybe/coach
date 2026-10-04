@@ -2,7 +2,25 @@ import { describe, expect, it, vi } from "vitest";
 import { ChangedOnDiskError } from "../storage/storage";
 import { MemoryStorage } from "../storage/memory";
 import { assignmentVersion } from "./hash";
-import { assessmentPath, collectionPath, credentialPath, handoffPath, heldPath, loadFolder, markPath, marksDir, profilePath, serializeMark, SKELETON_PATH } from "./folder";
+import {
+  assessmentPath,
+  collectionPath,
+  credentialPath,
+  handoffPath,
+  headToHeadPath,
+  heldPath,
+  heldReadingPath,
+  loadFolder,
+  markPath,
+  marksDir,
+  profilePath,
+  rejudgedPath,
+  serializeHeadToHead,
+  serializeHeldReading,
+  serializeMark,
+  serializeRejudge,
+  SKELETON_PATH,
+} from "./folder";
 import { buildMatrix, cellKey } from "./matrix";
 import { BUILT_IN_HANDOFF, defaultHandoff, handoffsFor, isHandoffLocked, SKELETON_ID, winnerFor } from "./handoffs";
 import {
@@ -34,7 +52,7 @@ import {
   updateProfile,
 } from "./operations";
 import { findPreset, presetCredential } from "./presets";
-import { credentialKey, type AgentProfile, type AssessmentResult, type FolderState, type JevReading } from "./types";
+import { credentialKey, type AgentProfile, type AssessmentResult, type FolderState, type HeadToHead, type HeldReading, type JevReading, type Rejudge } from "./types";
 
 /** Records a result and returns only the folder, as most tests here need. */
 async function recordState(...args: Parameters<typeof recordAssessment>): Promise<FolderState> {
@@ -783,6 +801,76 @@ describe("moving to trash", () => {
     expect(storage.file(`trash/20260930T100000Z/${moved}`)).toBe(movedText);
     expect(storage.file(markPath("go-basics", "read-a-file", "20260929T093000Z"))).toBeDefined();
     expect(state.marks.map((m) => m.credentialSlug)).toEqual(["read-a-file"]);
+  });
+
+  describe("what compare saves (jev-in-compare KTD1, KTD3, KTD4)", () => {
+    const stem = "20260929T084900Z";
+    const reading: JevReading = { model: "jev-1", assignmentVersion: "v1", askedAt: "2026-09-30T08:00:00.000Z", seen: "before", overall: 0.5, points: [] };
+    const rejudge = (profileSlug: string, credentialSlug = "write-a-cli"): Rejudge => ({
+      profileSlug,
+      collectionSlug: "go-basics",
+      credentialSlug,
+      id: "20260930T080000Z",
+      fileStem: stem,
+      result: "not_met",
+      judgedAt: "2026-09-30T08:00:00.000Z",
+      note: "",
+    });
+    const heldReading = (profileSlug: string, credentialSlug = "write-a-cli"): HeldReading => ({
+      profileSlug,
+      collectionSlug: "go-basics",
+      credentialSlug,
+      id: "20260930T081000Z",
+      fileStem: "20260930T070000Z",
+      reading,
+    });
+    const headToHead = (credentialSlug: string): HeadToHead => ({
+      collectionSlug: "go-basics",
+      credentialSlug,
+      id: "20260930T082000Z",
+      model: "jev-1",
+      assignmentVersion: "v1",
+      askedAt: "2026-09-30T08:20:00.000Z",
+      first: { profileSlug: "claude-opus", fileStem: stem },
+      second: { profileSlug: "other", fileStem: "20260930T070000Z" },
+      points: [{ text: "Flags parse.", firstOver: 0.9, secondOver: 0.1 }],
+    });
+    const files = (r: Rejudge[], h: HeldReading[], x: HeadToHead[]): Record<string, string> => ({
+      ...Object.fromEntries(r.map((v) => [rejudgedPath(v.profileSlug, v.collectionSlug, v.credentialSlug, v.id), serializeRejudge(v)])),
+      ...Object.fromEntries(h.map((v) => [heldReadingPath(v.profileSlug, v.collectionSlug, v.credentialSlug, v.id), serializeHeldReading(v)])),
+      ...Object.fromEntries(x.map((v) => [headToHeadPath(v.collectionSlug, v.credentialSlug, v.id), serializeHeadToHead(v)])),
+    });
+
+    it("trashing a badge moves its head-to-heads and every agent's re-judges and readings under the same stamp, and leaves another badge's", async () => {
+      const { storage, state: first } = await withOneAssessment();
+      const second = await createCredential(storage, first, "go-basics", "Read a file");
+      const moving = files([rejudge("claude-opus"), rejudge("other")], [heldReading("claude-opus"), heldReading("other")], [headToHead("write-a-cli")]);
+      const staying = files([rejudge("claude-opus", "read-a-file")], [heldReading("claude-opus", "read-a-file")], [headToHead("read-a-file")]);
+      storage.seed({ ...moving, ...staying });
+      const state = await trashCredential(storage, second.state, "go-basics", "write-a-cli", now);
+      for (const [path, text] of Object.entries(moving)) {
+        expect(storage.file(path)).toBeUndefined();
+        expect(storage.file(`trash/20260930T100000Z/${path}`)).toBe(text);
+      }
+      for (const [path, text] of Object.entries(staying)) expect(storage.file(path)).toBe(text);
+      expect(state.headToHeads.map((h) => h.credentialSlug)).toEqual(["read-a-file"]);
+      expect(state.heldReadings.map((h) => h.credentialSlug)).toEqual(["read-a-file"]);
+    });
+
+    it("trashing an agent moves its re-judges and readings and leaves the badge's head-to-heads", async () => {
+      const { storage, state } = await withOneAssessment();
+      const moving = files([rejudge("claude-opus")], [heldReading("claude-opus")], []);
+      const staying = files([rejudge("other")], [heldReading("other")], [headToHead("write-a-cli")]);
+      storage.seed({ ...moving, ...staying });
+      const next = await trashProfile(storage, state, "claude-opus", now);
+      for (const [path, text] of Object.entries(moving)) {
+        expect(storage.file(path)).toBeUndefined();
+        expect(storage.file(`trash/20260930T100000Z/${path}`)).toBe(text);
+      }
+      for (const [path, text] of Object.entries(staying)) expect(storage.file(path)).toBe(text);
+      expect(next.headToHeads).toEqual([headToHead("write-a-cli")]);
+      expect(next.heldReadings.map((h) => h.profileSlug)).toEqual(["other"]);
+    });
   });
 });
 

@@ -51,6 +51,8 @@ function folder(assessments: Assessment[], held: HeldReply[] = []): FolderState 
     skeleton: null,
     handoffs: [],
     marks: [],
+    heldReadings: [],
+    headToHeads: [],
     errors: [],
     warnings: [],
     raw: {},

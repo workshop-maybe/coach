@@ -13,6 +13,7 @@ import {
   fileStemFor,
   handoffPath,
   handoffsDir,
+  headToHeadDir,
   heldPath,
   isCredentialResult,
   loadFolder,
@@ -609,10 +610,12 @@ export async function trashCredential(
   await saveCollection(storage, next, base);
   if (base !== null) await storage.writeText("data", trashPath(stamp, path), base);
 
-  // Every agent's results for it, every handoff file and every go-to mark, parsed or not.
+  // Every agent's results for it (held replies, re-judges and readings with them), every
+  // handoff file, every go-to mark and every head-to-head (jev-in-compare KTD4), parsed or not.
   const results = (await storage.listFiles("data", ASSESSMENTS_DIR)).filter((p) => isCredentialResult(p, collectionSlug, credentialSlug));
   const handoffs = await storage.listFiles("data", handoffsDir(collectionSlug, credentialSlug));
   const marks = await storage.listFiles("data", marksDir(collectionSlug, credentialSlug));
-  await moveToTrash(storage, [...results, ...handoffs, ...marks, credentialPath(collectionSlug, credentialSlug)], stamp);
+  const headToHeads = await storage.listFiles("data", headToHeadDir(collectionSlug, credentialSlug));
+  await moveToTrash(storage, [...results, ...handoffs, ...marks, ...headToHeads, credentialPath(collectionSlug, credentialSlug)], stamp);
   return loadFolder(storage);
 }

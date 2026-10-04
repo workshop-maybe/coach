@@ -150,6 +150,8 @@ describe("pendingTests", () => {
       skeleton: null,
       handoffs: [],
       marks: [],
+      heldReadings: [],
+      headToHeads: [],
       errors: [],
       warnings: [],
       raw: {},

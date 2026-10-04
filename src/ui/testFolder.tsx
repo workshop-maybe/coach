@@ -9,18 +9,24 @@ import {
   SKELETON_PATH,
   credentialPath,
   handoffPath,
+  headToHeadPath,
   heldPath,
+  heldReadingPath,
   markPath,
   profilePath,
+  rejudgedPath,
   serializeAssessment,
   serializeCollection,
+  serializeHeadToHead,
   serializeHeld,
+  serializeHeldReading,
   serializeMark,
   serializeProfile,
+  serializeRejudge,
 } from "../domain/folder";
 import { serializeCredentialMd } from "../domain/credential-md";
 import { assignmentVersion } from "../domain/hash";
-import type { AgentProfile, Assessment, Credential, Handoff, HeldReply, Mark } from "../domain/types";
+import type { AgentProfile, Assessment, Credential, Handoff, HeadToHead, HeldReading, HeldReply, Mark, Rejudge } from "../domain/types";
 import { MemoryStorage } from "../storage/memory";
 import { AppShell, type Route } from "./AppShell";
 import { FolderProvider } from "./useFolderState";
@@ -92,6 +98,12 @@ export function storageWith(
     skeleton?: string;
     /** Go-to marks, each written as its own file. */
     marks?: Mark[];
+    /** Readings of held replies, each written as its own file (jev-in-compare KTD3). */
+    heldReadings?: HeldReading[];
+    /** Head-to-heads, each written as its own file (jev-in-compare KTD4). */
+    headToHeads?: HeadToHead[];
+    /** Re-judges, each written as its own file (jev-in-compare KTD1). */
+    rejudges?: Rejudge[];
   } = {},
 ): MemoryStorage {
   const credentials = opts.credentials ?? [];
@@ -114,6 +126,9 @@ export function storageWith(
   for (const h of opts.handoffs ?? []) files[handoffPath(h.collectionSlug, h.credentialSlug, h.id)] = h.text;
   if (opts.skeleton !== undefined) files[SKELETON_PATH] = opts.skeleton;
   for (const m of opts.marks ?? []) files[markPath(m.collectionSlug, m.credentialSlug, m.id)] = serializeMark(m);
+  for (const r of opts.heldReadings ?? []) files[heldReadingPath(r.profileSlug, r.collectionSlug, r.credentialSlug, r.id)] = serializeHeldReading(r);
+  for (const h of opts.headToHeads ?? []) files[headToHeadPath(h.collectionSlug, h.credentialSlug, h.id)] = serializeHeadToHead(h);
+  for (const r of opts.rejudges ?? []) files[rejudgedPath(r.profileSlug, r.collectionSlug, r.credentialSlug, r.id)] = serializeRejudge(r);
   return new MemoryStorage(files);
 }
 

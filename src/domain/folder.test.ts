@@ -11,17 +11,26 @@ import {
   fileStemFor,
   handoffPath,
   handoffsDir,
+  headToHeadDir,
+  headToHeadPath,
   heldDir,
   heldPath,
+  heldReadingPath,
   loadFolder,
   markPath,
   marksDir,
   parseAssessment,
   parseCollection,
+  parseHeadToHead,
   parseHeld,
+  parseHeldReading,
   parseMark,
   parseProfile,
+  parseRejudge,
   profilePath,
+  readingsDir,
+  rejudgedDir,
+  rejudgedPath,
   saveAssessment,
   saveCollection,
   saveCredential,
@@ -30,14 +39,21 @@ import {
   SKELETON_PATH,
   serializeAssessment,
   serializeCollection,
+  serializeHeadToHead,
   serializeHeld,
+  serializeHeldReading,
   serializeMark,
   serializeProfile,
+  serializeRejudge,
 } from "./folder";
+import { calibrationsOf } from "./calls";
 import { buildExport } from "./export";
+import { rankExamples } from "./jevExamples";
+import { buildMatrix, cellKey } from "./matrix";
 import { reorderCredentials } from "./operations";
+import { OVERALL_ID } from "./secondOpinion";
 import { resolveBadgeSettings } from "../badge/settings";
-import type { AgentProfile, Assessment, Collection, Credential, HeldReply, JevReading, Mark } from "./types";
+import type { AgentProfile, Assessment, Collection, Credential, HeadToHead, HeldReading, HeldReply, JevReading, Mark, Rejudge } from "./types";
 
 function cred(slug: string, name: string, collectionSlug = "eng"): Credential {
   return {
@@ -1221,5 +1237,428 @@ describe("held reply files", () => {
     expect(state.held).toEqual([held]);
     expect(state.errors.map((e) => e.path)).toEqual([assessmentPath("claude-high", "eng", "review", brokenStem)]);
     expect(state.raw[heldPath("claude-high", "eng", "review", judgedStem)]).toBeUndefined();
+  });
+});
+
+describe("re-judges, held readings and head-to-heads (jev-in-compare KTD1, KTD3, KTD4, KTD15)", () => {
+  const rejudge: Rejudge = {
+    profileSlug: "claude-high",
+    collectionSlug: "eng",
+    credentialSlug: "review",
+    id: "20261004T090000Z",
+    fileStem: assessment.fileStem,
+    result: "not_met",
+    judgedAt: "2026-10-04T09:00:00.000Z",
+    note: "Missed the edge case.",
+    missedPoints: ["Help prints."],
+  };
+  const rejudgeIds = { profileSlug: "claude-high", collectionSlug: "eng", credentialSlug: "review", id: rejudge.id };
+  /** The same reply re-judged Met again, later, with no note and no missed points. */
+  const backToMet: Rejudge = {
+    profileSlug: "claude-high",
+    collectionSlug: "eng",
+    credentialSlug: "review",
+    id: "20261004T100000Z",
+    fileStem: assessment.fileStem,
+    result: "met",
+    judgedAt: "2026-10-04T10:00:00.000Z",
+    note: "",
+  };
+
+  const reading: JevReading = {
+    model: "jev-1.13.0",
+    assignmentVersion: "12e456789012",
+    askedAt: "2026-10-04T09:10:00.000Z",
+    seen: "before",
+    overall: 0.62,
+    points: [{ text: "Flags parse.", probability: 0.91 }],
+    targets: [{ text: "I can parse flags.", probability: 0.8 }],
+    examplesSent: 2,
+  };
+  const heldReading: HeldReading = {
+    profileSlug: "claude-high",
+    collectionSlug: "eng",
+    credentialSlug: "review",
+    id: "20261004T091000Z",
+    fileStem: "20261001T090000Z",
+    reading,
+  };
+  const readingIds = { profileSlug: "claude-high", collectionSlug: "eng", credentialSlug: "review", id: heldReading.id };
+
+  const headToHead: HeadToHead = {
+    collectionSlug: "eng",
+    credentialSlug: "review",
+    id: "20261004T092000Z",
+    model: "jev-1.13.0",
+    assignmentVersion: "12e456789012",
+    askedAt: "2026-10-04T09:20:00.000Z",
+    first: { profileSlug: "claude-high", fileStem: assessment.fileStem },
+    second: { profileSlug: "codex", fileStem: "20261001T090000Z" },
+    points: [
+      { text: "Flags parse.", firstOver: 0.82, secondOver: 0.11 },
+      { text: "Help prints.", firstOver: 0, secondOver: 1 },
+    ],
+  };
+  const headToHeadIds = { collectionSlug: "eng", credentialSlug: "review", id: headToHead.id };
+
+  function rejudgeFile(r: Rejudge): Record<string, string> {
+    return { [rejudgedPath(r.profileSlug, r.collectionSlug, r.credentialSlug, r.id)]: serializeRejudge(r) };
+  }
+  function readingFile(h: HeldReading): Record<string, string> {
+    return { [heldReadingPath(h.profileSlug, h.collectionSlug, h.credentialSlug, h.id)]: serializeHeldReading(h) };
+  }
+  function headToHeadFile(h: HeadToHead): Record<string, string> {
+    return { [headToHeadPath(h.collectionSlug, h.credentialSlug, h.id)]: serializeHeadToHead(h) };
+  }
+
+  it("keeps re-judges and readings below an agent's results for a badge, and head-to-heads beside the badge's marks", () => {
+    expect(rejudgedDir("claude-high", "eng", "review")).toBe("assessments/claude-high/eng/review/rejudged");
+    expect(rejudgedPath("claude-high", "eng", "review", rejudge.id)).toBe("assessments/claude-high/eng/review/rejudged/20261004T090000Z.md");
+    expect(readingsDir("claude-high", "eng", "review")).toBe("assessments/claude-high/eng/review/readings");
+    expect(heldReadingPath("claude-high", "eng", "review", heldReading.id)).toBe("assessments/claude-high/eng/review/readings/20261004T091000Z.json");
+    expect(headToHeadDir("eng", "review")).toBe("collections/eng/head-to-head/review");
+    expect(headToHeadPath("eng", "review", headToHead.id)).toBe("collections/eng/head-to-head/review/20261004T092000Z.json");
+    // Both trash actions move what sits below an agent's results for a badge.
+    expect(isCredentialResult(rejudgedPath("claude-high", "eng", "review", rejudge.id), "eng", "review")).toBe(true);
+    expect(isCredentialResult(heldReadingPath("claude-high", "eng", "review", heldReading.id), "eng", "review")).toBe(true);
+  });
+
+  describe("re-judge files", () => {
+    it("serializes the reply, verdict, time and missed points as front matter, then the note, and parses back unchanged", () => {
+      const text = serializeRejudge(rejudge);
+      expect(text).toBe(
+        [
+          "---",
+          "reply: 20260929T084900Z",
+          "result: not_met",
+          "judged_at: 2026-10-04T09:00:00.000Z",
+          "missed_points:",
+          "  - Help prints.",
+          "---",
+          "",
+          "## Note",
+          "",
+          "Missed the edge case.",
+          "",
+        ].join("\n"),
+      );
+      expect(parseRejudge(text, rejudgeIds)).toEqual(rejudge);
+    });
+
+    it("writes no missed points key for none, keeps an empty note empty, and parses back unchanged", () => {
+      const text = serializeRejudge(backToMet);
+      expect(text).not.toMatch(/missed_points/);
+      expect(text.endsWith("## Note\n")).toBe(true);
+      const ids = { ...rejudgeIds, id: backToMet.id };
+      expect(parseRejudge(text, ids)).toEqual(backToMet);
+      expect(parseRejudge(serializeRejudge({ ...backToMet, missedPoints: [] }), ids)).toEqual(backToMet);
+    });
+
+    it("reads a malformed missed points list as none, a reply YAML takes as a number as text, and a CRLF file", () => {
+      const text = serializeRejudge(rejudge);
+      const { missedPoints: _missed, ...withoutMissed } = rejudge;
+      expect(parseRejudge(text.replace("missed_points:\n  - Help prints.\n", "missed_points: Help prints.\n"), rejudgeIds)).toEqual(withoutMissed);
+      expect(parseRejudge(text.replace("  - Help prints.\n", "  - Help prints.\n  - 2\n"), rejudgeIds)).toEqual(withoutMissed);
+      expect(parseRejudge(text.replace("reply: 20260929T084900Z", "reply: 20260929"), rejudgeIds).fileStem).toBe("20260929");
+      expect(parseRejudge(text.replace(/\n/g, "\r\n"), rejudgeIds)).toEqual(rejudge);
+    });
+
+    it("refuses a file with no front matter, or a missing or malformed reply, verdict or time", () => {
+      const text = serializeRejudge(rejudge);
+      expect(() => parseRejudge("## Note\n\nx\n", rejudgeIds)).toThrow(/frontmatter/i);
+      expect(() => parseRejudge(text.replace(/^reply: .*\n/m, ""), rejudgeIds)).toThrow(/reply/);
+      expect(() => parseRejudge(text.replace(/^reply: .*\n/m, 'reply: ""\n'), rejudgeIds)).toThrow(/reply/);
+      expect(() => parseRejudge(text.replace(/^reply: .*\n/m, "reply: [1]\n"), rejudgeIds)).toThrow(/reply/);
+      expect(() => parseRejudge(text.replace("result: not_met", "result: maybe"), rejudgeIds)).toThrow(/result/);
+      expect(() => parseRejudge(text.replace(/^result: .*\n/m, ""), rejudgeIds)).toThrow(/result/);
+      expect(() => parseRejudge(text.replace(/^judged_at: .*\n/m, ""), rejudgeIds)).toThrow(/judged_at/);
+    });
+
+    it("round-trips U+2028 and U+2029 before --- and before a heading in a note and in missed points", () => {
+      for (const note of ["Off by one ---", "Off ## Note --- ## Handback", "## Note", "## ## Note"]) {
+        const tricky: Rejudge = { ...rejudge, note, missedPoints: ["Help prints. ---", "Exits --- ## Note"] };
+        const text = serializeRejudge(tricky);
+        expect(text).toContain(" ---");
+        expect(parseRejudge(text, rejudgeIds)).toEqual(tricky);
+      }
+    });
+
+    it("never writes earlier verdicts into a result file", () => {
+      const text = serializeAssessment({ ...assessment, earlierVerdicts: ["not_met"] });
+      expect(text).toBe(serializeAssessment(assessment));
+      expect(text).not.toMatch(/earlier/);
+    });
+  });
+
+  describe("held reading files", () => {
+    it("serializes the held reply's stem and the reading as a result writes it, and parses back unchanged", () => {
+      const text = serializeHeldReading(heldReading);
+      expect(JSON.parse(text)).toEqual({
+        reply: "20261001T090000Z",
+        jev: {
+          model: "jev-1.13.0",
+          assignment_version: "12e456789012",
+          asked_at: "2026-10-04T09:10:00.000Z",
+          seen: "before",
+          overall: 0.62,
+          points: [{ text: "Flags parse.", probability: 0.91 }],
+          targets: [{ text: "I can parse flags.", probability: 0.8 }],
+          examples_sent: 2,
+        },
+      });
+      expect(text).toBe(`${JSON.stringify(JSON.parse(text), null, 2)}\n`);
+      expect(parseHeldReading(text, readingIds)).toEqual(heldReading);
+    });
+
+    it("round-trips U+2028 and U+2029 before --- and before a heading in a point or target", () => {
+      const tricky: HeldReading = {
+        ...heldReading,
+        reading: { ...reading, points: [{ text: "Flags --- ## Note", probability: 0.5 }], targets: [{ text: "I can ---", probability: 0.4 }] },
+      };
+      expect(parseHeldReading(serializeHeldReading(tricky), readingIds)).toEqual(tricky);
+    });
+
+    it("refuses a reading file missing its reply or its reading, or holding a reading that won't read", () => {
+      const obj = JSON.parse(serializeHeldReading(heldReading));
+      expect(() => parseHeldReading(JSON.stringify({ jev: obj.jev }), readingIds)).toThrow(/reply/);
+      expect(() => parseHeldReading(JSON.stringify({ ...obj, reply: "" }), readingIds)).toThrow(/reply/);
+      expect(() => parseHeldReading(JSON.stringify({ reply: obj.reply }), readingIds)).toThrow(/jev/);
+      expect(() => parseHeldReading(JSON.stringify({ ...obj, jev: { ...obj.jev, overall: 1.5 } }), readingIds)).toThrow(/jev/);
+      expect(() => parseHeldReading("[1]", readingIds)).toThrow();
+      expect(() => parseHeldReading("{", readingIds)).toThrow();
+    });
+  });
+
+  describe("head-to-head files", () => {
+    it("serializes both replies and every point's raw answers, and parses back unchanged", () => {
+      const text = serializeHeadToHead(headToHead);
+      expect(JSON.parse(text)).toEqual({
+        model: "jev-1.13.0",
+        assignment_version: "12e456789012",
+        asked_at: "2026-10-04T09:20:00.000Z",
+        first: { agent: "claude-high", reply: "20260929T084900Z" },
+        second: { agent: "codex", reply: "20261001T090000Z" },
+        points: [
+          { text: "Flags parse.", first_over: 0.82, second_over: 0.11 },
+          { text: "Help prints.", first_over: 0, second_over: 1 },
+        ],
+      });
+      expect(text).toBe(`${JSON.stringify(JSON.parse(text), null, 2)}\n`);
+      expect(parseHeadToHead(text, headToHeadIds)).toEqual(headToHead);
+    });
+
+    it("round-trips U+2028 and U+2029 before --- and before a heading in a point's text", () => {
+      const tricky: HeadToHead = {
+        ...headToHead,
+        points: [{ text: "Flags parse. --- ## Note ## Handback", firstOver: 0.5, secondOver: 0.5 }],
+      };
+      expect(parseHeadToHead(serializeHeadToHead(tricky), headToHeadIds)).toEqual(tricky);
+    });
+
+    it("refuses a missing field, a point that is not text, or a probability outside 0 to 1", () => {
+      const obj = JSON.parse(serializeHeadToHead(headToHead));
+      for (const key of ["model", "assignment_version", "asked_at", "first", "second", "points"]) {
+        expect(() => parseHeadToHead(JSON.stringify({ ...obj, [key]: undefined }), headToHeadIds)).toThrow(new RegExp(key));
+      }
+      const withPoint = (point: unknown) => JSON.stringify({ ...obj, points: [point] });
+      expect(() => parseHeadToHead(withPoint({ text: "x", first_over: 1.2, second_over: 0.1 }), headToHeadIds)).toThrow(/points/);
+      expect(() => parseHeadToHead(withPoint({ text: "x", first_over: 0.2, second_over: -0.1 }), headToHeadIds)).toThrow(/points/);
+      expect(() => parseHeadToHead(withPoint({ text: "x", first_over: "0.2", second_over: 0.1 }), headToHeadIds)).toThrow(/points/);
+      expect(() => parseHeadToHead(withPoint({ text: 3, first_over: 0.2, second_over: 0.1 }), headToHeadIds)).toThrow(/points/);
+      expect(() => parseHeadToHead(withPoint("x"), headToHeadIds)).toThrow(/points/);
+      expect(() => parseHeadToHead(JSON.stringify({ ...obj, points: "x" }), headToHeadIds)).toThrow(/points/);
+      expect(() => parseHeadToHead(JSON.stringify({ ...obj, second: { agent: "codex" } }), headToHeadIds)).toThrow(/second/);
+      expect(() => parseHeadToHead(JSON.stringify({ ...obj, first: { agent: "", reply: "x" } }), headToHeadIds)).toThrow(/first/);
+      expect(() => parseHeadToHead(JSON.stringify({ ...obj, first: "claude-high" }), headToHeadIds)).toThrow(/first/);
+      expect(() => parseHeadToHead("[1]", headToHeadIds)).toThrow();
+    });
+  });
+
+  describe("loading", () => {
+    it("a folder with none of the new files loads as before: no readings, no head-to-heads, and results with no earlier verdicts", async () => {
+      const storage = fixture();
+      const state = await loadFolder(storage);
+      expect(state.errors).toEqual([]);
+      expect(state.heldReadings).toEqual([]);
+      expect(state.headToHeads).toEqual([]);
+      expect(state.assessments).toEqual([assessment]);
+      expect(state.assessments[0]).not.toHaveProperty("earlierVerdicts");
+      expect(storage.writes).toEqual([]);
+    });
+
+    it("lays a re-judge over its result: one result under the original stem and time, with the new verdict, note and missed points (KTD1)", async () => {
+      const storage = fixture();
+      const resultText = storage.file(assessmentPath("claude-high", "eng", "review", assessment.fileStem));
+      storage.seed(rejudgeFile(rejudge));
+      const state = await loadFolder(storage);
+      expect(state.errors).toEqual([]);
+      expect(state.assessments).toEqual([
+        { ...assessment, result: "not_met", note: rejudge.note, missedPoints: ["Help prints."], earlierVerdicts: ["met"] },
+      ]);
+      expect(state.raw[rejudgedPath("claude-high", "eng", "review", rejudge.id)]).toBe(serializeRejudge(rejudge));
+      expect(state.raw[assessmentPath("claude-high", "eng", "review", assessment.fileStem)]).toBe(resultText);
+      expect(storage.writes).toEqual([]);
+    });
+
+    it("with two re-judges the newest by stem wins: a Met one clears missed points and takes its own empty note, and both earlier verdicts stay, oldest first", async () => {
+      const storage = fixture();
+      storage.seed({ ...rejudgeFile(backToMet), ...rejudgeFile(rejudge) });
+      const [loaded] = (await loadFolder(storage)).assessments;
+      expect(loaded).toEqual({ ...assessment, result: "met", note: "", earlierVerdicts: ["met", "not_met"] });
+      expect(loaded).not.toHaveProperty("missedPoints");
+
+      // Stem order decides, not the time written inside the file.
+      const other = fixture();
+      other.seed({ ...rejudgeFile({ ...backToMet, judgedAt: "2026-10-01T00:00:00.000Z" }), ...rejudgeFile(rejudge) });
+      expect((await loadFolder(other)).assessments[0].result).toBe("met");
+    });
+
+    it("a re-judge naming no result, or another agent's or badge's, changes nothing; a malformed one is a load error and changes nothing", async () => {
+      const storage = fixture();
+      const bad = rejudgedPath("claude-high", "eng", "review", "20261004T110000Z");
+      storage.seed({
+        ...rejudgeFile({ ...rejudge, fileStem: "20200101T000000Z" }),
+        ...rejudgeFile({ ...rejudge, profileSlug: "codex" }),
+        ...rejudgeFile({ ...rejudge, credentialSlug: "docs" }),
+        [bad]: serializeRejudge({ ...rejudge, id: "20261004T110000Z" }).replace("result: not_met", "result: maybe"),
+      });
+      const state = await loadFolder(storage);
+      expect(state.assessments).toEqual([assessment]);
+      expect(state.errors.map((e) => e.path)).toEqual([bad]);
+      expect(state.raw[bad]).toBeUndefined();
+    });
+
+    it("Covers AE9. An older reply re-judged Not met beside a newer Not met reply: the cell is Not met from the newer reply, and the older keeps its time", async () => {
+      const codex: AgentProfile = { ...profile, slug: "codex", name: "Codex" };
+      const older: Assessment = { ...assessment, profileSlug: "codex", fileStem: "20260929T090000Z", recordedAt: "2026-09-29T09:00:00.000Z", result: "met", note: "" };
+      const newer: Assessment = { ...older, fileStem: "20260930T090000Z", recordedAt: "2026-09-30T09:00:00.000Z", result: "not_met", handBack: "Newer." };
+      const files = {
+        [profilePath("codex")]: serializeProfile(codex),
+        [assessmentPath("codex", "eng", "review", older.fileStem)]: serializeAssessment(older),
+        [assessmentPath("codex", "eng", "review", newer.fileStem)]: serializeAssessment(newer),
+      };
+      const rejudgeOlder = (result: Rejudge["result"]) => rejudgeFile({ ...backToMet, profileSlug: "codex", fileStem: older.fileStem, result });
+
+      const storage = fixture();
+      storage.seed({ ...files, ...rejudgeOlder("not_met") });
+      const cell = (await buildMatrix(await loadFolder(storage))).cells.get(cellKey("codex", "eng/review"))!;
+      expect(cell.status).toBe("not_met");
+      expect(cell.latest?.fileStem).toBe(newer.fileStem);
+      expect(cell.history.map((a) => [a.fileStem, a.recordedAt, a.result, a.earlierVerdicts])).toEqual([
+        [newer.fileStem, newer.recordedAt, "not_met", undefined],
+        [older.fileStem, older.recordedAt, "not_met", ["met"]],
+      ]);
+
+      // R15: re-judging the older reply Met doesn't change who holds the badge either.
+      const other = fixture();
+      other.seed({ ...files, [assessmentPath("codex", "eng", "review", older.fileStem)]: serializeAssessment({ ...older, result: "not_met" }), ...rejudgeOlder("met") });
+      const cell2 = (await buildMatrix(await loadFolder(other))).cells.get(cellKey("codex", "eng/review"))!;
+      expect(cell2.status).toBe("not_met");
+      expect(cell2.latest?.fileStem).toBe(newer.fileStem);
+      expect(cell2.history[1].result).toBe("met");
+    });
+
+    it("Covers AE10. A reply with a reading, judged Met and re-judged Not met, counts once, as Not met, in the fit and in example ranking", async () => {
+      const { targets: _targets, examplesSent: _sent, ...plain } = reading;
+      const withReading: Assessment = { ...assessment, jev: { ...plain, assignmentVersion: assessment.assignmentVersion } };
+      const storage = fixture();
+      storage.seed({ [assessmentPath("claude-high", "eng", "review", assessment.fileStem)]: serializeAssessment(withReading), ...rejudgeFile(rejudge) });
+      const state = await loadFolder(storage);
+      expect(state.errors).toEqual([]);
+      expect(calibrationsOf(state, "eng/review").get(reading.model)?.judged).toBe(1);
+      const ranked = rankExamples(state, "eng/review", assessment.assignmentVersion);
+      expect(ranked.map((c) => c.sourceId)).toEqual([`claude-high/${assessment.fileStem}`]);
+      expect(ranked[0].result.result).toBe("not_met");
+      expect(ranked[0].feeds).toEqual([{ questionId: OVERALL_ID, side: "false" }]);
+
+      // Eight Met results with a 90% reading, one re-judged Not met: the track record counts it as a miss.
+      const eight = Array.from({ length: 8 }, (_, i): Assessment => ({
+        ...withReading,
+        fileStem: `2026092${i}T090000Z`,
+        recordedAt: `2026-09-2${i}T09:00:00.000Z`,
+        jev: { ...withReading.jev!, overall: 0.9 },
+      }));
+      const many = new MemoryStorage({
+        [MARKER_PATH]: '{ "format": 1 }\n',
+        [collectionPath("eng")]: serializeCollection(collection),
+        [credentialPath("eng", "review")]: serializeCredentialMd(cred("review", "Review")),
+        [profilePath("claude-high")]: serializeProfile(profile),
+        ...Object.fromEntries(eight.map((a) => [assessmentPath(a.profileSlug, a.collectionSlug, a.credentialSlug, a.fileStem), serializeAssessment(a)])),
+        ...rejudgeFile({ ...rejudge, fileStem: eight[0].fileStem }),
+      });
+      const calibration = calibrationsOf(await loadFolder(many), "eng/review").get(reading.model)!;
+      expect(calibration.judged).toBe(8);
+      expect(calibration.trackRecord).toEqual({ matches: 7, calls: 8, cantCalls: 0 });
+    });
+
+    it("loads held readings by badge, agent and id, and head-to-heads by badge and id, with their raw text, and writes nothing", async () => {
+      const storage = fixture();
+      const codexReading = { ...heldReading, profileSlug: "codex" };
+      const docsReading = { ...heldReading, credentialSlug: "docs" };
+      const laterReading = { ...heldReading, id: "20261004T093000Z" };
+      const laterH2h = { ...headToHead, id: "20261004T094000Z" };
+      const docsH2h = { ...headToHead, credentialSlug: "docs" };
+      storage.seed({
+        ...readingFile(codexReading),
+        ...readingFile(laterReading),
+        ...readingFile(docsReading),
+        ...readingFile(heldReading),
+        ...headToHeadFile(laterH2h),
+        ...headToHeadFile(docsH2h),
+        ...headToHeadFile(headToHead),
+      });
+      const state = await loadFolder(storage);
+      expect(state.errors).toEqual([]);
+      // No held reply has the reading's stem: it still loads, and whether it is used is decided elsewhere.
+      expect(state.held).toEqual([]);
+      expect(state.heldReadings).toEqual([docsReading, heldReading, laterReading, codexReading]);
+      expect(state.headToHeads).toEqual([docsH2h, headToHead, laterH2h]);
+      expect(state.raw[heldReadingPath("codex", "eng", "review", heldReading.id)]).toBe(serializeHeldReading(codexReading));
+      expect(state.raw[headToHeadPath("eng", "review", laterH2h.id)]).toBe(serializeHeadToHead(laterH2h));
+      expect(state.assessments).toEqual([assessment]);
+      expect(storage.writes).toEqual([]);
+    });
+
+    it("an unreadable reading or head-to-head lands in errors and is skipped, and the others still load", async () => {
+      const storage = fixture();
+      const obj = JSON.parse(serializeHeadToHead(headToHead));
+      const tooHigh = headToHeadPath("eng", "review", "20261004T094000Z");
+      const noSecond = headToHeadPath("eng", "review", "20261004T095000Z");
+      const badReading = heldReadingPath("claude-high", "eng", "review", "20261004T093000Z");
+      storage.seed({
+        ...headToHeadFile(headToHead),
+        ...readingFile(heldReading),
+        [tooHigh]: JSON.stringify({ ...obj, points: [{ text: "Flags parse.", first_over: 1.01, second_over: 0 }] }),
+        [noSecond]: JSON.stringify({ ...obj, second: undefined }),
+        [badReading]: JSON.stringify({ reply: heldReading.fileStem, jev: { model: "jev-1.13.0" } }),
+      });
+      const state = await loadFolder(storage);
+      expect(state.errors.map((e) => e.path).sort()).toEqual([badReading, tooHigh, noSecond].sort());
+      expect(state.headToHeads).toEqual([headToHead]);
+      expect(state.heldReadings).toEqual([heldReading]);
+      for (const path of [tooHigh, noSecond, badReading]) expect(state.raw[path]).toBeUndefined();
+    });
+
+    it("skips hidden and temp files in rejudged, readings and head-to-head folders", async () => {
+      const storage = fixture();
+      storage.seed({
+        "assessments/claude-high/eng/review/rejudged/.20261004T090000Z.md.swp": "x",
+        "assessments/claude-high/eng/review/rejudged/20261004T090000Z.md.tmp-1": "x",
+        "assessments/claude-high/eng/review/rejudged/notes.txt": "x",
+        "assessments/claude-high/eng/review/rejudged/20261004T090000Z.json": "x",
+        "assessments/claude-high/eng/review/readings/.20261004T091000Z.json.swp": "x",
+        "assessments/claude-high/eng/review/readings/20261004T091000Z.md": "x",
+        "assessments/claude-high/.hidden/review/rejudged/20261004T090000Z.md": "x",
+        "collections/eng/head-to-head/review/.20261004T092000Z.json.swp": "x",
+        "collections/eng/head-to-head/review/20261004T092000Z.json.tmp-1": "x",
+        "collections/eng/head-to-head/review/notes.md": "x",
+        "collections/eng/head-to-head/.hidden/20261004T092000Z.json": "x",
+      });
+      const state = await loadFolder(storage);
+      expect(state.errors).toEqual([]);
+      expect(state.heldReadings).toEqual([]);
+      expect(state.headToHeads).toEqual([]);
+      expect(state.assessments).toEqual([assessment]);
+    });
   });
 });
