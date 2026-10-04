@@ -38,6 +38,10 @@ A handoff that has at least one result on a badge. A badge with zero or one run 
 
 One of an agent's results within a run. The reply list shows each agent's latest take with its older takes below, and any two takes can be compared side by side.
 
+### Held reply
+
+A reply the user saved without a verdict, to judge later, usually beside other agents' replies to the same handoff. It shows in the reply list marked Held and is not a result: it holds no badge until the user judges it Met or Not met, which records an ordinary result.
+
 ### Go-to
 
 The agent the user chose for a badge, even when several hold it. The user marks a Met result to choose it, and every mark stays in the record; a badge's go-to is the agent of its most recent mark. A go-to that no longer holds the badge stays its go-to, flagged, until the user marks another.
