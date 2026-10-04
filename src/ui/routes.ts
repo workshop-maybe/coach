@@ -48,7 +48,11 @@ export type DeckRoute =
 /** An agent or a credential on its way to the trash. */
 export type TrashItem = { kind: "agent"; profileSlug: Slug } | { kind: "badge"; credentialKey: string };
 
-/** One take: an agent's result on a badge, named by the agent and the result's file stem, since stems can repeat across agents (KTD7). */
+/**
+ * One take: an agent's result or held reply on a badge, named by the agent and the file stem,
+ * since stems can repeat across agents (KTD7). A held reply's result takes its stem, so the
+ * same reference names it before and after it is judged (hold-and-compare KTD3).
+ */
 export interface TakeRef {
   profileSlug: Slug;
   fileStem: string;
@@ -70,14 +74,15 @@ export interface ReplyListState {
 
 /**
  * One item open: a badge, an agent, one of a badge's handoffs once two or more have run
- * (R12), one take's reply (R15, KTD7), or two takes side by side (R17, KTD10). The reply
- * and the compare carry the list's picks so their way back can keep them.
+ * (R12), one take's reply (R15, KTD7), or a compare (R17, KTD10): two or more takes in strip
+ * order, two of them open at a time (hold-and-compare KTD10). The reply and the compare
+ * carry the list's picks so their way back can keep them.
  */
 export type ItemRoute =
   | ({ view: "item"; item: "badge"; credentialKey: string } & ReplyListState)
   | { view: "item"; item: "agent"; profileSlug: Slug }
   | ({ view: "item"; item: "handoff"; credentialKey: string; handoffId: string } & ReplyListState)
   | { view: "item"; item: "reply"; credentialKey: string; take: TakeRef; picks?: TakeRef[] }
-  | { view: "item"; item: "compare"; credentialKey: string; takes: [TakeRef, TakeRef]; picks?: TakeRef[] };
+  | { view: "item"; item: "compare"; credentialKey: string; takes: TakeRef[]; picks?: TakeRef[] };
 
 export type Route = { view: "home" } | DeckRoute | ItemRoute;

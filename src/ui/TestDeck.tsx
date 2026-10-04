@@ -36,6 +36,13 @@
 // result it just recorded and resolves the agent, the badge and that result on every
 // render. While the result is still there and Met, its one forward action makes or keeps
 // the agent as the badge's go-to, then leaves; the quiet back and Escape leave with no mark.
+//
+// "Hold to compare" sits beside Met and Not yet (hold-and-compare R1-R3, KTD9): it saves the
+// reply with no verdict, through the deck's finish as they do, and frees the agent. The
+// screen after it says how many replies to this handoff are held, and "Test another agent"
+// starts this deck over in place at "Who takes it" with the handoff that ran carried to
+// the box, through the doors out of that card and back. In a Jev round it is a third choice
+// that Save holds; a reading in hand goes with the held reply, seen before any verdict.
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
@@ -45,9 +52,9 @@ import { sameSetup } from "../domain/matrix";
 import { fitsJev } from "../domain/jevBudget";
 import { assessmentDir, credentialsDir } from "../domain/folder";
 import { cleanUpLineBreaks, lineBreakBatches } from "../domain/lineBreaks";
-import { fileStemFor } from "../domain/folder";
 import { goToOf, resultOf } from "../domain/goTo";
-import { markGoTo, recordAssessment } from "../domain/operations";
+import { heldOn, runIdOf } from "../domain/handoffResults";
+import { holdReply, markGoTo, recordAssessment } from "../domain/operations";
 import { readingParts, secondOpinionRequest, type JevReadingParts } from "../domain/secondOpinion";
 import {
   credentialKey,
@@ -106,8 +113,11 @@ export interface TestDeckProps {
 /** A handoff as it was copied: its id and the filled text. */
 type Copied = HandoffTemplate;
 
+/** What the judge card's choice records: a verdict, or the reply held without one (hold-and-compare R1). */
+type Choice = AssessmentResult | "hold";
+
 /** How the round ended. A Met keeps the file stem of the result it recorded, so a mark names exactly that result. */
-type Outcome = { kind: "open" } | { kind: "met"; plugId: string; fileStem: string } | { kind: "not-yet"; plugId: string };
+type Outcome = { kind: "open" } | { kind: "met"; plugId: string; fileStem: string } | { kind: "not-yet"; plugId: string } | { kind: "held"; plugId: string };
 
 /** The reply as the app last wrote it (KTD18): by a paste, a put-back or Jev's cleanup. */
 interface Unedited {
@@ -118,7 +128,7 @@ interface Unedited {
 }
 
 /** Jev's reading in hand, with what it was asked about (KTD11). */
-interface HeldReading {
+interface ReadingInHand {
   round: number;
   reply: string;
   assignmentVersion: string;
@@ -144,11 +154,14 @@ export function TestDeck(props: TestDeckProps) {
   // The judge card shows the reply and the rubric as stored rather than rendered (R12).
   const [asStored, setAsStored] = useState(false);
   const [outcome, setOutcome] = useState<Outcome>({ kind: "open" });
-  // The verdict a Met or Not yet press saves at once, outside a Jev round.
-  const pressed = useRef<AssessmentResult>("met");
-  // The pick a Jev round's Save records (KTD10). The ref is the pick when an answer lands.
-  const [verdict, setVerdict] = useState<AssessmentResult | null>(null);
+  // The choice a Met, Not yet or Hold to compare press saves at once, outside a Jev round.
+  const pressed = useRef<Choice>("met");
+  // The pick a Jev round's Save records (KTD10). The ref is the verdict picked when an answer
+  // lands: Hold is not a verdict, so a reading that lands on it was seen before any verdict.
+  const [verdict, setVerdict] = useState<Choice | null>(null);
   const verdictNow = useRef<AssessmentResult | null>(null);
+  // The handoff that ran before "Test another agent", lit for the next agent on the same badge (hold-and-compare KTD9).
+  const [carried, setCarried] = useState<{ key: string; id: string } | null>(null);
   const [recording, setRecording] = useState(false);
   const [version, setVersion] = useState<string | null>(null);
   // The machine's screen through Copy: dots out, then the cursor waits.
@@ -163,7 +176,7 @@ export function TestDeck(props: TestDeckProps) {
   const jev = useJev();
   // Whether this round offers a second opinion, settled when the judge pane first shows (KTD10).
   const [decision, setDecision] = useState<{ round: number; offered: boolean; tooLong: boolean } | null>(null);
-  const [held, setHeld] = useState<HeldReading | null>(null);
+  const [inHand, setInHand] = useState<ReadingInHand | null>(null);
   const [asking, setAsking] = useState(false);
   // The last ask's failure. One that can't be retried takes the ask away for the round (KTD20).
   const [jevTrouble, setJevTrouble] = useState<{ round: number; line: string; retry: boolean } | null>(null);
@@ -210,7 +223,7 @@ export function TestDeck(props: TestDeckProps) {
   // Whether Jev can be asked about the paste at all: not when the paste alone is over Jev's budget (KTD19).
   const pasteFits = useMemo(() => !!pasted?.cleanable && lineBreakBatches(pasted.fixed) !== null, [pasted]);
   // The reading counts only for the round, reply and assignment version it was asked about.
-  const shown = held && held.round === round && held.reply === reply && held.assignmentVersion === version ? held : null;
+  const shown = inHand && inHand.round === round && inHand.reply === reply && inHand.assignmentVersion === version ? inHand : null;
 
   // Leaving the deck drops any ask or cleanup in flight.
   useEffect(() => {
@@ -237,8 +250,10 @@ export function TestDeck(props: TestDeckProps) {
   const leave = () => navigate(props.returnTo ? backToTest(props.returnTo) : { view: "home" });
 
   // On the screen after a Met, Escape does what its quiet action does, and nothing while a
-  // mark saves. During the deck round Deck's own Escape is mounted and this one stays out.
+  // mark saves. On the screen after a hold, its quiet action goes home either way. During
+  // the deck round Deck's own Escape is mounted and this one stays out.
   useEscape(() => {
+    if (outcome.kind === "held") return home();
     if (outcome.kind !== "met" || markingNow.current) return;
     if (profile && credential) leave();
     else home();
@@ -262,7 +277,9 @@ export function TestDeck(props: TestDeckProps) {
   const choice = openingChoice(def, has(won) ? won : null);
   const pick = picked && picked.profileSlug === profileSlug && picked.key === key && has(picked.id) ? picked.id : null;
   const back = key === props.credentialKey && has(props.handoffId) ? props.handoffId : null;
-  const lit = pick ?? back ?? choice.lit;
+  // The handoff that ran before "Test another agent" outranks the route's and the badge's (KTD9).
+  const carry = carried && carried.key === key && has(carried.id) ? carried.id : null;
+  const lit = pick ?? carry ?? back ?? choice.lit;
   const ask = choice.ask;
   const here = copied && copied.profileSlug === profileSlug && copied.key === key ? copied : null;
 
@@ -323,30 +340,58 @@ export function TestDeck(props: TestDeckProps) {
     const jevReading = shown ? savedReading(shown, verdict) : undefined;
     dropAsk();
     setRecording(true);
-    // The result's file stem comes from this time, so the Met screen can name that result.
-    const now = new Date();
     try {
-      const next = await recordAssessment(
-        storage,
-        state,
-        {
-          profileSlug: profile.slug,
-          collectionSlug: credential.collectionSlug,
-          credentialSlug: credential.slug,
-          result: verdict,
-          note: "",
-          handBack: reply,
-          ...(waiting?.context ? { context: waiting.context } : {}),
-          ...(handoff ? { handoff } : {}),
-          ...(jevReading ? { jev: jevReading } : {}),
-        },
-        now,
-      );
+      // The Met screen names the result by the stem the save wrote.
+      const { state: next, fileStem } = await recordAssessment(storage, state, {
+        profileSlug: profile.slug,
+        collectionSlug: credential.collectionSlug,
+        credentialSlug: credential.slug,
+        result: verdict,
+        note: "",
+        handBack: reply,
+        ...(waiting?.context ? { context: waiting.context } : {}),
+        ...(handoff ? { handoff } : {}),
+        ...(jevReading ? { jev: jevReading } : {}),
+      });
       // The plug comes out only once the result is written.
       remove(profile.slug, credentialKey(credential));
       apply(next);
       const plugId = handoff?.id ?? SKELETON_ID;
-      setOutcome(verdict === "met" ? { kind: "met", plugId, fileStem: fileStemFor(now) } : { kind: "not-yet", plugId });
+      setOutcome(verdict === "met" ? { kind: "met", plugId, fileStem } : { kind: "not-yet", plugId });
+    } finally {
+      setRecording(false);
+    }
+  }
+
+  /** The judge card's choice, saved: a verdict records a result, Hold to compare holds the reply. */
+  function finish(choice: Choice) {
+    return choice === "hold" ? hold() : record(choice);
+  }
+
+  /**
+   * Holds the reply without a verdict (hold-and-compare R1-R3, KTD9): a held reply with the
+   * handoff that ran, the plug's context and a reading in hand, which was seen before any
+   * verdict. The plug comes out only once the held reply is written.
+   */
+  async function hold() {
+    if (!state || !credential || !profile) return;
+    const handoff = ran();
+    const jevReading = shown ? readingBeforeVerdict(shown) : undefined;
+    dropAsk();
+    setRecording(true);
+    try {
+      const { state: next } = await holdReply(storage, state, {
+        profileSlug: profile.slug,
+        collectionSlug: credential.collectionSlug,
+        credentialSlug: credential.slug,
+        handBack: reply,
+        ...(waiting?.context ? { context: waiting.context } : {}),
+        ...(handoff ? { handoff } : {}),
+        ...(jevReading ? { jev: jevReading } : {}),
+      });
+      remove(profile.slug, credentialKey(credential));
+      apply(next);
+      setOutcome({ kind: "held", plugId: handoff?.id ?? SKELETON_ID });
     } finally {
       setRecording(false);
     }
@@ -389,9 +434,9 @@ export function TestDeck(props: TestDeckProps) {
    */
   function editReply(next: string) {
     setReply(next);
-    if (next !== reply && (held || inFlight.current)) {
+    if (next !== reply && (inHand || inFlight.current)) {
       dropAsk();
-      setHeld(null);
+      setInHand(null);
     }
     if (!writing.current && uneditedNow.current && next !== uneditedNow.current.markdown) {
       markUnedited(null);
@@ -466,8 +511,8 @@ export function TestDeck(props: TestDeckProps) {
     if (pasted) writeReply(pasted.raw, "putBack");
   }
 
-  function choose(v: AssessmentResult) {
-    verdictNow.current = v;
+  function choose(v: Choice) {
+    verdictNow.current = v === "hold" ? null : v;
     setVerdict(v);
   }
 
@@ -484,7 +529,7 @@ export function TestDeck(props: TestDeckProps) {
       if (gen !== askGen.current) return;
       // An answer that isn't a full reading fails like any other ask.
       if (!parts) throw new JevError("other");
-      setHeld({ ...asked, parts, verdictWhenSeen: verdictNow.current });
+      setInHand({ ...asked, parts, verdictWhenSeen: verdictNow.current });
     } catch (e) {
       if (gen === askGen.current) setJevTrouble({ round, ...jevFailure(e) });
     } finally {
@@ -519,13 +564,23 @@ export function TestDeck(props: TestDeckProps) {
     setDecision(null);
     setVerdict(null);
     verdictNow.current = null;
-    setHeld(null);
+    setInHand(null);
     setJevTrouble(null);
     // And no paste to clean up or put back.
     dropCleanup();
     setPasted(null);
     markUnedited(null);
+    setCarried(null);
     setRound((r) => r + 1);
+  }
+
+  /**
+   * The next agent on the same badge and the same handoff (hold-and-compare R3, KTD9): the
+   * deck starts over in place, at "Who takes it", with the handoff that ran carried to the box.
+   */
+  function testAnother(handoffId: string) {
+    tryAnother();
+    if (key) setCarried({ key, id: handoffId });
   }
 
   const collection = credential ? collectionOf(credential) : undefined;
@@ -602,6 +657,49 @@ export function TestDeck(props: TestDeckProps) {
               <button type="button" className="primary" disabled={marking} onClick={() => void markIt(fileStem)}>
                 {keep ? `Keep ${profile.name} as the go-to` : `Make ${profile.name} the go-to`}
               </button>
+            )}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  // The screen after a hold (hold-and-compare R3, KTD9), resolved from the folder on every
+  // render. It says how many replies to this badge and handoff wait to be compared, and
+  // offers the next agent on the same handoff; in a detour it goes back to the held-up test.
+  if (outcome.kind === "held") {
+    if (!credential || !profile) return <Missing onHome={home} />;
+    const { plugId } = outcome;
+    const count = heldOn(state, credentialKey(credential)).filter((h) => runIdOf(h) === plugId).length;
+    const heldUp = props.returnTo && state.credentials.find((c) => credentialKey(c) === props.returnTo?.credentialKey);
+    return (
+      <section className="deck" aria-label="Test an agent">
+        <div className="deck-card">
+          {/* Focus stays on the heading, so an Enter carried over from the hold cannot start the next test. */}
+          <h2 tabIndex={-1} ref={focusOnMount}>
+            Reply held
+          </h2>
+          {stage({ kind: "idle" }, { phase: "ejecting", plugged: { label: labelOf(plugId) } })}
+          <p className="muted">{count === 1 ? "1 reply held to compare" : `${count} replies held to compare`}</p>
+          <div className="deck-actions">
+            {props.returnTo ? (
+              <>
+                <button type="button" className="ghost" onClick={home}>
+                  Home
+                </button>
+                <button type="button" className="primary" onClick={leave}>
+                  {heldUp ? `Hand over ${heldUp.name}` : "Back to the test"}
+                </button>
+              </>
+            ) : (
+              <>
+                <button type="button" className="ghost" onClick={home}>
+                  Done
+                </button>
+                <button type="button" className="primary" onClick={() => testAnother(plugId)}>
+                  Test another agent
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -709,7 +807,7 @@ export function TestDeck(props: TestDeckProps) {
             </li>
           ))}
           <li>
-            <button type="button" className="choice choice-door" onClick={() => navigate({ view: "deck", deck: "agent", returnTo: { credentialKey: key } })}>
+            <button type="button" className="choice choice-door" onClick={() => navigate({ view: "deck", deck: "agent", returnTo: { credentialKey: key, ...(carry ? { handoffId: carry } : {}) } })}>
               <Outline kind="machine" width={96} />
               <span className="choice-name">Create an agent</span>
             </button>
@@ -723,8 +821,10 @@ export function TestDeck(props: TestDeckProps) {
   // back"; a plug on another badge replaces the box with pulling it first.
   const holder = profile && credential && !waiting ? plugFor(livePlugs(pending, state), profile.slug) : undefined;
   if (holder && profile) {
-    const held = state.credentials.find((c) => credentialKey(c) === holder.credentialKey);
-    const heldLabel = held ? (handoffLabel(state, holder.credentialKey, holder.handoff?.id) ?? undefined) : undefined;
+    const plugBadge = state.credentials.find((c) => credentialKey(c) === holder.credentialKey);
+    const plugLabel = plugBadge ? (handoffLabel(state, holder.credentialKey, holder.handoff?.id) ?? undefined) : undefined;
+    // The way back lights the handoff carried from the last round, else the route's.
+    const backHandoff = carry ?? props.handoffId;
     beats.push({
       id: "pull-first",
       title: "Pull that handoff first",
@@ -736,13 +836,13 @@ export function TestDeck(props: TestDeckProps) {
           profileSlug: profile.slug,
           credentialKey: holder.credentialKey,
           resume: true,
-          returnTo: { profileSlug: profile.slug, credentialKey: key, ...(props.handoffId ? { handoffId: props.handoffId } : {}) },
+          returnTo: { profileSlug: profile.slug, credentialKey: key, ...(backHandoff ? { handoffId: backHandoff } : {}) },
         }),
       body: (
         <>
-          {stage({ kind: "waiting" }, { plugged: { label: heldLabel } })}
+          {stage({ kind: "waiting" }, { plugged: { label: plugLabel } })}
           <p className="muted">
-            {profile.name} holds the {held?.name ?? "other"} handoff
+            {profile.name} holds the {plugBadge?.name ?? "other"} handoff
           </p>
         </>
       ),
@@ -884,7 +984,7 @@ export function TestDeck(props: TestDeckProps) {
         {(canAsk || asking) && (
           <p className="helper">
             <button type="button" className="link" disabled={asking || recording} onClick={() => void askJev()}>
-              {asking ? "Asking Jev…" : verdict ? "Check with Jev" : "Ask Jev"}
+              {asking ? "Asking Jev…" : verdict === "met" || verdict === "not_met" ? "Check with Jev" : "Ask Jev"}
             </button>
           </p>
         )}
@@ -927,6 +1027,9 @@ export function TestDeck(props: TestDeckProps) {
               <button type="button" aria-pressed={verdict === "not_met"} disabled={recording} onClick={() => choose("not_met")}>
                 Not yet
               </button>
+              <button type="button" aria-pressed={verdict === "hold"} disabled={recording} onClick={() => choose("hold")}>
+                Hold to compare
+              </button>
             </>
           ) : (
             <>
@@ -950,6 +1053,17 @@ export function TestDeck(props: TestDeckProps) {
                 }}
               >
                 Not yet
+              </button>
+              {/* Saves the reply with no verdict, to judge beside other agents' replies (hold-and-compare R1). */}
+              <button
+                type="button"
+                disabled={recording}
+                onClick={() => {
+                  pressed.current = "hold";
+                  advance();
+                }}
+              >
+                Hold to compare
               </button>
             </>
           )}
@@ -978,7 +1092,7 @@ export function TestDeck(props: TestDeckProps) {
       startAt={startAt}
       unsaved={reply.trim() !== ""}
       onClose={home}
-      onFinish={() => record(jevRound && verdict ? verdict : pressed.current)}
+      onFinish={() => finish(jevRound && verdict ? verdict : pressed.current)}
     />
   );
 }
@@ -997,12 +1111,17 @@ function OnLeave({ run }: { run(): void }) {
   return null;
 }
 
+/** The reading as a held reply keeps it: seen before the verdict, which is given later (hold-and-compare KTD9). */
+function readingBeforeVerdict(reading: ReadingInHand): JevReading {
+  return { model: JEV_MODEL, assignmentVersion: reading.assignmentVersion, askedAt: reading.askedAt, overall: reading.parts.overall, points: reading.parts.points, seen: "before" };
+}
+
 /** The reading as the result keeps it. One seen after a pick says whether the saved verdict differs (R13). */
-function savedReading(held: HeldReading, verdict: AssessmentResult): JevReading {
-  const base = { model: JEV_MODEL, assignmentVersion: held.assignmentVersion, askedAt: held.askedAt, overall: held.parts.overall, points: held.parts.points };
-  return held.verdictWhenSeen === null
+function savedReading(reading: ReadingInHand, verdict: AssessmentResult): JevReading {
+  const base = { model: JEV_MODEL, assignmentVersion: reading.assignmentVersion, askedAt: reading.askedAt, overall: reading.parts.overall, points: reading.parts.points };
+  return reading.verdictWhenSeen === null
     ? { ...base, seen: "before" }
-    : { ...base, seen: "after", verdictWhenSeen: held.verdictWhenSeen, verdictChanged: verdict !== held.verdictWhenSeen };
+    : { ...base, seen: "after", verdictWhenSeen: reading.verdictWhenSeen, verdictChanged: verdict !== reading.verdictWhenSeen };
 }
 
 /** Where a key problem is fixed (KTD20). */

@@ -31,6 +31,14 @@ function result(profileSlug: string, context: Partial<TestContext> | null, crede
   };
 }
 
+describe("contextLine of a held reply", () => {
+  it("compares a held reply with the agent's earlier results", () => {
+    const earlier = result("opus", { memory: "aaaaaaaaaaaa" });
+    const held = { profileSlug: "opus", context: { machineId: "laptop", machine: "James's MacBook Pro", memory: "bbbbbbbbbbbb", capturedAt: "2026-09-30T09:00:00.000Z" } };
+    expect(contextLine([earlier], held)).toEqual({ machine: "James's MacBook Pro", memory: "changed" });
+  });
+});
+
 describe("contextLine", () => {
   it("is null for a result with no context", () => {
     const a = result("opus", null);

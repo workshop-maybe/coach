@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { BUILT_IN_HANDOFF } from "../domain/handoffs";
 import type { Assessment, Handoff } from "../domain/types";
 import type { Route } from "./routes";
-import { opus, renderApp, result, review, storageWith } from "./testFolder";
+import { heldReply, opus, renderApp, result, review, storageWith } from "./testFolder";
 
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ writeText: vi.fn() }));
 
@@ -139,6 +139,21 @@ describe("HandoffDetail", () => {
   it("a handoff with no results on the badge is not found once the matrix loads", async () => {
     open([await result(opus, review, { ...day(1) })]);
     expect(await screen.findByRole("heading", { name: "Not in the folder" })).toBeTruthy();
+  });
+
+  it("a handoff whose only replies are held opens, its held replies listed", async () => {
+    const storage = storageWith({
+      credentials: [review],
+      profiles: [opus, codex],
+      handoffs: [a],
+      assessments: [await result(opus, review, { ...day(1) })],
+      held: [await heldReply(codex, review, { fileStem: day(2).fileStem, heldAt: day(2).recordedAt, handoff: { id: "a", text: "Filled A" }, handBack: "Codex held on A" })],
+    });
+    renderApp(storage, { view: "item", item: "handoff", credentialKey: "eng/review", handoffId: "a" });
+    expect(await screen.findByRole("heading", { name: "Handoff A" })).toBeTruthy();
+    const replies = within(screen.getByRole("region", { name: "Replies" }));
+    expect(replies.getAllByRole("listitem").map((li) => li.getAttribute("aria-label"))).toEqual(["Codex agent"]);
+    expect(replies.getByText("Held")).toBeTruthy();
   });
 
   it("an unknown badge is not found", async () => {

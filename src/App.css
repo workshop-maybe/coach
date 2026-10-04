@@ -1658,12 +1658,12 @@ button:focus-visible {
   color: var(--ink-muted);
 }
 
-/* Met and Not yet share the row and stop at a comfortable width, centered, so a wide
-   window does not stretch them into bars. */
+/* Met, Not yet and Hold to compare share the row and stop at a comfortable width, centered,
+   so a wide window does not stretch them into bars; a narrow one shrinks all three alike. */
 .meet-choices {
   flex: none;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 16rem));
+  grid-template-columns: repeat(3, minmax(0, 14rem));
   justify-content: center;
   gap: var(--space-md);
 }
@@ -2389,6 +2389,32 @@ button:focus-visible {
   color: var(--good);
 }
 
+/* A held take has no verdict yet: it reads in ink, never green (hold-and-compare KTD13). */
+.verdict-held {
+  color: var(--ink);
+}
+
+/* A take's actions at the foot of its record, outside the reply's scroll, so a long reply
+   never scrolls them away (hold-and-compare KTD11): Met and Not yet on a held reply, the
+   quiet Make go-to on a Met one, or Go-to in data blue as on the badge page's holders. */
+.reply-record > .take-actions {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  margin: 0;
+  padding: var(--space-sm) var(--space-base);
+  border-top: 1px solid var(--cell);
+}
+
+.take-goto {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: var(--value-tracking);
+  color: var(--data);
+}
+
 /* One take, opened (U5, R15): a pane. The corner control takes its own row at the right,
    then the take as a record like the judge card's texts: a mono header bar with the
    agent, setup, verdict and date, the stored-text switch at its end and the note below,
@@ -2515,6 +2541,62 @@ button:focus-visible {
 
 .compare-top > .deck-close {
   position: static;
+}
+
+/* The strip (hold-and-compare KTD10): every reply in the compare as a small record button,
+   agent over its setup over its state and date, the two open ones lit as a pressed key is.
+   It wraps, and past a few rows scrolls inside its own height, so any number of replies
+   leaves the panes their room and never widens the window. */
+.compare-strip {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  max-height: 8.5rem;
+  overflow-y: auto;
+  margin: var(--space-sm) 0 var(--space-base);
+  padding: 2px;
+  list-style: none;
+}
+
+.compare-strip > li {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.compare-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  max-width: 100%;
+  padding: var(--space-xs) var(--space-md);
+  border: 1px solid var(--cell);
+  background: var(--surface);
+  text-align: left;
+}
+
+.compare-chip[aria-pressed="true"] {
+  box-shadow: var(--focus-ring);
+  color: var(--data);
+}
+
+.compare-chip-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.compare-chip-meta {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: var(--value-tracking);
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
+}
+
+.compare-error {
+  flex: none;
+  margin: 0 0 var(--space-sm);
 }
 
 .compare-panes {

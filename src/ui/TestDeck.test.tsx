@@ -1737,3 +1737,238 @@ describe("TestDeck's paste cleanup", () => {
     expect(screen.queryByText("Nothing to join")).toBeNull();
   });
 });
+
+// Holding a reply to compare (hold-and-compare R1-R3, KTD9).
+describe("TestDeck's Hold to compare", () => {
+  const A = "20260901T090000Z";
+  const B = "20260902T090000Z";
+  const handoff = (id: string, text: string): Handoff => ({ collectionSlug: "eng", credentialSlug: "review", id, text });
+  const handoffA = handoff(A, "Handoff A for {{name}}\n\n{{task}}\n");
+  const handoffB = handoff(B, "Handoff B for {{name}}\n\n{{task}}\n");
+  const docs: Credential = { ...review, slug: "docs", name: "Write docs", task: "Document the module." };
+  const codex = { ...opus, slug: "codex", name: "Codex agent", harness: "codex", model: "gpt-5" };
+  const keysList = () => screen.getByRole("list", { name: "Handoffs" });
+  const pressedKeys = () => within(keysList()).queryAllByRole("button", { pressed: true }).map((b) => b.textContent);
+  const loaded = (storage: MemoryStorage) => loadFolder(storage);
+
+  /** Picks `agent` in "Who takes it", copies, pastes and reaches the judge card. */
+  async function runTo(agent: string, reply: string) {
+    await userEvent.click(await screen.findByRole("button", { name: agent }));
+    await screen.findByRole("heading", { name: "Hand it over" });
+    await userEvent.click(screen.getByRole("button", { name: "Copy" }));
+    await screen.findByRole("heading", { name: "What came back" });
+    await userEvent.type(replyBox(), reply);
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    await screen.findByRole("heading", { name: "Did it meet it" });
+  }
+
+  it("Covers AE7. Hold to compare is offered only on the judge card, which an empty reply box never reaches", async () => {
+    renderApp(storageWith({ credentials: [review], profiles: [opus] }), fromBadge);
+    await takeAndCopy();
+    expect((screen.getByRole("button", { name: "Next" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByRole("button", { name: "Hold to compare" })).toBeNull();
+  });
+
+  it("holds the reply with the handoff that ran and the plug's context, records no result, and frees the agent after the write", async () => {
+    const storage = storageWith({ credentials: [review], profiles: [opus], handoffs: [handoffA] });
+    renderApp(storage, fromBadge);
+    await runTo("Opus agent", "Here is my review.");
+    expect(readPending(FOLDER)).toHaveLength(1);
+    await userEvent.click(screen.getByRole("button", { name: "Hold to compare" }));
+    expect(await screen.findByRole("heading", { name: "Reply held" })).toBeTruthy();
+    const folder = await loaded(storage);
+    expect(folder.assessments).toEqual([]);
+    expect(folder.held).toEqual([expect.objectContaining({ profileSlug: "opus", handBack: "Here is my review.", handoff: expect.objectContaining({ id: A }) })]);
+    expect(readPending(FOLDER)).toEqual([]);
+  });
+
+  it("the screen after holding counts the replies held on this handoff, focuses its heading and has one ink action", async () => {
+    const storage = storageWith({ credentials: [review], profiles: [opus, codex] });
+    renderApp(storage, fromBadge);
+    await runTo("Opus agent", "Opus reply.");
+    await userEvent.click(screen.getByRole("button", { name: "Hold to compare" }));
+    const heading = await screen.findByRole("heading", { name: "Reply held" });
+    expect(document.activeElement).toBe(heading);
+    expect(screen.getByText("1 reply held to compare")).toBeTruthy();
+    expect(testDeck().querySelectorAll("button.primary")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Test another agent" }).className).toBe("primary");
+    expect(screen.getByRole("button", { name: "Done" }).className).toBe("ghost");
+  });
+
+  it("Covers AE1. Test another agent starts over at Who takes it on the same badge, and the box lights the handoff that ran", async () => {
+    // B is the default; the test runs A, so the carry has to win over the default.
+    const storage = storageWith({ credentials: [review], profiles: [opus, codex], handoffs: [handoffA, handoffB] });
+    renderApp(storage, fromBadge);
+    await userEvent.click(await screen.findByRole("button", { name: "Opus agent" }));
+    await screen.findByRole("heading", { name: "Hand it over" });
+    await userEvent.click(within(keysList()).getByRole("button", { name: "A" }));
+    await userEvent.click(screen.getByRole("button", { name: "Copy" }));
+    await screen.findByRole("heading", { name: "What came back" });
+    await userEvent.type(replyBox(), "Opus on A.");
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Hold to compare" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Test another agent" }));
+    expect(await screen.findByRole("heading", { name: "Who takes it" })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Codex agent" }));
+    await screen.findByRole("heading", { name: "Hand it over" });
+    expect(pressedKeys()).toEqual(["A"]);
+    await userEvent.click(screen.getByRole("button", { name: "Copy" }));
+    await screen.findByRole("heading", { name: "What came back" });
+    await userEvent.type(replyBox(), "Codex on A.");
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Hold to compare" }));
+    expect(await screen.findByText("2 replies held to compare")).toBeTruthy();
+  });
+
+  it("Covers AE1. the carried handoff outlives a pull-first detour and a new agent made from Who takes it", async () => {
+    addPending(FOLDER, {
+      profileSlug: "codex",
+      credentialKey: "eng/docs",
+      copiedAt: "2026-09-29T10:00:00.000Z",
+      assignmentVersion: await assignmentVersion(docs.task, docs.rubric),
+      setup: { harness: "codex", model: "gpt-5", effort: "high" },
+      handoff: { id: "skeleton", text: fillHandoff(BUILT_IN_HANDOFF, docs) },
+    });
+    const storage = storageWith({ credentials: [review, docs], profiles: [opus, codex], handoffs: [handoffA, handoffB] });
+    renderApp(storage, fromBadge);
+    await userEvent.click(await screen.findByRole("button", { name: "Opus agent" }));
+    await screen.findByRole("heading", { name: "Hand it over" });
+    await userEvent.click(within(keysList()).getByRole("button", { name: "A" }));
+    await userEvent.click(screen.getByRole("button", { name: "Copy" }));
+    await screen.findByRole("heading", { name: "What came back" });
+    await userEvent.type(replyBox(), "Opus on A.");
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Hold to compare" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Test another agent" }));
+
+    // Codex holds another badge's handoff: pull it, hold that reply, then hand over this badge.
+    await userEvent.click(await screen.findByRole("button", { name: "Codex agent" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Pull it" }));
+    await screen.findByRole("heading", { name: "What came back" });
+    await userEvent.type(replyBox(), "Docs done.");
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Hold to compare" }));
+    // In a detour the screen goes back to the held-up test, as the Not yet screen does.
+    expect(screen.getByRole("button", { name: "Home" }).className).toBe("ghost");
+    await userEvent.click(screen.getByRole("button", { name: "Hand over Code review" }));
+    await screen.findByRole("heading", { name: "Hand it over" });
+    expect(pressedKeys()).toEqual(["A"]);
+  });
+
+  it("Covers AE1. the carried handoff comes back from making a new agent in Who takes it", async () => {
+    const storage = storageWith({ credentials: [review], profiles: [opus], handoffs: [handoffA, handoffB] });
+    renderApp(storage, fromBadge);
+    await userEvent.click(await screen.findByRole("button", { name: "Opus agent" }));
+    await screen.findByRole("heading", { name: "Hand it over" });
+    await userEvent.click(within(keysList()).getByRole("button", { name: "A" }));
+    await userEvent.click(screen.getByRole("button", { name: "Copy" }));
+    await screen.findByRole("heading", { name: "What came back" });
+    await userEvent.type(replyBox(), "Opus on A.");
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Hold to compare" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Test another agent" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Create an agent" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Make the agent" }));
+    expect(await screen.findByRole("heading", { name: "Hand it over" })).toBeTruthy();
+    expect(pressedKeys()).toEqual(["A"]);
+  });
+
+  it("Covers AE6. Codex is free after a hold, and a second hold on the same handoff is its own take", async () => {
+    const storage = storageWith({ credentials: [review], profiles: [opus, codex] });
+    renderApp(storage, fromBadge);
+    await runTo("Codex agent", "First try.");
+    await userEvent.click(screen.getByRole("button", { name: "Hold to compare" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Test another agent" }));
+    await runTo("Codex agent", "Second try.");
+    await userEvent.click(screen.getByRole("button", { name: "Hold to compare" }));
+    expect(await screen.findByText("2 replies held to compare")).toBeTruthy();
+    expect((await loaded(storage)).held.map((h) => h.handBack)).toEqual(["First try.", "Second try."]);
+  });
+
+  it("Done goes home, Escape does too, and Home lists the held reply", async () => {
+    const storage = storageWith({ credentials: [review], profiles: [opus] });
+    renderApp(storage, fromBadge);
+    await runTo("Opus agent", "Opus reply.");
+    await userEvent.click(screen.getByRole("button", { name: "Hold to compare" }));
+    await screen.findByRole("heading", { name: "Reply held" });
+    await userEvent.keyboard("{Escape}");
+    expect(await screen.findByRole("heading", { name: "Home", level: 1 })).toBeTruthy();
+    expect(await screen.findByText("Judge Opus agent's reply")).toBeTruthy();
+  });
+
+  it("removing the agent while the screen is up shows the Not in the folder card", async () => {
+    const storage = storageWith({ credentials: [review], profiles: [opus] });
+    renderApp(storage, fromBadge);
+    await runTo("Opus agent", "Opus reply.");
+    await userEvent.click(screen.getByRole("button", { name: "Hold to compare" }));
+    await screen.findByRole("heading", { name: "Reply held" });
+    storage.remove(profilePath("opus"));
+    fireEvent.focus(window);
+    expect(await screen.findByRole("heading", { name: "Not in the folder" })).toBeTruthy();
+  });
+
+  it("a failed hold keeps the plug, records nothing and says why", async () => {
+    const storage = storageWith({ credentials: [review], profiles: [opus] });
+    renderApp(storage, fromBadge);
+    await runTo("Opus agent", "Opus reply.");
+    vi.spyOn(storage, "writeText").mockRejectedValueOnce(new Error("disk full"));
+    await userEvent.click(screen.getByRole("button", { name: "Hold to compare" }));
+    expect(await screen.findByText(/disk full/)).toBeTruthy();
+    expect(readPending(FOLDER)).toHaveLength(1);
+    expect((await loaded(storage)).held).toEqual([]);
+  });
+
+  it("after a hold, a Met by the same agent in the same second still offers the go-to on that result", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-01T09:00:00.000Z"));
+    try {
+      const storage = storageWith({ credentials: [review], profiles: [opus] });
+      renderApp(storage, fromBadge);
+      await runTo("Opus agent", "Held one.");
+      await userEvent.click(screen.getByRole("button", { name: "Hold to compare" }));
+      await userEvent.click(await screen.findByRole("button", { name: "Test another agent" }));
+      await runTo("Opus agent", "Met one.");
+      await userEvent.click(screen.getByRole("button", { name: "Met" }));
+      expect(await screen.findByRole("button", { name: "Make Opus agent the go-to" })).toBeTruthy();
+      const folder = await loaded(storage);
+      expect(folder.held.map((h) => h.fileStem)).toEqual(["20261001T090000Z"]);
+      expect(folder.assessments.map((a) => a.fileStem)).toEqual(["20261001T090001Z"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("TestDeck's Hold to compare in a Jev round", () => {
+  const graded: Credential = { ...review, rubric: "- Names the off-by-one\n- Points to the line" };
+  const ANSWERS: JevAnswers = { answers: { p1: 0.9, p2: 0.4, overall: 0.6 } };
+
+  it("is a third choice that Save holds, keeping the reading in hand as seen before the verdict", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", ANSWERS);
+    const storage = storageWith({ credentials: [graded], profiles: [opus] });
+    render(
+      <JevProvider jev={fake}>
+        <FolderProvider storage={storage} folder={FOLDER}>
+          <AppShell onChangeFolder={() => {}} initialRoute={fromBadge} />
+        </FolderProvider>
+      </JevProvider>,
+    );
+    await takeAndCopy();
+    await userEvent.type(replyBox(), "I found it on line 12.");
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    await screen.findByRole("heading", { name: "Did it meet it" });
+    await userEvent.click(screen.getByRole("button", { name: "Met" }));
+    await userEvent.click(screen.getByRole("button", { name: "Check with Jev" }));
+    await screen.findByRole("region", { name: "Jev's reading" });
+    const hold = screen.getByRole("button", { name: "Hold to compare" });
+    await userEvent.click(hold);
+    expect(hold.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Met" }).getAttribute("aria-pressed")).toBe("false");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByRole("heading", { name: "Reply held" })).toBeTruthy();
+    const folder = await loadFolder(storage);
+    expect(folder.assessments).toEqual([]);
+    expect(folder.held[0].jev).toEqual(expect.objectContaining({ seen: "before", overall: 0.6 }));
+  });
+});

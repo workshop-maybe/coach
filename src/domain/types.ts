@@ -105,6 +105,32 @@ export interface Assessment {
   jev?: JevReading;
 }
 
+/**
+ * A reply the user saved without a verdict, to judge later beside other agents' replies
+ * (hold-and-compare KTD1, KTD2). Read from assessments/<agent>/<collection>/<credential>/held/<stem>.md.
+ * It is not a result: it holds no badge. Judging it writes a result under the same stem and
+ * time, and from then on the folder no longer lists it as held (KTD3, KTD4).
+ */
+export interface HeldReply {
+  profileSlug: Slug;
+  collectionSlug: Slug;
+  credentialSlug: Slug;
+  /** Filename stem, a stamp. The result it becomes takes the same stem. */
+  fileStem: string;
+  /** Full ISO 8601 time the reply was held. The result it becomes is recorded at this time. */
+  heldAt: string;
+  /** Assignment version at hold time. */
+  assignmentVersion: string;
+  /** Profile setup at hold time. */
+  setup: AgentSetup;
+  /** The agent's reply, pasted verbatim. */
+  handBack: string;
+  context?: TestContext;
+  handoff?: HandoffTemplate;
+  /** Jev's reading, taken before the reply was held. Always seen "before" the verdict. */
+  jev?: JevReading;
+}
+
 /** A handoff's identity and template text. The skeleton's id is SKELETON_ID (KTD3). */
 export interface HandoffTemplate {
   /** The file stem, or "skeleton". */
@@ -173,6 +199,8 @@ export interface FolderState {
   credentials: Credential[];
   profiles: AgentProfile[];
   assessments: Assessment[];
+  /** Replies still held, by collection, credential, agent, then stem. A judged one is left out. */
+  held: HeldReply[];
   /** The edited skeleton's text, or null when the folder has none and the built-in one applies (KTD1). */
   skeleton: string | null;
   /** Every badge's handoffs, by collection, credential, then id (creation order). */

@@ -11,11 +11,14 @@ import {
   fileStemFor,
   handoffPath,
   handoffsDir,
+  heldDir,
+  heldPath,
   loadFolder,
   markPath,
   marksDir,
   parseAssessment,
   parseCollection,
+  parseHeld,
   parseMark,
   parseProfile,
   profilePath,
@@ -27,13 +30,14 @@ import {
   SKELETON_PATH,
   serializeAssessment,
   serializeCollection,
+  serializeHeld,
   serializeMark,
   serializeProfile,
 } from "./folder";
 import { buildExport } from "./export";
 import { reorderCredentials } from "./operations";
 import { resolveBadgeSettings } from "../badge/settings";
-import type { AgentProfile, Assessment, Collection, Credential, JevReading, Mark } from "./types";
+import type { AgentProfile, Assessment, Collection, Credential, HeldReply, JevReading, Mark } from "./types";
 
 function cred(slug: string, name: string, collectionSlug = "eng"): Credential {
   return {
@@ -927,5 +931,125 @@ describe("mark files", () => {
     expect(state.errors).toEqual([]);
     expect(state.marks).toEqual([]);
     expect(state.assessments).toHaveLength(1);
+  });
+});
+
+describe("held reply files", () => {
+  const held: HeldReply = {
+    profileSlug: "claude-high",
+    collectionSlug: "eng",
+    credentialSlug: "review",
+    fileStem: "20261001T090000Z",
+    heldAt: "2026-10-01T09:00:00.456Z",
+    assignmentVersion: "12e456789012",
+    setup: { harness: "claude-code", model: "opus", effort: "high" },
+    handBack,
+  };
+  const ids = { profileSlug: "claude-high", collectionSlug: "eng", credentialSlug: "review", fileStem: held.fileStem };
+  const context = { machineId: "m-1", machine: "Studio", memory: "4c1e9a7b20d3", capturedAt: "2026-10-01T08:50:00.000Z" };
+  const handoff = { id: "skeleton", text: "Do the review." };
+  const jev: JevReading = {
+    model: "jev-1",
+    assignmentVersion: "12e456789012",
+    askedAt: "2026-10-01T08:59:00.000Z",
+    seen: "before",
+    overall: 0.8,
+    points: [{ text: "Flags parse.", probability: 0.8 }],
+  };
+
+  it("keeps a held reply one folder below the results it will join (KTD1)", () => {
+    expect(heldDir("claude-high", "eng", "review")).toBe("assessments/claude-high/eng/review/held");
+    expect(heldPath("claude-high", "eng", "review", held.fileStem)).toBe("assessments/claude-high/eng/review/held/20261001T090000Z.md");
+    expect(isCredentialResult(heldPath("claude-high", "eng", "review", held.fileStem), "eng", "review")).toBe(true);
+  });
+
+  it("serializes with no verdict and no note, and parses back unchanged (KTD2)", () => {
+    const text = serializeHeld(held);
+    expect(text).toMatch(/^---\nheld_at: /);
+    // The reply itself has a "## Note" line; nothing before it does.
+    const head = text.slice(0, text.indexOf("## Handback"));
+    expect(head).not.toMatch(/^result:/m);
+    expect(head).not.toMatch(/^## Note/m);
+    expect(parseHeld(text, ids)).toEqual(held);
+  });
+
+  it("keeps a context, a handoff and a reading", () => {
+    const full: HeldReply = { ...held, context, handoff, jev };
+    expect(parseHeld(serializeHeld(full), ids)).toEqual(full);
+  });
+
+  it("reads a malformed context, handoff or reading as absent", () => {
+    const text = serializeHeld(held).replace("---\n\n## Handback", "context: 3\nhandoff: [1]\njev: nope\n---\n\n## Handback");
+    expect(parseHeld(text, ids)).toEqual(held);
+  });
+
+  it("ignores a stray result key and a hand-added note", () => {
+    const text = serializeHeld(held).replace("held_at:", "result: met\nheld_at:").replace("## Handback", "## Note\n\nMine.\n\n## Handback");
+    expect(parseHeld(text, ids)).toEqual(held);
+  });
+
+  it("refuses a file with no front matter, or one missing held_at, the version or a usable setup", () => {
+    expect(() => parseHeld("## Handback\n\nHi\n", ids)).toThrow(/frontmatter/i);
+    expect(() => parseHeld(serializeHeld(held).replace(/^held_at: .*\n/m, ""), ids)).toThrow(/held_at/);
+    expect(() => parseHeld(serializeHeld(held).replace(/^assignment_version: .*\n/m, ""), ids)).toThrow(/assignment_version/);
+    expect(() => parseHeld(serializeHeld(held).replace(/^setup:\n(  .*\n)+/m, "setup: 3\n"), ids)).toThrow(/setup/);
+  });
+
+  it("loads held replies under two agents and two badges, sorted, with their raw text, and never as results", async () => {
+    const storage = fixture();
+    storage.seed({ [credentialPath("eng", "docs")]: serializeCredentialMd(cred("docs", "Docs")) });
+    const later = { ...held, fileStem: "20261002T090000Z", heldAt: "2026-10-02T09:00:00.000Z" };
+    const codex = { ...held, profileSlug: "codex" };
+    const docs = { ...held, credentialSlug: "docs" };
+    for (const h of [later, codex, docs, held]) storage.seed({ [heldPath(h.profileSlug, h.collectionSlug, h.credentialSlug, h.fileStem)]: serializeHeld(h) });
+    const state = await loadFolder(storage);
+    expect(state.errors).toEqual([]);
+    expect(state.held).toEqual([docs, held, later, codex]);
+    expect(state.assessments).toEqual([assessment]);
+    expect(state.raw[heldPath("claude-high", "eng", "review", later.fileStem)]).toBe(serializeHeld(later));
+    expect(storage.writes).toEqual([]);
+  });
+
+  it("an unreadable held file lands in errors and not in held", async () => {
+    const storage = fixture();
+    const bad = heldPath("claude-high", "eng", "review", "20261002T090000Z");
+    storage.seed({ [heldPath("claude-high", "eng", "review", held.fileStem)]: serializeHeld(held), [bad]: "no front matter" });
+    const state = await loadFolder(storage);
+    expect(state.errors.map((e) => e.path)).toEqual([bad]);
+    expect(state.held).toEqual([held]);
+  });
+
+  it("skips hidden and temp files in a held folder and files under any other subfolder", async () => {
+    const storage = fixture();
+    storage.seed({
+      "assessments/claude-high/eng/review/held/.20261001T090000Z.md.swp": "x",
+      "assessments/claude-high/eng/review/held/20261001T090000Z.md.tmp-1": "x",
+      "assessments/claude-high/eng/review/held/notes.txt": "x",
+      "assessments/claude-high/eng/review/drafts/20261001T090000Z.md": "x",
+      "assessments/claude-high/eng/.hidden/held/20261001T090000Z.md": "x",
+    });
+    const state = await loadFolder(storage);
+    expect(state.errors).toEqual([]);
+    expect(state.held).toEqual([]);
+    expect(state.assessments).toEqual([assessment]);
+  });
+
+  it("leaves out and never reads a held file whose result file exists, even when that result won't parse (KTD4)", async () => {
+    const storage = fixture();
+    const judgedStem = assessment.fileStem;
+    const brokenStem = "20261003T090000Z";
+    storage.seed({
+      // Judged, and the held file itself mangled since: no load error for it.
+      [heldPath("claude-high", "eng", "review", judgedStem)]: "mangled",
+      // Judged, but the result file no longer parses: still not held again.
+      [heldPath("claude-high", "eng", "review", brokenStem)]: serializeHeld({ ...held, fileStem: brokenStem }),
+      [assessmentPath("claude-high", "eng", "review", brokenStem)]: "not a result",
+      // Still held.
+      [heldPath("claude-high", "eng", "review", held.fileStem)]: serializeHeld(held),
+    });
+    const state = await loadFolder(storage);
+    expect(state.held).toEqual([held]);
+    expect(state.errors.map((e) => e.path)).toEqual([assessmentPath("claude-high", "eng", "review", brokenStem)]);
+    expect(state.raw[heldPath("claude-high", "eng", "review", judgedStem)]).toBeUndefined();
   });
 });

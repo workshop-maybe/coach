@@ -5,11 +5,12 @@ import userEvent from "@testing-library/user-event";
 import { loadFolder } from "../domain/folder";
 import { handoffRuns } from "../domain/handoffResults";
 import { buildMatrix } from "../domain/matrix";
-import type { Assessment, Handoff } from "../domain/types";
+import type { Assessment, Handoff, HeldReply } from "../domain/types";
+import { formatDate } from "./format";
 import { NavContext } from "./nav";
 import { ReplyList } from "./ReplyList";
 import type { ReplyListState, Route, TakeRef } from "./routes";
-import { opus, result, review, storageWith } from "./testFolder";
+import { heldReply, opus, result, review, storageWith } from "./testFolder";
 
 afterEach(cleanup);
 
@@ -17,8 +18,8 @@ const codex = { ...opus, slug: "codex", name: "Codex agent", harness: "codex", m
 const a: Handoff = { id: "a", collectionSlug: "eng", credentialSlug: "review", text: "# A\n\n{{task}}\n" };
 const ran = { id: "a", text: "Filled handoff A" };
 
-async function setup(assessments: Assessment[], back: ReplyListState = {}) {
-  const state = await loadFolder(storageWith({ credentials: [review], profiles: [opus, codex], handoffs: [a], assessments }));
+async function setup(assessments: Assessment[], back: ReplyListState = {}, held: HeldReply[] = []) {
+  const state = await loadFolder(storageWith({ credentials: [review], profiles: [opus, codex], handoffs: [a], assessments, held }));
   const matrix = await buildMatrix(state);
   const run = handoffRuns(matrix, state, "eng/review").runs[0];
   const navigate = vi.fn<(r: Route) => void>();
@@ -34,7 +35,15 @@ async function setup(assessments: Assessment[], back: ReplyListState = {}) {
 }
 
 const day = (n: number) => ({ fileStem: `2026090${n}T090000Z`, recordedAt: `2026-09-0${n}T09:00:00.000Z` });
+const heldDay = (n: number) => ({ fileStem: day(n).fileStem, heldAt: day(n).recordedAt });
 const take = (slug: string, n: number): TakeRef => ({ profileSlug: slug, fileStem: day(n).fileStem });
+/** The take a pick box names, from its label "Pick <agent>, <date>": the agent by name, the day from the date. */
+function refFromLabel(box: HTMLInputElement): TakeRef {
+  const label = box.getAttribute("aria-label")!;
+  const slug = label.startsWith("Pick Opus") ? "opus" : "codex";
+  const n = [1, 2, 3, 4, 5].find((d) => label.endsWith(formatDate(day(d).recordedAt)))!;
+  return take(slug, n);
+}
 /** The button that opens a take: the row's own, or an older take's under it. */
 const head = (el: HTMLElement) => el.querySelector<HTMLButtonElement>("button.take-head")!;
 const replyTo = (at: TakeRef, picks?: TakeRef[]) => ({ view: "item", item: "reply", credentialKey: "eng/review", take: at, ...(picks ? { picks } : {}) });
@@ -114,11 +123,37 @@ describe("ReplyList", () => {
     expect((screen.getByRole("button", { name: "Compare" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
-  it("a third pick drops the oldest pick", async () => {
-    await setup([...(await twoAgents()), await result(opus, review, { ...day(3), handoff: ran, handBack: "Third" })]);
+  it("Covers AE4. Any number of takes, held and judged, can be picked, and Compare sends them all in pick order", async () => {
+    const { navigate } = await setup(
+      [...(await twoAgents()), await result(opus, review, { ...day(3), handoff: ran, handBack: "Third" })],
+      {},
+      [await heldReply(codex, review, { ...heldDay(4), handoff: ran }), await heldReply(opus, review, { ...heldDay(5), handoff: ran })],
+    );
     const boxes = screen.getAllByRole("checkbox");
+    expect(boxes).toHaveLength(5);
     for (const box of boxes) await userEvent.click(box);
-    expect(boxes.map((b) => (b as HTMLInputElement).checked)).toEqual([false, true, true]);
+    expect(boxes.map((b) => (b as HTMLInputElement).checked)).toEqual([true, true, true, true, true]);
+    await userEvent.click(screen.getByRole("button", { name: "Compare" }));
+    const route = navigate.mock.calls[navigate.mock.calls.length - 1][0] as { takes: TakeRef[] };
+    expect(route.takes).toHaveLength(5);
+    expect(route.takes).toEqual(boxes.map((b) => refFromLabel(b as HTMLInputElement)));
+  });
+
+  it("Covers AE2. A held take is marked Held in its handoff's list, beside judged takes", async () => {
+    await setup(await twoAgents(), {}, [await heldReply(codex, review, { ...heldDay(3), handoff: ran, handBack: "Held reply text" })]);
+    const codexRow = screen.getAllByRole("listitem").find((li) => li.getAttribute("aria-label") === "Codex agent")!;
+    expect(within(codexRow).getByText("Held")).toBeTruthy();
+    expect(within(codexRow).getByText(/Held reply text/)).toBeTruthy();
+    expect(within(codexRow).getByText("Not met")).toBeTruthy();
+  });
+
+  it("two held takes by one agent on one day have distinct pick labels", async () => {
+    await setup([], {}, [
+      await heldReply(codex, review, { fileStem: "20260903T090000Z", heldAt: "2026-09-03T09:00:00.000Z", handoff: ran }),
+      await heldReply(codex, review, { fileStem: "20260903T150000Z", heldAt: "2026-09-03T15:00:00.000Z", handoff: ran }),
+    ]);
+    const labels = screen.getAllByRole("checkbox").map((b) => b.getAttribute("aria-label"));
+    expect(new Set(labels).size).toBe(2);
   });
 
   it("Covers AE5. Compare goes to the compare of the two picked takes, carrying them as the picks", async () => {
@@ -178,10 +213,10 @@ describe("ReplyList", () => {
     expect((screen.getByRole("button", { name: "Pick two to compare" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("Test again opens the test for that agent and badge", async () => {
+  it("Test again opens the test for that agent and badge, with the run's handoff lit", async () => {
     const { navigate } = await setup(await twoAgents());
     await userEvent.click(within(screen.getAllByRole("listitem")[1]).getByRole("button", { name: "Test again" }));
-    expect(navigate).toHaveBeenCalledWith({ view: "deck", deck: "test", profileSlug: "opus", credentialKey: "eng/review" });
+    expect(navigate).toHaveBeenCalledWith({ view: "deck", deck: "test", profileSlug: "opus", credentialKey: "eng/review", handoffId: "a" });
   });
 
   it("the lit agent's row is marked as the one the view is about", async () => {

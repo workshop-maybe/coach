@@ -37,6 +37,8 @@ Andamio/
       my-credentials/
         say-how-sure-you-are/
           20260926T164500Z.md
+          held/
+            20260929T101500Z.md
   handoffs/
     skeleton.md
   trash/
@@ -49,11 +51,11 @@ Andamio/
 - `marks/` inside a collection holds every time you chose a badge's go-to, one small file each, named for when you chose. Each names the agent and the result you chose it on, and the newest one is the badge's go-to. See [Choose a go-to](/how-to/choose-a-go-to/).
 - `badge/` holds the art you chose for a badge's look.
 - `agents/` has one JSON file per agent: its name, harness, model, effort, repo, notes and parameters.
-- `assessments/` holds your results: a folder for each agent, then its collection, then the badge, with one file per result.
+- `assessments/` holds your results: a folder for each agent, then its collection, then the badge, with one file per result. A `held/` folder inside holds the replies you held to compare, one file each. When you judge one, its result is written beside the others under the same name, and the held file stays as it was. See [Run a bake-off](/how-to/run-a-bake-off/).
 - `handoffs/skeleton.md`, at the top, is the skeleton. It appears only once you edit it. Until then the app uses its built-in one.
 - `trash/` holds what you moved to the trash.
 
-A badge or an agent gets its file name from its name when you make it: *Say how sure you are* becomes `say-how-sure-you-are.md`. Renaming it later keeps the file name. A result is named for when you recorded it, in UTC.
+A badge or an agent gets its file name from its name when you make it: *Say how sure you are* becomes `say-how-sure-you-are.md`. Renaming it later keeps the file name. A result is named for when you recorded it, in UTC, and a held reply for when you held it. A result judged from a held reply keeps the held reply's name and time.
 
 ## A credential
 
@@ -87,7 +89,7 @@ Any other section you add by hand is kept when the app saves the file.
 A result is one Markdown file. It starts with a block of fields between `---` lines:
 
 - `result`: `met` or `not_met`.
-- `recorded_at`: when you recorded it.
+- `recorded_at`: when you recorded it. For a reply you held and judged later, when you held it.
 - `assignment_version`: which version of the badge's task and rubric it was judged against. When you change either one, its holders are asked to re-test.
 - `setup`: the agent's harness, model and effort at the time.
 - The computer the test started on, the exact handoff text the agent got, and Jev's reading when you asked for one.
@@ -108,7 +110,7 @@ You can change any file while the app is open. It reads the folder again when it
 
 ## The trash
 
-<UI>Move to trash</UI> deletes nothing. It moves the files into `trash/`, in a folder named for when you moved them, at the same paths they had. An agent goes with its results, and while it's there no badge has it as its go-to. A badge goes with its handoffs, its go-to choices, every agent's results on it and a copy of its collection's file as it was. Pictures pasted into a result go with it. Pictures beside a badge or an agent stay where they are, since other badges or agents may name the same file.
+<UI>Move to trash</UI> deletes nothing. It moves the files into `trash/`, in a folder named for when you moved them, at the same paths they had. An agent goes with its results and its held replies, and while it's there no badge has it as its go-to. A badge goes with its handoffs, its go-to choices, every agent's results and held replies on it and a copy of its collection's file as it was. Pictures pasted into a result go with it. Pictures beside a badge or an agent stay where they are, since other badges or agents may name the same file.
 
 To get something back, move its files from the trash to the same places in your folder, then click <UI>Reload</UI>. To delete something for good, delete it from `trash/`.
 
