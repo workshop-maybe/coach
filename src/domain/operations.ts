@@ -14,6 +14,8 @@ import {
   handoffsDir,
   isCredentialResult,
   loadFolder,
+  markPath,
+  marksDir,
   profilePath,
   profileResultsDir,
   saveAssessment,
@@ -21,10 +23,12 @@ import {
   saveCredential,
   saveProfile,
   saveText,
+  serializeMark,
   SKELETON_PATH,
   trashPath,
 } from "./folder";
 import { checkHandoff, isHandoffLocked, type HandoffProblem } from "./handoffs";
+import { resultOf } from "./goTo";
 import { assignmentVersion } from "./hash";
 import { findPreset, presetCredential } from "./presets";
 import { uniqueSlug } from "./slug";
@@ -38,6 +42,7 @@ import {
   type Credential,
   type FolderState,
   type JevReading,
+  type Mark,
   type Slug,
   type TestContext,
 } from "./types";
@@ -353,13 +358,15 @@ export async function saveSkeleton(storage: Storage, text: string, baseText: str
 const STAMP = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/;
 
 /**
- * A stamp later than every stamp the badge already has on disk, so the new handoff is
- * its newest (R6) even when two are made in the same second or the clock reads earlier.
+ * A stamp later than every `<stamp><ext>` file already in `dir`, so the new file is the
+ * newest there even when two are made in the same second or the clock reads earlier. A
+ * badge's handoffs (R6) and its go-to marks (KTD2) both take their ids from it.
  */
-async function nextHandoffId(storage: Storage, collectionSlug: Slug, credentialSlug: Slug, now: Date): Promise<string> {
+async function nextStamp(storage: Storage, dir: string, ext: string, now: Date): Promise<string> {
   let time = Math.floor(now.getTime() / 1000) * 1000;
-  for (const path of await storage.listFiles("data", handoffsDir(collectionSlug, credentialSlug))) {
-    const m = STAMP.exec(path.slice(path.lastIndexOf("/") + 1).replace(/\.md$/, ""));
+  for (const path of await storage.listFiles("data", dir)) {
+    const name = path.slice(path.lastIndexOf("/") + 1);
+    const m = STAMP.exec(name.endsWith(ext) ? name.slice(0, -ext.length) : name);
     if (m) time = Math.max(time, Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]) + 1000);
   }
   return fileStemFor(new Date(time));
@@ -376,7 +383,7 @@ export async function createHandoff(
 ): Promise<{ state: FolderState; id: string }> {
   const credential = findCredential(state, collectionSlug, credentialSlug);
   assertHandoffOk(text, credential.rubric);
-  const id = await nextHandoffId(storage, collectionSlug, credentialSlug, now);
+  const id = await nextStamp(storage, handoffsDir(collectionSlug, credentialSlug), ".md", now);
   await saveText(storage, handoffPath(collectionSlug, credentialSlug, id), text, null);
   return { state: await loadFolder(storage), id };
 }
@@ -459,6 +466,35 @@ export async function recordAssessment(
 }
 
 // ---------------------------------------------------------------------------
+// Go-to marks
+
+/** The result a mark is made on: its agent, its badge and its file stem. */
+export interface MarkInput {
+  profileSlug: Slug;
+  collectionSlug: Slug;
+  credentialSlug: Slug;
+  fileStem: string;
+}
+
+/**
+ * Marks a Met result as the agent the user chose for its badge (R1, R3): a new mark file
+ * named for when it was made, never a change to the result (KTD1, KTD2). Checks the result
+ * against the folder as given, since the view that asks may hold it across a reload.
+ */
+export async function markGoTo(storage: Storage, state: FolderState, input: MarkInput, now: Date = new Date()): Promise<FolderState> {
+  findProfile(state, input.profileSlug);
+  const credential = findCredential(state, input.collectionSlug, input.credentialSlug);
+  const result = resultOf(state, input.profileSlug, credentialKey(credential), input.fileStem);
+  if (!result) throw new Error("That result is no longer in the folder.");
+  if (result.result !== "met") throw new Error("Only a Met result can make an agent the go-to.");
+  const dir = marksDir(credential.collectionSlug, credential.slug);
+  const id = await nextStamp(storage, dir, ".json", now);
+  const mark: Mark = { collectionSlug: credential.collectionSlug, credentialSlug: credential.slug, id, profileSlug: input.profileSlug, fileStem: input.fileStem };
+  await saveText(storage, markPath(mark.collectionSlug, mark.credentialSlug, id), serializeMark(mark), null);
+  return loadFolder(storage);
+}
+
+// ---------------------------------------------------------------------------
 // Trash: an agent or a credential leaves the app with its results, moved (never
 // deleted) under trash/<stamp>/ at the same paths, so moving the files back restores it.
 // The item's own file moves last: if a move fails partway, the item still loads and
@@ -499,9 +535,10 @@ export async function trashCredential(
   await saveCollection(storage, next, base);
   if (base !== null) await storage.writeText("data", trashPath(stamp, path), base);
 
-  // Every agent's results for it and every handoff file, parsed or not.
+  // Every agent's results for it, every handoff file and every go-to mark, parsed or not.
   const results = (await storage.listFiles("data", ASSESSMENTS_DIR)).filter((p) => isCredentialResult(p, collectionSlug, credentialSlug));
   const handoffs = await storage.listFiles("data", handoffsDir(collectionSlug, credentialSlug));
-  await moveToTrash(storage, [...results, ...handoffs, credentialPath(collectionSlug, credentialSlug)], stamp);
+  const marks = await storage.listFiles("data", marksDir(collectionSlug, credentialSlug));
+  await moveToTrash(storage, [...results, ...handoffs, ...marks, credentialPath(collectionSlug, credentialSlug)], stamp);
   return loadFolder(storage);
 }

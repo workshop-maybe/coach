@@ -1,13 +1,14 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { credentialPath, loadFolder } from "../domain/folder";
+import { assessmentPath, credentialPath, loadFolder } from "../domain/folder";
 import { serializeCredentialMd } from "../domain/credential-md";
 import { BUILT_IN_HANDOFF } from "../domain/handoffs";
 import { buildMatrix } from "../domain/matrix";
 import { checkCriteriaPrompt, refinePrompt, reviewAssignmentPrompt } from "../domain/prompts";
+import type { Mark } from "../domain/types";
 import type { MemoryStorage } from "../storage/memory";
 import { holdersOf, parseParam } from "./EditDecks";
 import { opus, renderApp, result, review, snapshot, storageWith } from "./testFolder";
@@ -633,5 +634,185 @@ describe("edit helpers", () => {
     expect(parseParam("url=http://x?a=b")).toEqual(["url", "http://x?a=b"]);
     expect(parseParam("flag")).toEqual(["flag", ""]);
     expect(parseParam(" = x")).toBeNull();
+  });
+});
+
+// The go-to on the badge page (U5, R4, R8, R9, KTD7): each holder's row says it is the
+// go-to or offers Make go-to, and a go-to that no longer holds the badge shows under them.
+describe("BadgeDetail's go-to", () => {
+  const day = (n: number) => ({ fileStem: `2026090${n}T090000Z`, recordedAt: `2026-09-0${n}T09:00:00.000Z` });
+  const markOn = (slug: string, fileStem = day(1).fileStem): Mark => ({ collectionSlug: "eng", credentialSlug: "review", id: "20260905T090000Z", profileSlug: slug, fileStem });
+  const holdersRegion = () => screen.findByRole("region", { name: "Holders" });
+  /** A holder's row button, by its agent's name. */
+  const row = async (name: string) => within(await holdersRegion()).findByRole("button", { name: new RegExp(`^${name}`) });
+  /** The list item a holder's row sits in, with the line under it. */
+  const item = async (name: string) => (await row(name)).closest("li")!;
+  const makeGoTo = (name: string) => screen.getByRole("button", { name: "Make go-to", description: name });
+  const marks = async (storage: MemoryStorage) => (await loadFolder(storage)).marks;
+
+  it("Covers AE1. Two holders with no go-to both offer Make go-to; taking Codex's marks its latest result, its row says Go-to and takes focus", async () => {
+    const storage = storageWith({
+      credentials: [review],
+      profiles: [opus, codex],
+      assessments: [await result(opus, review), await result(codex, review), await result(codex, review, day(2))],
+    });
+    renderApp(storage, badge);
+    await row("Codex agent");
+    expect(within(await item("Opus agent")).getByRole("button", { name: "Make go-to" })).toBe(makeGoTo("Opus agent"));
+    expect(within(await item("Codex agent")).getByRole("button", { name: "Make go-to" })).toBe(makeGoTo("Codex agent"));
+    expect(within(await holdersRegion()).queryByText("Go-to")).toBeNull();
+
+    await userEvent.click(makeGoTo("Codex agent"));
+    await waitFor(async () => expect(within(await item("Codex agent")).getByText("Go-to")).toBeTruthy());
+    expect(within(await item("Codex agent")).queryByRole("button", { name: "Make go-to" })).toBeNull();
+    expect(within(await item("Opus agent")).getByRole("button", { name: "Make go-to" })).toBeTruthy();
+    const written = await marks(storage);
+    expect(written).toHaveLength(1);
+    expect(written[0]).toMatchObject({ profileSlug: "codex", fileStem: day(2).fileStem, collectionSlug: "eng", credentialSlug: "review" });
+    await waitFor(async () => expect(document.activeElement).toBe(await row("Codex agent")));
+    expect(document.querySelectorAll("button.primary")).toHaveLength(1);
+  });
+
+  it("Covers AE1. Home names the go-to made on the badge page", async () => {
+    const storage = storageWith({ credentials: [review], profiles: [opus, codex], assessments: [await result(opus, review), await result(codex, review)] });
+    renderApp(storage, badge);
+    await row("Codex agent");
+    await userEvent.click(makeGoTo("Codex agent"));
+    await waitFor(async () => expect(within(await item("Codex agent")).getByText("Go-to")).toBeTruthy());
+    await userEvent.click(screen.getAllByRole("button", { name: "Close" })[0]);
+    const badges = await screen.findByRole("region", { name: "Badges" });
+    await waitFor(() => expect(within(badges).getByRole("button", { name: /Code review/ }).querySelector(".badge-card-goto")?.textContent).toBe("Go-to: Codex agent"));
+  });
+
+  it("Covers AE7. Marking Opus agent's latest result makes it the go-to over Codex's older mark", async () => {
+    const storage = storageWith({
+      credentials: [review],
+      profiles: [opus, codex],
+      assessments: [await result(opus, review, day(3)), await result(codex, review), await result(codex, review, day(2))],
+      marks: [markOn("codex")],
+    });
+    renderApp(storage, badge);
+    await waitFor(async () => expect(within(await item("Codex agent")).getByText("Go-to")).toBeTruthy());
+    await userEvent.click(makeGoTo("Opus agent"));
+    await waitFor(async () => expect(within(await item("Opus agent")).getByText("Go-to")).toBeTruthy());
+    expect(within(await item("Codex agent")).getByRole("button", { name: "Make go-to" })).toBe(makeGoTo("Codex agent"));
+    expect(await marks(storage)).toHaveLength(2);
+  });
+
+  it("a sole holder with no go-to offers Make go-to", async () => {
+    renderApp(storageWith({ credentials: [review], profiles: [opus], assessments: [await result(opus, review)] }), badge);
+    await row("Opus agent");
+    expect(within(await item("Opus agent")).getByRole("button", { name: "Make go-to" })).toBe(makeGoTo("Opus agent"));
+  });
+
+  it("Covers AE5. A go-to whose latest result is Not met leaves the holders and shows under them, flagged", async () => {
+    renderApp(
+      storageWith({
+        credentials: [review],
+        profiles: [opus, codex],
+        assessments: [await result(opus, review), await result(codex, review), await result(codex, review, { ...day(2), result: "not_met" })],
+        marks: [markOn("codex")],
+      }),
+      badge,
+    );
+    const holders = await holdersRegion();
+    const line = await within(holders).findByText("Go-to: Codex agent · not met");
+    expect(line.classList.contains("flagged")).toBe(true);
+    expect(within(holders).queryByRole("button", { name: /^Codex agent/ })).toBeNull();
+    const list = holders.querySelector(".detail-holders")!;
+    expect(list.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(list.contains(line)).toBe(false);
+    expect(within(await item("Opus agent")).getByRole("button", { name: "Make go-to" })).toBeTruthy();
+  });
+
+  it("Covers AE5. A go-to that no longer holds a badge nobody holds shows after Nobody holds it yet", async () => {
+    renderApp(
+      storageWith({
+        credentials: [review],
+        profiles: [codex],
+        assessments: [await result(codex, review), await result(codex, review, { ...day(2), result: "not_met" })],
+        marks: [markOn("codex")],
+      }),
+      badge,
+    );
+    const holders = await holdersRegion();
+    const line = await within(holders).findByText("Go-to: Codex agent · not met");
+    const nobody = within(holders).getByText("Nobody holds it yet");
+    expect(nobody.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("a go-to whose setup changed says Go-to on its row, flagged", async () => {
+    const earned = await result(codex, review);
+    renderApp(storageWith({ credentials: [review], profiles: [opus, { ...codex, model: "gpt-6" }], assessments: [earned], marks: [markOn("codex")] }), badge);
+    await waitFor(async () => expect(within(await item("Codex agent")).getByText("Go-to").classList.contains("flagged")).toBe(true));
+    expect((await row("Codex agent")).textContent).toContain("setup changed");
+  });
+
+  it("Covers AE8. A go-to agent in the trash leaves the badge page with no go-to", async () => {
+    renderApp(storageWith({ credentials: [review], profiles: [opus], assessments: [await result(opus, review), await result(codex, review)], marks: [markOn("codex")] }), badge);
+    await row("Opus agent");
+    const holders = await holdersRegion();
+    expect(within(holders).queryByText(/^Go-to/)).toBeNull();
+    expect(within(await item("Opus agent")).getByRole("button", { name: "Make go-to" })).toBeTruthy();
+  });
+
+  it("a failed mark shows an alert in the Holders section, writes nothing and stays put", async () => {
+    const storage = storageWith({ credentials: [review], profiles: [opus, codex], assessments: [await result(opus, review), await result(codex, review)] });
+    const write = storage.writeText.bind(storage);
+    vi.spyOn(storage, "writeText").mockImplementation(async (root, path, text) => {
+      if (path.includes("/marks/")) throw new Error("The disk is full.");
+      return write(root, path, text);
+    });
+    renderApp(storage, badge);
+    await row("Codex agent");
+    await userEvent.click(makeGoTo("Codex agent"));
+    const alert = await within(await holdersRegion()).findByRole("alert");
+    expect(alert.textContent).toBe("The disk is full.");
+    expect(alert.classList.contains("deck-error")).toBe(true);
+    expect(await marks(storage)).toHaveLength(0);
+    expect((makeGoTo("Codex agent") as HTMLButtonElement).disabled).toBe(false);
+    expect(within(await holdersRegion()).queryByText("Go-to")).toBeNull();
+    expect(screen.getByRole("region", { name: "Code review" })).toBeTruthy();
+  });
+
+  it("while a mark saves, every Make go-to is disabled", async () => {
+    const storage = storageWith({ credentials: [review], profiles: [opus, codex], assessments: [await result(opus, review), await result(codex, review)] });
+    const write = storage.writeText.bind(storage);
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    vi.spyOn(storage, "writeText").mockImplementation(async (root, path, text) => {
+      if (path.includes("/marks/")) await held;
+      return write(root, path, text);
+    });
+    renderApp(storage, badge);
+    await row("Codex agent");
+    await userEvent.click(makeGoTo("Codex agent"));
+    await waitFor(() => {
+      const buttons = screen.getAllByRole("button", { name: "Make go-to" }) as HTMLButtonElement[];
+      expect(buttons).toHaveLength(2);
+      for (const b of buttons) expect(b.disabled).toBe(true);
+    });
+    release();
+    await waitFor(async () => expect(within(await item("Codex agent")).getByText("Go-to")).toBeTruthy());
+    expect((makeGoTo("Opus agent") as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("when the marked result is removed and the folder reloads, the go-to goes and every holder offers Make go-to", async () => {
+    const marked = await result(codex, review);
+    const storage = storageWith({
+      credentials: [review],
+      profiles: [opus, codex],
+      assessments: [await result(opus, review), marked, await result(codex, review, day(2))],
+      marks: [markOn("codex")],
+    });
+    renderApp(storage, badge);
+    await waitFor(async () => expect(within(await item("Codex agent")).getByText("Go-to")).toBeTruthy());
+    storage.remove(assessmentPath(marked.profileSlug, marked.collectionSlug, marked.credentialSlug, marked.fileStem));
+    fireEvent.focus(window);
+    await waitFor(async () => expect(within(await item("Codex agent")).getByRole("button", { name: "Make go-to" })).toBeTruthy());
+    const holders = await holdersRegion();
+    expect(within(holders).queryByText("Go-to")).toBeNull();
+    expect(within(holders).queryByText(/^Go-to:/)).toBeNull();
+    expect(screen.getAllByRole("button", { name: "Make go-to" })).toHaveLength(2);
   });
 });

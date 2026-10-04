@@ -7,8 +7,9 @@
 // Two variants. "empty" is a first run's folder: only the marker file. "full" holds one
 // collection (three presets and one hand-built credential), two agents with different
 // setups, dated results (two takes on one badge for the compare, one with a saved Jev
-// reading), one waiting test for What needs you, and one handoff of the hand-built
-// credential's own that no result has run, for How to's handoff pictures (U7). Values
+// reading), one waiting test for What needs you, one handoff of the hand-built
+// credential's own that no result has run, for How to's handoff pictures (U7), and one
+// go-to mark, Claude Code on the badge with two takes. Values
 // follow src/ui/testFolder.tsx, copied rather than imported, since that file imports
 // @testing-library/react.
 
@@ -18,9 +19,11 @@ import {
   collectionPath,
   credentialPath,
   handoffPath,
+  markPath,
   profilePath,
   serializeAssessment,
   serializeCollection,
+  serializeMark,
   serializeMarker,
   serializeProfile,
 } from "../domain/folder";
@@ -37,6 +40,7 @@ import {
   type ContextReading,
   type Credential,
   type HandoffTemplate,
+  type Mark,
   type TestContext,
 } from "../domain/types";
 import { FAKE_ON, FakeJev } from "../jev/fakeJev";
@@ -72,6 +76,8 @@ export const SAMPLE = {
   },
   /** Badge handoffs by their file stem. Write a release note's is its default, handoff A. */
   handoffs: { releaseNote: "20260928T090000Z" },
+  /** Go-to marks by their file stem: Claude Code on Say how sure you are, after its Met take. */
+  marks: { howSure: "20260926T170000Z" },
 } as const;
 
 /** The sample folder's files by path, and the waiting tests the harness puts in local storage. */
@@ -316,6 +322,16 @@ export async function sampleFolder(variant: SeedVariant): Promise<SampleFolder> 
   for (const a of results) {
     files[assessmentPath(a.profileSlug, a.collectionSlug, a.credentialSlug, a.fileStem)] = serializeAssessment(a);
   }
+
+  // Claude Code is Say how sure you are's go-to, marked on the Met take that earned it.
+  const goTo: Mark = {
+    collectionSlug: SAMPLE.collection,
+    credentialSlug: howSure.slug,
+    id: SAMPLE.marks.howSure,
+    profileSlug: CLAUDE.slug,
+    fileStem: SAMPLE.takes.claudeHowSure,
+  };
+  files[markPath(goTo.collectionSlug, goTo.credentialSlug, goTo.id)] = serializeMark(goTo);
 
   // Codex holds Name what matters next's handoff, waiting on its reply.
   const copiedAt = "2026-09-30T08:15:00.000Z";

@@ -4,11 +4,11 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import userEvent from "@testing-library/user-event";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { serializeCredentialMd } from "../domain/credential-md";
-import { credentialPath, loadFolder } from "../domain/folder";
+import { assessmentPath, credentialPath, loadFolder, marksDir, profilePath } from "../domain/folder";
 import { BUILT_IN_HANDOFF, fillHandoff } from "../domain/handoffs";
 import { assignmentVersion } from "../domain/hash";
 import type { JevAnswers } from "../domain/jevRequest";
-import type { Credential, Handoff } from "../domain/types";
+import type { Credential, Handoff, Mark } from "../domain/types";
 import { FAKE_ON, FakeJev } from "../jev/fakeJev";
 import { JEV_ERROR_KINDS, JevError } from "../jev/jev";
 import type { MemoryStorage } from "../storage/memory";
@@ -16,7 +16,7 @@ import { firePaste } from "../test/paste";
 import { AppShell, type Route } from "./AppShell";
 import { JevProvider } from "./jevContext";
 import { addPending, readPending, type PendingTest } from "./pendingTests";
-import { LANDING_MS, SENDING_MS, jevFailure } from "./TestDeck";
+import { SENDING_MS, jevFailure } from "./TestDeck";
 import { FOLDER, opus, renderApp, result, review, snapshot, storageWith } from "./testFolder";
 import { FolderProvider } from "./useFolderState";
 
@@ -93,7 +93,7 @@ describe("the first test", () => {
 });
 
 describe("TestDeck", () => {
-  it("four beats record a met result, the badge lands on the agent, then home", async () => {
+  it("four beats record a met result, the badge lands on the agent, and Home goes home", async () => {
     const storage = storageWith({ credentials: [review], profiles: [opus] });
     renderApp(storage, fromBadge);
     expect(await screen.findByRole("heading", { name: "Who takes it" })).toBeTruthy();
@@ -118,8 +118,8 @@ describe("TestDeck", () => {
     ]);
     expect(readPending(FOLDER)).toEqual([]);
 
-    const held = await waitFor(badgeCard, { timeout: LANDING_MS + 4000 });
-    expect(within(held).getByText("Opus agent")).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Home" }));
+    expect(within(await badgeCard()).getByText("Opus agent")).toBeTruthy();
   });
 
   it("Covers AE4. Not yet records not met with no landing, and the badge still has no holders", async () => {
@@ -130,7 +130,9 @@ describe("TestDeck", () => {
 
     expect(await screen.findByRole("heading", { name: "Not yet" })).toBeTruthy();
     expect(screen.queryByTestId("landing")).toBeNull();
+    expect(screen.queryByRole("button", { name: /go-to/ })).toBeNull();
     expect((await loadFolder(storage)).assessments).toEqual([expect.objectContaining({ result: "not_met", handBack: "I tried." })]);
+    expect(Object.keys(storage.files()).filter((p) => p.includes("/marks/"))).toEqual([]);
 
     await userEvent.click(screen.getByRole("button", { name: "Done" }));
     expect(within(await badgeCard()).getByText("No holders yet")).toBeTruthy();
@@ -522,11 +524,33 @@ describe("TestDeck with the handoff box", () => {
     expect((await loadFolder(storage)).assessments).toEqual([expect.objectContaining({ credentialSlug: "docs", result: "met" })]);
     expect(readPending(FOLDER)).toEqual([]);
 
-    expect(await screen.findByRole("heading", { name: "Hand it over" }, { timeout: LANDING_MS + 4000 })).toBeTruthy();
+    // The screen waits; its quiet way back names the test it held up.
+    expect(within(screen.getByTestId("landing")).queryByRole("button", { name: "Home" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Hand over Code review" }));
+    expect(await screen.findByRole("heading", { name: "Hand it over" })).toBeTruthy();
     await userEvent.click(copyButton());
     await screen.findByRole("heading", { name: "What came back" });
     expect(vi.mocked(writeText).mock.lastCall?.[0]).toContain("# Test: Code review");
     expect(readPending(FOLDER)).toEqual([expect.objectContaining({ credentialKey: "eng/review" })]);
+  });
+
+  it("a Met on a pulled handoff offers the go-to, and taking it marks that badge and goes back to the test it held up", async () => {
+    await plug({ credentialKey: "eng/docs" }, docs);
+    const storage = storageWith({ credentials: [review, docs], profiles: [opus] });
+    renderApp(storage, both);
+    await userEvent.click(await screen.findByRole("button", { name: "Pull it" }));
+    await screen.findByRole("heading", { name: "What came back" });
+    await pasteAndJudge("Docs written.", "Met");
+    await screen.findByTestId("landing");
+    expect(screen.getByRole("button", { name: "Hand over Code review" })).toBeTruthy();
+
+    await userEvent.click(screen.getByRole("button", { name: "Make Opus agent the go-to" }));
+    expect(await screen.findByRole("heading", { name: "Hand it over" })).toBeTruthy();
+    const made = Object.keys(storage.files()).filter((p) => p.startsWith(`${marksDir("eng", "docs")}/`));
+    expect(made).toHaveLength(1);
+    const [docsResult] = (await loadFolder(storage)).assessments;
+    expect(JSON.parse(storage.file(made[0])!)).toEqual({ agent: "opus", result: docsResult.fileStem });
+    expect(Object.keys(storage.files()).filter((p) => p.startsWith(`${marksDir("eng", "review")}/`))).toEqual([]);
   });
 
   it("Not yet on a pulled handoff goes on to the test it held up", async () => {
@@ -653,6 +677,155 @@ describe("TestDeck with the handoff box", () => {
     await userEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(await screen.findByRole("heading", { name: "Hand it over" })).toBeTruthy();
     expect(pressed()).toEqual(["A"]);
+  });
+});
+
+// The screen after a Met waits and offers the go-to mark (go-to U3, R3, R5, R6, KTD6, KTD9).
+describe("TestDeck's go-to offer after a Met", () => {
+  const codex = { ...opus, slug: "codex", name: "Codex agent", harness: "codex", model: "gpt-5" };
+  const OLD = "20260901T090000Z";
+  const markOn = (profileSlug: string): Mark => ({ collectionSlug: "eng", credentialSlug: "review", id: "20260901T100000Z", profileSlug, fileStem: OLD });
+  /** The badge's mark files, oldest first. */
+  const marks = (storage: MemoryStorage) =>
+    Object.keys(storage.files())
+      .filter((p) => p.startsWith(`${marksDir("eng", "review")}/`))
+      .sort();
+  const markJson = (storage: MemoryStorage, path: string) => JSON.parse(storage.file(path)!);
+  const landing = () => screen.getByTestId("landing");
+  const primary = () => landing().querySelector<HTMLButtonElement>("button.primary");
+  const atHome = () => screen.findByRole("heading", { name: "Home", level: 1 });
+  const goToLine = async (line: string) => waitFor(async () => expect(within(await badgeCard()).getByText(line)).toBeTruthy());
+  const stemOf = async (storage: MemoryStorage, handBack: string) => (await loadFolder(storage)).assessments.find((a) => a.handBack === handBack)!.fileStem;
+
+  async function toLanding(storage: MemoryStorage, reply = "I reviewed it.") {
+    renderApp(storage, fromBadge);
+    await takeAndCopy();
+    await pasteAndJudge(reply, "Met");
+    await screen.findByTestId("landing");
+  }
+
+  /** Holds every mark write until the returned release runs. */
+  function holdMarks(storage: MemoryStorage): () => void {
+    const real = storage.writeText.bind(storage);
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    vi.spyOn(storage, "writeText").mockImplementation(async (root, path, text) => {
+      if (path.includes("/marks/")) await gate;
+      return real(root, path, text);
+    });
+    return () => release();
+  }
+
+  it("after Met the screen stays up well past 1.4 s, focus on its heading, and offers Make Opus agent the go-to", async () => {
+    const storage = storageWith({ credentials: [review], profiles: [opus] });
+    await toLanding(storage);
+    await act(() => new Promise((r) => setTimeout(r, 1600)));
+    expect(landing()).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Opus agent holds it" }));
+    expect(landing().querySelectorAll("button.primary")).toHaveLength(1);
+    expect(primary()?.textContent).toBe("Make Opus agent the go-to");
+    expect(within(landing()).getByRole("button", { name: "Home" }).className).toBe("ghost");
+    expect(marks(storage)).toEqual([]);
+  }, 10_000);
+
+  it("Covers AE3. With Codex the go-to, Make Opus agent the go-to writes one mark on the new result, goes home, and Home names Opus agent", async () => {
+    const storage = storageWith({ credentials: [review], profiles: [opus, codex], assessments: [await result(codex, review)], marks: [markOn("codex")] });
+    const before = marks(storage);
+    await toLanding(storage, "Opus reviewed it.");
+    await userEvent.click(screen.getByRole("button", { name: "Make Opus agent the go-to" }));
+    await atHome();
+
+    const made = marks(storage).filter((p) => !before.includes(p));
+    expect(made).toHaveLength(1);
+    expect(markJson(storage, made[0])).toEqual({ agent: "opus", result: await stemOf(storage, "Opus reviewed it.") });
+    await goToLine("Go-to: Opus agent");
+  });
+
+  it("Covers AE2. With Opus agent the go-to, a new Met offers Keep, and taking it writes a second mark on the new result", async () => {
+    const storage = storageWith({ credentials: [review], profiles: [opus], assessments: [await result(opus, review)], marks: [markOn("opus")] });
+    await toLanding(storage, "Again.");
+    expect(screen.queryByRole("button", { name: "Make Opus agent the go-to" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Keep Opus agent as the go-to" }));
+    await atHome();
+
+    const all = marks(storage);
+    expect(all).toHaveLength(2);
+    expect(markJson(storage, all[1])).toEqual({ agent: "opus", result: await stemOf(storage, "Again.") });
+    expect(markJson(storage, all[0])).toEqual({ agent: "opus", result: OLD });
+    await goToLine("Go-to: Opus agent");
+  });
+
+  it.each([
+    ["the quiet Home", () => userEvent.click(screen.getByRole("button", { name: "Home" }))],
+    ["Escape", () => userEvent.keyboard("{Escape}")],
+  ])("Covers AE2. %s after a Met writes no mark, goes home, and the go-to stays", async (_, leave) => {
+    const storage = storageWith({ credentials: [review], profiles: [opus, codex], assessments: [await result(codex, review)], marks: [markOn("codex")] });
+    const before = marks(storage);
+    await toLanding(storage);
+    await leave();
+    await atHome();
+    expect(marks(storage)).toEqual(before);
+    await goToLine("Go-to: Codex agent");
+  });
+
+  it("a reload that removes the recorded result takes the offer away, and the quiet back still leaves", async () => {
+    const storage = storageWith({ credentials: [review], profiles: [opus] });
+    await toLanding(storage, "Gone soon.");
+    const stem = await stemOf(storage, "Gone soon.");
+    expect(primary()).not.toBeNull();
+    storage.remove(assessmentPath("opus", "eng", "review", stem));
+    fireEvent.focus(window);
+    await waitFor(() => expect(primary()).toBeNull());
+    expect(screen.getByRole("heading", { name: "Opus agent holds it" })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Home" }));
+    await atHome();
+    expect(marks(storage)).toEqual([]);
+  });
+
+  it("a reload that removes the agent shows Not in the folder, not a fresh deck, and Escape goes home", async () => {
+    const storage = storageWith({ credentials: [review], profiles: [opus] });
+    await toLanding(storage);
+    storage.remove(profilePath("opus"));
+    fireEvent.focus(window);
+    expect(await screen.findByRole("heading", { name: "Not in the folder" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Who takes it" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /go-to/ })).toBeNull();
+    await userEvent.keyboard("{Escape}");
+    await atHome();
+  });
+
+  it("a mark that fails to save shows the error inline, writes nothing, and stays on the screen", async () => {
+    const storage = storageWith({ credentials: [review], profiles: [opus] });
+    const real = storage.writeText.bind(storage);
+    vi.spyOn(storage, "writeText").mockImplementation(async (root, path, text) => {
+      if (path.includes("/marks/")) throw new Error("disk full");
+      return real(root, path, text);
+    });
+    await toLanding(storage);
+    await userEvent.click(screen.getByRole("button", { name: "Make Opus agent the go-to" }));
+    const alert = await within(landing()).findByRole("alert");
+    expect(alert.textContent).toBe("disk full");
+    expect(alert.classList.contains("deck-error")).toBe(true);
+    expect(alert.nextElementSibling?.classList.contains("deck-actions")).toBe(true);
+    expect(marks(storage)).toEqual([]);
+    expect(screen.getByRole("heading", { name: "Opus agent holds it" })).toBeTruthy();
+    expect(primary()?.disabled).toBe(false);
+  });
+
+  it("a double click on the primary writes one mark, and Escape while it saves does nothing", async () => {
+    const storage = storageWith({ credentials: [review], profiles: [opus] });
+    const release = holdMarks(storage);
+    await toLanding(storage);
+    const make = screen.getByRole("button", { name: "Make Opus agent the go-to" }) as HTMLButtonElement;
+    await userEvent.dblClick(make);
+    expect(make.disabled).toBe(true);
+    expect((within(landing()).getByRole("button", { name: "Home" }) as HTMLButtonElement).disabled).toBe(true);
+    await userEvent.keyboard("{Escape}");
+    expect(landing()).toBeTruthy();
+
+    release();
+    await atHome();
+    expect(marks(storage)).toHaveLength(1);
   });
 });
 

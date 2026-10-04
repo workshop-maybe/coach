@@ -202,15 +202,20 @@ export const SHOTS: readonly Shot[] = [
     steps: FIRST_TEST_TO_JUDGE,
   },
   {
-    // Met plays a 1400 ms landing before home returns, so the last step waits for a
-    // holder, which only home shows.
+    // After Met the screen waits; making the agent the go-to goes home, so the last step
+    // waits for a holder, which only home shows.
     id: "first-test-home",
     page: "getting-started/first-test",
     route: { view: "deck", deck: "agent", firstTest: true },
     seed: "empty",
     jev: "off",
     expect: { selector: ".holder" },
-    steps: [...FIRST_TEST_TO_JUDGE, { click: { button: "Met" } }, { waitFor: { selector: ".holder" } }],
+    steps: [
+      ...FIRST_TEST_TO_JUDGE,
+      { click: { button: "Met" } },
+      { click: { button: "Make Claude Code, opus, high the go-to" } },
+      { waitFor: { selector: ".holder" } },
+    ],
   },
   {
     // What needs you sits beside Agents, so every shelf shows above the doors pinned to the
@@ -337,6 +342,35 @@ export const SHOTS: readonly Shot[] = [
     jev: "off",
     expect: { text: "Did it meet it" },
     steps: [...RELEASE_TO_REPLY, { click: { button: "Next" } }, { waitFor: { text: "Did it meet it" } }],
+  },
+  {
+    // Nobody holds Write a release note, so the screen after Met offers to make Claude Code
+    // its go-to.
+    id: "go-to-offer",
+    page: "how-to/choose-a-go-to",
+    route: RELEASE_TEST,
+    seed: "full",
+    jev: "off",
+    expect: { text: "Make Claude Code the go-to" },
+    steps: [
+      ...RELEASE_TO_REPLY,
+      { click: { button: "Next" } },
+      { waitFor: { text: "Did it meet it" } },
+      { click: { button: "Met" } },
+      { waitFor: { text: "Make Claude Code the go-to" } },
+    ],
+  },
+  {
+    // Codex holds Check an answer key and nobody has made it the go-to. The holders show
+    // once the matrix is built, so the picture waits for the offer.
+    id: "go-to-badge",
+    page: "how-to/choose-a-go-to",
+    route: { view: "item", item: "badge", credentialKey: ANSWER_KEY },
+    seed: "full",
+    jev: "off",
+    expect: { text: "Make go-to" },
+    steps: [{ waitFor: { text: "Make go-to" } }],
+    clip: { selector: 'section[aria-labelledby="badge-holders"]', pad: 24 },
   },
   {
     id: "badge-replies",
@@ -468,14 +502,14 @@ export const COVERAGE: Record<RouteKind, readonly string[] | typeof NOT_PICTURED
   home: ["home-empty", "home", "home-needs"],
   "deck:credential": ["credential-start", "credential-target"],
   "deck:agent": ["first-test-agent", "first-test-hand", "first-test-judge", "first-test-home", "agent-new"],
-  "deck:test": ["test-hand", "test-reply", "judge", "jev-ask", "jev-cleanup"],
+  "deck:test": ["test-hand", "test-reply", "judge", "go-to-offer", "jev-ask", "jev-cleanup"],
   "deck:edit-credential": ["edit-retest"],
   "deck:edit-agent": ["agent-params"],
   "deck:handoffs": ["handoffs-box"],
   "deck:edit-handoff": ["handoff-edit"],
   "deck:trash": ["trash-badge", "trash-agent"],
   "deck:jev": ["jev-off", "jev-on"],
-  "item:badge": ["badge-replies", "badge-page"],
+  "item:badge": ["badge-replies", "badge-page", "go-to-badge"],
   "item:agent": ["agent-page"],
   // A handoff opens as its own item only once two or more have results; the sample's has none.
   "item:handoff": NOT_PICTURED,

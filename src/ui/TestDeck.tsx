@@ -31,6 +31,11 @@
 // the app last wrote it and the cleanup in flight, since going Back remounts the editor.
 // The app's own writes are no edit; any other change ends both offers, and a cleanup
 // generation drops an answer that lands after an edit, a new paste or the box going away.
+//
+// The screen after a Met waits for the user (go-to R5, R6, KTD6). It holds the stem of the
+// result it just recorded and resolves the agent, the badge and that result on every
+// render. While the result is still there and Met, its one forward action makes or keeps
+// the agent as the badge's go-to, then leaves; the quiet back and Escape leave with no mark.
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
@@ -39,7 +44,9 @@ import { assignmentVersion } from "../domain/hash";
 import { sameSetup } from "../domain/matrix";
 import { fitsJev } from "../domain/jevBudget";
 import { cleanUpLineBreaks, lineBreakBatches } from "../domain/lineBreaks";
-import { recordAssessment } from "../domain/operations";
+import { fileStemFor } from "../domain/folder";
+import { goToOf, resultOf } from "../domain/goTo";
+import { markGoTo, recordAssessment } from "../domain/operations";
 import { readingParts, secondOpinionRequest, type JevReadingParts } from "../domain/secondOpinion";
 import {
   credentialKey,
@@ -68,12 +75,9 @@ import { RichText } from "./RichText";
 import type { PastePayload, RichTextHandle } from "./RichText";
 import { RichView } from "./RichView";
 import type { TestPick } from "./routes";
-import { StoredSwitch, focusOnMount } from "./shared";
+import { Missing, StoredSwitch, focusOnMount, useEscape } from "./shared";
 import { describeError, useFolder } from "./useFolderState";
 import { useMatrix } from "./useMatrix";
-
-/** How long the landing plays before home returns. */
-export const LANDING_MS = 1400;
 
 /** How long the dots run across the screen after Copy before the cursor waits. */
 export const SENDING_MS = 700;
@@ -99,7 +103,8 @@ export interface TestDeckProps {
 /** A handoff as it was copied: its id and the filled text. */
 type Copied = HandoffTemplate;
 
-type Outcome = { kind: "open" } | { kind: "met"; plugId: string } | { kind: "not-yet"; plugId: string };
+/** How the round ended. A Met keeps the file stem of the result it recorded, so a mark names exactly that result. */
+type Outcome = { kind: "open" } | { kind: "met"; plugId: string; fileStem: string } | { kind: "not-yet"; plugId: string };
 
 /** The reply as the app last wrote it (KTD18): by a paste, a put-back or Jev's cleanup. */
 interface Unedited {
@@ -176,6 +181,13 @@ export function TestDeck(props: TestDeckProps) {
   // The cleanup generation: an answer lands only while its cleanup is still the latest.
   const cleanGen = useRef(0);
   const cleaningNow = useRef(false);
+  // The go-to mark after a Met (KTD6). The ref is set before the first await, so a second
+  // press, or an Escape while the mark saves, does nothing.
+  const [marking, setMarking] = useState(false);
+  const markingNow = useRef(false);
+  const [markError, setMarkError] = useState<string | null>(null);
+  // Nothing navigates once the deck has gone. Set in the effect, so StrictMode's second mount sets it again.
+  const mounted = useRef(false);
 
   const profile = state?.profiles.find((p) => p.slug === profileSlug);
   const credential = state?.credentials.find((c) => credentialKey(c) === key);
@@ -194,13 +206,14 @@ export function TestDeck(props: TestDeckProps) {
   const shown = held && held.round === round && held.reply === reply && held.assignmentVersion === version ? held : null;
 
   // Leaving the deck drops any ask or cleanup in flight.
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
       askGen.current++;
       cleanGen.current++;
-    },
-    [],
-  );
+    };
+  }, []);
 
   // The credential's current assignment version, to tell whether a copied prompt is stale.
   useEffect(() => {
@@ -215,15 +228,14 @@ export function TestDeck(props: TestDeckProps) {
   const home = () => navigate({ view: "home" });
   // Where a finished test goes: home, or back to the test this pull held up (AE5).
   const leave = () => navigate(props.returnTo ? backToTest(props.returnTo) : { view: "home" });
-  const goOn = useRef(leave);
-  goOn.current = leave;
 
-  // Met plays the landing, then home (or the held-up test) returns on its own.
-  useEffect(() => {
-    if (outcome.kind !== "met") return;
-    const t = window.setTimeout(() => goOn.current(), LANDING_MS);
-    return () => window.clearTimeout(t);
-  }, [outcome.kind]);
+  // On the screen after a Met, Escape does what its quiet action does, and nothing while a
+  // mark saves. During the deck round Deck's own Escape is mounted and this one stays out.
+  useEscape(() => {
+    if (outcome.kind !== "met" || markingNow.current) return;
+    if (profile && credential) leave();
+    else home();
+  });
 
   // The dots run a moment, then the cursor waits. Under reduced motion it waits at once.
   useEffect(() => {
@@ -304,25 +316,56 @@ export function TestDeck(props: TestDeckProps) {
     const jevReading = shown ? savedReading(shown, verdict) : undefined;
     dropAsk();
     setRecording(true);
+    // The result's file stem comes from this time, so the Met screen can name that result.
+    const now = new Date();
     try {
-      const next = await recordAssessment(storage, state, {
-        profileSlug: profile.slug,
-        collectionSlug: credential.collectionSlug,
-        credentialSlug: credential.slug,
-        result: verdict,
-        note: "",
-        handBack: reply,
-        ...(waiting?.context ? { context: waiting.context } : {}),
-        ...(handoff ? { handoff } : {}),
-        ...(jevReading ? { jev: jevReading } : {}),
-      });
+      const next = await recordAssessment(
+        storage,
+        state,
+        {
+          profileSlug: profile.slug,
+          collectionSlug: credential.collectionSlug,
+          credentialSlug: credential.slug,
+          result: verdict,
+          note: "",
+          handBack: reply,
+          ...(waiting?.context ? { context: waiting.context } : {}),
+          ...(handoff ? { handoff } : {}),
+          ...(jevReading ? { jev: jevReading } : {}),
+        },
+        now,
+      );
       // The plug comes out only once the result is written.
       remove(profile.slug, credentialKey(credential));
       apply(next);
       const plugId = handoff?.id ?? SKELETON_ID;
-      setOutcome(verdict === "met" ? { kind: "met", plugId } : { kind: "not-yet", plugId });
+      setOutcome(verdict === "met" ? { kind: "met", plugId, fileStem: fileStemFor(now) } : { kind: "not-yet", plugId });
     } finally {
       setRecording(false);
+    }
+  }
+
+  /** Marks the result just recorded as the agent's go-to for the badge, then leaves (R5, KTD6). */
+  async function markIt(fileStem: string) {
+    if (!state || !profile || !credential || markingNow.current) return;
+    markingNow.current = true;
+    setMarking(true);
+    setMarkError(null);
+    try {
+      const next = await markGoTo(storage, state, {
+        profileSlug: profile.slug,
+        collectionSlug: credential.collectionSlug,
+        credentialSlug: credential.slug,
+        fileStem,
+      });
+      // The mark is on disk, so the folder takes it even when the deck has gone.
+      apply(next);
+      if (mounted.current) leave();
+    } catch (e) {
+      if (mounted.current) setMarkError(describeError(e));
+    } finally {
+      markingNow.current = false;
+      if (mounted.current) setMarking(false);
     }
   }
 
@@ -522,18 +565,37 @@ export function TestDeck(props: TestDeckProps) {
       </div>
     ) : null;
 
-  if (outcome.kind === "met" && credential && profile) {
+  // The screen after a Met (KTD6), resolved from the folder on every render: a reload can
+  // take the agent, the badge or the recorded result away under it.
+  if (outcome.kind === "met") {
+    if (!credential || !profile) return <Missing onHome={home} />;
+    const k = credentialKey(credential);
+    const { fileStem } = outcome;
+    const recorded = resultOf(state, profile.slug, k, fileStem)?.result === "met";
+    const keep = goToOf(state, k)?.profile.slug === profile.slug;
+    const heldUp = props.returnTo && state.credentials.find((c) => credentialKey(c) === props.returnTo?.credentialKey);
     return (
       <section className="deck" aria-label="Test an agent">
         <div className="deck-card landing" data-testid="landing">
+          {/* Focus stays on the heading, so an Enter carried over from the Met press cannot make a mark. */}
           <h2 tabIndex={-1} ref={focusOnMount}>
             {profile.name} holds it
           </h2>
-          {stage({ kind: "idle" }, { phase: "ejecting", seated: credentialKey(credential), plugged: { label: labelOf(outcome.plugId) } })}
+          {stage({ kind: "idle" }, { phase: "ejecting", seated: k, plugged: { label: labelOf(outcome.plugId) } })}
+          {markError && (
+            <p className="deck-error" role="alert">
+              {markError}
+            </p>
+          )}
           <div className="deck-actions">
-            <button type="button" className="ghost" onClick={home}>
-              Home
+            <button type="button" className="ghost" disabled={marking} onClick={leave}>
+              {props.returnTo ? (heldUp ? `Hand over ${heldUp.name}` : "Back to the test") : "Home"}
             </button>
+            {recorded && (
+              <button type="button" className="primary" disabled={marking} onClick={() => void markIt(fileStem)}>
+                {keep ? `Keep ${profile.name} as the go-to` : `Make ${profile.name} the go-to`}
+              </button>
+            )}
           </div>
         </div>
       </section>

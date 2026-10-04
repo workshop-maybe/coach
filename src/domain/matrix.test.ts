@@ -49,6 +49,7 @@ function state(parts: Partial<FolderState> = {}): FolderState {
     assessments: [],
     skeleton: null,
     handoffs: [],
+    marks: [],
     errors: [],
     warnings: [],
     raw: {},
