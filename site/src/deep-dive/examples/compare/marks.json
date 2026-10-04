@@ -1,0 +1,42 @@
+[
+  {
+    "point": 1,
+    "a1": "46%",
+    "b1": "41%",
+    "a_call": "Can't call",
+    "b_call": "Can't call",
+    "better": null
+  },
+  {
+    "point": 2,
+    "a2": "58%",
+    "b2": "33%",
+    "a_call": "Can't call",
+    "b_call": "Can't call",
+    "better": null
+  },
+  {
+    "point": 3,
+    "a3": "81%",
+    "b3": "14%",
+    "a_call": "Meets",
+    "b_call": "Misses",
+    "better": "Claude Code"
+  },
+  {
+    "point": 4,
+    "a4": "94%",
+    "b4": "4%",
+    "a_call": "Meets",
+    "b_call": "Misses",
+    "better": "Claude Code"
+  },
+  {
+    "point": 5,
+    "a5": "55%",
+    "b5": "38%",
+    "a_call": "Can't call",
+    "b_call": "Can't call",
+    "better": null
+  }
+]

@@ -1,0 +1,40 @@
+{
+  "model": "jev-1.13.0",
+  "assignment_version": "afcd29666972",
+  "asked_at": "2026-10-01T09:30:00.000Z",
+  "first": {
+    "agent": "claude-code-opus-high",
+    "reply": "20260929T101500Z"
+  },
+  "second": {
+    "agent": "codex-gpt-6-astra-medium",
+    "reply": "20260929T114000Z"
+  },
+  "points": [
+    {
+      "text": "Holds. 100 has 20 multiples of 5 and 4 multiples of 25, so 100! has 24 trailing zeros.",
+      "first_over": 0.46,
+      "second_over": 0.41
+    },
+    {
+      "text": "Wrong. The answer is no. A year divisible by 100 is a leap year only when it is also divisible by 400, and the rationale leaves that rule out.",
+      "first_over": 0.58,
+      "second_over": 0.33
+    },
+    {
+      "text": "Wrong. The answer is 1 - (5/6)^4 = 671/1296, about 0.52. Adding the chances counts the rolls with more than one six twice.",
+      "first_over": 0.81,
+      "second_over": 0.14
+    },
+    {
+      "text": "Holds. Sorting in reverse gives [3, 2, 1], and the slice drops the first item, leaving [2, 1].",
+      "first_over": 0.94,
+      "second_over": 0.04
+    },
+    {
+      "text": "Wrong. 2^100 is larger. 2^10 is 1,024, a little more than 10^3, so the rationale has the direction backward.",
+      "first_over": 0.55,
+      "second_over": 0.38
+    }
+  ]
+}

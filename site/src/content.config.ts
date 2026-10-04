@@ -1,7 +1,7 @@
-// The guide collection (U2, KTD1, R13): one MDX page per file under content/guide, in
-// four parts. A page's entry id is its path without the extension (how-to/export), and
-// that id is its address (/how-to/export/). The page's title is its one h1, so the body
-// starts below it.
+// The guide collection (U2, KTD1, R13): one MDX page per file under content/guide, in the
+// parts src/parts.ts names. A page's entry id is its path without the extension
+// (how-to/export), and that id is its address (/how-to/export/). The page's title is its
+// one h1, so the body starts below it.
 
 import { defineCollection } from "astro:content";
 import { glob } from "astro/loaders";

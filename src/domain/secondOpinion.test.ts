@@ -17,6 +17,7 @@ import {
   TARGET_CRITERIA,
   TARGET_QUESTION,
   targetId,
+  tappedPoints,
 } from "./secondOpinion";
 import type { JevReading } from "./types";
 
@@ -38,6 +39,12 @@ describe("rubricParts: points", () => {
       points: ["One", "Two", "Three"],
       notes: "Met when every point holds.",
     });
+  });
+
+  it("keeps a point whose text repeats an earlier point's once, in its first place", () => {
+    expect(rubricParts("1. Holds.\n2. Wrong.\n3. Holds.\n\nMet when all hold.")).toEqual({ points: ["Holds.", "Wrong."], notes: "Met when all hold." });
+    expect(Object.keys(ask("- Holds.\n- Wrong.\n- Holds.").questions)).toEqual(["p1", "p2", "overall"]);
+    expect(tappedPoints(points("- Holds.\n- Wrong.\n- Holds."), ["Holds."])).toEqual(["Holds."]);
   });
 
   it("takes ordered, plus and star items as points", () => {
@@ -110,6 +117,11 @@ describe("rubricParts: points", () => {
 });
 
 describe("secondOpinionRequest", () => {
+  it("sends the reply as a reader sees it, without the reply box's escapes, fenced code as written", () => {
+    const reply = "Key: \\[2, 1\\], a\\_b &amp; c\n```\n\\[x\\]\n```";
+    expect(ask("- One", reply).state.reply).toBe("Key: [2, 1], a_b & c\n```\n\\[x\\]\n```");
+  });
+
   it("covers AE4: three point questions plus an overall question", () => {
     const req = ask("- One\n- Two\n- Three\n\nMet when every point holds.");
     expect(req.kind).toBe("secondOpinion");

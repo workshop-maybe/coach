@@ -237,12 +237,22 @@ export function matchOf(answers: Readonly<Record<string, number>>, keys: readonl
   return { best, alsoLike: over.filter((k) => k !== best) };
 }
 
+/** An expected level below this rates the job routine (KTD2): nearer level 0 than level 1. */
+export const ROUTINE_BELOW = 0.5;
+/** An expected level below this, and not routine, rates the job as needing judgment; at or above it, unusual or high-stakes. */
+export const JUDGMENT_BELOW = 1.5;
+
+/** The expected level the difficulty's probabilities give: each level's number times its probability, summed. */
+export function expectedLevel(levels: readonly number[]): number {
+  return levels.reduce((sum, p, i) => sum + i * p, 0);
+}
+
 /**
  * How hard Jev rates the job (KTD2): the level nearest the expected level its probabilities
  * give, worked out here rather than read from TypeSafe's score. Null without levels.
  */
 export function ratingOf(levels: readonly number[] | null): Rating | null {
   if (!levels || levels.length !== DIFFICULTY_LEVELS.length) return null;
-  const expected = levels.reduce((sum, p, i) => sum + i * p, 0);
-  return expected < 0.5 ? "routine" : expected < 1.5 ? "judgment" : "high-stakes";
+  const expected = expectedLevel(levels);
+  return expected < ROUTINE_BELOW ? "routine" : expected < JUDGMENT_BELOW ? "judgment" : "high-stakes";
 }

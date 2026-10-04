@@ -1,0 +1,23 @@
+[
+  {
+    "reply": "Claude Code",
+    "action": "Met",
+    "reading_overall": "90%",
+    "reading_calls": "Meets",
+    "step_opens": false
+  },
+  {
+    "reply": "Codex",
+    "action": "Met",
+    "reading_overall": "78%",
+    "reading_calls": "Meets",
+    "step_opens": false
+  },
+  {
+    "reply": "Codex",
+    "action": "Change to Not yet",
+    "reading_overall": "78%",
+    "reading_calls": "Meets",
+    "step_opens": true
+  }
+]

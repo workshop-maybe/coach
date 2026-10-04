@@ -13,12 +13,14 @@ Start here for what every Jev feature shares. Then read about each feature:
 
 - [The second opinion, end to end](/jev/second-opinion/), and its [case study](/jev/second-opinion-case-study/).
 - [The paste cleanup, end to end](/jev/paste-cleanup/), and its [case study](/jev/paste-cleanup-case-study/).
+- [Jev in compare, end to end](/jev/compare/), and its [case study](/jev/compare-case-study/).
+- [The router, end to end](/jev/router/), and its [case study](/jev/router-case-study/).
 
 ## What Jev is
 
 Jev is TypeSafe's model. TypeSafe calls it a [System One model](https://docs.typesafe.ai/concepts/system-one): it reads text and returns typed answers with probabilities, rather than writing text of its own. It does not explain its answers or write code.
 
-The app asks Jev only one kind of question, a [Noul](https://docs.typesafe.ai/primitives/noul): a yes-or-no question whose answer is the probability that the answer is yes, from 0 to 1. Each request carries a **state**, the text Jev reads, and a set of **questions**, each with its own instructions and an optional description of what a yes and a no mean. TypeSafe's [Models page](https://docs.typesafe.ai/models) says Jev reads the state once and evaluates every question in the request against it in parallel.
+The app asks Jev two kinds of question. Nearly every question is a [Noul](https://docs.typesafe.ai/primitives/noul): a yes-or-no question whose answer is the probability that the answer is yes, from 0 to 1. A routing ask also carries one [Score](https://docs.typesafe.ai/primitives/score), which rates the state on levels the question describes, in order, and whose answer gives a probability for each level. Each request carries a **state**, the text Jev reads, and a set of **questions**, each with its own instructions and either an optional description of what a yes and a no mean or, for the Score, its levels. TypeSafe's [Models page](https://docs.typesafe.ai/models) says Jev reads the state once and evaluates every question in the request against it in parallel.
 
 The app pins one version of Jev, `jev-1.13.0`, rather than an alias that moves when TypeSafe ships a new release. TypeSafe's Models page advises pinning a version when you have tuned thresholds against it, which is what the app does with your verdicts (see [How a probability becomes a call](/jev/second-opinion/#how-a-probability-becomes-a-call)).
 
@@ -73,17 +75,17 @@ Nothing is sent until you click one of these:
 - <UI>Clean up with Jev</UI> under the reply box sends one cleanup, which may take more than one request for a long paste.
 - <UI>Ask Jev</UI> on <UI>Ask Jev which badge it's like</UI> sends one routing ask, which may take more than one request when you have many badges.
 
-Turning Jev Mode on, opening a badge, judging without asking, or pasting a reply sends nothing. A second opinion is never retried on its own. A cleanup retries a request only when TypeSafe says it is busy, as [The paste cleanup, end to end](/jev/paste-cleanup/#batches-and-retries) explains.
+Turning Jev Mode on, opening a badge, judging without asking, or pasting a reply sends nothing. A second opinion, and each request <UI>Compare with Jev</UI> sends, is never retried on its own. A cleanup or a routing ask retries a request only when TypeSafe says it is busy, as [The paste cleanup, end to end](/jev/paste-cleanup/#batches-and-retries) explains.
 
 ## What is sent, and what isn't
 
 A second opinion sends:
 
 - the badge's task, its rubric in full, the rubric split into its points and its other lines, and its learning targets;
-- the reply you're judging, as the Markdown in the reply box;
+- the reply you're judging, as it reads: its Markdown, without the escapes the reply box adds, such as the backslash before a square bracket;
 - the openings of up to a few earlier replies on the same badge, with your notes on them, inside the questions as examples.
 
-A head-to-head sends the same task, rubric and learning targets with two replies, each whole, and no earlier replies.
+A head-to-head sends the same task, rubric and learning targets with two replies, each whole and as it reads, and no earlier replies.
 
 A cleanup sends only the text you pasted, after the app's own fixes, with each line tagged by its number.
 
@@ -107,13 +109,17 @@ The window checks every request before it asks, and Rust checks it again with th
 
 <Source file="src-tauri/src/jev.rs" symbol="check_budget" />
 
-A second opinion that is too long even with no examples shows <UI>This reply is too long for Jev</UI>, and you judge it as usual. A paste too long for even one cleanup question shows the same line under the reply box in place of <UI>Clean up with Jev</UI>.
+A second opinion that is too long even with no examples shows <UI>This reply is too long for Jev</UI>, and you judge it as usual. A paste too long for even one cleanup question shows the same line under the reply box in place of <UI>Clean up with Jev</UI>. In a compare, each reply or pair too long for Jev is named in a line of its own and left out, and a job too long to send beside any badge shows <UI>This job is too long for Jev.</UI>
 
 ## What comes back
 
 TypeSafe answers with a probability for each question and names the model that answered. The app keeps only those. An answer outside 0 to 1, a missing answer, or an answer for a question the app didn't ask fails the whole ask as an error, rather than being clamped or guessed. An answer larger than 256 KiB fails the same way.
 
 <Source file="src-tauri/src/jev.rs" symbol="answers_from" />
+
+A Score's answer also carries a position on the levels, a confidence and the levels' own words. The app keeps only the probability of each level, and fails the ask unless there are exactly three, each from 0 to 1, summing to 1 within 0.02. The router works out the rating from those three itself: see [The router, end to end](/jev/router/#how-hard-the-job-is).
+
+<Source file="src-tauri/src/jev.rs" symbol="levels_of" />
 
 The app records which model answered, because a reading's calls depend on it (see [How a probability becomes a call](/jev/second-opinion/#how-a-probability-becomes-a-call)). A model name that is missing or not a short id reads as the pinned model and never fails the ask.
 
@@ -125,7 +131,7 @@ Every failure becomes one kind, with no text from TypeSafe, the network library 
 
 <Source file="src-tauri/src/jev.rs" symbol="kind_of" />
 
-TypeSafe's [API reference](https://docs.typesafe.ai/api) lists 401, 422, 429 and 529. The app also reads a 413 as too long, in case one arrives, and any other status, a 422 among them, as an answer it couldn't use, with the status number in brackets.
+TypeSafe's [API reference](https://docs.typesafe.ai/api) lists 401, 422, 429 and 529. A 422 means the request failed TypeSafe's validation, such as a missing field or a malformed question. The app builds every request itself, and Rust checks its shape before sending, so a 422 can only be a bug in the app, and it gets a line of its own. The app also reads a 413 as too long, in case anything between the app and TypeSafe sends one, and any other status as an answer it couldn't use, with the status number in brackets.
 
 On the judge card, or under the reply box for a cleanup, each kind gets one line:
 
@@ -133,6 +139,7 @@ On the judge card, or under the reply box for a cleanup, each kind gets one line
 - **Key missing**, when no key is held or it was removed from the keychain: <UI>Jev has no key. Add one in \{place\}.</UI>
 - **Off**, when Jev Mode was turned off: <UI>Jev Mode is off. Turn it on in \{place\}.</UI>
 - **Too long**, when the request is over the limits or TypeSafe answered 413: <UI>This reply is too long for Jev.</UI>
+- **Invalid request**, when TypeSafe answered 422: <UI>Jev couldn't read the app's request. That's a bug in the app.</UI>
 - **Rate limited**, when TypeSafe answered 429: <UI>Jev has had too many asks. Try again in a moment.</UI>
 - **Overloaded**, when TypeSafe answered 529: <UI>Jev is overloaded. Try again shortly.</UI>
 - **Unreachable**, with no connection, or no answer within 20 seconds: <UI>Jev couldn't be reached.</UI>
@@ -140,6 +147,6 @@ On the judge card, or under the reply box for a cleanup, each kind gets one line
 - **Settings**, when the app's settings couldn't be read: <UI>Jev Mode's settings couldn't be read.</UI>
 - **Other**, for any other status, a redirect, or an answer the app couldn't use: <UI>Jev couldn't answer.</UI>, or <UI>Jev couldn't answer (\{status\}).</UI> with the status number.
 
-The place a key line names is <UI>Jev Mode in the top bar, on home</UI>. The first four can't succeed on a second try, so they take <UI>Ask Jev</UI> away for the rest of that test; you can ask again after the others. Whatever the line says, you can still record your verdict. [When something breaks](/help/when-something-breaks/#jev-mode) says what to do about each.
+The place a key line names is <UI>Jev Mode in the top bar, on home</UI>. The first five can't succeed on a second try, so they take <UI>Ask Jev</UI> away for the rest of that test, and <UI>Compare with Jev</UI> away until the compare opens again; you can ask again after the others. Whatever the line says, you can still record your verdict. [When something breaks](/help/when-something-breaks/#jev-mode) says what to do about each.
 
 <Source file="src/ui/jevFailure.ts" symbol="jevFailure" />

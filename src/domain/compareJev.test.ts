@@ -444,6 +444,25 @@ describe("what the grid reads (KTD7)", () => {
       expect(marks.get(idOf(a))).toEqual([[], []]);
     });
 
+    it("finds each point by its text, so a head-to-head saved over a rubric that repeated a point still marks every point after it", async () => {
+      // A badge made from the old preset keeps "Holds." twice; its parse counts it once now.
+      const rubric = "1. Holds.\n2. Wrong A.\n3. Holds.\n4. Wrong B.";
+      const repeated = { ...badge, rubric };
+      const version = await assignmentVersion(TASK, rubric);
+      const a = held(claude, 1);
+      const b = held(codex, 2);
+      const saved: HeadToHeadPoint[] = [
+        { text: "Holds.", firstOver: 0.9, secondOver: 0.1 },
+        { text: "Wrong A.", firstOver: 0.5, secondOver: 0.5 },
+        { text: "Holds.", firstOver: 0.9, secondOver: 0.1 },
+        { text: "Wrong B.", firstOver: 0.1, secondOver: 0.9 },
+      ];
+      const state = folder({ credential: repeated, held: [a, b], headToHeads: [headToHead(a, b, version, saved)] });
+      const marks = marksOf(state, KEY, entries([a, b]), version);
+      expect(marks.get(idOf(a))).toEqual([[idOf(b)], [], []]);
+      expect(marks.get(idOf(b))).toEqual([[], [], [idOf(a)]]);
+    });
+
     it("an old-version head-to-head marks nothing, nor does a point whose text no longer matches", async () => {
       const version = await assignmentVersion(TASK, RUBRIC);
       const a = held(claude, 1);

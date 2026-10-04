@@ -5,7 +5,7 @@ order: 30
 description: What to do when the app won't open, your folder moved, a file changed under you, or Jev can't answer.
 ---
 
-{/* Jev Mode, data and help, third page (U8, R7): the known ways things go wrong and what to do. Labels are checked against src/ui/FolderGate.tsx, src/ui/AppShell.tsx, src/ui/LoadErrors.tsx, src/ui/shared.tsx, src/ui/ReplyView.tsx, src/ui/Deck.tsx, src/ui/JevDeck.tsx and src/ui/TestDeck.tsx (KTD8). What the app does when the folder is gone follows src-tauri/src/files.rs, whose messages are not checked labels, so the page describes them. */}
+{/* Jev Mode, data and help, third page (U8, R7): the known ways things go wrong and what to do. Labels are checked against src/ui/FolderGate.tsx, src/ui/AppShell.tsx, src/ui/LoadErrors.tsx, src/ui/shared.tsx, src/ui/ReplyView.tsx, src/ui/Deck.tsx, src/ui/JevDeck.tsx, src/ui/TestDeck.tsx and src/ui/jevFailure.ts (KTD8). Where a failed ask's line shows follows src/ui/TestDeck.tsx, src/ui/CompareView.tsx and src/ui/RouterDeck.tsx. What the app does when the folder is gone follows src-tauri/src/files.rs, whose messages are not checked labels, so the page describes them. */}
 
 The app is an early preview, and some things will break. Here's what to do about the ones we know. If yours isn't here, [tell James](/help/feedback/).
 
@@ -64,15 +64,16 @@ When something is wrong on the Jev Mode card, one line on the card says what:
 - <UI>The key is gone. Paste it again.</UI> Jev Mode is on, but its key was removed from the keychain. On a Linux setup with no keychain, the key is gone each time you quit.
 - <UI>The app's settings couldn't be read, so nothing changed.</UI> or <UI>That didn't work. Try again.</UI> Try again. If it keeps happening, [tell James](/help/feedback/).
 
-### A second opinion or a cleanup
+### When Jev can't answer
 
-When Jev can't answer, one line says why, under the rubric for a second opinion or under the reply box for a cleanup.
+One line says why. It shows under the rubric for a second opinion, above the grid in a compare, under the reply box for a cleanup, or on the ask card for a routing ask.
 
 - **A key problem, or Jev Mode is off.** TypeSafe refused the key, there's no key, the key doesn't look right, or Jev Mode was turned off. The line sends you to <UI>Jev Mode</UI> in the top bar, on home, to paste the key again, use a new one or turn Jev Mode on.
 - <UI>Jev has had too many asks. Try again in a moment.</UI> or <UI>Jev is overloaded. Try again shortly.</UI> Wait a little, then ask again.
 - <UI>Jev couldn't be reached.</UI> Check your connection, then ask again.
 - <UI>The keychain didn't give up the key.</UI> Your system didn't let the app read the key. Ask again and allow it.
 - <UI>Jev couldn't answer.</UI> or <UI>Jev Mode's settings couldn't be read.</UI> Ask again. If it keeps happening, [tell James](/help/feedback/), with the number in brackets if the line shows one.
+- <UI>Jev couldn't read the app's request. That's a bug in the app.</UI> Asking again won't help. Judge the reply yourself, or for a routing ask click <UI>Pick the badge myself</UI>, and [tell James](/help/feedback/) so it can be fixed.
 - <UI>This reply is too long for Jev.</UI> Jev can't read a reply this long. Judge it yourself. When a reply fits but your earlier replies on the badge don't all fit beside it, fewer of them go with it, and nothing says so beyond the count under <UI>Ask Jev</UI>.
 
 Whatever the line says, you can still record your verdict. A cleanup that fails leaves the reply as you pasted it.

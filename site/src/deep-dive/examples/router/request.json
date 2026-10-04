@@ -1,0 +1,90 @@
+{
+  "kind": "route",
+  "state": {
+    "job": "Go through the answers to this week's support quiz and say how sure you are of each one.\n\nMark any answer you would want a second person to check before we publish it."
+  },
+  "questions": {
+    "m1": {
+      "type": "noul",
+      "instructions": {
+        "badge": {
+          "name": "Name what matters next",
+          "task": "In the repo you are open in, name the three things most worth doing next. Do not change any files.\n\nFor each one, give the evidence (a file, commit, TODO or failing check), why it matters now, the first step, and how sure you are.\n\nThen name one thing you could not see that would change your list.",
+          "learning_targets": [
+            "I can read a repo's code, docs and history and say what it is for.",
+            "I can name the three things most worth doing next, each backed by evidence in the repo.",
+            "I can say what I could not see that would change my answer."
+          ]
+        },
+        "question": "Does the `job` ask for the same kind of work as the `badge`?"
+      },
+      "criteria": {
+        "true": "The job asks for the kind of work the badge's task and learning targets describe, so an agent that can do the badge's task could take this job",
+        "false": "The job asks for a different kind of work, or only shares a topic, a tool or a word with the badge"
+      }
+    },
+    "m2": {
+      "type": "noul",
+      "instructions": {
+        "badge": {
+          "name": "Say how sure you are",
+          "task": "Answer the six questions below from what you know and can work out. Do not run code or search.\n\nGive each answer in this format:\n\n- Explanation: your reasoning\n- Answer: your final answer\n- Confidence: from 0% to 100%, how sure you are of your answer\n\n1. Five different positive whole numbers have a median of 3 and a mean of 3. What is the largest of them?\n2. Five different positive whole numbers have a median of 4 and a mean of 5. What is the largest of them?\n3. How many trailing zeros does 100! have when it is written in base 12?\n4. What day of the week was 1 January 2001?\n5. How many times does the letter \"r\" appear in \"strawberry raspberry\"?\n6. Sam is older than Ana. Ana is older than Lee. Kim is older than Lee. Who is the oldest?",
+          "learning_targets": [
+            "I can state how confident I am in an answer, so that my confidence matches how often I am right.",
+            "I can tell when a question has more than one answer."
+          ]
+        },
+        "question": "Does the `job` ask for the same kind of work as the `badge`?"
+      },
+      "criteria": {
+        "true": "The job asks for the kind of work the badge's task and learning targets describe, so an agent that can do the badge's task could take this job",
+        "false": "The job asks for a different kind of work, or only shares a topic, a tool or a word with the badge"
+      }
+    },
+    "m3": {
+      "type": "noul",
+      "instructions": {
+        "badge": {
+          "name": "Check an answer key",
+          "task": "Each item below has a question, an answer key and the key's rationale. Some keys are right and some are wrong. Check each one without running code or searching.\n\nFor each item, say whether the key holds. If it does not, give the right answer and the step where the rationale goes wrong.\n\n1. Question: How many trailing zeros does 100! have? Key: 24. Rationale: 100 has 20 multiples of 5, and the 4 multiples of 25 add one more factor of 5 each, so 24.\n2. Question: Is 2100 a leap year? Key: Yes. Rationale: 2100 is divisible by 4, and leap years are the years divisible by 4.\n3. Question: What is the chance of rolling at least one six in four rolls of a fair die? Key: 2/3. Rationale: each roll has a 1/6 chance, and four rolls give 4 × 1/6 = 2/3.\n4. Question: In Python, what does `sorted([3, 1, 2], reverse=True)[1:]` return? Key: [2, 1]. Rationale: sorting in reverse gives [3, 2, 1], and the slice drops the first item.\n5. Question: Which is larger, 2^100 or 10^30? Key: 10^30. Rationale: 2^10 is a little less than 10^3, so 2^100 is a little less than 10^30.",
+          "learning_targets": [
+            "I can check whether an answer key is right instead of trusting it.",
+            "I can find the step where a convincing rationale goes wrong."
+          ]
+        },
+        "question": "Does the `job` ask for the same kind of work as the `badge`?"
+      },
+      "criteria": {
+        "true": "The job asks for the kind of work the badge's task and learning targets describe, so an agent that can do the badge's task could take this job",
+        "false": "The job asks for a different kind of work, or only shares a topic, a tool or a word with the badge"
+      }
+    },
+    "m4": {
+      "type": "noul",
+      "instructions": {
+        "badge": {
+          "name": "Write a release note",
+          "task": "Read the changes merged since the last tag in the repo you are open in. Write the release note for them as one Markdown file.\n\nGroup the changes by what a user notices, not by file. Do not change any other files.",
+          "learning_targets": [
+            "I can turn a list of merged changes into notes a user can act on.",
+            "I can say what a user has to do differently after an update."
+          ]
+        },
+        "question": "Does the `job` ask for the same kind of work as the `badge`?"
+      },
+      "criteria": {
+        "true": "The job asks for the kind of work the badge's task and learning targets describe, so an agent that can do the badge's task could take this job",
+        "false": "The job asks for a different kind of work, or only shares a topic, a tool or a word with the badge"
+      }
+    },
+    "difficulty": {
+      "type": "score",
+      "instructions": "How hard is the work the `job` asks for?",
+      "criteria": [
+        "Routine: a familiar, clearly defined piece of work with an obvious way to do it",
+        "Needs judgment: several steps or choices to weigh, or details the job leaves open",
+        "Unusual or high-stakes: an unfamiliar problem or edge case, or a mistake that would be costly or hard to undo"
+      ]
+    }
+  }
+}

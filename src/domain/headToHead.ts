@@ -12,6 +12,7 @@
 
 import { callOf, DEFAULT_CUT_OFFS } from "./calls";
 import { isProbability, type HeadToHeadRequest, type JevAnswers, type JevCriteria } from "./jevRequest";
+import { readerText } from "./readerText";
 import { rubricParts, targetsToSend } from "./secondOpinion";
 import type { HeadToHeadPoint } from "./types";
 
@@ -22,9 +23,9 @@ export interface HeadToHeadInput {
   rubric: string;
   /** The badge's learning targets, sent as context only, as a second opinion sends them. */
   learningTargets?: readonly string[];
-  /** The reply first in the compare's order, as it stands in the folder. */
+  /** The reply first in the compare's order, as it stands in the folder. It is sent as a reader sees it (`readerText`). */
   first: string;
-  /** The reply second in the compare's order, as it stands in the folder. */
+  /** The reply second in the compare's order, as it stands in the folder. It is sent as a reader sees it. */
   second: string;
 }
 
@@ -64,8 +65,9 @@ export function secondOverId(index: number): string {
 
 /**
  * The head-to-head request for two replies: "a1" … "aN", then "b1" … "bN", each naming
- * its point, with the rubric's notes when it has any. Null for a rubric with no points,
- * which has no head-to-head (KTD6).
+ * its point, with the rubric's notes when it has any. Both replies go as a reader sees them,
+ * as a second opinion sends its reply. Null for a rubric with no points, which has no
+ * head-to-head (KTD6).
  */
 export function headToHeadRequest({ task, rubric, learningTargets = [], first, second }: HeadToHeadInput): HeadToHeadRequest | null {
   const { points, notes } = rubricParts(rubric);
@@ -95,8 +97,8 @@ export function headToHeadRequest({ task, rubric, learningTargets = [], first, s
       rubric_notes: notes,
       rubric,
       learning_targets: targetsToSend(learningTargets),
-      reply_1: first,
-      reply_2: second,
+      reply_1: readerText(first),
+      reply_2: readerText(second),
     },
     questions,
   };

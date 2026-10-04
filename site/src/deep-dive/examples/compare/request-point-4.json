@@ -1,0 +1,26 @@
+{
+  "a4": {
+    "type": "noul",
+    "instructions": {
+      "point": "Holds. Sorting in reverse gives [3, 2, 1], and the slice drops the first item, leaving [2, 1].",
+      "rubric_notes": "Met when all five calls are right and each wrong key gets the right answer and the step that fails. Calling a right key wrong fails the test.",
+      "question": "Does `reply_1` cover `point` better than `reply_2`, read with `rubric_notes`, given `task`?"
+    },
+    "criteria": {
+      "true": "`reply_1` gives more specific, checkable evidence that this point is met than `reply_2` does: it names more of the files, commands or output, or shows more of the content",
+      "false": "`reply_2` gives evidence as strong or stronger, or neither reply addresses this point"
+    }
+  },
+  "b4": {
+    "type": "noul",
+    "instructions": {
+      "point": "Holds. Sorting in reverse gives [3, 2, 1], and the slice drops the first item, leaving [2, 1].",
+      "rubric_notes": "Met when all five calls are right and each wrong key gets the right answer and the step that fails. Calling a right key wrong fails the test.",
+      "question": "Does `reply_2` cover `point` better than `reply_1`, read with `rubric_notes`, given `task`?"
+    },
+    "criteria": {
+      "true": "`reply_2` gives more specific, checkable evidence that this point is met than `reply_1` does: it names more of the files, commands or output, or shows more of the content",
+      "false": "`reply_1` gives evidence as strong or stronger, or neither reply addresses this point"
+    }
+  }
+}

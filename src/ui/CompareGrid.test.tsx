@@ -260,6 +260,68 @@ describe("CompareGrid", () => {
   });
 });
 
+// A badge made before a repeated rubric point counted once keeps the repeat in its file, and
+// the readings and head-to-heads saved for it hold every point it had. Each current point
+// finds its saved call by its text, so nothing after the dropped repeat goes blank (R3).
+describe("CompareGrid on a badge whose rubric repeats a point", () => {
+  const rubric = "1. Holds.\n2. Wrong A.\n3. Holds.\n4. Wrong B.";
+  const repeated: Credential = { ...badge, rubric };
+  const SAVED = ["Holds.", "Wrong A.", "Holds.", "Wrong B."];
+
+  it("shows each distinct point's saved call and mark, the last one included, and the missed-points step does too", async () => {
+    const v = await assignmentVersion(repeated.task, rubric);
+    const probabilities = [0.9, 0.5, 0.9, 0.1];
+    const claudeReading: JevReading = {
+      model: JEV_MODEL,
+      assignmentVersion: v,
+      askedAt: "2026-09-09T09:00:00.000Z",
+      seen: "before",
+      overall: 0.9,
+      points: SAVED.map((text, i) => ({ text, probability: probabilities[i] })),
+      targets: [{ text: TARGET, probability: 0.9 }],
+      examplesSent: 0,
+    };
+    const h2h: HeadToHead = {
+      collectionSlug: "eng",
+      credentialSlug: "review",
+      id: stem(5),
+      model: JEV_MODEL,
+      assignmentVersion: v,
+      askedAt: at(5),
+      first: { profileSlug: claude.slug, fileStem: stem(1) },
+      second: { profileSlug: codex.slug, fileStem: stem(2) },
+      points: SAVED.map((text, i) => (i === 3 ? { text, firstOver: 0.1, secondOver: 0.9 } : { text, firstOver: 0.5, secondOver: 0.5 })),
+    };
+    const storage = storageWith({
+      credentials: [repeated],
+      profiles: [claude, codex],
+      held: [
+        await heldReply(claude, repeated, { fileStem: stem(1), heldAt: at(1), handBack: "Claude Code replied.", jev: claudeReading }),
+        await heldReply(codex, repeated, { fileStem: stem(2), heldAt: at(2), handBack: "Codex replied." }),
+      ],
+      headToHeads: [h2h],
+    });
+    open(storage, [ref(claude, 1), ref(codex, 2)]);
+    await screen.findByRole("table", { name: "Jev's calls" });
+    expect(rowNames()).toEqual(["Holds.", "Wrong A.", "Wrong B.", TARGET, "Overall"]);
+    expect(cell("Wrong B.", 0).textContent).toContain("Misses");
+    expect(cell("Wrong B.", 0).textContent).toContain("10%");
+    expect(cell("Wrong B.", 1).textContent).toContain("Better than Claude Code");
+
+    // Not yet against Claude Code's meets reading opens the step, Jev's call beside every point.
+    await userEvent.click(within(panes()[0]).getByRole("button", { name: "Not yet" }));
+    const list = await within(panes()[0]).findByRole("list", { name: "Rubric points" });
+    const calls = within(list)
+      .getAllByRole("listitem")
+      .map((li) => [within(li).getByRole("button").textContent, li.querySelector(".missed-call")?.textContent ?? null]);
+    expect(calls).toEqual([
+      ["Holds.", "Meets"],
+      ["Wrong A.", "Can't call"],
+      ["Wrong B.", "Misses"],
+    ]);
+  });
+});
+
 // The strip turning into the grid while Jev answers (KTD13's focus rules).
 describe("CompareGrid during a run", () => {
   /** Every id a reading or a head-to-head on the badge asks for. */

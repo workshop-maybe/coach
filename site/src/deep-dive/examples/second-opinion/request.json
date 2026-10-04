@@ -3,14 +3,14 @@
   "state": {
     "task": "Each item below has a question, an answer key and the key's rationale. Some keys are right and some are wrong. Check each one without running code or searching.\n\nFor each item, say whether the key holds. If it does not, give the right answer and the step where the rationale goes wrong.\n\n1. Question: How many trailing zeros does 100! have? Key: 24. Rationale: 100 has 20 multiples of 5, and the 4 multiples of 25 add one more factor of 5 each, so 24.\n2. Question: Is 2100 a leap year? Key: Yes. Rationale: 2100 is divisible by 4, and leap years are the years divisible by 4.\n3. Question: What is the chance of rolling at least one six in four rolls of a fair die? Key: 2/3. Rationale: each roll has a 1/6 chance, and four rolls give 4 × 1/6 = 2/3.\n4. Question: In Python, what does `sorted([3, 1, 2], reverse=True)[1:]` return? Key: [2, 1]. Rationale: sorting in reverse gives [3, 2, 1], and the slice drops the first item.\n5. Question: Which is larger, 2^100 or 10^30? Key: 10^30. Rationale: 2^10 is a little less than 10^3, so 2^100 is a little less than 10^30.",
     "rubric_points": [
-      "Holds.",
+      "Holds. 100 has 20 multiples of 5 and 4 multiples of 25, so 100! has 24 trailing zeros.",
       "Wrong. The answer is no. A year divisible by 100 is a leap year only when it is also divisible by 400, and the rationale leaves that rule out.",
       "Wrong. The answer is 1 - (5/6)^4 = 671/1296, about 0.52. Adding the chances counts the rolls with more than one six twice.",
-      "Holds.",
+      "Holds. Sorting in reverse gives [3, 2, 1], and the slice drops the first item, leaving [2, 1].",
       "Wrong. 2^100 is larger. 2^10 is 1,024, a little more than 10^3, so the rationale has the direction backward."
     ],
     "rubric_notes": "Met when all five calls are right and each wrong key gets the right answer and the step that fails. Calling a right key wrong fails the test.",
-    "rubric": "1. Holds.\n2. Wrong. The answer is no. A year divisible by 100 is a leap year only when it is also divisible by 400, and the rationale leaves that rule out.\n3. Wrong. The answer is 1 - (5/6)^4 = 671/1296, about 0.52. Adding the chances counts the rolls with more than one six twice.\n4. Holds.\n5. Wrong. 2^100 is larger. 2^10 is 1,024, a little more than 10^3, so the rationale has the direction backward.\n\nMet when all five calls are right and each wrong key gets the right answer and the step that fails. Calling a right key wrong fails the test.",
+    "rubric": "1. Holds. 100 has 20 multiples of 5 and 4 multiples of 25, so 100! has 24 trailing zeros.\n2. Wrong. The answer is no. A year divisible by 100 is a leap year only when it is also divisible by 400, and the rationale leaves that rule out.\n3. Wrong. The answer is 1 - (5/6)^4 = 671/1296, about 0.52. Adding the chances counts the rolls with more than one six twice.\n4. Holds. Sorting in reverse gives [3, 2, 1], and the slice drops the first item, leaving [2, 1].\n5. Wrong. 2^100 is larger. 2^10 is 1,024, a little more than 10^3, so the rationale has the direction backward.\n\nMet when all five calls are right and each wrong key gets the right answer and the step that fails. Calling a right key wrong fails the test.",
     "learning_targets": [
       "I can check whether an answer key is right instead of trusting it.",
       "I can find the step where a convincing rationale goes wrong."
@@ -21,7 +21,7 @@
     "p1": {
       "type": "noul",
       "instructions": {
-        "point": "Holds.",
+        "point": "Holds. 100 has 20 multiples of 5 and 4 multiples of 25, so 100! has 24 trailing zeros.",
         "rubric_notes": "Met when all five calls are right and each wrong key gets the right answer and the step that fails. Calling a right key wrong fails the test.",
         "question": "Does `reply` satisfy `point`, read with `rubric_notes`, given `task`?"
       },
@@ -87,7 +87,7 @@
     "p4": {
       "type": "noul",
       "instructions": {
-        "point": "Holds.",
+        "point": "Holds. Sorting in reverse gives [3, 2, 1], and the slice drops the first item, leaving [2, 1].",
         "rubric_notes": "Met when all five calls are right and each wrong key gets the right answer and the step that fails. Calling a right key wrong fails the test.",
         "question": "Does `reply` satisfy `point`, read with `rubric_notes`, given `task`?"
       },

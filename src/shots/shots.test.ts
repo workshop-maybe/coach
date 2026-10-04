@@ -146,6 +146,19 @@ describe("the shot manifest", () => {
     }
   });
 
+  it("scripts a Score's levels only where Jev Mode is on: three probabilities summing to 1, by the difficulty id", () => {
+    for (const shot of SHOTS) {
+      if (!shot.jevLevels) continue;
+      expect(shot.jev, shot.id).toBe("on");
+      for (const [id, levels] of Object.entries(shot.jevLevels)) {
+        expect(id, shot.id).toBe("difficulty");
+        expect(levels, shot.id).toHaveLength(3);
+        expect(levels.every((p) => p >= 0 && p <= 1), shot.id).toBe(true);
+        expect(Math.abs(levels.reduce((a, b) => a + b, 0) - 1), shot.id).toBeLessThan(1e-9);
+      }
+    }
+  });
+
   it("gives every clip a selector and every step a target", () => {
     for (const shot of SHOTS) {
       if (shot.clip) expect(shot.clip.selector.trim(), shot.id).not.toBe("");

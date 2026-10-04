@@ -1,0 +1,29 @@
+{
+  "threshold": "70%",
+  "badges": [
+    {
+      "id": "m1",
+      "badge": "Name what matters next",
+      "yes": "12%",
+      "role": null
+    },
+    {
+      "id": "m2",
+      "badge": "Say how sure you are",
+      "yes": "93%",
+      "role": "match"
+    },
+    {
+      "id": "m3",
+      "badge": "Check an answer key",
+      "yes": "74%",
+      "role": "also like"
+    },
+    {
+      "id": "m4",
+      "badge": "Write a release note",
+      "yes": "8%",
+      "role": null
+    }
+  ]
+}

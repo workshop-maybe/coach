@@ -1,0 +1,17 @@
+{
+  "job": "Go through the answers to this week's support quiz and say how sure you are of each one.",
+  "collection": "my-credentials",
+  "credential": "check-an-answer-key",
+  "agent": "codex-gpt-6-astra-medium",
+  "setup": {
+    "harness": "codex",
+    "model": "gpt-6-astra",
+    "effort": "medium"
+  },
+  "recommended": "codex-gpt-6-astra-medium",
+  "basis": "cheapest",
+  "steppedUp": false,
+  "matched": "also-like",
+  "difficulty": "routine",
+  "jevModel": "jev-1.13.0"
+}

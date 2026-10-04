@@ -96,6 +96,12 @@ export interface Shot {
    * call, or no match. Only with Jev Mode on.
    */
   jevAnswers?: Readonly<Record<string, number>>;
+  /**
+   * What Jev answers a routing ask's Score, as level probabilities by question id
+   * (`difficulty`), routine first. A Score left out gets FakeJev's default, certain the job
+   * is routine. Only with Jev Mode on.
+   */
+  jevLevels?: Readonly<Record<string, readonly number[]>>;
 }
 
 /**
@@ -135,8 +141,8 @@ const CLAUDE_HOW_SURE = { profileSlug: CLAUDE, fileStem: "20260926T164500Z" };
 /** Write a release note's own handoff, A, its default. */
 const RELEASE_NOTE_HANDOFF = "20260928T090000Z";
 
-/** The job the router's pictures paste (router KTD15), as someone would hand it to an agent. */
-const ROUTER_JOB = `Go through the answers to this week's support quiz and say how sure you are of each one.
+/** The job the router's pictures and its case study paste (router KTD15), as someone would hand it to an agent. */
+export const ROUTER_JOB = `Go through the answers to this week's support quiz and say how sure you are of each one.
 
 Mark any answer you would want a second person to check before we publish it.`;
 
@@ -181,7 +187,7 @@ const CODEX_HELD = { profileSlug: CODEX, fileStem: "20260929T114000Z" };
  * 30/70 only on point 3, where Claude Code names the failing step, and point 4, where Codex
  * calls a right key wrong (jev-in-compare KTD6).
  */
-const HEAD_TO_HEAD_CALLS = { a1: 0.46, b1: 0.41, a2: 0.58, b2: 0.33, a3: 0.81, b3: 0.14, a4: 0.94, b4: 0.04, a5: 0.55, b5: 0.38 };
+export const HEAD_TO_HEAD_CALLS = { a1: 0.46, b1: 0.41, a2: 0.58, b2: 0.33, a3: 0.81, b3: 0.14, a4: 0.94, b4: 0.04, a5: 0.55, b5: 0.38 };
 
 /** What Claude Code sends back when it takes Say how sure you are again, with Jev Mode on. */
 const HOW_SURE_REPLY = `1. Answer: 5. Confidence: 95%
@@ -204,8 +210,8 @@ const ANSWER_KEY_REPLY = `1. Holds. 100 has 20 multiples of 5 and 4 multiples of
 
 /**
  * What Jev answers about that reply, read with the 40/75 cut-offs the judged sample fits:
- * meets overall and on four points, can't call on the bare "Holds." of point 4, and on the
- * second target, which 30/70 would have read as meets.
+ * meets overall and on four points, can't call on point 4, the slice key, and on the second
+ * target, which 30/70 would have read as meets.
  */
 const ANSWER_KEY_CALLS = { p1: 0.91, p2: 0.86, p3: 0.88, p4: 0.58, p5: 0.83, overall: 0.84, t1: 0.88, t2: 0.72 };
 
@@ -249,6 +255,63 @@ export const CASE_REASON = "Lets key 2 stand, but 2100 is not a leap year.";
 /** The rubric point the case study taps as missed: the second, the leap-year key. */
 export const CASE_MISSED_POINT =
   "Wrong. The answer is no. A year divisible by 100 is a leap year only when it is also divisible by 400, and the rationale leaves that rule out.";
+
+/**
+ * The compare case study's re-judge (fix plan KTD10): after Met under both held replies,
+ * the grid's mark on point 4 sends the user back to Codex's reply, which calls a right key
+ * wrong. Change to Not yet goes against Jev's meets reading, so the step asks which points
+ * the reply missed, and what Jev missed.
+ */
+export const COMPARE_MISSED_POINT = "Holds. Sorting in reverse gives [3, 2, 1], and the slice drops the first item, leaving [2, 1].";
+export const COMPARE_REASON = "Calls the right key on item 4 wrong.";
+
+/** The compare the bake-off's pictures open: both held replies on Check an answer key, Claude Code's first. */
+const COMPARE_ROUTE: Route = { view: "item", item: "compare", credentialKey: ANSWER_KEY, takes: [CLAUDE_HELD, CODEX_HELD], picks: [CLAUDE_HELD, CODEX_HELD] };
+
+/** Each held reply's record in that compare, by the agent its label starts with. The harness clicks the first match, so Codex's buttons need its record. */
+const CLAUDE_RECORD = '.reply-record[aria-label^="Claude Code"]';
+const CODEX_RECORD = '.reply-record[aria-label^="Codex"]';
+
+/** Compare with Jev pressed, and its head-to-head's marks in the grid. */
+const COMPARE_ASKED: readonly Step[] = [{ click: { button: "Compare with Jev" } }, { waitFor: { text: "Better than Codex" } }];
+
+/**
+ * On to Met under both replies, each one click since it agrees with its reading, then Change
+ * to Not yet under Codex's, which goes against its reading and opens the step. A judged
+ * reply's links are `button.link`; the held reply's Met and Not yet are not.
+ */
+const COMPARE_TO_REJUDGE: readonly Step[] = [
+  ...COMPARE_ASKED,
+  { click: { selector: `${CLAUDE_RECORD} .take-actions button:nth-child(1)` } },
+  { waitFor: { selector: `${CLAUDE_RECORD} .take-actions button.link` } },
+  { click: { selector: `${CODEX_RECORD} .take-actions button:nth-child(1)` } },
+  { waitFor: { selector: `${CODEX_RECORD} .take-actions button.link` } },
+  { click: { selector: `${CODEX_RECORD} .take-actions button.link:last-of-type` } },
+  { waitFor: { text: "Which points did it miss" } },
+];
+
+/** On to the reason card, with the missed point pressed and the reason typed. */
+const COMPARE_TO_REASON: readonly Step[] = [
+  ...COMPARE_TO_REJUDGE,
+  { click: { button: COMPARE_MISSED_POINT } },
+  { click: { button: "Next" } },
+  { waitFor: { text: "What did Jev miss" } },
+  { fill: { label: "Reason" }, value: COMPARE_REASON },
+];
+
+/**
+ * What Jev answers the router case study's routing ask, by question id: whether the job is
+ * like each badge, in the sample's Home order (Name what matters next, Say how sure you are,
+ * Check an answer key, Write a release note). Illustrative, not a real reading: Say how sure
+ * you are matches, Check an answer key is also like it, and the other two are not.
+ */
+export const ROUTER_CALLS = { m1: 0.12, m2: 0.93, m3: 0.74, m4: 0.08 };
+
+/**
+ * What Jev answers the routing ask's difficulty Score in the case study, routine first.
+ * Illustrative: mostly routine, some judgment, so the expected level, 0.41, rates it routine.
+ */
+export const ROUTER_LEVELS = [0.64, 0.31, 0.05] as const;
 
 /** The case study's test: Claude Code takes Check an answer key, which opens at "Hand it over". */
 const CASE_TEST: Route = { view: "deck", deck: "test", profileSlug: CLAUDE, credentialKey: ANSWER_KEY };
@@ -630,7 +693,8 @@ export const SHOTS: readonly Shot[] = [
   {
     // Claude Code is Say how sure you are's go-to. Saving a changed rubric opens the badge's
     // page, and closing it shows home's Badges with the go-to's line flagged. The sample
-    // folder stays unflagged, so no other picture changes.
+    // folder stays unflagged, so no other picture changes. Home keeps the badge page's scroll,
+    // so the last step brings Badges back into view above the pinned doors.
     id: "go-to-flagged",
     page: "how-to/choose-a-go-to",
     route: { view: "deck", deck: "edit-credential", credentialKey: HOW_SURE, part: "rubric" },
@@ -645,6 +709,7 @@ export const SHOTS: readonly Shot[] = [
       { waitFor: { selector: 'section[aria-labelledby="badge-holders"]' } },
       { click: { button: "Close" } },
       { waitFor: { text: "Go-to: Claude Code · task changed" } },
+      { scroll: { selector: 'section[aria-labelledby="home-badges"]' } },
     ],
     clip: { selector: 'section[aria-labelledby="home-badges"]', pad: 8 },
   },
@@ -756,24 +821,66 @@ export const SHOTS: readonly Shot[] = [
     // reply is wrong or bare (jev-in-compare R3, R4, R7).
     id: "compare-grid",
     page: "how-to/run-a-bake-off",
-    route: { view: "item", item: "compare", credentialKey: ANSWER_KEY, takes: [CLAUDE_HELD, CODEX_HELD], picks: [CLAUDE_HELD, CODEX_HELD] },
+    route: COMPARE_ROUTE,
     seed: "full",
     jev: "on",
     jevAnswers: HEAD_TO_HEAD_CALLS,
     expect: { text: "Better than Codex" },
-    steps: [{ click: { button: "Compare with Jev" } }, { waitFor: { text: "Better than Codex" } }],
+    steps: COMPARE_ASKED,
   },
   {
-    // Not yet under Codex's held reply, which Jev's reading calls meets: the step under it asks
-    // which points the reply missed, with Jev's call beside each and none pressed
-    // (jev-in-compare R11).
+    // After Compare with Jev, Not yet under Codex's held reply, which Jev's reading calls meets:
+    // the step under it asks which points the reply missed, with Jev's call beside each and
+    // none pressed (jev-in-compare R11). The compare is the case study's (fix plan KTD10).
     id: "compare-against-jev",
     page: "how-to/run-a-bake-off",
-    route: { view: "item", item: "compare", credentialKey: ANSWER_KEY, takes: [CODEX_HELD, CLAUDE_HELD], picks: [CODEX_HELD, CLAUDE_HELD] },
+    route: COMPARE_ROUTE,
     seed: "full",
-    jev: "off",
+    jev: "on",
+    jevAnswers: HEAD_TO_HEAD_CALLS,
     expect: { text: "Which points did it miss" },
-    steps: [{ click: { button: "Not yet" } }, { waitFor: { text: "Which points did it miss" } }],
+    steps: [...COMPARE_ASKED, { click: { selector: `${CODEX_RECORD} .take-actions button:nth-child(2)` } }, { waitFor: { text: "Which points did it miss" } }],
+  },
+  // Jev in compare's case study (fix plan KTD10): the same compare, before the press, then Met
+  // under both replies and Change to Not yet under Codex's after the mark on point 4.
+  {
+    id: "compare-ask",
+    page: "jev/compare-case-study",
+    route: COMPARE_ROUTE,
+    seed: "full",
+    jev: "on",
+    jevAnswers: HEAD_TO_HEAD_CALLS,
+    expect: { text: "Sends 1 request: 1 head-to-head" },
+  },
+  {
+    id: "compare-rejudge",
+    page: "jev/compare-case-study",
+    route: COMPARE_ROUTE,
+    seed: "full",
+    jev: "on",
+    jevAnswers: HEAD_TO_HEAD_CALLS,
+    expect: { text: "Which points did it miss" },
+    steps: COMPARE_TO_REJUDGE,
+  },
+  {
+    id: "compare-reason",
+    page: "jev/compare-case-study",
+    route: COMPARE_ROUTE,
+    seed: "full",
+    jev: "on",
+    jevAnswers: HEAD_TO_HEAD_CALLS,
+    expect: { text: "What did Jev miss" },
+    steps: COMPARE_TO_REASON,
+  },
+  {
+    id: "compare-changed",
+    page: "jev/compare-case-study",
+    route: COMPARE_ROUTE,
+    seed: "full",
+    jev: "on",
+    jevAnswers: HEAD_TO_HEAD_CALLS,
+    expect: { text: "Changed from Met" },
+    steps: [...COMPARE_TO_REASON, { click: { button: "Save" } }, { waitFor: { text: "Changed from Met" } }],
   },
   {
     id: "badge-page",
@@ -910,9 +1017,31 @@ export const SHOTS: readonly Shot[] = [
     route: { view: "deck", deck: "router" },
     seed: "full",
     jev: "on",
-    jevAnswers: { m1: 0.12, m2: 0.93, m3: 0.74, m4: 0.08 },
+    jevAnswers: ROUTER_CALLS,
+    jevLevels: { difficulty: ROUTER_LEVELS },
     expect: { text: "Go-to for Say how sure you are" },
     steps: [{ paste: ROUTER_JOB }, { click: { button: "Next" } }, { click: { button: "Ask Jev" } }, { waitFor: { text: "Go-to for Say how sure you are" } }],
+    clip: { selector: ".deck", pad: 8 },
+  },
+  {
+    // The router's case study: Check an answer key tapped under Also like switches the card to
+    // it without asking again, and Codex, the cheapest agent holding it, is the pick.
+    id: "router-also",
+    page: "jev/router-case-study",
+    route: { view: "deck", deck: "router" },
+    seed: "full",
+    jev: "on",
+    jevAnswers: ROUTER_CALLS,
+    jevLevels: { difficulty: ROUTER_LEVELS },
+    expect: { text: "Cheapest agent holding Check an answer key" },
+    steps: [
+      { paste: ROUTER_JOB },
+      { click: { button: "Next" } },
+      { click: { button: "Ask Jev" } },
+      { waitFor: { text: "Go-to for Say how sure you are" } },
+      { click: { button: "Check an answer key" } },
+      { waitFor: { text: "Cheapest agent holding Check an answer key" } },
+    ],
     clip: { selector: ".deck", pad: 8 },
   },
   {
@@ -954,12 +1083,12 @@ export const COVERAGE: Record<RouteKind, readonly string[] | typeof NOT_PICTURED
   "deck:edit-handoff": ["handoff-edit"],
   "deck:trash": ["trash-badge", "trash-agent"],
   "deck:jev": ["jev-off", "jev-on"],
-  "deck:router": ["router-ask", "router-card"],
+  "deck:router": ["router-ask", "router-card", "router-also"],
   "deck:cost-order": ["cost-order"],
   "item:badge": ["badge-replies", "badge-page", "go-to-badge"],
   "item:agent": ["agent-page"],
   // A handoff opens as its own item only once two or more have results; the sample's has none.
   "item:handoff": NOT_PICTURED,
   "item:reply": ["reply-view", "jev-reading"],
-  "item:compare": ["compare", "compare-held", "compare-grid", "compare-against-jev"],
+  "item:compare": ["compare", "compare-held", "compare-grid", "compare-against-jev", "compare-ask", "compare-rejudge", "compare-reason", "compare-changed"],
 };

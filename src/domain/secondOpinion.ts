@@ -5,7 +5,9 @@
 // context KTD2).
 //
 // A point is a top-level list item (`-`, `*`, `+` or ordered). Nested items and indented
-// lines fold into it, task boxes are dropped, and fenced code is skipped. The rest of the
+// lines fold into it, task boxes are dropped, and fenced code is skipped. A point whose text
+// repeats an earlier point's counts once, in its first place, as a repeated learning target
+// does: both would ask Jev the same question, and missed points are kept by text. The rest of the
 // rubric, such as "A rewrite in other words passes" or "Met when every point holds", is
 // its notes, and reaches every point question beside the point (R12). Unlike CommonMark,
 // an unindented line right after an item ends the list instead of continuing the item, so
@@ -23,10 +25,11 @@ import {
   type SecondOpinionRequest,
 } from "./jevRequest";
 import { scanLines } from "./markdownLines";
+import { readerText } from "./readerText";
 import type { JevPoint, JevReading } from "./types";
 
 export interface RubricParts {
-  /** Top-level list items, in order, each as one line of text. */
+  /** Top-level list items, in order, each as one line of text, each text once. */
   points: string[];
   /** Non-blank lines outside the list and outside fences, trimmed, joined with newlines. */
   notes: string;
@@ -37,7 +40,7 @@ export interface SecondOpinionInput {
   task: string;
   /** The badge's rubric, in full. */
   rubric: string;
-  /** The agent's reply. */
+  /** The agent's reply, as the reply box holds it. It is sent as a reader sees it (`readerText`). */
   reply: string;
   /** The badge's learning targets. Sent trimmed, without blanks or repeats (KTD12). */
   learningTargets?: readonly string[];
@@ -91,6 +94,15 @@ export function tappedPoints(points: readonly string[], tapped: readonly string[
   return points.filter((point, i) => picked.has(point) && points.indexOf(point) === i);
 }
 
+/**
+ * The saved entry for a point, found by its text: the first of `saved` with the same text.
+ * A rubric's points are distinct (`rubricParts`), so the text finds one point, also in a
+ * reading or head-to-head saved before a repeated point counted once.
+ */
+export function savedPointOf<T extends { text: string }>(saved: readonly T[] | null | undefined, point: string): T | undefined {
+  return saved?.find((s) => s.text === point);
+}
+
 /** The rubric's points and notes. A rubric with no list has no points. */
 export function rubricParts(rubric: string): RubricParts {
   const points: string[] = [];
@@ -132,8 +144,9 @@ export function rubricParts(rubric: string): RubricParts {
 /**
  * The request for Jev's second opinion: one question per rubric point ("p1" … "pN"), one
  * per learning target ("t1" … "tM"), plus one overall. The state holds only the task, the
- * rubric, the learning targets and the reply (R5). Examples go on the point and overall
- * questions they are keyed to; one keyed to any other id is not sent.
+ * rubric, the learning targets and the reply (R5), the reply as a reader sees it, without the
+ * reply box's escapes. Examples go on the point and overall questions they are keyed to; one
+ * keyed to any other id is not sent.
  */
 export function secondOpinionRequest({ task, rubric, reply, learningTargets = [], examples = {} }: SecondOpinionInput): SecondOpinionRequest {
   const { points, notes } = rubricParts(rubric);
@@ -156,7 +169,7 @@ export function secondOpinionRequest({ task, rubric, reply, learningTargets = []
   questions[OVERALL_ID] = withExamples({ type: "noul", instructions: OVERALL_QUESTION, criteria: OVERALL_CRITERIA }, examples[OVERALL_ID]);
   return {
     kind: "secondOpinion",
-    state: { task, rubric_points: points, rubric_notes: notes, rubric, learning_targets: targets, reply },
+    state: { task, rubric_points: points, rubric_notes: notes, rubric, learning_targets: targets, reply: readerText(reply) },
     questions,
   };
 }
@@ -228,10 +241,10 @@ function dropTaskBox(content: string): string {
   return content.replace(TASK_BOX, "").trim();
 }
 
-/** Adds the item's text to the points unless it is empty, and closes the item. */
+/** Adds the item's text to the points unless it is empty or already a point, and closes the item. */
 function finish(item: { parts: string[] } | null, points: string[]): null {
   const text = item?.parts.filter((p) => p !== "").join(" ") ?? "";
-  if (text !== "") points.push(text);
+  if (text !== "" && !points.includes(text)) points.push(text);
   return null;
 }
 

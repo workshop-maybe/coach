@@ -231,6 +231,20 @@ describe("useCompareJev (KTD8, KTD9)", () => {
     expect(hook.result.current.compare.canAsk).toBe(false);
   });
 
+  it("a request TypeSafe refused as invalid stops the run with the app's-bug line and hides the action", async () => {
+    const { storage, held } = await threeHeld();
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", new JevError("invalidRequest"));
+    const hook = await mount(storage, fake, held);
+
+    await runAll(hook);
+
+    expect(hook.result.current.usable).toBe(true);
+    expect(fake.asks).toHaveLength(1);
+    expect(hook.result.current.compare.failure).toBe("Jev couldn't read the app's request. That's a bug in the app.");
+    expect(hook.result.current.compare.canAsk).toBe(false);
+  });
+
   it("a pair refused as too long is named, the items after it are still sent, and asking again in the same compare doesn't resend it", async () => {
     const { storage, held } = await threeHeld([opus, codex, gemini]);
     const fake = new FakeJev(FAKE_ON);

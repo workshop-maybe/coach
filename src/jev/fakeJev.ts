@@ -6,10 +6,10 @@
 // An ask with nothing queued answers each requested Noul id from the answer map the fake
 // was made with, and FAKE_ANSWER for every id not in it, and names the pinned model, as the
 // native side names the model that answered. A Score question (a route's "difficulty")
-// gets no entry in `answers`: it comes back under `levels` as FAKE_LEVELS, routine-certain,
-// and `levels` is left out when the request asks no Score, as natively. A queued answer is
-// returned as queued, and one with no model reads as the pinned one. The screenshot harness
-// scripts a shot's reading through that map.
+// gets no entry in `answers`: it comes back under `levels`, from the levels map the fake was
+// made with or as FAKE_LEVELS, routine-certain, and `levels` is left out when the request
+// asks no Score, as natively. A queued answer is returned as queued, and one with no model
+// reads as the pinned one. The screenshot harness scripts a shot's reading through those maps.
 //
 // The key is never recorded in `calls` and is held only in a private field, so printing
 // the fake never shows it. `holdsKey` answers whether a given key was the one set.
@@ -58,15 +58,18 @@ export class FakeJev implements Jev {
   #state: JevStatus;
   #key: string | null = null;
   readonly #answers: ReadonlyMap<string, number>;
+  readonly #levels: ReadonlyMap<string, readonly number[]>;
   readonly #queues: { [M in JevMethod]: FakeOutcome<M>[] } = { status: [], setKey: [], clearKey: [], setOn: [], ask: [] };
 
   /**
    * Starts from a status, off by default. A status with `hasKey` models a key already saved.
-   * `answers` gives the probability an unqueued ask returns for each question id it names.
+   * `answers` gives the probability an unqueued ask returns for each question id it names,
+   * and `levels` the level probabilities it returns for each Score id it names.
    */
-  constructor(initial: JevStatus = JEV_OFF, answers: Readonly<Record<string, number>> = {}) {
+  constructor(initial: JevStatus = JEV_OFF, answers: Readonly<Record<string, number>> = {}, levels: Readonly<Record<string, readonly number[]>> = {}) {
     this.#state = { ...initial };
     this.#answers = new Map(Object.entries(answers));
+    this.#levels = new Map(Object.entries(levels));
   }
 
   /**
@@ -139,14 +142,14 @@ export class FakeJev implements Jev {
     }
   }
 
-  /** An answer for every requested id: each Noul from the answer map, each Score as FAKE_LEVELS. */
+  /** An answer for every requested id: each Noul from the answer map, each Score from the levels map or as FAKE_LEVELS. */
   #unqueued(request: JevRequest): JevAnswers {
     const questions: [string, { type: string }][] = Object.entries(request.questions);
     const nouls = questions.filter(([, q]) => q.type !== "score").map(([id]) => id);
     const scores = questions.filter(([, q]) => q.type === "score").map(([id]) => id);
     const answers = Object.fromEntries(nouls.map((id) => [id, this.#answers.get(id) ?? FAKE_ANSWER]));
     if (scores.length === 0) return { answers, model: JEV_MODEL };
-    return { answers, levels: Object.fromEntries(scores.map((id) => [id, [...FAKE_LEVELS]])), model: JEV_MODEL };
+    return { answers, levels: Object.fromEntries(scores.map((id) => [id, [...(this.#levels.get(id) ?? FAKE_LEVELS)]])), model: JEV_MODEL };
   }
 
   /** The next queued outcome for `method`, or the native rule when nothing is queued. */

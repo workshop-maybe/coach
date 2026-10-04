@@ -1249,6 +1249,21 @@ describe("TestDeck's second opinion", () => {
     expect(fake.asks).toHaveLength(1);
   });
 
+  it("a request TypeSafe refused as invalid says it is the app's bug, hides the ask for the rest of the round, and Save still records without a reading", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", new JevError("invalidRequest"));
+    const storage = await judge(fake);
+    await userEvent.click(button("Ask Jev"));
+    expect(await screen.findByText("Jev couldn't read the app's request. That's a bug in the app.")).toBeTruthy();
+    expect(askAction()).toBeNull();
+    await userEvent.click(choice("Met"));
+    expect(askAction()).toBeNull();
+    await userEvent.click(save());
+    await screen.findByTestId("landing");
+    expect((await saved(storage))[0].jev).toBeUndefined();
+    expect(fake.asks).toHaveLength(1);
+  });
+
   it("a key missing during Check with Jev keeps Save and the choices as they were", async () => {
     const fake = new FakeJev(FAKE_ON);
     fake.queue("ask", new JevError("keyMissing"));
@@ -1472,7 +1487,7 @@ describe("TestDeck's second opinion", () => {
     expect(byKind.keyMissing.line).toContain(FIX_THE_KEY);
     expect(byKind.rateLimited.line).toContain("Try again in a moment");
     expect(byKind.unreachable.line).toBe("Jev couldn't be reached.");
-    expect(JEV_ERROR_KINDS.filter((kind) => !byKind[kind].retry)).toEqual(["off", "keyMissing", "keyRefused", "tooLong", "invalidKey"]);
+    expect(JEV_ERROR_KINDS.filter((kind) => !byKind[kind].retry)).toEqual(["off", "keyMissing", "keyRefused", "invalidRequest", "tooLong", "invalidKey"]);
     expect(jevFailure(new JevError("other", { status: 502 })).line).toBe("Jev couldn't answer (502).");
     expect(jevFailure(new JevError("rateLimited", { retryAfter: 30 })).line).toBe(byKind.rateLimited.line);
   });

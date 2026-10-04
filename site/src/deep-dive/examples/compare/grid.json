@@ -1,0 +1,58 @@
+[
+  {
+    "row": "Holds. 100 has 20 multiples of 5 and 4 multiples of 25, so 100! has 24 trailing zeros.",
+    "cells": {
+      "Claude Code": "Meets 93%",
+      "Codex": "Meets 90%"
+    }
+  },
+  {
+    "row": "Wrong. The answer is no. A year divisible by 100 is a leap year only when it is also divisible by 400, and the rationale leaves that rule out.",
+    "cells": {
+      "Claude Code": "Meets 92%",
+      "Codex": "Meets 84%"
+    }
+  },
+  {
+    "row": "Wrong. The answer is 1 - (5/6)^4 = 671/1296, about 0.52. Adding the chances counts the rolls with more than one six twice.",
+    "cells": {
+      "Claude Code": "Meets 90% · Better than Codex",
+      "Codex": "Meets 72%"
+    }
+  },
+  {
+    "row": "Holds. Sorting in reverse gives [3, 2, 1], and the slice drops the first item, leaving [2, 1].",
+    "cells": {
+      "Claude Code": "Meets 91% · Better than Codex",
+      "Codex": "Can't call 62%"
+    }
+  },
+  {
+    "row": "Wrong. 2^100 is larger. 2^10 is 1,024, a little more than 10^3, so the rationale has the direction backward.",
+    "cells": {
+      "Claude Code": "Meets 90%",
+      "Codex": "Meets 86%"
+    }
+  },
+  {
+    "row": "I can check whether an answer key is right instead of trusting it.",
+    "cells": {
+      "Claude Code": "Meets 88%",
+      "Codex": "Meets 80%"
+    }
+  },
+  {
+    "row": "I can find the step where a convincing rationale goes wrong.",
+    "cells": {
+      "Claude Code": "Can't call 64%",
+      "Codex": "Can't call 52%"
+    }
+  },
+  {
+    "row": "Overall",
+    "cells": {
+      "Claude Code": "Meets 90%",
+      "Codex": "Meets 78%"
+    }
+  }
+]

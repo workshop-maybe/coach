@@ -16,7 +16,7 @@
 //! | `jev_set_key`   | `{ key: string }`          | `JevStatus` | `invalidKey`, `keychain`, `settings` |
 //! | `jev_clear_key` | none                       | `JevStatus` | `keychain`, `settings` |
 //! | `jev_set_on`    | `{ on: boolean }`          | `JevStatus` | `keyMissing` (on with no key), `settings` |
-//! | `jev_ask`       | `{ request: JevRequest }`  | `JevAnswers`| `off`, `other`, `tooLong`, `keyMissing`, `keychain`, `keyRefused`, `rateLimited`, `overloaded`, `unreachable` |
+//! | `jev_ask`       | `{ request: JevRequest }`  | `JevAnswers`| `off`, `other`, `tooLong`, `keyMissing`, `keychain`, `keyRefused`, `invalidRequest`, `rateLimited`, `overloaded`, `unreachable` |
 //!
 //! `jev_status` never reads the key store. `jev_set_key` trims the key, makes no
 //! network call, writes the keychain and then the settings, and turns Jev Mode on.
@@ -40,11 +40,12 @@
 //!   | "off"         // Jev Mode is off; nothing was read or sent
 //!   | "keyMissing"  // no key to send, or `jev_set_on(true)` with none; ask for the key again
 //!   | "keyRefused"  // TypeSafe answered 401
+//!   | "invalidRequest" // TypeSafe answered 422: the request failed its validation, a bug in the app
 //!   | "rateLimited" // 429
 //!   | "overloaded"  // 529
 //!   | "tooLong"     // over the question cap or token budget (refused before sending), or 413
 //!   | "unreachable" // no connection, or no complete answer within 20 seconds
-//!   | "other"       // any other status, a redirect, a malformed request or a malformed answer
+//!   | "other"       // any other status, a redirect, a malformed request caught before sending, or a malformed answer
 //!   | "keychain"    // the OS key store refused or failed (a Deny, a dismissed unlock prompt)
 //!   | "invalidKey"  // empty after trimming, over 512 characters, or not printable ASCII
 //!   | "settings";   // settings.json exists but can't be read, so nothing was changed
@@ -243,6 +244,7 @@ pub enum Kind {
     Off,
     KeyMissing,
     KeyRefused,
+    InvalidRequest,
     RateLimited,
     Overloaded,
     TooLong,
@@ -1001,6 +1003,9 @@ fn kind_of(failure: Failure) -> JevError {
     let waiting = |kind, retry_after| JevError { kind, status: None, retry_after };
     match failure {
         Failure::Status(401, _) => JevError::of(Kind::KeyRefused),
+        // TypeSafe's validation refused the body, so the app built a bad request.
+        Failure::Status(422, _) => JevError::of(Kind::InvalidRequest),
+        // Not in TypeSafe's docs, but HTTP's "payload too large": the body is too big, so a retry can't succeed.
         Failure::Status(413, _) => JevError::of(Kind::TooLong),
         Failure::Status(429, retry) => waiting(Kind::RateLimited, retry),
         Failure::Status(529, retry) => waiting(Kind::Overloaded, retry),
@@ -1543,7 +1548,7 @@ mod tests {
         assert_eq!(status(429).kind, Kind::RateLimited);
         assert_eq!(status(529).kind, Kind::Overloaded);
         assert_eq!(status(413), JevError::of(Kind::TooLong));
-        assert_eq!(status(422), JevError { kind: Kind::Other, status: Some(422), retry_after: None });
+        assert_eq!(status(422), JevError::of(Kind::InvalidRequest));
         assert_eq!(status(500), JevError { kind: Kind::Other, status: Some(500), retry_after: None });
         for redirect in [301, 302, 307, 308] {
             assert_eq!(status(redirect), JevError { kind: Kind::Other, status: Some(redirect), retry_after: None });
@@ -1756,6 +1761,7 @@ mod tests {
             (Kind::Off, "off"),
             (Kind::KeyMissing, "keyMissing"),
             (Kind::KeyRefused, "keyRefused"),
+            (Kind::InvalidRequest, "invalidRequest"),
             (Kind::RateLimited, "rateLimited"),
             (Kind::Overloaded, "overloaded"),
             (Kind::TooLong, "tooLong"),
@@ -1769,8 +1775,12 @@ mod tests {
             assert_eq!(serde_json::to_value(JevError::of(kind)).unwrap()["kind"], name);
         }
         assert_eq!(
-            serde_json::to_value(JevError { kind: Kind::Other, status: Some(422), retry_after: None }).unwrap(),
-            json!({ "kind": "other", "status": 422, "retryAfter": null })
+            serde_json::to_value(JevError { kind: Kind::Other, status: Some(500), retry_after: None }).unwrap(),
+            json!({ "kind": "other", "status": 500, "retryAfter": null })
+        );
+        assert_eq!(
+            serde_json::to_value(JevError::of(Kind::InvalidRequest)).unwrap(),
+            json!({ "kind": "invalidRequest", "status": null, "retryAfter": null })
         );
     }
 

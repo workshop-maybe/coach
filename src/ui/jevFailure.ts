@@ -8,8 +8,9 @@ const FIX_THE_KEY = "Jev Mode in the top bar, on home";
 
 /**
  * One line for a failed ask, and whether asking again can help (KTD20). Nothing from the
- * error's own text: "other" carries at most its status number. A key problem, Jev Mode off
- * or a reply too long can't succeed on a retry, so those take the ask away for the round.
+ * error's own text: "other" carries at most its status number. A key problem, Jev Mode off,
+ * a request TypeSafe refused as invalid or a reply too long can't succeed on a retry, so
+ * those take the ask away for the round.
  */
 export function jevFailure(e: unknown): { line: string; retry: boolean } {
   const error = toJevError(e);
@@ -22,6 +23,8 @@ export function jevFailure(e: unknown): { line: string; retry: boolean } {
       return { line: `The key doesn't look right. Change it in ${FIX_THE_KEY}.`, retry: false };
     case "off":
       return { line: `Jev Mode is off. Turn it on in ${FIX_THE_KEY}.`, retry: false };
+    case "invalidRequest":
+      return { line: "Jev couldn't read the app's request. That's a bug in the app.", retry: false };
     case "tooLong":
       return { line: "This reply is too long for Jev.", retry: false };
     case "rateLimited":

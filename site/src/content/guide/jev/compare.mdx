@@ -1,0 +1,112 @@
+---
+title: Jev in compare, end to end
+part: jev
+order: 60
+description: "Every rule behind Compare with Jev: what one press asks for, the head-to-head request, the rule that both orders must agree, what is saved, what the grid shows, and judging against Jev."
+---
+
+{/* Jev under the hood, Jev in compare (coach-desktop#23; docs/plans/2026-10-04-1358-feat-jev-in-compare-plan.md KTD1-KTD10; docs/plans/2026-10-04-1759-fix-jev-round-two-plan.md U9): the rules in the order the app applies them. The worked example and most of the code are on the case study page. Numbers in the prose are tied to code constants by site/tests/deepDive.test.ts. Labels are checked against src/ui/CompareView.tsx, src/ui/CompareGrid.tsx, src/ui/takeActions.tsx, src/ui/verdictSteps.tsx and src/domain/compareJev.ts. */}
+
+In a compare, Jev can read each held reply and set each pair of replies against each other, point by point. You still judge every reply. This page gives the rules in the order the app applies them. [Case study: Jev in compare](/jev/compare-case-study/) follows one bake-off through the same steps, with the exact request and the code.
+
+In short, when you click <UI>Compare with Jev</UI>:
+
+1. The app works out what the compare is missing: a reading of each held reply that has none, and a head-to-head of each pair of replies.
+2. A line says how many requests that is, before anything goes.
+3. The requests go one at a time, readings first, and each answer is saved before the next request goes.
+4. The grid shows each reply's calls, and marks a reply that covers a point better than another only when Jev's two answers about that point agree.
+5. A verdict that goes against a reply's own reading asks why before it saves.
+
+## What one press asks for
+
+The action covers the replies in the compare that answered the same handoff as the first reply in the strip.
+
+- **A reading** for each held reply with no reading at the badge's current task and rubric, or whose reading leaves out one of the badge's learning targets. It is the second opinion a test asks for, earlier replies as examples and all: see [The second opinion, end to end](/jev/second-opinion/). A judged reply never gets a new one. It keeps the reading it was judged with.
+- **A head-to-head** for each pair of replies, in strip order, when the rubric has points and no head-to-head at the current task and rubric names both replies, in either order. A judged reply takes part in pairs too.
+
+<Source file="src/domain/compareJev.ts" symbol="planCompareJev" />
+
+The line beside the action counts the requests before anything goes, leaving out a part with none, such as <UI>Sends 1 request: 1 head-to-head</UI>. When a reading quotes earlier replies, another line says <UI>Readings also send earlier replies on this badge</UI>. A reply or a pair too long for Jev is left out and named in a line of its own: <UI>\{agent\}'s reply is too long for Jev</UI> or <UI>\{agent\} and \{agent\} are too long for Jev together</UI>.
+
+## The head-to-head request
+
+A head-to-head asks about two replies to one handoff, in the compare's order. Its state is the badge and both replies:
+
+| Field | What it holds |
+|---|---|
+| `task` | The badge's task |
+| `rubric_points` | The rubric's points, in order |
+| `rubric_notes` | The rubric's other lines |
+| `rubric` | The rubric, in full |
+| `learning_targets` | The badge's learning targets, as a second opinion sends them |
+| `reply_1` | The first reply, as it reads |
+| `reply_2` | The second reply, as it reads |
+
+For each rubric point it asks two questions, one in each order:
+
+- `a1` to `aN`: does `reply_1` cover this point better than `reply_2`?
+- `b1` to `bN`: does `reply_2` cover this point better than `reply_1`?
+
+Each question carries its point and the rubric's notes in its instructions, and criteria that ask for evidence first, as a second opinion's do: a reply that only claims a point never covers it better. A head-to-head carries no earlier replies as examples, and no question about learning targets or the whole bar.
+
+<Source file="src/domain/headToHead.ts" symbol="FIRST_OVER_QUESTION" to="SECOND_OVER_CRITERIA" />
+
+## Both orders must agree
+
+Jev answers each question with a probability. One reply covers a point better than the other only when both answers about that point agree: its own question reads above 70% and the reverse question below 30%, each rounded to a whole percent first. Any other pair of answers is no clear difference, and nothing is marked.
+
+Asking both orders guards against a lean toward yes: if Jev leaned toward answering any "better than" question yes, both answers would rise, and the pair would read as no clear difference rather than as a win.
+
+The band is always 30 and 70, never the cut-offs fitted to your verdicts on the badge: those are fitted to your verdicts on the whole bar, and a head-to-head has no verdict to fit.
+
+<Source file="src/domain/headToHead.ts" symbol="betterReply" />
+
+## Asking, one request at a time
+
+The requests go one at a time, readings first in strip order, then pairs. Before each one, the app checks the badge's task and rubric are still the ones it planned against. If they changed, the run stops with <UI>The badge's task or rubric changed. Compare with Jev again.</UI>
+
+- Each answer is saved before the next request goes, so a run that stops keeps what came back, and the next press sends only the rest.
+- A request Jev refuses as too long is named in its own line, drops out of the count, and the run goes on.
+- Any other failure stops the run, with the same line a test shows for it.
+- Nothing is retried. Closing the compare drops the run, and an answer that lands after is not saved.
+
+While a run asks, the action reads <UI>Asking Jev, \{k\} of \{n\}…</UI>, and <UI>Met</UI>, <UI>Not yet</UI> and the change links wait.
+
+<Source file="src/ui/useCompareJev.ts" symbol="stopsAt" />
+
+## What is saved
+
+Nothing about a held reply or a result is rewritten. Each answer is a new file:
+
+- **A reading** of a held reply is saved beside it, under `readings/` in the agent's results for the badge. A held reply's reading is the newest one asked at the badge's current task and rubric. Judging the reply copies that reading into the result.
+- **A head-to-head** is saved under `head-to-head/` beside the badge's go-to marks, since it names two agents. It keeps the model that answered, the task and rubric version it was asked at, when it was asked, both replies by agent and file name, and each point's text with both raw answers.
+
+The marks are not saved. The grid works them out from the raw answers each time it draws.
+
+## What the grid shows
+
+Once any reply in the compare has a reading, or any pair a head-to-head, at the badge's current task and rubric, the grid takes the strip's place. It shows only what is current: a reading or a head-to-head asked before the task or rubric changed leaves its cells blank.
+
+- A row for each rubric point. A cell shows the reply's call and chance, read with the badge's cut-offs for the model that answered, where the reading holds that point at the same place with the same text.
+- Then, once any reply has a reading, a row for each learning target and one for <UI>Overall</UI>.
+- On a point row, <UI>Better than \{names\}</UI> names each reply that one covers the point better than, where a head-to-head says so.
+
+The grid never ranks the replies or names a winner.
+
+<Source file="src/domain/compareJev.ts" symbol="marksOf" />
+
+## Judging against Jev
+
+Only a reply's own reading decides whether a verdict goes against Jev: the reading folded under that reply, read with the badge's cut-offs for its model. A head-to-head never does. A verdict that agrees with the reading's call on the whole bar, or a reply with no reading or a can't-call one, saves in one click.
+
+A verdict that goes against it opens a step under the reply before anything saves, one card at a time: <UI>Which points did it miss</UI> after <UI>Not yet</UI> when the rubric has points, then <UI>What did Jev miss</UI>. The reading and its cut-offs are frozen when the step opens, so another verdict that moves the fit meanwhile never drops what you wrote. The cards are the test's own: see [The steps after your verdict](/jev/second-opinion/#the-steps-after-your-verdict).
+
+<Source file="src/ui/JudgeStep.tsx" symbol="overruled" />
+
+## Changing a verdict
+
+<UI>Change to Met</UI> or <UI>Change to Not yet</UI> under a judged reply judges it again, through the same step when the new verdict goes against the reply's reading. The new verdict is its own file, under `rejudged/` in the agent's results for the badge. The app lays the newest one over the result when the folder loads, so the reply keeps its file, its time and its place, and shows the new verdict everywhere. The earlier verdict stays in the record, and the reply says <UI>Changed from Met</UI> or <UI>Changed from Not met</UI>.
+
+Whether an agent holds a badge still follows its latest reply, so changing an older reply doesn't change who holds it. A go-to stands only while its reply's verdict is Met. The cut-off fit, the track record and the examples a second opinion sends count each reply once, at its newest verdict.
+
+<Source file="src/domain/operations.ts" symbol="rejudgeResult" />

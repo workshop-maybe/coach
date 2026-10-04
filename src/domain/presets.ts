@@ -189,12 +189,17 @@ Give each answer in this format:
 
 The answers:
 
-1. 5. The two numbers below the median must be 1 and 2, so the top two add up to 9 and must be 4 and 5.
-2. More than one answer. The largest can be 9, 10, 11, 12 or 13, for example 1, 3, 4, 8, 9 or 1, 2, 4, 5, 13.
-3. 48. 12 is 2 × 2 × 3. 100! has 97 factors of 2, which make 48 pairs, and 48 factors of 3.
-4. Monday.
-5. 6. Each word has three.
-6. More than one answer. Sam or Kim could be the oldest, since nothing compares them.
+Question 1: 5. The two numbers below the median must be 1 and 2, so the top two add up to 9 and must be 4 and 5.
+
+Question 2: more than one answer. The largest can be 9, 10, 11, 12 or 13, for example 1, 3, 4, 8, 9 or 1, 2, 4, 5, 13.
+
+Question 3: 48. 12 is 2 × 2 × 3. 100! has 97 factors of 2, which make 48 pairs, and 48 factors of 3.
+
+Question 4: Monday.
+
+Question 5: 6. Each word has three.
+
+Question 6: more than one answer. Sam or Kim could be the oldest, since nothing compares them.
 
 - Questions 2 and 6 are answered as having more than one answer. Picking one value fails, unless its confidence is 50% or less and the explanation names the others.
 - At least three of questions 1, 3, 4 and 5 are right.
@@ -228,10 +233,10 @@ For each item, say whether the key holds. If it does not, give the right answer 
 
 ## Rubric
 
-1. Holds.
+1. Holds. 100 has 20 multiples of 5 and 4 multiples of 25, so 100! has 24 trailing zeros.
 2. Wrong. The answer is no. A year divisible by 100 is a leap year only when it is also divisible by 400, and the rationale leaves that rule out.
 3. Wrong. The answer is 1 - (5/6)^4 = 671/1296, about 0.52. Adding the chances counts the rolls with more than one six twice.
-4. Holds.
+4. Holds. Sorting in reverse gives [3, 2, 1], and the slice drops the first item, leaving [2, 1].
 5. Wrong. 2^100 is larger. 2^10 is 1,024, a little more than 10^3, so the rationale has the direction backward.
 
 Met when all five calls are right and each wrong key gets the right answer and the step that fails. Calling a right key wrong fails the test.

@@ -1,0 +1,11 @@
+{
+  "result": "not_met",
+  "recorded_at": "2026-09-29T11:40:00.000Z",
+  "note": "Calls the right key on item 4 wrong.",
+  "missed_points": [
+    "Holds. Sorting in reverse gives [3, 2, 1], and the slice drops the first item, leaving [2, 1]."
+  ],
+  "earlier_verdicts": [
+    "met"
+  ]
+}

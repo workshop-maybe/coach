@@ -19,6 +19,7 @@ import { parse as parseYaml } from "yaml";
 import { filesUnder } from "../../src/test/files";
 import { MAX_EXCERPT_LINES, excerpt, excerptFromText, forbiddenIn, repoRoot } from "../src/deep-dive/excerpt";
 import { MAX_EXAMPLES_PER_SIDE } from "../../src/domain/jevRequest";
+import { COMPARE_MISSED_POINT, COMPARE_REASON } from "../../src/shots/shots";
 import { buildExamples } from "../src/deep-dive/examples";
 import { guidePages } from "./guidePages";
 
@@ -167,6 +168,14 @@ function constIn(file: string, name: string): number {
   return value.split("*").reduce((product, n) => product * Number(n.trim()), 1);
 }
 
+/** A decimal const as a source file declares it: `const NAME: f64 = 0.02;`. */
+function decimalConstIn(file: string, name: string): number {
+  const text = readFileSync(join(ROOT, file), "utf8");
+  const m = new RegExp(`\\bconst ${name}\\b[^=]*=\\s*([\\d.]+);`).exec(text);
+  if (!m) throw new Error(`${file} declares no decimal const ${name}`);
+  return Number(m[1]);
+}
+
 /** Small numbers as the pages spell them. */
 const WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"];
 const word = (n: number) => WORDS[n] ?? String(n);
@@ -194,7 +203,40 @@ async function facts(): Promise<{ page: string; says: string }[]> {
   const { low, high } = calls.DEFAULT_CUT_OFFS;
   const pct = (p: number) => `${p}`;
   const say = (page: string, ...says: string[]) => says.map((s) => ({ page, says: s }));
+  const router = await import("../../src/domain/router");
+  const verdicts = parse("compare/verdicts.json") as { reply: string; reading_overall: string }[];
+  const overallOf = (reply: string) => verdicts.find((v) => v.reply === reply)!.reading_overall;
+  const grid = parse("compare/grid.json") as { row: string; cells: Record<string, string> }[];
+  const match = parse("router/match.json") as { threshold: string; badges: { badge: string; yes: string }[] };
+  const yesOf = (badge: string) => match.badges.find((b) => b.badge === badge)!.yes;
+  const rating = parse("router/rating.json");
   return [
+    ...say("jev/how-jev-works", `summing to 1 within ${decimalConstIn(rs, "LEVELS_SUM_TOLERANCE")}`),
+    ...say(
+      "jev/compare",
+      `its own question reads above ${high}% and the reverse question below ${low}%`,
+      `The band is always ${low} and ${high}`,
+    ),
+    ...say(
+      "jev/compare-case-study",
+      `Claude Code's at ${overallOf("Claude Code")} and Codex's at ${overallOf("Codex")}`,
+      `can't call point 4, at ${/\d+%/.exec(grid[3].cells.Codex)![0]}`,
+      `its own question is above ${high}% and the reverse below ${low}%`,
+      `between ${low}% and ${high}%`,
+    ),
+    ...say(
+      "jev/router",
+      `${Math.round(router.MATCH_THRESHOLD * 100)}% or more`,
+      `below ${router.ROUTINE_BELOW} is routine, below ${router.JUDGMENT_BELOW} needs judgment, and ${router.JUDGMENT_BELOW} or more is unusual or high-stakes`,
+      `up to ${batches.BATCH_RETRIES} times`,
+      `at most ${request.MAX_REASON_CHARS} characters`,
+    ),
+    ...say(
+      "jev/router-case-study",
+      `at ${yesOf("Say how sure you are")}, is the strongest yes at ${match.threshold} or more`,
+      `*Check an answer key*, at ${yesOf("Check an answer key")}`,
+      `: ${rating.expected_level}. That is below ${router.ROUTINE_BELOW}`,
+    ),
     ...say(
       "jev/how-jev-works",
       `\`${request.JEV_MODEL}\``,
@@ -333,6 +375,38 @@ describe("the deep dive's examples", async () => {
       expect(kept.length + dropped.length, side).toBeLessThanOrEqual(MAX_EXAMPLES_PER_SIDE);
       if (kept.length && dropped.length) expect(Math.min(...dropped), side).toBeGreaterThan(Math.max(...kept));
     }
+  });
+
+  it("ask one head-to-head in the compare, mark only points 3 and 4 for Claude Code, and save the change as a re-judge", () => {
+    const plan = parse("compare/plan.json");
+    expect(plan.count_line).toBe("Sends 1 request: 1 head-to-head");
+    expect(plan.pairs).toEqual([{ reply_1: "Claude Code", reply_2: "Codex" }]);
+    const marks = parse("compare/marks.json") as { point: number; better: string | null }[];
+    expect(marks.filter((m) => m.better).map((m) => [m.point, m.better])).toEqual([
+      [3, "Claude Code"],
+      [4, "Claude Code"],
+    ]);
+    const verdicts = parse("compare/verdicts.json") as { action: string; step_opens: boolean }[];
+    expect(verdicts.map((v) => [v.action, v.step_opens])).toEqual([
+      ["Met", false],
+      ["Met", false],
+      ["Change to Not yet", true],
+    ]);
+    const changed = parse("compare/rejudged-result.json");
+    expect(changed).toMatchObject({ result: "not_met", missed_points: [COMPARE_MISSED_POINT], earlier_verdicts: ["met"], note: COMPARE_REASON });
+  });
+
+  it("ask the router about four badges and the difficulty in one request, match Say how sure you are, and record Codex for Check an answer key", () => {
+    const request = parse("router/request.json");
+    expect(Object.keys(request.questions)).toEqual(["m1", "m2", "m3", "m4", "difficulty"]);
+    expect(JSON.stringify(request)).not.toContain("rubric");
+    const match = parse("router/match.json") as { badges: { badge: string; role: string | null }[] };
+    expect(match.badges.filter((b) => b.role).map((b) => [b.badge, b.role])).toEqual([
+      ["Say how sure you are", "match"],
+      ["Check an answer key", "also like"],
+    ]);
+    expect(parse("router/rating.json").rating).toBe("routine");
+    expect(parse("router/routing-record.json")).toMatchObject({ credential: "check-an-answer-key", agent: "codex-gpt-6-astra-medium", matched: "also-like", basis: "cheapest" });
   });
 
   it("join only whitespace in the cleanup, leaving every word in its order", () => {

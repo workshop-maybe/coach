@@ -13,7 +13,7 @@ import { readingOfTake, isHeld, runIdOf, type Take } from "./handoffResults";
 import { fitSecondOpinion, fitsJev } from "./jevBudget";
 import { examplesFor, rankExamples, type ExampleCandidate } from "./jevExamples";
 import type { HeadToHeadRequest, SecondOpinionRequest } from "./jevRequest";
-import { rubricParts, targetsToSend } from "./secondOpinion";
+import { rubricParts, savedPointOf, targetsToSend } from "./secondOpinion";
 import { credentialKey, type Credential, type FolderState, type HeadToHead, type JevReading, type ReplyRef } from "./types";
 
 /** One take in a compare, in strip order. */
@@ -181,8 +181,9 @@ export function currentHeadToHead(state: FolderState, key: string, a: ReplyRef, 
 /**
  * The grid's head-to-head marks (KTD6, R7): for each take id, one list per current rubric
  * point, by index, of the take ids it covers that point better than, in strip order. Only
- * current head-to-heads count, and a point counts only where the head-to-head's point at
- * that index has the same text. Every take has a list for every point, empty when unmarked.
+ * current head-to-heads count, and a point counts only where the head-to-head holds a point
+ * with the same text (`savedPointOf`). Every take has a list for every point, empty when
+ * unmarked.
  */
 export function marksOf(state: FolderState, key: string, takes: readonly CompareTake[], version: string): Map<string, string[][]> {
   const credential = state.credentials.find((c) => credentialKey(c) === key);
@@ -195,8 +196,8 @@ export function marksOf(state: FolderState, key: string, takes: readonly Compare
       if (!h) continue;
       const [first, second] = sameReply(h.first, a.take) ? [a, b] : [b, a];
       points.forEach((text, p) => {
-        const point = h.points[p];
-        if (!point || point.text !== text) return;
+        const point = savedPointOf(h.points, text);
+        if (!point) return;
         const better = betterReply(point);
         if (better === "first") marks.get(first.id)![p].push(second.id);
         else if (better === "second") marks.get(second.id)![p].push(first.id);

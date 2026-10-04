@@ -1,0 +1,11 @@
+{
+  "levels": {
+    "Routine": 0.64,
+    "Needs judgment": 0.31,
+    "Unusual or high-stakes": 0.05
+  },
+  "expected_level": 0.41,
+  "routine_below": 0.5,
+  "judgment_below": 1.5,
+  "rating": "routine"
+}

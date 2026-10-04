@@ -117,8 +117,12 @@ describe("TauriJev", () => {
     expect(e).toBeInstanceOf(JevError);
     expect(e).toMatchObject({ kind: "rateLimited", status: null, retryAfter: 7 });
 
-    invoke.mockRejectedValueOnce({ kind: "other", status: 422, retryAfter: null });
-    await expect(jev.ask(lineBreaks)).rejects.toMatchObject({ kind: "other", status: 422, retryAfter: null });
+    invoke.mockRejectedValueOnce({ kind: "other", status: 500, retryAfter: null });
+    await expect(jev.ask(lineBreaks)).rejects.toMatchObject({ kind: "other", status: 500, retryAfter: null });
+
+    // TypeSafe's 422: the native side names it, with no status.
+    invoke.mockRejectedValueOnce({ kind: "invalidRequest", status: null, retryAfter: null });
+    await expect(jev.ask(lineBreaks)).rejects.toMatchObject({ kind: "invalidRequest", status: null, retryAfter: null });
   });
 
   it("passes every native error kind through, from every command", async () => {

@@ -306,6 +306,37 @@ describe("an excerpt", () => {
     expect(excerptOf(`One. Two "three." ${"x".repeat(400)}`)).toBe('One. Two "three."');
   });
 
+  it("shows an earlier reply as a reader sees it, without the reply box's escapes, code as written", () => {
+    expect(excerptOf("Fixed \\[the parser\\] in `a\\_b` &amp; snake\\_case.")).toBe("Fixed [the parser] in `a\\_b` & snake_case.");
+    expect(excerptOf("```\n\\[x\\]\n```\nThen \\[y\\].")).toBe("```\n\\[x\\]\n```\nThen [y].");
+    // A picture whose alt the box escaped still goes, and a token the box escaped is still a secret.
+    expect(excerptOf("Shot ![a\\]b](x.png) here.")).toBe("Shot  here.");
+    expect(excerptOf(`Pushed.\ntoken ghp\\_${"a1B2".repeat(6)}\nDone.`)).toBe("Pushed.\nDone.");
+  });
+
+  it("never ends on a list marker with nothing after it, though the cut falls right after one", () => {
+    // The cut lands after "3.", which reads as a sentence end; the excerpt stops at item 2.
+    const second = `2. ${"step ".repeat(50)}done.`;
+    const reply = ["1. Fixed the parser.", second, `3. ${"more words without an end ".repeat(10)}`].join("\n");
+    expect(excerptOf(reply)).toBe(`1. Fixed the parser.\n${second}`);
+    // A bare bullet, or a marker with an empty task box, on the last kept line goes too.
+    expect(excerptOf(`Intro line.\n-\n${"x".repeat(400)}`)).toBe("Intro line.");
+    expect(excerptOf(`Plan:\n- [ ]\n${"x".repeat(400)}`)).toBe("Plan:");
+  });
+
+  it("drops a bare marker that ends a short reply, and keeps periods that end a sentence", () => {
+    expect(excerptOf("1. Done.\n2.")).toBe("1. Done.");
+    expect(excerptOf("1. Done.\n2)\n  -")).toBe("1. Done.");
+    expect(excerptOf("We ship version 2.\n3. Done.")).toBe("We ship version 2.\n3. Done.");
+    expect(excerptOf("3.")).toBe("");
+  });
+
+  it("gives no example from a reply that is only a list marker", () => {
+    const bare = result("codex", "met", 1, { handBack: "1." });
+    const words = result("claude", "met", 2, { handBack: "1. Fixed it." });
+    expect(side(examples(folder([bare, words])), "overall", "true").map((e) => e.sourceId)).toEqual([id(words)]);
+  });
+
   it("keeps the first 300 characters when nothing inside them ends a line or sentence", () => {
     const excerpt = excerptOf(`Edited parse.ts then ${"y".repeat(400)}`);
     expect(Array.from(excerpt)).toHaveLength(MAX_OPENING_CHARS);
@@ -321,6 +352,15 @@ describe("an excerpt", () => {
     // Not hex letters, which a run of 32 or more would drop as a secret.
     expect(excerptOf(`${"w".repeat(299)}😀${"v".repeat(10)}`)).toBe(`${"w".repeat(299)}😀`);
     expect(excerptOf(`${"w".repeat(300)}😀v`)).toBe("w".repeat(300));
+  });
+
+  it("reads a long line before cutting it, so a line that reads shorter keeps its whole first line and every emoji", () => {
+    // 110 `&lt;` are 440 units as written and 110 characters as read: cut first, the line's
+    // cut fell inside the opening, on the emoji's first half, and Rust refuses a lone half.
+    const line = `${"<".repeat(110)}${"to the left. ".repeat(12)}zzzzz😀 and more…`;
+    const opening = excerptOf(`${line.replace(/</g, "&lt;")}\n\nSecond paragraph.`);
+    expect(opening).toBe(line);
+    expect(opening).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/);
   });
 
   it("drops zero-width, bidi and tag characters, and reads every line break as one", () => {
@@ -395,6 +435,8 @@ describe("an excerpt", () => {
       "password".repeat(25_000),
       `password: x${" ".repeat(100_000)}y`,
       `${"password:x".repeat(20_000)} y`,
+      "\\".repeat(100_000),
+      "`\\_".repeat(30_000),
     ];
     // One at a time, since an excerpt stops reading once it has enough.
     for (const line of lines) {
