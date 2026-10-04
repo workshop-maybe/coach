@@ -179,7 +179,16 @@ function Player({ profileSlug, returnTo, likeSlug, keys, onKey, plugged, firstTe
       params: { ...(draft?.params ?? {}) },
     });
     apply(made.state);
-    if (returnTo?.credentialKey) navigate({ view: "deck", deck: "test", profileSlug: made.slug, credentialKey: returnTo.credentialKey });
+    // Back to the test with the new agent, and the handoff the test had lit, so a bake-off keeps its handoff (hold-and-compare KTD9).
+    if (returnTo?.credentialKey) {
+      navigate({
+        view: "deck",
+        deck: "test",
+        profileSlug: made.slug,
+        credentialKey: returnTo.credentialKey,
+        ...(returnTo.handoffId ? { handoffId: returnTo.handoffId } : {}),
+      });
+    }
     else if (likeSlug) navigate({ view: "item", item: "agent", profileSlug: made.slug });
     else navigate({ view: "home" });
   }

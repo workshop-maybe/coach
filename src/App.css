@@ -1658,12 +1658,12 @@ button:focus-visible {
   color: var(--ink-muted);
 }
 
-/* Met and Not yet share the row and stop at a comfortable width, centered, so a wide
-   window does not stretch them into bars. */
+/* Met, Not yet and Hold to compare share the row and stop at a comfortable width, centered,
+   so a wide window does not stretch them into bars; a narrow one shrinks all three alike. */
 .meet-choices {
   flex: none;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 16rem));
+  grid-template-columns: repeat(3, minmax(0, 14rem));
   justify-content: center;
   gap: var(--space-md);
 }
