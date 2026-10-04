@@ -18,6 +18,7 @@ import { describe, expect, it } from "vitest";
 import { parse as parseYaml } from "yaml";
 import { filesUnder } from "../../src/test/files";
 import { MAX_EXCERPT_LINES, excerpt, excerptFromText, forbiddenIn, repoRoot } from "../src/deep-dive/excerpt";
+import { MAX_EXAMPLES_PER_SIDE } from "../../src/domain/jevRequest";
 import { buildExamples } from "../src/deep-dive/examples";
 import { guidePages } from "./guidePages";
 
@@ -325,7 +326,11 @@ describe("the deep dive's examples", async () => {
       (e.kept ? s.kept : s.dropped).push(e.rank);
       sides.set(`${e.question}:${e.side}`, s);
     }
-    for (const [side, { kept, dropped }] of sides) if (kept.length && dropped.length) expect(Math.min(...dropped), side).toBeGreaterThan(Math.max(...kept));
+    for (const [side, { kept, dropped }] of sides) {
+      // Each side is offered no more than the cap, so every drop is the budget's, never the cap's.
+      expect(kept.length + dropped.length, side).toBeLessThanOrEqual(MAX_EXAMPLES_PER_SIDE);
+      if (kept.length && dropped.length) expect(Math.min(...dropped), side).toBeGreaterThan(Math.max(...kept));
+    }
   });
 
   it("join only whitespace in the cleanup, leaving every word in its order", () => {

@@ -18,7 +18,7 @@ import { DEFAULT_CUT_OFFS, calibrationOf, callOf, candidate, isOverrule, ranksAs
 import { assessmentPath, loadFolder } from "../../../src/domain/folder";
 import { BUILT_IN_HANDOFF, SKELETON_ID, fillHandoff } from "../../../src/domain/handoffs";
 import { assignmentVersion } from "../../../src/domain/hash";
-import { JEV_LIMITS, JEV_MODEL, answeringModel, type CriteriaSide, type JevAnswers, type JevExample, type JevExampleEntry, type SecondOpinionRequest } from "../../../src/domain/jevRequest";
+import { JEV_LIMITS, JEV_MODEL, MAX_EXAMPLES_PER_SIDE, answeringModel, type CriteriaSide, type JevAnswers, type JevExample, type JevExampleEntry, type SecondOpinionRequest } from "../../../src/domain/jevRequest";
 import { fitSecondOpinion, fitsTokens, jevTokens } from "../../../src/domain/jevBudget";
 import { examplesFor, rankExamples, type ExampleCandidate } from "../../../src/domain/jevExamples";
 import { cutOffAfter, joinLines, lineBreakBatches, lineBreakState, lineId } from "../../../src/domain/lineBreaks";
@@ -233,8 +233,9 @@ function savedForPage(file: string): string {
 }
 
 /**
- * A second opinion too big for every example it was offered: three rubric points, six
- * earlier results each offering an example on every side it can show on, and a reply long
+ * A second opinion too big for every example it was offered: three rubric points, four
+ * earlier results each offering an example on every side it can show on, so every side holds
+ * exactly as many as the per-side cap admits, as examplesFor hands them over, and a reply long
  * enough that about half the examples must go. Which go is the budget step's call.
  */
 function forcedDrops() {
@@ -242,7 +243,7 @@ function forcedDrops() {
   const input = { task: "Summarize the change for the people it affects.", rubric, learningTargets: [] };
   const opening = (rank: number) => `Reply ${rank + 1} opens here. ${"It explains the change, who it reaches, and what they do next. ".repeat(4)}`.trim().slice(0, 300);
   const entries: JevExampleEntry[] = [];
-  for (let rank = 0; rank < 6; rank++) {
+  for (let rank = 0; rank < 2 * MAX_EXAMPLES_PER_SIDE; rank++) {
     const met = rank % 2 === 0;
     const item = met ? { reply_opening: opening(rank) } : { reply_opening: opening(rank), user_reason: `Reason ${rank + 1}: it never says who is affected.` };
     const sides = met ? [["p1", "true"], ["p2", "true"], ["p3", "true"], ["overall", "true"]] : [["p2", "false"], ["overall", "false"]];

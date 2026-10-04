@@ -7,7 +7,7 @@
     "state_plus_longest": 32000,
     "state_plus_all": 64000
   },
-  "offered": 18,
+  "offered": 12,
   "kept": 6,
   "examples": [
     {
@@ -80,42 +80,6 @@
       "question": "overall",
       "side": "false",
       "rank": 3,
-      "kept": false
-    },
-    {
-      "question": "p1",
-      "side": "true",
-      "rank": 4,
-      "kept": false
-    },
-    {
-      "question": "p2",
-      "side": "true",
-      "rank": 4,
-      "kept": false
-    },
-    {
-      "question": "p3",
-      "side": "true",
-      "rank": 4,
-      "kept": false
-    },
-    {
-      "question": "overall",
-      "side": "true",
-      "rank": 4,
-      "kept": false
-    },
-    {
-      "question": "p2",
-      "side": "false",
-      "rank": 5,
-      "kept": false
-    },
-    {
-      "question": "overall",
-      "side": "false",
-      "rank": 5,
       "kept": false
     }
   ]
