@@ -72,6 +72,8 @@ A result whose verdict went against Jev's overall call: Not met against a meets 
 
 Jev's answer, only when the user asks, to which badge a new job is like and how hard the job is: one yes-or-no question per badge, sent with the badge's name, task and learning targets and never its rubric, and one rating of the job as routine, needing judgment, or unusual or high-stakes.
 
+An answer holds for the job it was asked about, and only editing the job drops it. A badge that leaves the folder afterward drops out of it, and the next badge over the threshold takes its place. A badge added afterward has no answer, so it can't match until the user asks again.
+
 ## Finding an agent
 
 ### Holds cleanly
