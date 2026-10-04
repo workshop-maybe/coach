@@ -3,26 +3,45 @@
 //
 // In the Markdown an image is `![alt](src "title")`; in the editor it is an inline atom.
 // Its Markdown hooks round-trip it exactly, so no box drops an image ref any more (R9).
+// The same syntax names a video (KTD1 of the video plan): its Markdown hook makes a `video`
+// node (src/ui/richVideo.ts) when the src ends .mp4, .m4v, .mov or .webm, since Tiptap
+// reaches only the first handler for an inline `image` token.
 //
 // Nothing here loads from the network or from outside the data folder (R7; R13 of the
-// panes plan). That holds at the node view, not at the parser:
-// - the only HTML it parses is its own copy format (an `img` carrying `data-md-src`), and
-//   its HTML carries the src there, never in `src`, so no copy takes a remote address out;
+// panes plan; R9 of the video plan). That holds at the node views, not at the parser:
+// - the only HTML it parses is its own copy format (an `img` carrying `data-md-src`, never
+//   with a video name), and its HTML carries the src there, never in `src`, so no copy takes
+//   a remote address out;
 // - the node view asks the box's image source only for a bare PNG or JPEG file name, and
 //   the only `src` it ever sets is a PNG or JPEG data URI that source returned;
 // - everything else is an inert placeholder whose text is the ref.
-// The view is built with createElement and textContent only. marked passes markup through
-// into alt, title and src, and the webview has no CSP, so an HTML string here would run a
-// reply's script.
+// The video node holds to the same rule with its own checks. The views are built with
+// createElement and textContent only. marked passes markup through into alt, title and src,
+// and the webview has no CSP, so an HTML string here would run a reply's script.
 
 import { Node } from "@tiptap/react";
 import type { JSONContent } from "@tiptap/react";
 import type { Node as PMNode } from "@tiptap/pm/model";
 import { isImageDataUri, isLocalImageName } from "../domain/images";
+import { hasVideoExtension } from "../domain/videos";
+
+/**
+ * A video a box's source can play: a URL, how much the player may load before play, and
+ * the release the view calls once it lets go (KTD2, KTD4 of the video plan). The view calls
+ * `release` exactly once for each handle it was given.
+ */
+export interface RichVideo {
+  url: string;
+  /** "none" for a reply's folder, where nothing decodes until play; "metadata" elsewhere. */
+  preload: "none" | "metadata";
+  release(): void;
+}
 
 /** Where a box's images come from: a bare file name in, a data URI (or null) out. */
 export interface RichImageSource {
   load(name: string): Promise<string | null>;
+  /** A bare video file name in, a playable handle (or null) out. Without it, videos show as placeholders. */
+  video?(name: string): Promise<RichVideo | null>;
 }
 
 export interface RichImageOptions {
@@ -33,6 +52,11 @@ export interface RichImageOptions {
 interface RichImageStorage {
   /** The live node views, so a box can redraw them when its source changes. */
   views: Set<ImageView>;
+}
+
+/** A node view a box redraws when its source changes. */
+interface Refreshable {
+  refresh(): void;
 }
 
 /** marked's inline tokens, as far as an alt needs them. */
@@ -204,7 +228,8 @@ export const RichImage = Node.create<RichImageOptions, RichImageStorage>({
   },
 
   parseHTML() {
-    return [{ tag: "img[data-md-src]" }];
+    // A video name is the video node's, so a cut and paste of either rebuilds the same node.
+    return [{ tag: "img[data-md-src]", getAttrs: (el) => (hasVideoExtension(el.getAttribute("data-md-src") ?? "") ? false : null) }];
   },
 
   renderHTML({ HTMLAttributes }) {
@@ -219,9 +244,11 @@ export const RichImage = Node.create<RichImageOptions, RichImageStorage>({
 
   markdownTokenName: "image",
 
+  // Also the video node's parser: an `image` token whose src has a video extension is a video.
   parseMarkdown(token): JSONContent {
     const t = token as { href?: string; title?: string | null; text?: string; tokens?: AltToken[] };
-    return { type: "image", attrs: { src: t.href ?? "", alt: altOf(t.tokens, t.text ?? ""), title: t.title ?? null } };
+    const src = t.href ?? "";
+    return { type: hasVideoExtension(src) ? "video" : "image", attrs: { src, alt: altOf(t.tokens, t.text ?? ""), title: t.title ?? null } };
   },
 
   renderMarkdown(node) {
@@ -235,8 +262,8 @@ export const RichImage = Node.create<RichImageOptions, RichImageStorage>({
   },
 });
 
-/** Redraws a box's images after its image source changed. */
+/** Redraws a box's images and videos after its image source changed. */
 export function refreshImages(editor: { storage: unknown }): void {
-  const storage = editor.storage as { image?: RichImageStorage };
-  for (const view of storage.image?.views ?? []) view.refresh();
+  const storage = editor.storage as { image?: { views: Set<Refreshable> }; video?: { views: Set<Refreshable> } };
+  for (const view of [...(storage.image?.views ?? []), ...(storage.video?.views ?? [])]) view.refresh();
 }

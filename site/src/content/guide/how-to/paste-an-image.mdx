@@ -7,7 +7,7 @@ description: Paste a screenshot into a task, a rubric, an agent's notes or a rep
 
 {/* How to (the paste-images plan, U7, R13): which boxes take a picture, where its file goes, what a paste can be, and what to know about a picture that's in your folder. Labels are checked against src/ui/EditDecks.tsx, src/ui/CredentialDeck.tsx, src/ui/TestDeck.tsx and src/domain/images.ts (KTD8). */}
 
-Copy a screenshot, click where it belongs in a <UI>Task</UI>, <UI>Rubric</UI>, <UI>Notes</UI> or <UI>Reply</UI> box, and paste. The picture shows in the box where you pasted it.
+Copy a screenshot, click where it belongs in a <UI>Task</UI>, <UI>Rubric</UI>, <UI>Notes</UI> or <UI>Reply</UI> box, and paste. The picture shows in the box where you pasted it. You can also drag a PNG or JPEG file from Finder onto the box.
 
 <Shot id="paste-image" alt="The task card for Write a release note, with a pasted screenshot of a terminal listing four merged changes below the task's text" />
 
@@ -32,4 +32,5 @@ The file's name comes from the picture itself, so pasting the same picture twice
 - When you copy a handoff, your agent gets the picture's name, not the picture. If it needs to see it, give it the file yourself.
 - A picture the app can't find or read shows as its file name. A picture from the web never loads.
 - [Export](/how-to/export/) puts a task's pictures in each module's `assets/` folder.
+- A video goes in the same way; see [Add a video](/how-to/add-a-video/).
 - On Linux, a paste brings a picture in only when your system's WebKitGTK is recent enough to hand it over.

@@ -1,6 +1,7 @@
 // Fires a paste the way a person's paste arrives: a paste event whose clipboard data holds
 // the flavors given, keyed by MIME type ("text/plain", "text/html", ...), and any files, as a
-// copied screenshot or a Finder copy brings them. ProseMirror's own `view.pasteText` passes
+// copied screenshot or a Finder copy brings them: pictures, videos (`videoFile`) or both, each
+// carried in `files` and in `items`. ProseMirror's own `view.pasteText` passes
 // no clipboard data, so it never reaches a `handlePaste` that reads the clipboard, and jsdom
 // has no DataTransfer. Works on a rich box and on a textarea alike.
 
@@ -15,6 +16,15 @@ export function firePaste(target: Element, flavors: Record<string, string>, file
     items: files.map((file) => ({ kind: "file", type: file.type, getAsFile: () => file })),
   };
   return fireEvent.paste(target, { clipboardData });
+}
+
+/**
+ * A small video `File`, as a Finder copy of a clip arrives: the start of a QuickTime file.
+ * Pass `type` "" for a file the clipboard gives no type.
+ */
+export function videoFile(name = "clip.mov", type = "video/quicktime"): File {
+  const bytes = new Uint8Array([0, 0, 0, 0x14, 0x66, 0x74, 0x79, 0x70, 0x71, 0x74, 0x20, 0x20, 0, 0, 0, 0, 0x71, 0x74, 0x20, 0x20]);
+  return new File([bytes], name, { type });
 }
 
 /** A small PNG `File`, as a clipboard screenshot arrives. */

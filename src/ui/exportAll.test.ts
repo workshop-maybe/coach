@@ -5,6 +5,8 @@ import { MARKER_PATH, collectionPath, credentialPath, loadFolder, serializeColle
 import { serializeCredentialMd } from "../domain/credential-md";
 import { bytesToBase64 } from "../domain/images";
 import type { Credential } from "../domain/types";
+import { movBytes, mp4Bytes, webmBytes } from "../test/videoBytes";
+import { fileName } from "./shared";
 
 const review: Credential = {
   slug: "review",
@@ -84,32 +86,33 @@ describe("exportAll", () => {
   });
 });
 
+// Shared by the task image and task video exports.
+const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+const PNG = `data:image/png;base64,${bytesToBase64(PNG_BYTES)}`;
+const credentials = "collections/eng/credentials";
+const TEXT_FILES = [
+  "eng.json",
+  "eng/1/assignment.md",
+  "eng/1/badge.svg",
+  "eng/1/outline.md",
+  "words.json",
+  "words/1/assignment.md",
+  "words/1/badge.svg",
+  "words/1/outline.md",
+];
+
+function withTask(task: string, rubric = review.rubric): MemoryStorage {
+  return seed({ [credentialPath("eng", "review")]: serializeCredentialMd({ ...review, task, rubric }) });
+}
+
+async function exported(storage: MemoryStorage) {
+  const result = await exportAll(storage, await loadFolder(storage));
+  const md = storage.file("eng/1/assignment.md", "export") ?? "";
+  const json = JSON.parse(storage.file("eng.json", "export") ?? "{}") as { course: { modules: { assignment: { content: string } }[] } };
+  return { result, md, content: json.course.modules[0].assignment.content };
+}
+
 describe("exportAll task images", () => {
-  const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
-  const PNG = `data:image/png;base64,${bytesToBase64(PNG_BYTES)}`;
-  const credentials = "collections/eng/credentials";
-  const TEXT_FILES = [
-    "eng.json",
-    "eng/1/assignment.md",
-    "eng/1/badge.svg",
-    "eng/1/outline.md",
-    "words.json",
-    "words/1/assignment.md",
-    "words/1/badge.svg",
-    "words/1/outline.md",
-  ];
-
-  function withTask(task: string, rubric = review.rubric): MemoryStorage {
-    return seed({ [credentialPath("eng", "review")]: serializeCredentialMd({ ...review, task, rubric }) });
-  }
-
-  async function exported(storage: MemoryStorage) {
-    const result = await exportAll(storage, await loadFolder(storage));
-    const md = storage.file("eng/1/assignment.md", "export") ?? "";
-    const json = JSON.parse(storage.file("eng.json", "export") ?? "{}") as { course: { modules: { assignment: { content: string } }[] } };
-    return { result, md, content: json.course.modules[0].assignment.content };
-  }
-
   it("copies an app-pasted image into the module's assets folder under the same name", async () => {
     // The name the app gave the image when it was pasted: content-addressed, so it comes back unchanged.
     const name = await new MemoryStorage().saveImage("data", "", PNG_BYTES);
@@ -121,7 +124,7 @@ describe("exportAll task images", () => {
     expect(md).toContain(`![a diff](assets/${name})`);
     expect(content).toBe(`Look at this.\n\n![a diff](assets/${name})`);
     expect(result.files).toBe(9);
-    expect(result.imagesNotCopied).toEqual([]);
+    expect(result.notCopied).toEqual([]);
   });
 
   it("copies a hand-placed image under its content-addressed name", async () => {
@@ -144,9 +147,9 @@ describe("exportAll task images", () => {
     expect(md).toContain("![](gone.png)");
     expect(content).toBe("![](gone.png)");
     expect(await storage.listFiles("export", "eng/1/assets")).toEqual([]);
-    expect(result.imagesNotCopied).toEqual([`${credentials}/gone.png`]);
+    expect(result.notCopied).toEqual([`${credentials}/gone.png`]);
     expect(result.files).toBe(8);
-    expect(exportMessage(result, "/out")).toContain(`1 image could not be copied: ${credentials}/gone.png.`);
+    expect(exportMessage(result, "/out")).toContain(`1 file could not be copied: ${credentials}/gone.png.`);
   });
 
   it("leaves an unreadable image's ref as written, names it once and still exports", async () => {
@@ -159,7 +162,7 @@ describe("exportAll task images", () => {
     expect(md).toContain("![](photo.png)");
     expect(content).toBe("![](photo.png)");
     expect(storage.file("eng/2/assignment.md", "export")).toContain("![](photo.png)");
-    expect(result.imagesNotCopied).toEqual([`${credentials}/photo.png`]);
+    expect(result.notCopied).toEqual([`${credentials}/photo.png`]);
   });
 
   it("leaves a remote image alone and copies nothing, nor any image in the rubric", async () => {
@@ -169,21 +172,119 @@ describe("exportAll task images", () => {
     expect(md).toContain("![](https://example.com/p.png)");
     expect(content).toBe("![](https://example.com/p.png)");
     expect(await storage.listFiles("export", "")).toEqual(TEXT_FILES);
-    expect(result.imagesNotCopied).toEqual([]);
+    expect(result.notCopied).toEqual([]);
+  });
+});
+
+describe("exportAll task videos", () => {
+  /** The name the app gives a video when it is added: content-addressed, so a copy keeps it. */
+  async function addedName(bytes: Uint8Array, ext: string): Promise<string> {
+    const scratch = new MemoryStorage();
+    scratch.seedVideo(`clip.${ext}`, bytes);
+    return fileName(await scratch.copyVideo(`clip.${ext}`, "data", ""));
+  }
+
+  it("copies an app-added video into the module's assets folder under the same name", async () => {
+    const bytes = movBytes("a talk");
+    const name = await addedName(bytes, "mov");
+    expect(name).toMatch(/^video-[0-9a-f]{8}\.mov$/);
+    const storage = withTask(`Watch this.\n\n![](${name})`);
+    storage.seedVideo(`${credentials}/${name}`, bytes);
+    const { result, md, content } = await exported(storage);
+    expect(storage.video(`eng/1/assets/${name}`, "export")).toEqual(bytes);
+    expect(await storage.listFiles("export", "")).toEqual([...TEXT_FILES, `eng/1/assets/${name}`].sort());
+    expect(md).toContain(`![](assets/${name})`);
+    expect(content).toBe(`Watch this.\n\n![](assets/${name})`);
+    expect(result.files).toBe(9);
+    expect(result.notCopied).toEqual([]);
+  });
+
+  it("copies a hand-placed video under its content-addressed name", async () => {
+    const bytes = mp4Bytes("a demo");
+    const storage = withTask("![a demo](talk.mp4)");
+    storage.seedVideo(`${credentials}/talk.mp4`, bytes);
+    const { result, md, content } = await exported(storage);
+    const copied = await storage.listFiles("export", "eng/1/assets");
+    expect(copied).toHaveLength(1);
+    expect(copied[0]).toMatch(/^eng\/1\/assets\/video-[0-9a-f]{8}\.mp4$/);
+    expect(storage.video(copied[0], "export")).toEqual(bytes);
+    expect(await storage.listFiles("export", "")).toEqual([...TEXT_FILES, copied[0]].sort());
+    const ref = copied[0].slice("eng/1/".length);
+    expect(md).toContain(`![a demo](${ref})`);
+    expect(content).toBe(`![a demo](${ref})`);
+    expect(md).not.toContain("talk.mp4");
+    expect(result.files).toBe(9);
+  });
+
+  it("leaves a missing video's ref as written and names it", async () => {
+    const storage = withTask("![](gone.mov)");
+    const { result, md, content } = await exported(storage);
+    expect(md).toContain("![](gone.mov)");
+    expect(content).toBe("![](gone.mov)");
+    expect(await storage.listFiles("export", "")).toEqual(TEXT_FILES);
+    expect(result.notCopied).toEqual([`${credentials}/gone.mov`]);
+    expect(result.files).toBe(8);
+    expect(exportMessage(result, "/out")).toContain(`1 file could not be copied: ${credentials}/gone.mov.`);
+  });
+
+  it("leaves a video copyVideo refuses as written and names it", async () => {
+    // WebM bytes under an .mp4 name: the family check refuses the copy.
+    const storage = withTask("![](fake.mp4)");
+    storage.seedVideo(`${credentials}/fake.mp4`, webmBytes());
+    const { result, md, content } = await exported(storage);
+    expect(md).toContain("![](fake.mp4)");
+    expect(content).toBe("![](fake.mp4)");
+    expect(await storage.listFiles("export", "")).toEqual(TEXT_FILES);
+    expect(result.notCopied).toEqual([`${credentials}/fake.mp4`]);
+    expect(result.files).toBe(8);
+    expect(exportMessage(result, "/out")).toContain(`1 file could not be copied: ${credentials}/fake.mp4.`);
+  });
+
+  it("leaves a remote video alone and copies nothing, nor any video in the rubric", async () => {
+    const storage = withTask("![](https://example.com/v.mp4)", "![](secret.mov)");
+    storage.seedVideo(`${credentials}/secret.mov`, movBytes("secret"));
+    const { result, md, content } = await exported(storage);
+    expect(md).toContain("![](https://example.com/v.mp4)");
+    expect(content).toBe("![](https://example.com/v.mp4)");
+    expect(await storage.listFiles("export", "")).toEqual(TEXT_FILES);
+    expect(result.notCopied).toEqual([]);
+    expect(result.files).toBe(8);
+  });
+
+  it("copies both a picture and a video from one task", async () => {
+    const bytes = webmBytes("a clip");
+    const storage = withTask("![](photo.png)\n\n![](clip.webm)");
+    storage.seedImage(`${credentials}/photo.png`, PNG);
+    storage.seedVideo(`${credentials}/clip.webm`, bytes);
+    const { result, md, content } = await exported(storage);
+    const copied = await storage.listFiles("export", "eng/1/assets");
+    expect(copied).toHaveLength(2);
+    const picture = copied.find((p) => /\/image-[0-9a-f]{8}\.png$/.test(p));
+    const video = copied.find((p) => /\/video-[0-9a-f]{8}\.webm$/.test(p));
+    expect(picture).toBeDefined();
+    expect(video).toBeDefined();
+    expect(storage.image(picture!, "export")).toBe(PNG);
+    expect(storage.video(video!, "export")).toEqual(bytes);
+    expect(await storage.listFiles("export", "")).toEqual([...TEXT_FILES, ...copied].sort());
+    const expected = `![](assets/${fileName(picture!)})\n\n![](assets/${fileName(video!)})`;
+    expect(md).toContain(expected);
+    expect(content).toBe(expected);
+    expect(result.files).toBe(10);
+    expect(result.notCopied).toEqual([]);
   });
 });
 
 describe("exportMessage", () => {
-  it("reports files, art-less badges, uncopied images and skipped collections", () => {
-    expect(exportMessage({ files: 1, withoutArt: 0, imagesNotCopied: [], skipped: [] }, "/out")).toBe("Exported 1 file to /out.");
-    expect(exportMessage({ files: 4, withoutArt: 2, imagesNotCopied: [], skipped: ["collections/w/collection.json"] }, "/out")).toBe(
+  it("reports files, art-less badges, uncopied pictures and videos, and skipped collections", () => {
+    expect(exportMessage({ files: 1, withoutArt: 0, notCopied: [], skipped: [] }, "/out")).toBe("Exported 1 file to /out.");
+    expect(exportMessage({ files: 4, withoutArt: 2, notCopied: [], skipped: ["collections/w/collection.json"] }, "/out")).toBe(
       "Exported 4 files to /out. 2 badges were exported without art because the image could not be read. Skipped collections/w/collection.json because it could not be read.",
     );
     expect(
-      exportMessage({ files: 3, withoutArt: 0, imagesNotCopied: ["collections/e/credentials/a.png", "collections/e/credentials/b.png"], skipped: [] }, "/out"),
-    ).toBe("Exported 3 files to /out. 2 images could not be copied: collections/e/credentials/a.png, collections/e/credentials/b.png.");
-    expect(exportMessage({ files: 2, withoutArt: 1, imagesNotCopied: ["collections/e/credentials/a.png"], skipped: ["collections/w/collection.json"] }, "/out")).toBe(
-      "Exported 2 files to /out. 1 badge was exported without art because the image could not be read. 1 image could not be copied: collections/e/credentials/a.png. Skipped collections/w/collection.json because it could not be read.",
+      exportMessage({ files: 3, withoutArt: 0, notCopied: ["collections/e/credentials/a.png", "collections/e/credentials/b.mov"], skipped: [] }, "/out"),
+    ).toBe("Exported 3 files to /out. 2 files could not be copied: collections/e/credentials/a.png, collections/e/credentials/b.mov.");
+    expect(exportMessage({ files: 2, withoutArt: 1, notCopied: ["collections/e/credentials/a.png"], skipped: ["collections/w/collection.json"] }, "/out")).toBe(
+      "Exported 2 files to /out. 1 badge was exported without art because the image could not be read. 1 file could not be copied: collections/e/credentials/a.png. Skipped collections/w/collection.json because it could not be read.",
     );
   });
 });

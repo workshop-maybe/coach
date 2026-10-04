@@ -1,13 +1,15 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { createRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
-import { TextSelection } from "@tiptap/pm/state";
+import { NodeSelection, TextSelection } from "@tiptap/pm/state";
 import { RichText, looksLikeMarkdown, type RichImages, type RichTextHandle } from "./RichText";
 import { RichText as StubRichText } from "./richTextStub";
 import { useRichDraft } from "./richDraft";
-import { firePaste, pngFile } from "../test/paste";
+import { firePaste, pngFile, videoFile } from "../test/paste";
+import type { AddFrom } from "../storage/storage";
+import { DROP_ON_A_BOX, handleDragDrop, installDropNotice } from "./dropFiles";
 
 // The ProseMirror jsdom shims live in src/test/setup.ts (KTD11).
 afterEach(cleanup);
@@ -165,18 +167,27 @@ describe("RichText", () => {
   });
 });
 
-describe("images in the Markdown (KTD1, R9)", () => {
-  /** Opens `md`, makes an unrelated edit at the end, and returns what the box saves. */
-  function editedOnce(md: string): string {
-    const { ed, onChange } = setup(md);
-    act(() => {
-      ed.commands.focus("end");
-    });
-    typeInto(ed, " x");
-    const saved = onChange.mock.lastCall?.[0] as string;
-    return saved.endsWith(" x") ? saved.slice(0, -2) : saved;
-  }
+/** Opens `md`, makes an unrelated edit at the end, and returns what the box saves. */
+function editedOnce(md: string): string {
+  const { ed, onChange } = setup(md);
+  act(() => {
+    ed.commands.focus("end");
+  });
+  typeInto(ed, " x");
+  const saved = onChange.mock.lastCall?.[0] as string;
+  return saved.endsWith(" x") ? saved.slice(0, -2) : saved;
+}
 
+/** Each image and video node in the box, in order, as "type:src". */
+function leaves(ed: Editor): string[] {
+  const out: string[] = [];
+  ed.state.doc.descendants((n) => {
+    if (n.type.name === "image" || n.type.name === "video") out.push(`${n.type.name}:${n.attrs.src as string}`);
+  });
+  return out;
+}
+
+describe("images in the Markdown (KTD1, R9)", () => {
   it.each([
     ["a block image between paragraphs", "Before\n\n![](image-1a2b3c4d.png)\n\nAfter"],
     ["alt and title", 'See ![alt](a.png "t") here'],
@@ -210,6 +221,210 @@ describe("images in the Markdown (KTD1, R9)", () => {
   it("copies an image as its Markdown in plain text", () => {
     const { ed } = setup("![shot](image-1a2b3c4d.png)");
     expect(ed.getText()).toBe("![shot](image-1a2b3c4d.png)");
+  });
+});
+
+describe("videos in the Markdown (KTD1, R11)", () => {
+  it.each([
+    ["a block video between paragraphs", "Before\n\n![](video-1a2b3c4d.mp4)\n\nAfter", "video-1a2b3c4d.mp4"],
+    ["alt and title on a movie", '![alt](a.mov "t")', "a.mov"],
+    ["a video mid-sentence", "Look ![](video-1a2b3c4d.webm) here", "video-1a2b3c4d.webm"],
+    ["a src with a space", "![](<my clip.webm>)", "my clip.webm"],
+    ["an upper-case extension", "![](x.MP4)", "x.MP4"],
+    ["an M4V mid-sentence", "Clip ![](c.m4v) end", "c.m4v"],
+    ["a remote video", "Remote ![](https://example.com/v.mp4) here", "https://example.com/v.mp4"],
+  ])("keeps %s after an edit, as a video node", (_, md, src) => {
+    const { ed } = setup(md);
+    expect(leaves(ed)).toEqual([`video:${src}`]);
+    cleanup();
+    expect(editedOnce(md)).toBe(md);
+    cleanup();
+  });
+
+  it("keeps a paragraph that holds only a video, in a document the schema accepts", () => {
+    const { ed } = setup("![](x.MP4)");
+    expect(() => ed.state.doc.check()).not.toThrow();
+    expect(ed.state.doc.firstChild?.type.name).toBe("paragraph");
+    expect(ed.state.doc.firstChild?.firstChild?.type.name).toBe("video");
+    expect(ed.getMarkdown()).toBe("![](x.MP4)");
+  });
+
+  it("keeps an image and a video side by side as their own nodes", () => {
+    const { ed } = setup("A ![](shot.png) B ![](clip.mp4) C");
+    expect(leaves(ed)).toEqual(["image:shot.png", "video:clip.mp4"]);
+    expect(ed.getMarkdown()).toBe("A ![](shot.png) B ![](clip.mp4) C");
+  });
+
+  it.each([
+    ["an escaped bracket in alt", "![a\\]b](x.mp4)", "![a\\]b](x.mp4)"],
+    ["an escaped backslash in alt", "![a\\\\b](x.mp4)", "![a\\\\b](x.mp4)"],
+    ["an escaped underscore in alt", "![a\\_b](x.mp4)", "![a_b](x.mp4)"],
+    ["an escaped quote in a title", '![](x.mov "say \\"hi\\"")', '![](x.mov "say \\"hi\\"")'],
+    ["angle brackets in a bracketed src", "![](<a\\<b\\>.webm>)", "![](<a\\<b\\>.webm>)"],
+  ])("settles %s after one edit, and a second edit changes nothing more", (_, md, settled) => {
+    const { ed } = setup(md);
+    expect(leaves(ed)[0]).toMatch(/^video:/);
+    cleanup();
+    const once = editedOnce(md);
+    expect(once).toBe(settled);
+    cleanup();
+    expect(editedOnce(once)).toBe(settled);
+    cleanup();
+  });
+
+  it("copies a video as its Markdown in plain text, and as HTML with no src and no player", () => {
+    const { ed } = setup('![a clip](video-1a2b3c4d.mp4 "t")');
+    expect(ed.getText()).toBe('![a clip](video-1a2b3c4d.mp4 "t")');
+    const html = ed.getHTML();
+    expect(html).toContain('data-md-video="video-1a2b3c4d.mp4"');
+    expect(html).not.toMatch(/\ssrc=/);
+    expect(html).not.toMatch(/<video|poster=/);
+  });
+
+  /** Selects the first `type` node, cuts it as a person would, and pastes it at the end of the box. */
+  function cutAndPaste(ed: Editor, type: string) {
+    let pos = -1;
+    ed.state.doc.descendants((n, p) => {
+      if (pos < 0 && n.type.name === type) pos = p;
+    });
+    expect(pos).toBeGreaterThanOrEqual(0);
+    act(() => {
+      ed.view.dispatch(ed.state.tr.setSelection(NodeSelection.create(ed.state.doc, pos)));
+    });
+    const { dom, text } = ed.view.serializeForClipboard(ed.state.selection.content());
+    act(() => {
+      ed.view.dispatch(ed.state.tr.deleteSelection());
+      ed.commands.focus("end");
+    });
+    firePaste(box(), { "text/html": dom.innerHTML, "text/plain": text });
+  }
+
+  it("rebuilds a cut video, and a cut image beside it, as the same nodes", () => {
+    const { ed, onChange } = setup("A ![](clip.mp4) B ![](shot.png) C");
+    cutAndPaste(ed, "video");
+    expect(leaves(ed)).toEqual(["image:shot.png", "video:clip.mp4"]);
+    cutAndPaste(ed, "image");
+    expect(leaves(ed)).toEqual(["video:clip.mp4", "image:shot.png"]);
+    expect(onChange).toHaveBeenLastCalledWith("A  B  C![](clip.mp4)![](shot.png)");
+  });
+
+  it("never makes an image node of a video name in pasted HTML", () => {
+    const { ed } = setup("");
+    firePaste(box(), { "text/html": '<p>x <img data-md-src="clip.mp4" src="https://example.com/clip.mp4"></p>', "text/plain": "x" });
+    expect(leaves(ed)).not.toContain("image:clip.mp4");
+  });
+});
+
+describe("a video in a box (KTD2)", () => {
+  /** A box whose videos each get a fresh handle per ask; the editor may ask twice as it mounts. */
+  function setupVideo(value: string) {
+    const handed: { name: string; release: ReturnType<typeof vi.fn> }[] = [];
+    const images: RichImages = {
+      load: () => Promise.resolve(null),
+      video: vi.fn(async (name: string) => {
+        const release = vi.fn();
+        handed.push({ name, release });
+        return { url: "blob:x", preload: "metadata" as const, release };
+      }),
+    };
+    /** The names whose handles are not yet released. */
+    const held = () => handed.filter((h) => h.release.mock.calls.length === 0).map((h) => h.name);
+    const onChange = vi.fn();
+    render(<RichText aria-label="Task" value={value} onChange={onChange} images={images} />);
+    return { ed: editorOf(box()), onChange, handed, held, images };
+  }
+
+  async function shown(): Promise<HTMLVideoElement> {
+    await waitFor(() => expect(box().querySelector("video[src]")).not.toBeNull());
+    return box().querySelector("video")!;
+  }
+
+  function videoPos(ed: Editor): number {
+    let pos = -1;
+    ed.state.doc.descendants((n, p) => {
+      if (n.type.name === "video") pos = p;
+    });
+    return pos;
+  }
+
+  it("plays from the box's source, with controls and no autoplay", async () => {
+    const { images } = setupVideo("Watch ![](clip.mp4)");
+    const video = await shown();
+    expect(video.getAttribute("src")).toBe("blob:x");
+    expect(video.controls).toBe(true);
+    expect(video.autoplay).toBe(false);
+    expect(images.video).toHaveBeenCalledWith("clip.mp4");
+  });
+
+  it("keeps Space and Backspace inside the video from replacing the selected node", async () => {
+    const { ed, onChange } = setupVideo("A ![](clip.mp4) B");
+    const video = await shown();
+    act(() => {
+      ed.view.dispatch(ed.state.tr.setSelection(NodeSelection.create(ed.state.doc, videoPos(ed))));
+    });
+    fireEvent.keyDown(video, { key: " ", code: "Space", keyCode: 32 });
+    fireEvent.keyPress(video, { key: " ", code: "Space", charCode: 32, keyCode: 32 });
+    fireEvent.keyDown(video, { key: "Backspace", code: "Backspace", keyCode: 8 });
+    expect(leaves(ed)).toEqual(["video:clip.mp4"]);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("leaves pointer, mouse, key and drag events inside the video to the video", async () => {
+    setupVideo("A ![](clip.mp4) B");
+    const video = await shown();
+    const frame = video.closest(".rich-video") as HTMLElement & { pmViewDesc?: { stopEvent(e: Event): boolean } };
+    const desc = frame.pmViewDesc!;
+    const seen: Record<string, boolean> = {};
+    const types = ["mousedown", "mouseup", "pointerdown", "click", "dblclick", "keydown", "keypress", "dragstart", "drop", "contextmenu"];
+    for (const type of types) {
+      video.addEventListener(type, (e) => (seen[type] = desc.stopEvent(e)), { once: true });
+      fireEvent(video, new Event(type, { bubbles: true, cancelable: true }));
+    }
+    expect(Object.keys(seen)).toEqual(types);
+    expect(Object.entries(seen).filter(([, stopped]) => !stopped)).toEqual([]);
+    // The frame around the player still belongs to the editor, so a click there selects the node.
+    let frameStopped: boolean | undefined;
+    frame.addEventListener("mousedown", (e) => (frameStopped = desc.stopEvent(e)), { once: true });
+    fireEvent.mouseDown(frame);
+    expect(frameStopped).toBe(false);
+  });
+
+  it("marks a selected video without making it draggable", async () => {
+    const { ed } = setupVideo("A ![](clip.mp4) B");
+    const video = await shown();
+    const frame = video.closest(".rich-video") as HTMLElement;
+    act(() => {
+      ed.view.dispatch(ed.state.tr.setSelection(NodeSelection.create(ed.state.doc, videoPos(ed))));
+    });
+    expect(frame.classList.contains("ProseMirror-selectednode")).toBe(true);
+    expect(frame.draggable).toBe(false);
+    act(() => {
+      ed.view.dispatch(ed.state.tr.setSelection(TextSelection.create(ed.state.doc, 1)));
+    });
+    expect(frame.classList.contains("ProseMirror-selectednode")).toBe(false);
+  });
+
+  it("keeps the webview's menu and drag off a video, and leaves the menu alone on text", async () => {
+    setupVideo("Words ![](clip.mp4)");
+    const video = await shown();
+    expect(fireEvent.contextMenu(video)).toBe(false);
+    expect(fireEvent.dragStart(video)).toBe(false);
+    expect(fireEvent.contextMenu(box().querySelector("p")!)).toBe(true);
+  });
+
+  it("releases its URL when the src changes and when the box closes", async () => {
+    const { ed, handed, held, images } = setupVideo("![](a.mp4)");
+    await shown();
+    expect(held()).toEqual(["a.mp4"]);
+    act(() => {
+      ed.view.dispatch(ed.state.tr.setNodeMarkup(videoPos(ed), undefined, { src: "b.mp4", alt: "", title: null }));
+    });
+    expect(held()).not.toContain("a.mp4");
+    await waitFor(() => expect(images.video).toHaveBeenLastCalledWith("b.mp4"));
+    await waitFor(() => expect(held()).toEqual(["b.mp4"]));
+    cleanup();
+    expect(held()).toEqual([]);
+    expect(handed.every((h) => h.release.mock.calls.length === 1)).toBe(true);
   });
 });
 
@@ -645,6 +860,571 @@ describe("pasting an image (KTD5, KTD8)", () => {
   });
 });
 
+describe("adding a file with the Video key (KTD9, R2, R7)", () => {
+  /** A box whose images add files the way the picker would, each add settled in turn by `land` or `fail`. */
+  function setupAdd(value = "", video?: RichImages["video"]) {
+    const onChange = vi.fn();
+    const adds: { from: AddFrom; resolve: (names: string[]) => void; reject: (e: Error) => void }[] = [];
+    const images: RichImages = {
+      load: vi.fn(() => Promise.resolve("data:image/png;base64,iVBORw0KGgo=")),
+      video,
+      add: vi.fn(
+        (from: AddFrom) =>
+          new Promise<string[]>((resolve, reject) => {
+            adds.push({ from, resolve, reject });
+          }),
+      ),
+    };
+    const ref = createRef<RichTextHandle>();
+    const utils = render(<RichText ref={ref} aria-label="Task" value={value} onChange={onChange} images={images} />);
+    const ed = editorOf(box());
+    const key = () => within(screen.getByRole("toolbar", { name: "Formatting" })).getByRole("button", { name: "Video" });
+    async function settle(run: () => void) {
+      await act(async () => {
+        run();
+        await new Promise((r) => setTimeout(r, 0));
+      });
+    }
+    /** Lets add number `i` land with `names` (none for a closed picker). */
+    const land = (i: number, ...names: string[]) => settle(() => adds[i].resolve(names));
+    const fail = (i: number) => settle(() => adds[i].reject(new Error("The data folder is not set.")));
+    const caret = (pos: number) =>
+      act(() => {
+        ed.view.dispatch(ed.state.tr.setSelection(TextSelection.create(ed.state.doc, pos)));
+      });
+    return { onChange, images, adds, ed, ref, utils, key, land, fail, caret };
+  }
+
+  it("adds through the picker and puts the video at the cursor, with focus back just after it (R2)", async () => {
+    const { onChange, images, ed, key, land, caret } = setupAdd("Look here");
+    caret(5);
+    key().focus();
+    fireEvent.click(key());
+    expect(images.add).toHaveBeenCalledTimes(1);
+    expect(images.add).toHaveBeenCalledWith({ kind: "pick" });
+    await land(0, "video-1a2b3c4d.mov");
+    expect(onChange).toHaveBeenLastCalledWith("Look![](video-1a2b3c4d.mov) here");
+    expect(leaves(ed)).toEqual(["video:video-1a2b3c4d.mov"]);
+    expect(document.activeElement).toBe(box());
+    expect(ed.state.selection.from).toBe(6);
+  });
+
+  it("is a plain button named Video, not a toggle", () => {
+    const { key } = setupAdd("");
+    expect(key().getAttribute("title")).toBe("Video");
+    expect(key().hasAttribute("aria-pressed")).toBe(false);
+  });
+
+  it("changes nothing when the picker is closed, and gives the editor its focus back where it was", async () => {
+    const { onChange, ed, key, land, caret } = setupAdd("Look here");
+    caret(5);
+    key().focus();
+    fireEvent.click(key());
+    await land(0);
+    expect(onChange).not.toHaveBeenCalled();
+    expect(ed.getMarkdown()).toBe("Look here");
+    expect(document.activeElement).toBe(box());
+    expect(ed.state.selection.from).toBe(5);
+  });
+
+  it("puts two names in the order they came, each as its own kind", async () => {
+    const { onChange, ed, key, land } = setupAdd("");
+    fireEvent.click(key());
+    await land(0, "video-1a2b3c4d.mp4", "image-1a2b3c4d.png");
+    expect(onChange).toHaveBeenLastCalledWith("![](video-1a2b3c4d.mp4)![](image-1a2b3c4d.png)");
+    expect(leaves(ed)).toEqual(["video:video-1a2b3c4d.mp4", "image:image-1a2b3c4d.png"]);
+  });
+
+  it("lands at the cursor's place when the person types while the add runs, and leaves their cursor alone", async () => {
+    const { onChange, ed, key, land, caret } = setupAdd("One two");
+    caret(4);
+    fireEvent.click(key());
+    act(() => {
+      ed.commands.focus("end");
+    });
+    typeInto(ed, " three");
+    await land(0, "video-a.mov");
+    expect(onChange).toHaveBeenLastCalledWith("One![](video-a.mov) two three");
+    expect(ed.state.selection.from).toBe(ed.state.doc.content.size - 1);
+  });
+
+  it("inserts nothing when the box is set from outside while the add runs", async () => {
+    const { onChange, ed, key, land, utils, images } = setupAdd("Old reply");
+    fireEvent.click(key());
+    utils.rerender(<RichText aria-label="Task" value="" onChange={onChange} images={images} />);
+    await land(0, "video-a.mov");
+    expect(ed.getMarkdown()).toBe("");
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("inserts nothing when replaceAsPaste writes the box while the add runs", async () => {
+    const { onChange, ed, ref, key, land } = setupAdd("Old reply");
+    fireEvent.click(key());
+    act(() => {
+      ref.current!.replaceAsPaste("New reply.");
+    });
+    await land(0, "video-a.mov");
+    expect(ed.getMarkdown()).toBe("New reply.");
+    expect(onChange).toHaveBeenLastCalledWith("New reply.");
+  });
+
+  it("inserts nothing, quietly, when the box closes while the add runs", async () => {
+    const { onChange, key, land, utils } = setupAdd("Old reply");
+    fireEvent.click(key());
+    utils.unmount();
+    await land(0, "video-a.mov");
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("lights up a ref already written by hand to the file it just added", async () => {
+    const onDisk: string[] = [];
+    const video = vi.fn(async (name: string) => (onDisk.includes(name) ? { url: "blob:x", preload: "metadata" as const, release: vi.fn() } : null));
+    const { key, land } = setupAdd("Before ![](video-1a2b3c4d.mov)", video);
+    await waitFor(() => expect(box().querySelector(".rich-video-missing")).not.toBeNull());
+    fireEvent.click(key());
+    onDisk.push("video-1a2b3c4d.mov");
+    await land(0, "video-1a2b3c4d.mov");
+    await waitFor(() => expect(box().querySelectorAll("video[src]")).toHaveLength(2));
+  });
+
+  it("puts a video picked in a code block in a new paragraph after the block", async () => {
+    const { onChange, key, land, caret } = setupAdd("```\nx\n```");
+    caret(2);
+    fireEvent.click(key());
+    await land(0, "video-a.mov");
+    expect(onChange).toHaveBeenLastCalledWith("```\nx\n```\n\n![](video-a.mov)");
+  });
+
+  it("has no Video key in the selection menu, nor in a box that can't add files", async () => {
+    const { ed } = setupAdd("make this bold");
+    act(() => {
+      ed.view.dispatch(ed.state.tr.setSelection(TextSelection.create(ed.state.doc, 6, 10)));
+    });
+    const menu = await screen.findByRole("toolbar", { name: "Format", hidden: true }, { timeout: 2000 });
+    expect(within(menu).getByRole("button", { name: "Bold", hidden: true })).toBeTruthy();
+    expect(within(menu).queryByRole("button", { name: "Video", hidden: true })).toBeNull();
+    cleanup();
+    for (const images of [undefined, { load: () => Promise.resolve(null), save: vi.fn() }]) {
+      const { container } = render(<RichText aria-label="Task" value="" onChange={vi.fn()} images={images} />);
+      expect(within(screen.getByRole("toolbar", { name: "Formatting" })).queryByRole("button", { name: "Video" })).toBeNull();
+      expect(container.querySelector(".rich-foot")).toBeNull();
+      cleanup();
+    }
+  });
+
+  it("says it is saving the file on a line kept for it while the add runs, without reading its pictures again (R7)", async () => {
+    const { images, key, land, utils } = setupAdd("![](image-1a2b3c4d.png) Look");
+    await waitFor(() => expect(images.load).toHaveBeenCalled());
+    const loads = vi.mocked(images.load).mock.calls.length;
+    const foot = utils.container.querySelector(".rich > .rich-foot");
+    expect(foot).not.toBeNull();
+    expect(screen.queryByRole("status")).toBeNull();
+    fireEvent.click(key());
+    const status = screen.getByRole("status");
+    expect(status.textContent).toBe("Saving the file");
+    expect(foot!.contains(status)).toBe(true);
+    // The count lives in the box, never on its images, so no view reads again.
+    expect(images.load).toHaveBeenCalledTimes(loads);
+    await land(0, "video-a.mov");
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(utils.container.querySelector(".rich > .rich-foot")).toBe(foot);
+  });
+
+  it("stops saying so when the add fails, inserts nothing, and the key works again", async () => {
+    const { onChange, key, land, fail } = setupAdd("Look");
+    fireEvent.click(key());
+    expect(screen.getByRole("status").textContent).toBe("Saving the file");
+    await fail(0);
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(onChange).not.toHaveBeenCalled();
+    fireEvent.click(key());
+    await land(1, "video-a.mov");
+    expect(onChange).toHaveBeenLastCalledWith("![](video-a.mov)Look");
+  });
+
+  it("shows one line for two adds at once, until both have landed", async () => {
+    const { key, land } = setupAdd("Look");
+    fireEvent.click(key());
+    fireEvent.click(key());
+    expect(screen.getAllByRole("status")).toHaveLength(1);
+    await land(0, "video-a.mov");
+    expect(screen.getByRole("status").textContent).toBe("Saving the file");
+    await land(1);
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+});
+
+describe("pasting a video copied in Finder (KTD5, R3, R4)", () => {
+  /** A box that can save pasted pictures and add files, each add settled in turn by `land`. */
+  function setupPaste(value = "", props: { cleanPaste?: boolean; onPaste?: () => void } = {}) {
+    const onChange = vi.fn();
+    const adds: { from: AddFrom; resolve: (names: string[]) => void }[] = [];
+    const images: RichImages = {
+      load: () => Promise.resolve("data:image/png;base64,iVBORw0KGgo="),
+      save: vi.fn(() => Promise.resolve("image-1a2b3c4d.png")),
+      add: vi.fn(
+        (from: AddFrom) =>
+          new Promise<string[]>((resolve) => {
+            adds.push({ from, resolve });
+          }),
+      ),
+    };
+    const label = props.cleanPaste ? "Reply" : "Task";
+    render(<RichText aria-label={label} value={value} onChange={onChange} images={images} {...props} />);
+    const ed = editorOf(box(label));
+    const land = async (i: number, ...names: string[]) => {
+      await act(async () => {
+        adds[i].resolve(names);
+        await new Promise((r) => setTimeout(r, 0));
+      });
+    };
+    const caret = (pos: number) =>
+      act(() => {
+        ed.view.dispatch(ed.state.tr.setSelection(TextSelection.create(ed.state.doc, pos)));
+      });
+    return { onChange, images, ed, land, caret, label };
+  }
+
+  it("adds the video from its name and size at the cursor, and never saves its bytes (R3)", async () => {
+    const { onChange, images, ed, land, caret } = setupPaste("Look here");
+    caret(5);
+    const file = videoFile("clip.mov", "video/quicktime");
+    expect(firePaste(box(), {}, [file])).toBe(false);
+    expect(images.add).toHaveBeenCalledTimes(1);
+    expect(images.add).toHaveBeenCalledWith({ kind: "paste", files: [{ name: "clip.mov", size: file.size }] });
+    expect(images.save).not.toHaveBeenCalled();
+    expect(screen.getByRole("status").textContent).toBe("Saving the file");
+    await land(0, "video-1a2b3c4d.mov");
+    expect(onChange).toHaveBeenLastCalledWith("Look![](video-1a2b3c4d.mov) here");
+    expect(leaves(ed)).toEqual(["video:video-1a2b3c4d.mov"]);
+  });
+
+  it("adds a video and a picture copied together in one add, past the image branch (R4)", async () => {
+    const { onChange, images, land } = setupPaste("");
+    const clip = videoFile("clip.mov");
+    const shot = pngFile("shot.png");
+    firePaste(box(), {}, [clip, shot]);
+    expect(images.add).toHaveBeenCalledTimes(1);
+    expect(images.add).toHaveBeenCalledWith({
+      kind: "paste",
+      files: [
+        { name: "clip.mov", size: clip.size },
+        { name: "shot.png", size: shot.size },
+      ],
+    });
+    expect(images.save).not.toHaveBeenCalled();
+    await land(0, "video-1a2b3c4d.mov", "image-1a2b3c4d.png");
+    expect(onChange).toHaveBeenLastCalledWith("![](video-1a2b3c4d.mov)![](image-1a2b3c4d.png)");
+  });
+
+  it("leaves a paste of pictures only to the image branch", async () => {
+    const { onChange, images } = setupPaste("");
+    const shot = pngFile();
+    firePaste(box(), {}, [shot]);
+    expect(images.add).not.toHaveBeenCalled();
+    expect(images.save).toHaveBeenCalledTimes(1);
+    expect(images.save).toHaveBeenCalledWith(shot);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(onChange).toHaveBeenLastCalledWith("![](image-1a2b3c4d.png)");
+  });
+
+  it("takes the text path when the paste carries real text beside the video", () => {
+    const { onChange, images } = setupPaste("");
+    firePaste(box(), { "text/plain": "Notes on the clip" }, [videoFile()]);
+    expect(images.add).not.toHaveBeenCalled();
+    expect(images.save).not.toHaveBeenCalled();
+    expect(onChange).toHaveBeenLastCalledWith("Notes on the clip");
+  });
+
+  it("takes a video whose text is only its own file name, as a Finder copy may bring", () => {
+    const { images } = setupPaste("");
+    const file = videoFile("clip.mov");
+    firePaste(box(), { "text/plain": "clip.mov" }, [file]);
+    expect(images.add).toHaveBeenCalledWith({ kind: "paste", files: [{ name: "clip.mov", size: file.size }] });
+  });
+
+  it("in the reply box, adds the video as an edit and reports no paste", async () => {
+    const onPaste = vi.fn();
+    const { onChange, images, land } = setupPaste("Done", { cleanPaste: true, onPaste });
+    firePaste(box("Reply"), {}, [videoFile()]);
+    expect(images.add).toHaveBeenCalledTimes(1);
+    await land(0, "video-1a2b3c4d.mov");
+    expect(onChange).toHaveBeenLastCalledWith(expect.stringContaining("![](video-1a2b3c4d.mov)"));
+    expect(onPaste).not.toHaveBeenCalled();
+  });
+
+  it("hands a Matroska file to the add, so its refusal comes from the one place refusals are made", () => {
+    const { images } = setupPaste("");
+    const file = videoFile("clip.mkv", "video/x-matroska");
+    firePaste(box(), {}, [file]);
+    expect(images.add).toHaveBeenCalledWith({ kind: "paste", files: [{ name: "clip.mkv", size: file.size }] });
+  });
+
+  it("knows a video by its extension when the clipboard gives no type", () => {
+    const { images } = setupPaste("");
+    const file = videoFile("Clip.MOV", "");
+    firePaste(box(), {}, [file]);
+    expect(images.add).toHaveBeenCalledWith({ kind: "paste", files: [{ name: "Clip.MOV", size: file.size }] });
+  });
+
+  it("leaves a video paste to today's path in a box that can't add files", async () => {
+    const onChange = vi.fn();
+    const save = vi.fn(() => Promise.resolve("image-1a2b3c4d.png"));
+    render(<RichText aria-label="Task" value="" onChange={onChange} images={{ load: () => Promise.resolve(null), save }} />);
+    const shot = pngFile("shot.png");
+    firePaste(box(), {}, [videoFile("clip.mov"), shot]);
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(save).toHaveBeenCalledWith(shot);
+    cleanup();
+    render(<RichText aria-label="Task" value="" onChange={onChange} images={{ load: () => Promise.resolve(null), save }} />);
+    expect(firePaste(box(), {}, [videoFile("clip.mov")])).toBe(true);
+    expect(save).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("dropping files on a box (KTD8, R1, R4)", () => {
+  const noPoint = document.elementFromPoint;
+  afterEach(() => {
+    document.elementFromPoint = noPoint;
+  });
+
+  /** A box whose images add files the way a drop would, each add settled in turn by `land`. */
+  function setupDrop(value = "", label = "Task") {
+    const onChange = vi.fn();
+    const adds: { from: AddFrom; resolve: (names: string[]) => void; reject: (e: Error) => void }[] = [];
+    const images: RichImages = {
+      load: () => Promise.resolve("data:image/png;base64,iVBORw0KGgo="),
+      add: vi.fn(
+        (from: AddFrom) =>
+          new Promise<string[]>((resolve, reject) => {
+            adds.push({ from, resolve, reject });
+          }),
+      ),
+    };
+    const utils = render(<RichText aria-label={label} value={value} onChange={onChange} images={images} />);
+    const ed = editorOf(box(label));
+    const root = utils.container.querySelector(".rich") as HTMLElement;
+    const land = async (i: number, ...names: string[]) => {
+      await act(async () => {
+        adds[i].resolve(names);
+        await new Promise((r) => setTimeout(r, 0));
+      });
+    };
+    /** Points the page at `el`, and the editor at `pos` when the point is inside it. */
+    const pointAt = (el: Element | null, pos?: number) => {
+      document.elementFromPoint = () => el;
+      if (pos !== undefined) vi.spyOn(ed.view, "posAtCoords").mockReturnValue({ pos, inside: -1 });
+    };
+    return { onChange, images, adds, ed, root, utils, land, pointAt };
+  }
+
+  const dropAt = (paths: string[], x = 120, y = 80) =>
+    act(() => {
+      handleDragDrop({ type: "drop", paths, position: { x, y } });
+    });
+
+  it("adds a dropped video and puts it where it was dropped (R1)", async () => {
+    const { onChange, images, ed, land, pointAt } = setupDrop("Look here");
+    pointAt(ed.view.dom.querySelector("p"), 5);
+    const posAtCoords = vi.mocked(ed.view.posAtCoords);
+    dropAt(["/Users/me/Movies/clip.mov"], 120, 80);
+    expect(images.add).toHaveBeenCalledTimes(1);
+    expect(images.add).toHaveBeenCalledWith({ kind: "drop", paths: ["/Users/me/Movies/clip.mov"] });
+    expect(posAtCoords).toHaveBeenCalledWith({ left: 120, top: 80 });
+    await land(0, "video-1a2b3c4d.mov");
+    expect(onChange).toHaveBeenLastCalledWith("Look![](video-1a2b3c4d.mov) here");
+    expect(leaves(ed)).toEqual(["video:video-1a2b3c4d.mov"]);
+  });
+
+  it("puts a drop on the box but outside its text at the end of the box", async () => {
+    const { onChange, root, land, pointAt } = setupDrop("Look here\n\nAnd here");
+    pointAt(root.querySelector(".rich-bar"));
+    dropAt(["/a/clip.mov"]);
+    await land(0, "video-a.mov");
+    expect(onChange).toHaveBeenLastCalledWith("Look here\n\nAnd here![](video-a.mov)");
+  });
+
+  it("puts a drop that lands between two blocks in a paragraph of its own there", async () => {
+    const { onChange, ed, land, pointAt } = setupDrop("One\n\nTwo");
+    pointAt(ed.view.dom, 5);
+    dropAt(["/a/clip.mov"]);
+    await land(0, "video-a.mov");
+    expect(onChange).toHaveBeenLastCalledWith("One\n\n![](video-a.mov)\n\nTwo");
+  });
+
+  it("adds a picture and a video in one add and puts both in the order they came (R4)", async () => {
+    const { onChange, images, ed, land, pointAt } = setupDrop("");
+    pointAt(ed.view.dom.querySelector("p"), 1);
+    dropAt(["/a/shot.png", "/a/clip.mov"]);
+    expect(images.add).toHaveBeenCalledTimes(1);
+    expect(images.add).toHaveBeenCalledWith({ kind: "drop", paths: ["/a/shot.png", "/a/clip.mov"] });
+    await land(0, "image-1a2b3c4d.png", "video-1a2b3c4d.mov");
+    expect(onChange).toHaveBeenLastCalledWith("![](image-1a2b3c4d.png)![](video-1a2b3c4d.mov)");
+    expect(leaves(ed)).toEqual(["image:image-1a2b3c4d.png", "video:video-1a2b3c4d.mov"]);
+  });
+
+  it("says it is saving the file while a drop's add runs (R7)", async () => {
+    const { land } = setupDrop("Look");
+    dropAt(["/a/clip.mov"]);
+    expect(screen.getByRole("status").textContent).toBe("Saving the file");
+    await land(0, "video-a.mov");
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("inserts nothing when the box unmounts while its drop's add runs", async () => {
+    const { onChange, land, utils } = setupDrop("Look");
+    dropAt(["/a/clip.mov"]);
+    utils.unmount();
+    await land(0, "video-a.mov");
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("goes to the box under the point when two are mounted", async () => {
+    const onChange = vi.fn();
+    const add = vi.fn(async () => ["video-a.mov"]);
+    const other = vi.fn(async () => ["video-b.mov"]);
+    render(
+      <>
+        <RichText aria-label="Task" value="Task" onChange={onChange} images={{ load: () => Promise.resolve(null), add }} />
+        <RichText aria-label="Rubric" value="Rubric" onChange={vi.fn()} images={{ load: () => Promise.resolve(null), add: other }} />
+      </>,
+    );
+    document.elementFromPoint = () => box("Task").closest(".rich")!.querySelector(".rich-bar");
+    await act(async () => {
+      handleDragDrop({ type: "drop", paths: ["/a/clip.mov"], position: { x: 1, y: 1 } });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(add).toHaveBeenCalledTimes(1);
+    expect(other).not.toHaveBeenCalled();
+    expect(onChange).toHaveBeenLastCalledWith("Task![](video-a.mov)");
+  });
+
+  it("takes no drop in a box that can't add files", () => {
+    const notice = vi.fn();
+    const uninstall = installDropNotice(notice);
+    const save = vi.fn();
+    render(<RichText aria-label="Task" value="" onChange={vi.fn()} images={{ load: () => Promise.resolve(null), save }} />);
+    dropAt(["/a/clip.mov"]);
+    expect(notice).toHaveBeenCalledWith(DROP_ON_A_BOX);
+    expect(save).not.toHaveBeenCalled();
+    uninstall();
+  });
+
+  it("stops taking drops once it unmounts", () => {
+    const notice = vi.fn();
+    const uninstall = installDropNotice(notice);
+    const { images, utils } = setupDrop("Look");
+    utils.unmount();
+    dropAt(["/a/clip.mov"]);
+    expect(images.add).not.toHaveBeenCalled();
+    expect(notice).toHaveBeenCalledWith(DROP_ON_A_BOX);
+    uninstall();
+  });
+
+  it("wears the drop outline while a file is dragged over it, and loses it on leave", () => {
+    const { root } = setupDrop("Look");
+    act(() => handleDragDrop({ type: "enter", paths: ["/a/clip.mov"], position: { x: 1, y: 1 } }));
+    expect(root.classList.contains("rich-drop")).toBe(true);
+    expect(root.classList.contains("rich")).toBe(true);
+    act(() => handleDragDrop({ type: "leave" }));
+    expect(root.classList.contains("rich-drop")).toBe(false);
+    expect(root.className).toBe("rich");
+  });
+});
+
+describe("the flow-test stub's drop", () => {
+  const load = () => Promise.resolve(null);
+
+  it("adds a fed drop's paths and splices each ref in at the end, as the real box does off its text", async () => {
+    const onChange = vi.fn();
+    const add = vi.fn(() => Promise.resolve(["video-x.mov"]));
+    render(<StubRichText aria-label="Task" value="AB" onChange={onChange} images={{ load, add }} />);
+    await act(async () => {
+      handleDragDrop({ type: "drop", paths: ["/a/clip.mov"], position: { x: 1, y: 1 } });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(add).toHaveBeenCalledWith({ kind: "drop", paths: ["/a/clip.mov"] });
+    expect(onChange).toHaveBeenLastCalledWith("AB![](video-x.mov)");
+  });
+
+  it("calls nothing when the add lands after it unmounts", async () => {
+    const onChange = vi.fn();
+    let resolve!: (names: string[]) => void;
+    const add = vi.fn(() => new Promise<string[]>((r) => (resolve = r)));
+    const { unmount } = render(<StubRichText aria-label="Task" value="AB" onChange={onChange} images={{ load, add }} />);
+    act(() => handleDragDrop({ type: "drop", paths: ["/a/clip.mov"], position: { x: 1, y: 1 } }));
+    expect(add).toHaveBeenCalledTimes(1);
+    unmount();
+    await act(async () => {
+      resolve(["video-x.mov"]);
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("takes no drop without add", () => {
+    const notice = vi.fn();
+    const uninstall = installDropNotice(notice);
+    render(<StubRichText aria-label="Task" value="" onChange={vi.fn()} images={{ load, save: vi.fn() }} />);
+    act(() => handleDragDrop({ type: "drop", paths: ["/a/clip.mov"], position: { x: 1, y: 1 } }));
+    expect(notice).toHaveBeenCalledWith(DROP_ON_A_BOX);
+    uninstall();
+  });
+});
+
+describe("the flow-test stub's Video key", () => {
+  const load = () => Promise.resolve(null);
+
+  it("adds through the picker and splices each ref in at the selection", async () => {
+    const onChange = vi.fn();
+    const add = vi.fn(() => Promise.resolve(["video-x.mov", "image-y.png"]));
+    render(<StubRichText aria-label="Task" value="AB" onChange={onChange} images={{ load, add }} />);
+    const el = screen.getByRole("textbox", { name: "Task" }) as HTMLTextAreaElement;
+    el.setSelectionRange(1, 1);
+    fireEvent.click(screen.getByRole("button", { name: "Video" }));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(add).toHaveBeenCalledWith({ kind: "pick" });
+    expect(onChange).toHaveBeenLastCalledWith("A![](video-x.mov)![](image-y.png)B");
+  });
+
+  it("calls nothing for a closed picker or a failed add", async () => {
+    const onChange = vi.fn();
+    const add = vi.fn().mockResolvedValueOnce([]).mockRejectedValueOnce(new Error("The data folder is not set."));
+    render(<StubRichText aria-label="Task" value="AB" onChange={onChange} images={{ load, add }} />);
+    for (let i = 0; i < 2; i++) {
+      fireEvent.click(screen.getByRole("button", { name: "Video" }));
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 0));
+      });
+    }
+    expect(add).toHaveBeenCalledTimes(2);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("calls nothing when the add lands after it unmounts, as the real box inserts nothing", async () => {
+    const onChange = vi.fn();
+    let resolve!: (names: string[]) => void;
+    const add = vi.fn(() => new Promise<string[]>((r) => (resolve = r)));
+    const { unmount } = render(<StubRichText aria-label="Task" value="AB" onChange={onChange} images={{ load, add }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Video" }));
+    unmount();
+    await act(async () => {
+      resolve(["video-x.mov"]);
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("has no Video key without add", () => {
+    render(<StubRichText aria-label="Task" value="" onChange={vi.fn()} images={{ load, save: vi.fn() }} />);
+    expect(screen.queryByRole("button", { name: "Video" })).toBeNull();
+  });
+});
+
 describe("the flow-test stub's image paste", () => {
   it("saves the image and splices its ref in at the selection", async () => {
     const onChange = vi.fn();
@@ -666,6 +1446,34 @@ describe("the flow-test stub's image paste", () => {
     render(<StubRichText aria-label="Task" value="" onChange={onChange} images={{ load: () => Promise.resolve(null), save }} />);
     firePaste(screen.getByRole("textbox", { name: "Task" }), { "text/plain": "Revenue" }, [pngFile()]);
     expect(save).not.toHaveBeenCalled();
+  });
+});
+
+describe("the flow-test stub's video paste", () => {
+  const load = () => Promise.resolve(null);
+
+  it("adds a pasted video by name and size and splices its ref in at the selection", async () => {
+    const onChange = vi.fn();
+    const save = vi.fn(() => Promise.resolve("image-x.png"));
+    const add = vi.fn(() => Promise.resolve(["video-x.mov"]));
+    render(<StubRichText aria-label="Task" value="AB" onChange={onChange} images={{ load, save, add }} />);
+    const el = screen.getByRole("textbox", { name: "Task" }) as HTMLTextAreaElement;
+    el.setSelectionRange(1, 1);
+    const file = videoFile();
+    expect(firePaste(el, {}, [file, pngFile()])).toBe(false);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(add).toHaveBeenCalledWith({ kind: "paste", files: [{ name: "clip.mov", size: file.size }, { name: "image.png", size: 12 }] });
+    expect(save).not.toHaveBeenCalled();
+    expect(onChange).toHaveBeenLastCalledWith("A![](video-x.mov)B");
+  });
+
+  it("leaves a video paste with real text to the text path", () => {
+    const add = vi.fn(() => Promise.resolve(["video-x.mov"]));
+    render(<StubRichText aria-label="Task" value="" onChange={vi.fn()} images={{ load, add }} />);
+    firePaste(screen.getByRole("textbox", { name: "Task" }), { "text/plain": "Notes on the clip" }, [videoFile()]);
+    expect(add).not.toHaveBeenCalled();
   });
 });
 

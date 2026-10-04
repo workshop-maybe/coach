@@ -1,0 +1,40 @@
+{
+  "comment": "Cases for the local video name rule, read by both the Rust and the TypeScript tests so the two rules cannot drift.",
+  "accept": [
+    "video-1a2b3c4d.mp4",
+    "video-1a2b3c4d.m4v",
+    "video-1a2b3c4d.mov",
+    "video-1a2b3c4d.webm",
+    "Clip 1.MOV",
+    "clip.Mp4",
+    "é.webm",
+    "my clip (2).mov",
+    "a.b.mp4"
+  ],
+  "refuse": [
+    "",
+    ".mp4",
+    ".x.mp4",
+    "sub/x.mp4",
+    "sub\\x.mp4",
+    "../x.mp4",
+    "..x.mp4",
+    "x..mp4",
+    "/x.mp4",
+    "C:x.mp4",
+    "https://x/v.mp4",
+    "x.mp4?a",
+    "x.mp4#t",
+    "x.mkv",
+    "x.avi",
+    "x.png",
+    "x.mp4.txt",
+    "a<b.mp4",
+    "a>b.mp4",
+    "a\"b.mp4",
+    "a\u0000b.mp4",
+    "a\nb.mp4",
+    "a\u007fb.mp4",
+    "mp4"
+  ]
+}
