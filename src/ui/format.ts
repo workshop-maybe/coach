@@ -1,7 +1,8 @@
-// Display text for a result, a flag, a handoff, a setup, a date and a part's first line.
+// Display text for a result, a flag, the go-to, a handoff, a setup, a date and a part's first line.
 
 import { handoffKeys } from "../cast/mappings";
 import type { ContextLine } from "../domain/context";
+import type { GoToFlag } from "../domain/goTo";
 import { SKELETON_ID, handoffsFor } from "../domain/handoffs";
 import type { CellFlag, CellStatus } from "../domain/matrix";
 import type { AgentSetup, FolderState } from "../domain/types";
@@ -18,6 +19,17 @@ export const FLAG_SHORT: Record<CellFlag, string> = {
   earlier_version: "task changed",
   setup_mismatch: "setup changed",
 };
+
+/** A go-to's flag in a few words: "not met" as the badge page's rows print the result, and the setup flag as rows print it. */
+const GO_TO_FLAG_SHORT: Record<GoToFlag, string> = {
+  not_met: "not met",
+  setup_mismatch: FLAG_SHORT.setup_mismatch,
+};
+
+/** The go-to's line on a badge card, or under a badge's holders when it no longer holds it (KTD8, KTD9). */
+export function goToLine(name: string, flags: GoToFlag[]): string {
+  return [`Go-to: ${name}`, ...flags.map((f) => GO_TO_FLAG_SHORT[f])].join(" · ");
+}
 
 const MEMORY_SHORT: Record<ContextLine["memory"], string | null> = {
   changed: "memory changed",
