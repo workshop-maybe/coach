@@ -790,6 +790,27 @@ describe("CompareView, Compare with Jev", () => {
     expect(Object.keys(storage.files()).filter((p) => p.startsWith(`${readingsDir("opus", "eng", "review")}/`))).toEqual([]);
   });
 
+  it("waits while a verdict step is open, so the step's reading is the one its result keeps", async () => {
+    // A hold-time reading from an older rubric that calls meets: Not yet opens the step, and a
+    // run now would save a newer reading under it.
+    const stale: JevReading = { model: JEV_MODEL, assignmentVersion: "older", askedAt: "2026-09-01T09:05:00.000Z", seen: "before", overall: 0.9, points: [] };
+    const storage = storageWith({
+      credentials: [graded],
+      profiles: [opus, codex],
+      held: [await heldReply(opus, graded, { ...heldDay(1), handBack: "Opus held", jev: stale })],
+      assessments: [await result(codex, graded, day(2))],
+    });
+    renderWithJev(storage, new FakeJev(FAKE_ON, ANSWERS), route);
+    const action = (await screen.findByRole("button", { name: "Compare with Jev" })) as HTMLButtonElement;
+    expect(action.disabled).toBe(false);
+    const [left] = panes();
+    await userEvent.click(within(left).getByRole("button", { name: "Not yet" }));
+    expect(within(left).getByRole("heading", { name: "Which points did it miss" })).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Compare with Jev" }) as HTMLButtonElement).disabled).toBe(true);
+    await userEvent.click(within(left).getByRole("button", { name: "Back" }));
+    expect((screen.getByRole("button", { name: "Compare with Jev" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it("a failed ask shows its line, and the action stays for a retry", async () => {
     const fake = new FakeJev(FAKE_ON, ANSWERS);
     fake.queue("ask", new JevError("unreachable"));

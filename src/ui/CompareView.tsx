@@ -80,8 +80,6 @@ function openPair(chosen: readonly (string | null)[], strip: readonly Entry[]): 
   return pair.slice(0, 2);
 }
 
-/** The handoff text a take answered, exactly as saved: the filled text, or the built-in skeleton before handoffs. */
-
 export function CompareView({ credentialKey: key, takes, picks }: { credentialKey: string; takes: TakeRef[]; picks?: TakeRef[] }) {
   const { state, storage } = useFolder();
   const { navigate } = useNav();
@@ -212,7 +210,8 @@ export function CompareView({ credentialKey: key, takes, picks }: { credentialKe
           <>
             {(jev.canAsk || jev.running) && (
               <p className="helper">
-                <button type="button" className="link" disabled={jev.running || writes.saving} onClick={() => void jev.run()}>
+                {/* It waits while a verdict step is open, so the reading the step was opened against is the one its result keeps. */}
+                <button type="button" className="link" disabled={jev.running || writes.saving || stepped !== -1} onClick={() => void jev.run()}>
                   {jev.running && jev.progress ? `Asking Jev, ${jev.progress.done + 1} of ${jev.progress.total}…` : "Compare with Jev"}
                 </button>
               </p>
