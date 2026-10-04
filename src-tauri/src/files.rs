@@ -75,7 +75,7 @@ pub fn register_remembered(roots: &mut Roots, remembered: Option<&str>) -> Optio
 
 /// Lexical normalization of a root-relative path: drops `.`, applies `..`, and
 /// refuses an absolute path or one that climbs above the root. Reads no disk.
-fn normalize_rel(rel: &str) -> Result<Vec<&std::ffi::OsStr>, String> {
+pub(crate) fn normalize_rel(rel: &str) -> Result<Vec<&std::ffi::OsStr>, String> {
     use std::path::Component;
 
     let rel_path = Path::new(rel);
@@ -427,6 +427,440 @@ pub fn read_data_uri_in(root: &Path, rel: &str) -> Result<Option<String>, String
     };
     let encoded = base64::engine::general_purpose::STANDARD.encode(&bytes);
     Ok(Some(format!("data:{mime};base64,{encoded}")))
+}
+
+// --- Videos (KTD6, KTD7) ---
+//
+// Copies are made from an open handle, streamed and hashed, and never hold a whole
+// video in memory. Nothing here unwraps: the release profile aborts on a panic.
+
+/// Largest video accepted, in bytes (100 MiB, inclusive): GitHub's limit on one file.
+pub const MAX_VIDEO_BYTES: u64 = 100 * 1024 * 1024;
+
+pub const VIDEO_TOO_LARGE: &str = "That video is larger than 100 MB.";
+pub const NOT_A_VIDEO: &str = "That file is not an MP4, MOV, M4V or WebM video.";
+pub const UNSUPPORTED_FILE: &str = "Only MP4, MOV, M4V and WebM videos, and PNG and JPEG images, can be added.";
+pub const CANNOT_READ: &str = "That file can't be read.";
+
+/// How many bytes the family sniff reads. An EBML header is a few dozen bytes.
+const HEAD_BYTES: u64 = 4096;
+
+const EBML_MAGIC: [u8; 4] = [0x1A, 0x45, 0xDF, 0xA3];
+const EBML_DOC_TYPE: u64 = 0x4282;
+
+/// Top-level QuickTime atoms a `.mov` may start with instead of `ftyp`.
+const QUICKTIME_ATOMS: [&[u8; 4]; 6] = [b"moov", b"mdat", b"wide", b"free", b"skip", b"pnot"];
+
+/// A video container family, read from the head of the file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VideoFamily {
+    /// ISO-BMFF or QuickTime with an `ftyp` box first, whatever the brand.
+    Ftyp,
+    /// QuickTime that starts with another top-level atom.
+    QuickTimeAtom,
+    /// EBML whose DocType is `webm`.
+    Webm,
+}
+
+/// The family of a video from its first bytes, or None. A Matroska file is not WebM.
+pub fn sniff_video(head: &[u8]) -> Option<VideoFamily> {
+    if let Some(kind) = head.get(4..8) {
+        if kind == b"ftyp" {
+            return Some(VideoFamily::Ftyp);
+        }
+        if QUICKTIME_ATOMS.iter().any(|a| a.as_slice() == kind) {
+            return Some(VideoFamily::QuickTimeAtom);
+        }
+    }
+    if head.starts_with(&EBML_MAGIC) && ebml_doc_type(head)? == b"webm" {
+        return Some(VideoFamily::Webm);
+    }
+    None
+}
+
+/// One EBML variable-length integer at the start of `bytes`: its value with the length
+/// marker removed (or kept, for an element ID) and its length in bytes.
+fn ebml_vint(bytes: &[u8], keep_marker: bool) -> Option<(u64, usize)> {
+    let first = *bytes.first()?;
+    let len = usize::try_from(first.leading_zeros()).ok()?.checked_add(1)?;
+    if len > 8 {
+        return None;
+    }
+    let mut value = if keep_marker { u64::from(first) } else { u64::from(first) & (0xFF_u64 >> len) };
+    for b in bytes.get(1..len)? {
+        value = value.checked_shl(8)? | u64::from(*b);
+    }
+    Some((value, len))
+}
+
+/// The DocType in the EBML header at the start of `head`, without trailing NULs.
+fn ebml_doc_type(head: &[u8]) -> Option<&[u8]> {
+    let mut pos = EBML_MAGIC.len();
+    let (size, n) = ebml_vint(head.get(pos..)?, false)?;
+    pos = pos.checked_add(n)?;
+    // An unknown or oversized header size runs to the end of what was read.
+    let end = usize::try_from(size).map_or(head.len(), |s| pos.saturating_add(s).min(head.len()));
+    while pos < end {
+        let (id, n) = ebml_vint(head.get(pos..end)?, true)?;
+        pos = pos.checked_add(n)?;
+        let (len, n) = ebml_vint(head.get(pos..end)?, false)?;
+        pos = pos.checked_add(n)?;
+        let data_end = pos.checked_add(usize::try_from(len).ok()?)?;
+        let data = head.get(pos..data_end)?;
+        if id == EBML_DOC_TYPE {
+            let kept = data.iter().rposition(|b| *b != 0).map_or(0, |i| i.saturating_add(1));
+            return data.get(..kept);
+        }
+        pos = data_end;
+    }
+    None
+}
+
+/// Whether a family agrees with a lowercased extension.
+pub fn family_agrees(family: VideoFamily, ext: &str) -> bool {
+    match family {
+        VideoFamily::Ftyp => matches!(ext, "mp4" | "m4v" | "mov"),
+        VideoFamily::QuickTimeAtom => ext == "mov",
+        VideoFamily::Webm => ext == "webm",
+    }
+}
+
+/// The video extension `ext` names, lowercased, in any ASCII case.
+fn video_ext(ext: &str) -> Option<&'static str> {
+    ["mp4", "m4v", "mov", "webm"].into_iter().find(|v| ext.eq_ignore_ascii_case(v))
+}
+
+/// The lowercased video extension of a file name, or None.
+pub fn video_ext_of_name(name: &str) -> Option<&'static str> {
+    name.rsplit_once('.').and_then(|(_, ext)| video_ext(ext))
+}
+
+/// Whether `name` is a bare local video name (KTD2): one path segment with no separator,
+/// colon, angle bracket, quote, C0 control, DEL or line separator, no `..`, no leading
+/// dot, and a non-empty stem before a video extension in any ASCII case. It mirrors the
+/// TypeScript rule; both read `src/domain/video-name-vectors.json` in their tests.
+pub fn is_local_video_name(name: &str) -> bool {
+    let bad = |c: char| {
+        matches!(c, '/' | '\\' | ':' | '<' | '>' | '"' | '\u{7f}' | '\u{2028}' | '\u{2029}') || c <= '\u{1f}'
+    };
+    if name.chars().any(bad) || name.contains("..") || name.starts_with('.') {
+        return false;
+    }
+    matches!(name.rsplit_once('.'), Some((stem, ext)) if !stem.is_empty() && video_ext(ext).is_some())
+}
+
+/// Opens `source` for reading if it is a regular file, checked before the open and again
+/// on the handle, so a FIFO or a device is refused instead of blocking. `Ok(None)` means
+/// it is not a regular file. Returns the handle and its length.
+pub(crate) fn open_regular(source: &Path) -> Result<Option<(std::fs::File, u64)>, String> {
+    match std::fs::metadata(source) {
+        Ok(m) if m.is_file() => {}
+        Ok(_) => return Ok(None),
+        Err(_) => return Err(CANNOT_READ.into()),
+    }
+    let file = std::fs::File::open(source).map_err(|_| CANNOT_READ.to_string())?;
+    let meta = file.metadata().map_err(|_| CANNOT_READ.to_string())?;
+    if !meta.is_file() {
+        return Ok(None);
+    }
+    Ok(Some((file, meta.len())))
+}
+
+/// Reads the first bytes of `file` for the sniff and rewinds it.
+pub(crate) fn read_head(file: &mut std::fs::File) -> std::io::Result<Vec<u8>> {
+    use std::io::{Read, Seek};
+    let mut head = Vec::new();
+    file.by_ref().take(HEAD_BYTES).read_to_end(&mut head)?;
+    file.rewind()?;
+    Ok(head)
+}
+
+/// A temp file name in the target folder. The final name waits for the hash.
+fn video_temp_name() -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::{SystemTime, UNIX_EPOCH};
+    static COUNT: AtomicU64 = AtomicU64::new(0);
+    let nanos = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+    let n = COUNT.fetch_add(1, Ordering::Relaxed);
+    format!(".video{TEMP_MARKER}-{}-{nanos}-{n}", std::process::id())
+}
+
+/// Streams `reader` into a new temp file in `dir`, hashing as it goes, and stops one byte
+/// past `cap`. Returns the temp path and the first 4 bytes of the SHA-256 as 8 hex. A
+/// source that runs past the cap is refused and its temp file removed.
+fn stream_to_temp(reader: impl std::io::Read, dir: &Path, cap: u64) -> Result<(PathBuf, String), String> {
+    use sha2::{Digest, Sha256};
+    use std::io::{Read, Write};
+
+    let temp = dir.join(video_temp_name());
+    let mut out = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temp)
+        .map_err(|e| format!("Cannot save the video: {e}"))?;
+    let mut limited = reader.take(cap.saturating_add(1));
+    let mut hasher = Sha256::new();
+    let mut total: u64 = 0;
+    let mut buf = vec![0u8; 256 * 1024];
+    let result = loop {
+        let n = match limited.read(&mut buf) {
+            Ok(0) => break out.sync_all().map_err(|e| format!("Cannot save the video: {e}")),
+            Ok(n) => n,
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(_) => break Err(CANNOT_READ.to_string()),
+        };
+        let Some(chunk) = buf.get(..n) else {
+            break Err(CANNOT_READ.to_string());
+        };
+        total = match total.checked_add(n as u64) {
+            Some(t) if t <= cap => t,
+            _ => break Err(VIDEO_TOO_LARGE.to_string()),
+        };
+        hasher.update(chunk);
+        if let Err(e) = out.write_all(chunk) {
+            break Err(format!("Cannot save the video: {e}"));
+        }
+    };
+    drop(out);
+    if let Err(e) = result {
+        let _ = std::fs::remove_file(&temp);
+        return Err(e);
+    }
+    let digest = hasher.finalize();
+    let hash = digest.iter().take(4).map(|b| format!("{b:02x}")).collect();
+    Ok((temp, hash))
+}
+
+/// Whether two files hold the same bytes, compared in streams.
+fn same_bytes(a: &Path, b: &Path) -> std::io::Result<bool> {
+    let (mut a, mut b) = (std::fs::File::open(a)?, std::fs::File::open(b)?);
+    let (mut abuf, mut bbuf) = (vec![0u8; 64 * 1024], vec![0u8; 64 * 1024]);
+    loop {
+        let n = read_full(&mut a, &mut abuf)?;
+        let m = read_full(&mut b, &mut bbuf)?;
+        if n != m || abuf.get(..n) != bbuf.get(..m) {
+            return Ok(false);
+        }
+        if n == 0 {
+            return Ok(true);
+        }
+    }
+}
+
+/// Fills `buf` as far as the reader allows. Returns how many bytes were read.
+fn read_full(r: &mut impl std::io::Read, buf: &mut [u8]) -> std::io::Result<usize> {
+    let mut filled = 0;
+    while let Some(rest) = buf.get_mut(filled..) {
+        if rest.is_empty() {
+            break;
+        }
+        match r.read(rest) {
+            Ok(0) => break,
+            Ok(n) => filled += n,
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(filled)
+}
+
+/// Resolves `dir` inside `root` and creates it. Returns the folder on disk and the
+/// normalized root-relative folder with forward slashes ("" for the root).
+fn video_target_dir(root: &Path, dir: &str) -> Result<(PathBuf, String), String> {
+    let parts = normalize_rel(dir)?;
+    let rel_dir = parts.iter().map(|p| p.to_string_lossy()).collect::<Vec<_>>().join("/");
+    let abs = resolve_in_root(root, &rel_dir)?;
+    std::fs::create_dir_all(&abs).map_err(|e| format!("Cannot create the folder \"{rel_dir}\": {e}"))?;
+    Ok((abs, rel_dir))
+}
+
+/// Copies an open, sniffed video into `dir` under `root` per KTD6 and returns its
+/// root-relative path. The cap is checked from `len` before anything is written and
+/// again while streaming. The name is `video-<8 hex>.<ext>`; the same bytes already there
+/// give the same path, and anything else at the name is refused and left alone.
+fn copy_open_video(file: std::fs::File, len: u64, ext: &str, root: &Path, dir: &str) -> Result<String, String> {
+    if len > MAX_VIDEO_BYTES {
+        return Err(VIDEO_TOO_LARGE.into());
+    }
+    let (dir_abs, rel_dir) = video_target_dir(root, dir)?;
+    let (temp, hash) = stream_to_temp(file, &dir_abs, MAX_VIDEO_BYTES)?;
+    let name = format!("video-{hash}.{ext}");
+    let rel = if rel_dir.is_empty() { name.clone() } else { format!("{rel_dir}/{name}") };
+    let target = dir_abs.join(&name);
+    let discard = |err: String| {
+        let _ = std::fs::remove_file(&temp);
+        Err(err)
+    };
+    match std::fs::symlink_metadata(&target) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => match std::fs::rename(&temp, &target) {
+            Ok(()) => Ok(rel),
+            Err(e) => discard(format!("Cannot save the video as \"{rel}\": {e}")),
+        },
+        Err(e) => discard(format!("Cannot save the video as \"{rel}\": {e}")),
+        Ok(m) if m.file_type().is_symlink() || !m.is_file() => {
+            discard(format!("Something other than a plain file is already named {name}."))
+        }
+        Ok(m) => {
+            let temp_len = std::fs::metadata(&temp).map(|t| t.len()).ok();
+            match (temp_len == Some(m.len())).then(|| same_bytes(&temp, &target)) {
+                Some(Ok(true)) => {
+                    let _ = std::fs::remove_file(&temp);
+                    Ok(rel)
+                }
+                Some(Err(e)) => discard(format!("Cannot read \"{rel}\": {e}")),
+                _ => discard(format!("A different file is already named {name}.")),
+            }
+        }
+    }
+}
+
+/// Adds the file at `source` to `dir` in `root`, sorted by content (KTD5): a PNG or JPEG
+/// by the pasted-image rules, a video whose family agrees with its extension by KTD6, and
+/// anything else refused. Errors never name `source`.
+pub fn add_file_in(root: &Path, dir: &str, source: &Path) -> Result<String, String> {
+    use std::io::Read;
+
+    let Some((mut file, len)) = open_regular(source)? else {
+        return Err(UNSUPPORTED_FILE.into());
+    };
+    let head = read_head(&mut file).map_err(|_| CANNOT_READ.to_string())?;
+    if head.starts_with(&PNG_SIGNATURE) || head.starts_with(&JPEG_MAGIC) {
+        if len > MAX_PASTED_IMAGE_BYTES as u64 {
+            return Err(ImageLimit::Pasted.too_large(usize::try_from(len).unwrap_or(usize::MAX)));
+        }
+        let mut bytes = Vec::new();
+        file.take(MAX_PASTED_IMAGE_BYTES as u64 + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|_| CANNOT_READ.to_string())?;
+        return save_image_in(root, dir, &bytes);
+    }
+    let ext = source.file_name().and_then(|n| n.to_str()).and_then(video_ext_of_name);
+    match (ext, sniff_video(&head)) {
+        (Some(ext), Some(family)) if family_agrees(family, ext) => copy_open_video(file, len, ext, root, dir),
+        _ => Err(UNSUPPORTED_FILE.into()),
+    }
+}
+
+/// Copies a video from `from` in the data root into `to_dir` of a target root (KTD7),
+/// under its content-addressed name. The export root is never read.
+pub fn copy_video_in(data_root: &Path, from: &str, to_root: &Path, to_dir: &str) -> Result<String, String> {
+    let parts = normalize_rel(from)?;
+    let ext = parts.last().and_then(|n| n.to_str()).and_then(video_ext_of_name).ok_or(NOT_A_VIDEO)?;
+    let source = resolve_in_root(data_root, from)?;
+    let Some((mut file, len)) = open_regular(&source)? else {
+        return Err(NOT_A_VIDEO.into());
+    };
+    let head = read_head(&mut file).map_err(|_| CANNOT_READ.to_string())?;
+    if !sniff_video(&head).is_some_and(|family| family_agrees(family, ext)) {
+        return Err(NOT_A_VIDEO.into());
+    }
+    copy_open_video(file, len, ext, to_root, to_dir)
+}
+
+// --- Adding files by pick, drop or paste (KTD5) ---
+
+/// The one refusal for a dropped or pasted path that was not approved or not matched.
+pub const NOT_ADDABLE: &str = "That file can't be added. Drag it from Finder or use the Video key.";
+
+/// How long a dropped path stays approved.
+pub const DROP_APPROVAL_TTL: std::time::Duration = std::time::Duration::from_secs(120);
+
+/// Paths the person dropped on the window, each approved once for two minutes.
+#[derive(Debug, Default)]
+pub struct DropApprovals {
+    entries: Vec<(PathBuf, std::time::Instant)>,
+}
+
+impl DropApprovals {
+    /// Approves each dropped path once, adding to any earlier drop.
+    pub fn approve(&mut self, paths: &[PathBuf], now: std::time::Instant) {
+        self.prune(now);
+        self.entries.extend(paths.iter().map(|p| (p.clone(), now)));
+    }
+
+    /// Uses up the approval of exactly `path`, compared as given with no normalization,
+    /// and returns the path as it was stored. A dropped folder approves nothing in it.
+    pub fn take(&mut self, path: &str, now: std::time::Instant) -> Option<PathBuf> {
+        self.prune(now);
+        let at = self.entries.iter().position(|(p, _)| p.as_os_str() == std::ffi::OsStr::new(path))?;
+        Some(self.entries.remove(at).0)
+    }
+
+    fn prune(&mut self, now: std::time::Instant) {
+        self.entries.retain(|(_, at)| now.saturating_duration_since(*at) <= DROP_APPROVAL_TTL);
+    }
+}
+
+/// The base name of a path, as the person sees it.
+fn base_name(path: &Path) -> String {
+    path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
+}
+
+/// A file to add: the name the person sees and, when it was approved or matched, the
+/// path Rust will read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Candidate {
+    pub name: String,
+    pub path: Option<PathBuf>,
+}
+
+/// The result for one file: a root-relative path, or a refusal. Exactly one is set.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct AddedFile {
+    pub name: String,
+    pub path: Option<String>,
+    pub error: Option<String>,
+}
+
+/// The dropped paths the page sent, each with its approval taken, in order.
+pub fn take_dropped(approvals: &mut DropApprovals, paths: &[String], now: std::time::Instant) -> Vec<Candidate> {
+    paths
+        .iter()
+        .map(|p| Candidate { name: base_name(Path::new(p)), path: approvals.take(p, now) })
+        .collect()
+}
+
+/// Files the person picked in the dialog, each named by its base name.
+pub fn picked(paths: Vec<PathBuf>) -> Vec<Candidate> {
+    paths.into_iter().map(|p| Candidate { name: base_name(&p), path: Some(p) }).collect()
+}
+
+/// The clipboard paths that match the files the page saw on the paste, by base name
+/// and byte size, in the page's order.
+pub fn match_pasted(clipboard: &[PathBuf], expected: &[(String, u64)]) -> Vec<Candidate> {
+    let mut used = vec![false; clipboard.len()];
+    expected
+        .iter()
+        .map(|(name, size)| {
+            let found = clipboard.iter().zip(used.iter_mut()).find(|(p, used)| {
+                !**used
+                    && p.file_name() == Some(std::ffi::OsStr::new(name))
+                    && std::fs::metadata(p).is_ok_and(|m| m.len() == *size)
+            });
+            let path = found.map(|(p, used)| {
+                *used = true;
+                p.clone()
+            });
+            Candidate { name: name.clone(), path }
+        })
+        .collect()
+}
+
+/// Adds each candidate to `dir` in `root`, in order. One failure never stops the rest.
+pub fn add_files_in(root: &Path, dir: &str, candidates: Vec<Candidate>) -> Vec<AddedFile> {
+    candidates
+        .into_iter()
+        .map(|c| {
+            let result = match &c.path {
+                None => Err(NOT_ADDABLE.to_string()),
+                Some(path) => add_file_in(root, dir, path),
+            };
+            match result {
+                Ok(rel) => AddedFile { name: c.name, path: Some(rel), error: None },
+                Err(e) => AddedFile { name: c.name, path: None, error: Some(e) },
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -1178,5 +1612,573 @@ mod tests {
         assert!(save_image_in(&root, &dir, &png(10)).is_err());
         outer_holds_only_the_root(&outer);
         assert_eq!(fs::read_dir(&root).unwrap().count(), 0);
+    }
+
+    // --- Videos (U1) ---
+
+    /// `len` bytes that start with `head`, padded with zeros.
+    fn with_head(head: &[u8], len: usize) -> Vec<u8> {
+        let mut v = head.to_vec();
+        v.resize(len.max(head.len()), 0);
+        v
+    }
+
+    fn ftyp(brand: &[u8; 4], len: usize) -> Vec<u8> {
+        let mut head = vec![0, 0, 0, 0x14, b'f', b't', b'y', b'p'];
+        head.extend(brand);
+        head.extend([0, 0, 0, 0]);
+        with_head(&head, len)
+    }
+
+    fn atom(kind: &[u8; 4], len: usize) -> Vec<u8> {
+        let mut head = vec![0, 0, 0, 8];
+        head.extend(kind);
+        with_head(&head, len)
+    }
+
+    /// An EBML header with the given DocType, then zeros up to `len`.
+    fn ebml(doc_type: &str, len: usize) -> Vec<u8> {
+        let mut body = vec![0x42, 0x86, 0x81, 0x01, 0x42, 0xF7, 0x81, 0x01, 0x42, 0xF2, 0x81, 0x04, 0x42, 0xF3, 0x81, 0x08];
+        body.extend([0x42, 0x82, 0x80 | doc_type.len() as u8]);
+        body.extend(doc_type.as_bytes());
+        body.extend([0x42, 0x87, 0x81, 0x02, 0x42, 0x85, 0x81, 0x02]);
+        let mut head = vec![0x1A, 0x45, 0xDF, 0xA3, 0x80 | body.len() as u8];
+        head.extend(body);
+        with_head(&head, len)
+    }
+
+    /// A folder outside every root holding source files, as a person's Desktop would.
+    fn sources() -> TempDir {
+        tempfile::tempdir().unwrap()
+    }
+
+    fn source(dir: &TempDir, name: &str, bytes: &[u8]) -> PathBuf {
+        let p = dir.path().join(name);
+        fs::write(&p, bytes).unwrap();
+        p
+    }
+
+    /// Every entry under `dir`, temp files included, as sorted relative paths.
+    fn all_entries(dir: &Path) -> Vec<String> {
+        let mut out = Vec::new();
+        let mut stack = vec![dir.to_path_buf()];
+        while let Some(d) = stack.pop() {
+            for e in fs::read_dir(&d).unwrap() {
+                let e = e.unwrap();
+                let rel = e.path().strip_prefix(dir).unwrap().to_string_lossy().into_owned();
+                if e.file_type().unwrap().is_dir() {
+                    stack.push(e.path());
+                }
+                out.push(rel);
+            }
+        }
+        out.sort();
+        out
+    }
+
+    #[test]
+    fn video_name_rule_matches_the_shared_vectors() {
+        let vectors: serde_json::Value =
+            serde_json::from_str(include_str!("../../src/domain/video-name-vectors.json")).unwrap();
+        let accept = vectors["accept"].as_array().unwrap();
+        let refuse = vectors["refuse"].as_array().unwrap();
+        assert!(!accept.is_empty() && !refuse.is_empty());
+        for name in accept {
+            let name = name.as_str().unwrap();
+            assert!(is_local_video_name(name), "should accept {name:?}");
+        }
+        for name in refuse {
+            let name = name.as_str().unwrap();
+            assert!(!is_local_video_name(name), "should refuse {name:?}");
+        }
+    }
+
+    #[test]
+    fn each_video_family_is_accepted_and_named_by_its_sha256_prefix() {
+        let (_d, root) = root();
+        let src = sources();
+        let cases: [(&str, Vec<u8>, &str); 5] = [
+            ("clip.mp4", ftyp(b"isom", 64), "mp4"),
+            ("phone.mov", ftyp(b"qt  ", 64), "mov"),
+            ("old.mov", atom(b"wide", 64), "mov"),
+            ("film.m4v", ftyp(b"M4V ", 64), "m4v"),
+            ("talk.webm", ebml("webm", 64), "webm"),
+        ];
+        for (name, bytes, ext) in cases {
+            let rel = add_file_in(&root, DIR, &source(&src, name, &bytes)).unwrap();
+            assert_eq!(rel, format!("{DIR}/video-{}.{ext}", hash8(&bytes)), "{name}");
+            assert_eq!(fs::read(root.join(&rel)).unwrap(), bytes, "{name}");
+        }
+        assert_eq!(all_entries(&root.join(DIR)).len(), 5);
+    }
+
+    #[test]
+    fn an_upper_case_extension_is_saved_lower_case() {
+        let (_d, root) = root();
+        let src = sources();
+        let bytes = ftyp(b"qt  ", 40);
+        let rel = add_file_in(&root, "", &source(&src, "Clip 1.MOV", &bytes)).unwrap();
+        assert_eq!(rel, format!("video-{}.mov", hash8(&bytes)));
+    }
+
+    #[test]
+    fn a_mismatched_or_unknown_video_is_refused_and_writes_nothing() {
+        let (_d, root) = root();
+        let src = sources();
+        let cases: [(&str, Vec<u8>); 8] = [
+            ("mkv-inside.webm", ebml("matroska", 64)),
+            ("ftyp-inside.webm", ftyp(b"isom", 64)),
+            ("webm-inside.mp4", ebml("webm", 64)),
+            ("atom-first.mp4", atom(b"wide", 64)),
+            ("clip.mkv", ftyp(b"isom", 64)),
+            ("clip.avi", b"RIFF\0\0\0\0AVI LIST".to_vec()),
+            ("notes.mp4", b"just some text, saved as a video".to_vec()),
+            ("empty.mp4", Vec::new()),
+        ];
+        for (name, bytes) in cases {
+            let err = add_file_in(&root, DIR, &source(&src, name, &bytes)).unwrap_err();
+            assert_eq!(err, UNSUPPORTED_FILE, "{name}");
+        }
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn sniff_never_panics_on_truncated_or_odd_heads() {
+        let webm = ebml("webm", 48);
+        for n in 0..webm.len() {
+            let _ = sniff_video(&webm[..n]);
+        }
+        // An EBML header claiming a size far past the head, and an unknown-size one.
+        for head in [
+            vec![0x1A, 0x45, 0xDF, 0xA3, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x42, 0x82, 0x84],
+            vec![0x1A, 0x45, 0xDF, 0xA3, 0xFF, 0x42, 0x82, 0x84, b'w', b'e', b'b', b'm'],
+            vec![0x1A, 0x45, 0xDF, 0xA3, 0x00],
+            vec![0x1A, 0x45, 0xDF, 0xA3, 0x85, 0x42, 0x82, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF],
+        ] {
+            let _ = sniff_video(&head);
+        }
+        assert_eq!(sniff_video(&ebml("webm", 32)), Some(VideoFamily::Webm));
+        assert_eq!(sniff_video(&ebml("matroska", 32)), None);
+        // An unknown-size header still finds its DocType.
+        assert_eq!(
+            sniff_video(&[0x1A, 0x45, 0xDF, 0xA3, 0xFF, 0x42, 0x82, 0x84, b'w', b'e', b'b', b'm']),
+            Some(VideoFamily::Webm)
+        );
+        // A NUL-padded DocType is still webm.
+        assert_eq!(sniff_video(&ebml("webm\0\0", 32)), Some(VideoFamily::Webm));
+        assert_eq!(sniff_video(&ftyp(b"isom", 8)), Some(VideoFamily::Ftyp));
+        assert_eq!(sniff_video(&ftyp(b"isom", 7)[..7]), None);
+        assert_eq!(sniff_video(&atom(b"moov", 8)), Some(VideoFamily::QuickTimeAtom));
+        assert_eq!(sniff_video(&atom(b"junk", 8)), None);
+    }
+
+    #[test]
+    fn the_video_cap_is_100_mib_inclusive() {
+        assert_eq!(MAX_VIDEO_BYTES, 100 * 1024 * 1024);
+        let (_d, root) = root();
+        let src = sources();
+
+        // One byte over, sparse: refused from its size before anything is written.
+        let big = source(&src, "big.mp4", &ftyp(b"isom", 32));
+        fs::File::options().write(true).open(&big).unwrap().set_len(MAX_VIDEO_BYTES + 1).unwrap();
+        assert_eq!(add_file_in(&root, DIR, &big).unwrap_err(), VIDEO_TOO_LARGE);
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 0);
+
+        // Exactly the cap is copied whole.
+        let at_cap = source(&src, "cap.mp4", &ftyp(b"isom", 32));
+        fs::File::options().write(true).open(&at_cap).unwrap().set_len(MAX_VIDEO_BYTES).unwrap();
+        let rel = add_file_in(&root, DIR, &at_cap).unwrap();
+        assert_eq!(fs::metadata(root.join(&rel)).unwrap().len(), MAX_VIDEO_BYTES);
+        assert_eq!(all_entries(&root.join(DIR)), vec![rel.rsplit('/').next().unwrap().to_string()]);
+    }
+
+    #[test]
+    fn a_source_that_grows_past_the_cap_while_streaming_is_refused_and_its_temp_removed() {
+        let dir = tempfile::tempdir().unwrap();
+        // The reader yields one byte more than the cap, as a file growing during the copy would.
+        let err = stream_to_temp(std::io::Cursor::new(vec![7u8; 17]), dir.path(), 16).unwrap_err();
+        assert_eq!(err, VIDEO_TOO_LARGE);
+        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 0);
+
+        // At the cap it streams into one temp file carrying the marker, hashed as it went.
+        let bytes = vec![7u8; 16];
+        let (temp, hash) = stream_to_temp(std::io::Cursor::new(bytes.clone()), dir.path(), 16).unwrap();
+        assert_eq!(hash, hash8(&bytes));
+        assert_eq!(temp.parent(), Some(dir.path()));
+        assert!(temp.file_name().unwrap().to_string_lossy().contains(TEMP_MARKER));
+        assert_eq!(fs::read(&temp).unwrap(), bytes);
+    }
+
+    #[test]
+    fn the_same_video_twice_returns_the_same_path_and_leaves_the_file() {
+        let (_d, root) = root();
+        let src = sources();
+        let bytes = ftyp(b"isom", 500);
+        let first = add_file_in(&root, DIR, &source(&src, "a.mp4", &bytes)).unwrap();
+        let before = fs::symlink_metadata(root.join(&first)).unwrap();
+        // Another name, same bytes.
+        let second = add_file_in(&root, DIR, &source(&src, "b.MP4", &bytes)).unwrap();
+        assert_eq!(second, first);
+        let after = fs::symlink_metadata(root.join(&first)).unwrap();
+        assert_eq!(after.modified().unwrap(), before.modified().unwrap());
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            assert_eq!(after.ino(), before.ino());
+        }
+        // No temp file is left.
+        assert_eq!(all_entries(&root.join(DIR)), vec![first.rsplit('/').next().unwrap().to_string()]);
+    }
+
+    #[test]
+    fn a_different_file_or_a_folder_at_the_name_is_refused_and_left() {
+        let (_d, root) = root();
+        let src = sources();
+        let bytes = ftyp(b"isom", 64);
+        let name = format!("video-{}.mp4", hash8(&bytes));
+        let at_name = root.join(DIR).join(&name);
+        fs::create_dir_all(root.join(DIR)).unwrap();
+        let from = source(&src, "clip.mp4", &bytes);
+
+        // Same length, different bytes: only the byte comparison can tell them apart.
+        let mut same_len = bytes.clone();
+        *same_len.last_mut().unwrap() = 1;
+        fs::write(&at_name, &same_len).unwrap();
+        assert_eq!(add_file_in(&root, DIR, &from).unwrap_err(), format!("A different file is already named {name}."));
+        assert_eq!(fs::read(&at_name).unwrap(), same_len);
+
+        fs::write(&at_name, b"short").unwrap();
+        assert_eq!(add_file_in(&root, DIR, &from).unwrap_err(), format!("A different file is already named {name}."));
+        assert_eq!(fs::read(&at_name).unwrap(), b"short");
+
+        fs::remove_file(&at_name).unwrap();
+        fs::create_dir(&at_name).unwrap();
+        assert!(add_file_in(&root, DIR, &from).is_err());
+        assert!(at_name.is_dir());
+        assert_eq!(fs::read_dir(&at_name).unwrap().count(), 0);
+        // Only the folder is there: no temp file was left by any refusal.
+        assert_eq!(all_entries(&root.join(DIR)), vec![name]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_at_the_name_is_refused_and_its_target_left() {
+        use std::os::unix::fs::symlink;
+        let (_d, root) = root();
+        let src = sources();
+        let bytes = ftyp(b"isom", 64);
+        let name = format!("video-{}.mp4", hash8(&bytes));
+        write_text_in(&root, &format!("{DIR}/foo.md"), "foo").unwrap();
+        symlink(root.join(DIR).join("foo.md"), root.join(DIR).join(&name)).unwrap();
+        assert!(add_file_in(&root, DIR, &source(&src, "clip.mp4", &bytes)).is_err());
+        assert_eq!(fs::read_to_string(root.join(DIR).join("foo.md")).unwrap(), "foo");
+        assert!(fs::symlink_metadata(root.join(DIR).join(&name)).unwrap().file_type().is_symlink());
+
+        // A link to a file holding the very same bytes is refused too.
+        copy_bytes_into_root(&root, "other/same.mp4", &bytes).unwrap();
+        symlink("same.mp4", root.join("other").join(&name)).unwrap();
+        assert!(add_file_in(&root, "other", &source(&src, "clip2.mp4", &bytes)).is_err());
+        assert!(fs::symlink_metadata(root.join("other").join(&name)).unwrap().file_type().is_symlink());
+        assert_eq!(all_entries(&root.join("other")).len(), 2);
+    }
+
+    #[test]
+    fn a_video_folder_that_leaves_the_root_is_refused() {
+        let (outer, root) = nested_root();
+        let src = sources();
+        let from = source(&src, "clip.mp4", &ftyp(b"isom", 64));
+        for dir in ["..", "../out", "a/../..", "collections/../../out", "/"] {
+            assert!(add_file_in(&root, dir, &from).is_err(), "dir {dir:?}");
+        }
+        let abs = outer.path().join("abs");
+        assert!(add_file_in(&root, abs.to_str().unwrap(), &from).is_err());
+        assert!(add_file_in(&root, root.join("inside").to_str().unwrap(), &from).is_err());
+        outer_holds_only_the_root(&outer);
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 0);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_video_folder_reached_through_a_link_that_leaves_the_root_is_refused() {
+        use std::os::unix::fs::symlink;
+        let (_d, root) = root();
+        let outside = tempfile::tempdir().unwrap();
+        symlink(outside.path(), root.join("link")).unwrap();
+        let src = sources();
+        let from = source(&src, "clip.mp4", &ftyp(b"isom", 64));
+        assert!(add_file_in(&root, "link", &from).is_err());
+        assert!(add_file_in(&root, "link/deeper", &from).is_err());
+        assert_eq!(fs::read_dir(outside.path()).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn copy_video_in_copies_from_data_into_a_folder_of_export() {
+        let (_d, data) = root();
+        let (_e, export) = root();
+        let mov = ftyp(b"qt  ", 80);
+        copy_bytes_into_root(&data, "collections/c/credentials/video-x.mov", &mov).unwrap();
+        let rel = copy_video_in(&data, "collections/c/credentials/video-x.mov", &export, "c/101/assets").unwrap();
+        assert_eq!(rel, format!("c/101/assets/video-{}.mov", hash8(&mov)));
+        assert_eq!(fs::read(export.join(&rel)).unwrap(), mov);
+        assert_eq!(all_entries(&export), vec!["c", "c/101", "c/101/assets", rel.as_str()]);
+
+        // A hand-placed video comes back under its content-addressed name.
+        let mp4 = ftyp(b"isom", 90);
+        copy_bytes_into_root(&data, "collections/c/credentials/talk.mp4", &mp4).unwrap();
+        let rel = copy_video_in(&data, "collections/c/credentials/talk.mp4", &data, "collections/c/assessments").unwrap();
+        assert_eq!(rel, format!("collections/c/assessments/video-{}.mp4", hash8(&mp4)));
+        assert_eq!(fs::read(data.join(&rel)).unwrap(), mp4);
+
+        // Not a video by content or by name.
+        copy_bytes_into_root(&data, "notes.mp4", b"text pretending").unwrap();
+        assert_eq!(copy_video_in(&data, "notes.mp4", &export, "x").unwrap_err(), NOT_A_VIDEO);
+        copy_bytes_into_root(&data, "pic.png", &png(40)).unwrap();
+        assert_eq!(copy_video_in(&data, "pic.png", &export, "x").unwrap_err(), NOT_A_VIDEO);
+        assert!(!export.join("x").exists());
+    }
+
+    #[test]
+    fn copy_video_in_refuses_a_source_outside_the_data_root() {
+        let (outer, data) = nested_root();
+        let (_e, export) = root();
+        let mov = ftyp(b"qt  ", 80);
+        fs::write(outer.path().join("outside.mov"), &mov).unwrap();
+        assert!(copy_video_in(&data, "../outside.mov", &export, "c").is_err());
+        let abs = outer.path().join("outside.mov");
+        assert!(copy_video_in(&data, abs.to_str().unwrap(), &export, "c").is_err());
+        assert_eq!(fs::read_dir(&export).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn a_picture_added_by_path_follows_the_pasted_image_rules() {
+        let (_d, root) = root();
+        let src = sources();
+        let p = png(300);
+        // The content decides, not the name.
+        let rel = add_file_in(&root, DIR, &source(&src, "shot.png", &p)).unwrap();
+        assert_eq!(rel, format!("{DIR}/image-{}.png", hash8(&p)));
+        assert_eq!(fs::read(root.join(&rel)).unwrap(), p);
+        let j = jpeg(300);
+        let rel = add_file_in(&root, DIR, &source(&src, "photo.JPG", &j)).unwrap();
+        assert_eq!(rel, format!("{DIR}/image-{}.jpg", hash8(&j)));
+
+        let big = source(&src, "big.png", &png(MAX_PASTED_IMAGE_BYTES + 1));
+        assert_eq!(add_file_in(&root, DIR, &big).unwrap_err(), "That image is larger than 10 MB.");
+        assert_eq!(all_entries(&root.join(DIR)).len(), 2);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_fifo_at_the_source_is_refused_promptly() {
+        let (_d, root) = root();
+        let src = sources();
+        let fifo = src.path().join("clip.mov");
+        let made = std::process::Command::new("mkfifo").arg(&fifo).status().unwrap();
+        assert!(made.success());
+        let (tx, rx) = std::sync::mpsc::channel();
+        let root2 = root.clone();
+        std::thread::spawn(move || {
+            let _ = tx.send(add_file_in(&root2, DIR, &fifo));
+        });
+        let result = rx.recv_timeout(std::time::Duration::from_secs(5)).expect("the add blocked on a FIFO");
+        assert_eq!(result.unwrap_err(), UNSUPPORTED_FILE);
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn a_missing_source_or_a_folder_is_refused_without_its_path() {
+        let (_d, root) = root();
+        let src = sources();
+        let missing = src.path().join("gone.mov");
+        let err = add_file_in(&root, DIR, &missing).unwrap_err();
+        assert_eq!(err, CANNOT_READ);
+        let folder = src.path().join("clips.mov");
+        fs::create_dir(&folder).unwrap();
+        assert_eq!(add_file_in(&root, DIR, &folder).unwrap_err(), UNSUPPORTED_FILE);
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 0);
+    }
+
+    // --- Adding files by pick, drop or paste (U3) ---
+
+    use std::time::{Duration, Instant};
+
+    fn later(now: Instant, secs: u64) -> Instant {
+        now.checked_add(Duration::from_secs(secs)).unwrap()
+    }
+
+    fn path_str(p: &Path) -> String {
+        p.to_str().unwrap().to_string()
+    }
+
+    #[test]
+    fn an_approved_path_is_taken_once_and_an_unapproved_one_never() {
+        let now = Instant::now();
+        let mut approvals = DropApprovals::default();
+        approvals.approve(&[PathBuf::from("/d/clip.mov")], now);
+        assert_eq!(approvals.take("/d/clip.mov", now), Some(PathBuf::from("/d/clip.mov")));
+        assert_eq!(approvals.take("/d/clip.mov", now), None);
+        assert_eq!(approvals.take("/never/approved.mov", now), None);
+    }
+
+    #[test]
+    fn an_approval_lasts_two_minutes() {
+        let now = Instant::now();
+        let mut approvals = DropApprovals::default();
+        approvals.approve(&[PathBuf::from("/d/a.mov"), PathBuf::from("/d/b.mov")], now);
+        assert_eq!(approvals.take("/d/a.mov", later(now, 120)), Some(PathBuf::from("/d/a.mov")));
+        assert_eq!(approvals.take("/d/b.mov", later(now, 121)), None);
+        // An expired approval is gone, not merely skipped.
+        assert_eq!(approvals.take("/d/b.mov", now), None);
+    }
+
+    #[test]
+    fn a_second_drop_adds_to_the_first() {
+        let now = Instant::now();
+        let mut approvals = DropApprovals::default();
+        approvals.approve(&[PathBuf::from("/d/a.mov")], now);
+        approvals.approve(&[PathBuf::from("/d/b.mov")], later(now, 5));
+        assert!(approvals.take("/d/a.mov", later(now, 6)).is_some());
+        assert!(approvals.take("/d/b.mov", later(now, 6)).is_some());
+        // The same file dropped twice can be added twice.
+        approvals.approve(&[PathBuf::from("/d/a.mov")], now);
+        approvals.approve(&[PathBuf::from("/d/a.mov")], now);
+        assert!(approvals.take("/d/a.mov", now).is_some());
+        assert!(approvals.take("/d/a.mov", now).is_some());
+        assert!(approvals.take("/d/a.mov", now).is_none());
+    }
+
+    #[test]
+    fn a_dropped_folder_approves_nothing_inside_it() {
+        let now = Instant::now();
+        let mut approvals = DropApprovals::default();
+        approvals.approve(&[PathBuf::from("/d")], now);
+        for other in ["/d/clip.mov", "/d/", "/d/.", "/D", "d", "/d/../d"] {
+            assert_eq!(approvals.take(other, now), None, "{other:?}");
+        }
+        assert!(approvals.take("/d", now).is_some());
+    }
+
+    #[test]
+    fn unapproved_missing_and_existing_paths_get_identical_refusals() {
+        let (_d, root) = root();
+        let src = sources();
+        let existing = source(&src, "clip.mov", &ftyp(b"qt  ", 64));
+        fs::create_dir(src.path().join("gone")).unwrap();
+        let missing = src.path().join("gone").join("clip.mov");
+        let mut approvals = DropApprovals::default();
+        let now = Instant::now();
+        let results = add_files_in(
+            &root,
+            DIR,
+            take_dropped(&mut approvals, &[path_str(&existing), path_str(&missing)], now),
+        );
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0], results[1]);
+        assert_eq!(
+            serde_json::to_string(&results[0]).unwrap(),
+            serde_json::to_string(&results[1]).unwrap()
+        );
+        assert_eq!(results[0].error.as_deref(), Some(NOT_ADDABLE));
+        assert_eq!(results[0].name, "clip.mov");
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn dropped_files_are_sorted_by_content_in_order() {
+        let (_d, root) = root();
+        let src = sources();
+        let mov = ftyp(b"qt  ", 64);
+        let p = png(64);
+        let paths = [
+            source(&src, "Clip.MOV", &mov),
+            source(&src, "shot.png", &p),
+            source(&src, "notes.txt", b"plain notes"),
+            src.path().join("clips"),
+        ];
+        fs::create_dir(&paths[3]).unwrap();
+        let now = Instant::now();
+        let mut approvals = DropApprovals::default();
+        approvals.approve(&paths, now);
+        let sent: Vec<String> = paths.iter().map(|p| path_str(p)).collect();
+        let results = add_files_in(&root, DIR, take_dropped(&mut approvals, &sent, now));
+        let saved = |name: &str, path: String| AddedFile { name: name.into(), path: Some(path), error: None };
+        let refused = |name: &str, error: &str| AddedFile { name: name.into(), path: None, error: Some(error.into()) };
+        assert_eq!(
+            results,
+            vec![
+                saved("Clip.MOV", format!("{DIR}/video-{}.mov", hash8(&mov))),
+                saved("shot.png", format!("{DIR}/image-{}.png", hash8(&p))),
+                refused("notes.txt", UNSUPPORTED_FILE),
+                refused("clips", UNSUPPORTED_FILE),
+            ]
+        );
+        // Each approval was used up.
+        assert!(sent.iter().all(|s| approvals.take(s, now).is_none()));
+    }
+
+    #[test]
+    fn a_paste_copies_only_the_clipboard_files_that_match_by_name_and_size() {
+        let (_d, root) = root();
+        let src = sources();
+        let a = ftyp(b"qt  ", 40);
+        let b = ftyp(b"qt  ", 56);
+        let clipboard = [source(&src, "a.mov", &a), source(&src, "b.mov", &b)];
+
+        let matched = match_pasted(&clipboard, &[("a.mov".into(), 40)]);
+        assert_eq!(matched, vec![Candidate { name: "a.mov".into(), path: Some(clipboard[0].clone()) }]);
+        let results = add_files_in(&root, DIR, matched);
+        assert_eq!(results[0].path.as_deref(), Some(format!("{DIR}/video-{}.mov", hash8(&a)).as_str()));
+        assert_eq!(all_entries(&root.join(DIR)), vec![format!("video-{}.mov", hash8(&a))]);
+
+        // A size that does not match copies nothing and never names a clipboard path.
+        let matched = match_pasted(&clipboard, &[("a.mov".into(), 41), ("b.mov".into(), 40), ("c.mov".into(), 40)]);
+        assert!(matched.iter().all(|c| c.path.is_none()));
+        let results = add_files_in(&root, DIR, matched);
+        let src_text = path_str(src.path());
+        for r in &results {
+            assert_eq!(r.error.as_deref(), Some(NOT_ADDABLE));
+            assert!(!serde_json::to_string(r).unwrap().contains(&src_text));
+        }
+        assert_eq!(all_entries(&root.join(DIR)).len(), 1);
+    }
+
+    #[test]
+    fn each_expected_paste_matches_at_most_one_clipboard_file() {
+        let src = sources();
+        let other = sources();
+        let bytes = ftyp(b"qt  ", 40);
+        let one = source(&src, "a.mov", &bytes);
+        let two = source(&other, "a.mov", &bytes);
+        let expected = [("a.mov".to_string(), 40), ("a.mov".to_string(), 40)];
+        let matched = match_pasted(std::slice::from_ref(&one), &expected);
+        assert_eq!(matched[0].path.as_ref(), Some(&one));
+        assert_eq!(matched[1].path, None);
+        let matched = match_pasted(&[one.clone(), two.clone()], &expected);
+        assert_eq!(matched.iter().map(|c| c.path.clone()).collect::<Vec<_>>(), vec![Some(one.clone()), Some(two)]);
+        // Only the base name counts, never a folder in it.
+        assert_eq!(match_pasted(&[one], &[("src/a.mov".into(), 40)])[0].path, None);
+    }
+
+    #[test]
+    fn a_picked_file_is_named_by_its_base_name() {
+        let picked = picked(vec![PathBuf::from("/Users/me/Movies/Clip 1.MOV")]);
+        assert_eq!(
+            picked,
+            vec![Candidate { name: "Clip 1.MOV".into(), path: Some(PathBuf::from("/Users/me/Movies/Clip 1.MOV")) }]
+        );
+    }
+
+    #[test]
+    fn an_added_file_serializes_to_the_contract_shape() {
+        let saved = AddedFile { name: "a.mov".into(), path: Some("d/video-1a2b3c4d.mov".into()), error: None };
+        assert_eq!(
+            serde_json::to_value(&saved).unwrap(),
+            serde_json::json!({ "name": "a.mov", "path": "d/video-1a2b3c4d.mov", "error": null })
+        );
+        let refused = AddedFile { name: "a.txt".into(), path: None, error: Some(UNSUPPORTED_FILE.into()) };
+        assert_eq!(
+            serde_json::to_value(&refused).unwrap(),
+            serde_json::json!({ "name": "a.txt", "path": null, "error": UNSUPPORTED_FILE })
+        );
     }
 }

@@ -1,6 +1,7 @@
 mod context;
 mod files;
 mod jev;
+mod media;
 mod settings;
 
 use std::path::PathBuf;
@@ -21,6 +22,9 @@ struct AppState {
     /// Looked up on the first copy, not at launch, since it spawns a process.
     machine_name: std::sync::OnceLock<String>,
     home: Option<PathBuf>,
+    /// Paths dropped on the window, approved for `add_files` (KTD5). Written only by the
+    /// window event handler in `run`, never by a listener on the event bus.
+    drops: Mutex<files::DropApprovals>,
 }
 
 /// The context a test starts with. Only the memory digest leaves `context`.
@@ -170,6 +174,135 @@ async fn import_badge_art(
     Ok(Some(rel))
 }
 
+/// Where `add_files` gets its files (KTD5).
+#[derive(serde::Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+enum AddFrom {
+    /// Rust shows a video picker.
+    Pick,
+    /// Paths the page got from the drop event, each checked against the approvals.
+    Drop { paths: Vec<String> },
+    /// The files the page saw on a paste, matched against the clipboard's file list.
+    Paste { files: Vec<PastedFile> },
+}
+
+#[derive(serde::Deserialize)]
+struct PastedFile {
+    name: String,
+    size: u64,
+}
+
+/// Runs file work on a blocking thread, so a slow volume never ties up the async workers.
+async fn blocking<T: Send + 'static>(work: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String> {
+    tauri::async_runtime::spawn_blocking(work)
+        .await
+        .unwrap_or_else(|_| Err("The copy stopped before it finished.".into()))
+}
+
+/// The paths of the files on the clipboard, as Finder puts them there on a copy.
+#[cfg(desktop)]
+fn clipboard_files() -> Vec<PathBuf> {
+    arboard::Clipboard::new().and_then(|mut c| c.get().file_list()).unwrap_or_default()
+}
+
+#[cfg(not(desktop))]
+fn clipboard_files() -> Vec<PathBuf> {
+    Vec::new()
+}
+
+/// The pick filter. GTK matches extensions by case, so both cases are listed.
+const VIDEO_PICK_EXTENSIONS: [&str; 8] = ["mp4", "m4v", "mov", "webm", "MP4", "M4V", "MOV", "WEBM"];
+
+/// Adds files to `dir` in the data root by pick, drop or paste (KTD5), copied by Rust
+/// from each file's path so no bytes cross IPC. Returns one result per file, in order.
+/// A dropped or pasted path is checked against the approvals or the clipboard before
+/// anything reads it.
+#[tauri::command]
+async fn add_files(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    dir: String,
+    from: AddFrom,
+) -> Result<Vec<files::AddedFile>, String> {
+    let root = state.root("data")?;
+    let candidates = match from {
+        AddFrom::Pick => {
+            let picked = app
+                .dialog()
+                .file()
+                .add_filter("Videos", &VIDEO_PICK_EXTENSIONS)
+                .blocking_pick_files();
+            let Some(picked) = picked else {
+                return Ok(Vec::new());
+            };
+            files::picked(picked.into_iter().filter_map(|fp| fp.into_path().ok()).collect())
+        }
+        AddFrom::Drop { paths } => {
+            let mut approvals = state.drops.lock().map_err(|e| e.to_string())?;
+            files::take_dropped(&mut approvals, &paths, std::time::Instant::now())
+        }
+        AddFrom::Paste { files: expected } => {
+            let expected: Vec<(String, u64)> = expected.into_iter().map(|f| (f.name, f.size)).collect();
+            blocking(move || Ok(files::match_pasted(&clipboard_files(), &expected))).await?
+        }
+    };
+    blocking(move || Ok(files::add_files_in(&root, &dir, candidates))).await
+}
+
+/// Copies a video from the data root into a folder of the data or export root under its
+/// content-addressed name (KTD7). Returns the target's root-relative path.
+#[tauri::command]
+async fn copy_video(
+    state: State<'_, AppState>,
+    from: String,
+    to_root: String,
+    to_dir: String,
+) -> Result<String, String> {
+    let data = state.root("data")?;
+    let target = state.root(&to_root)?;
+    blocking(move || files::copy_video_in(&data, &from, &target, &to_dir)).await
+}
+
+/// Turns a scheme reply into a response. A reply that cannot be built is an empty 500.
+fn media_response(reply: media::Reply) -> tauri::http::Response<Vec<u8>> {
+    let mut builder = tauri::http::Response::builder().status(reply.status);
+    for (name, value) in &reply.headers {
+        builder = builder.header(*name, value.as_str());
+    }
+    builder.body(reply.body).unwrap_or_else(|_| {
+        let mut empty = tauri::http::Response::new(Vec::new());
+        *empty.status_mut() = tauri::http::StatusCode::INTERNAL_SERVER_ERROR;
+        empty
+    })
+}
+
+/// Answers a `media` request on a blocking thread (KTD3). The data root is looked up per
+/// request, so a new data folder takes effect at once. On macOS the response is handed
+/// back on the main thread, which closes wry#1822's race with WebKit stopping the task.
+fn serve_media(app: AppHandle, request: tauri::http::Request<Vec<u8>>, responder: tauri::UriSchemeResponder) {
+    let text = |name: tauri::http::header::HeaderName| {
+        request.headers().get(name).map(|v| String::from_utf8_lossy(v.as_bytes()).into_owned())
+    };
+    let range = text(tauri::http::header::RANGE);
+    let origin = text(tauri::http::header::ORIGIN);
+    let method = request.method().as_str().to_string();
+    let path = request.uri().path().to_string();
+    tauri::async_runtime::spawn_blocking(move || {
+        let root = app.try_state::<AppState>().and_then(|s| s.root("data").ok());
+        let reply = media::respond(
+            root.as_deref(),
+            &media::Request { method: &method, path: &path, range: range.as_deref(), origin: origin.as_deref() },
+        );
+        let response = media_response(reply);
+        #[cfg(target_os = "macos")]
+        {
+            let _ = app.run_on_main_thread(move || responder.respond(response));
+        }
+        #[cfg(not(target_os = "macos"))]
+        responder.respond(response);
+    });
+}
+
 #[tauri::command]
 async fn read_data_uri(state: State<'_, AppState>, root: String, path: String) -> Result<Option<String>, String> {
     files::read_data_uri_in(&state.root(&root)?, &path)
@@ -274,6 +407,20 @@ pub fn run() {
         )
     };
     builder
+        // Videos play through this scheme, confined to the data folder (KTD3).
+        .register_asynchronous_uri_scheme_protocol("media", |ctx, request, responder| {
+            serve_media(ctx.app_handle().clone(), request, responder)
+        })
+        // A drop approves its paths here, synchronously, before the page hears of it (KTD5).
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
+                if let Some(state) = window.try_state::<AppState>() {
+                    if let Ok(mut drops) = state.drops.lock() {
+                        drops.approve(paths, std::time::Instant::now());
+                    }
+                }
+            }
+        })
         .setup(|app| {
             let settings_path = app.path().app_config_dir()?.join(settings::FILE_NAME);
             let mut saved = settings::load(&settings_path);
@@ -289,6 +436,7 @@ pub fn run() {
                 machine_id,
                 machine_name: std::sync::OnceLock::new(),
                 home: app.path().home_dir().ok(),
+                drops: Mutex::new(files::DropApprovals::default()),
             });
             Ok(())
         })
@@ -303,6 +451,8 @@ pub fn run() {
             import_badge_art,
             read_data_uri,
             save_image,
+            add_files,
+            copy_video,
             read_context,
             jev_status,
             jev_set_key,
@@ -312,4 +462,70 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// This file's source above its tests.
+    fn app_source() -> &'static str {
+        let src = include_str!("lib.rs");
+        let end = ["\n#[cfg(test)]", "\n#[cfg(all(test"].iter().filter_map(|m| src.find(m)).min();
+        &src[..end.unwrap()]
+    }
+
+    #[test]
+    fn approvals_come_only_from_the_window_event() {
+        let src = app_source();
+        // One approve call, inside the window event handler, for a Drop only.
+        assert_eq!(src.matches(".approve(").count(), 1);
+        let handler = src.find(".on_window_event(").expect("a window event handler");
+        let approve = src.find(".approve(").unwrap();
+        assert!(handler < approve);
+        let between = &src[handler..approve];
+        assert!(between.contains("DragDropEvent::Drop"), "{between}");
+        assert!(!between.contains("Enter"), "{between}");
+        // Nothing listens on the event bus, where page script can emit `tauri://drag-drop` itself.
+        assert!(!src.contains(".listen"));
+        assert!(!src.contains(".once"));
+        assert!(!src.contains("tauri://drag-drop"));
+    }
+
+    #[test]
+    fn add_from_reads_the_three_shapes_of_the_contract() {
+        let pick: AddFrom = serde_json::from_value(serde_json::json!({ "kind": "pick" })).unwrap();
+        assert!(matches!(pick, AddFrom::Pick));
+        let drop: AddFrom =
+            serde_json::from_value(serde_json::json!({ "kind": "drop", "paths": ["/d/a.mov", "/d/b.png"] })).unwrap();
+        assert!(matches!(drop, AddFrom::Drop { paths } if paths == ["/d/a.mov", "/d/b.png"]));
+        let paste: AddFrom = serde_json::from_value(
+            serde_json::json!({ "kind": "paste", "files": [{ "name": "a.mov", "size": 5 }] }),
+        )
+        .unwrap();
+        assert!(matches!(paste, AddFrom::Paste { files } if files.len() == 1 && files[0].name == "a.mov" && files[0].size == 5));
+        for bad in [
+            serde_json::json!({ "kind": "Pick" }),
+            serde_json::json!({ "kind": "drop" }),
+            serde_json::json!({ "kind": "paste", "files": [{ "name": "a.mov", "size": -1 }] }),
+            serde_json::json!({ "kind": "path", "path": "/etc/hosts" }),
+        ] {
+            assert!(serde_json::from_value::<AddFrom>(bad.clone()).is_err(), "{bad}");
+        }
+    }
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod clipboard_check {
+    /// The paste stop condition (KTD5): a file copied in Finder reaches arboard as a path.
+    /// Run by hand after `osascript -e 'set the clipboard to (POSIX file "<path>")'`, with
+    /// that path in `CLIP_CHECK_PATH`. It reads the real clipboard, so it is ignored by default.
+    #[test]
+    #[ignore = "reads the real clipboard"]
+    fn arboard_reads_a_copied_file_reference() {
+        let expected = std::env::var("CLIP_CHECK_PATH").expect("set CLIP_CHECK_PATH");
+        let list = arboard::Clipboard::new().unwrap().get().file_list().unwrap();
+        println!("file_list: {list:?}");
+        assert!(list.iter().any(|p| p == std::path::Path::new(&expected)), "{list:?}");
+    }
 }
