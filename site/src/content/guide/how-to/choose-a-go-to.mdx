@@ -1,0 +1,42 @@
+---
+title: Choose a go-to
+part: how-to
+order: 55
+description: Mark the agent you'll use for a badge, so home names it when that work comes up.
+---
+
+{/* How to, the go-to (R11): choosing it after a Met and on a badge's page, and reading it on home. Labels are checked against src/ui/TestDeck.tsx, src/ui/BadgeDetail.tsx and src/ui/format.ts (KTD8, KTD9). */}
+
+When several agents hold a badge, home shows who can do the work, not who you use. Your go-to is the agent you chose for the badge. Home names it, so the next time that work comes up you don't have to guess.
+
+## After a Met
+
+When you record <UI>Met</UI>, the screen waits for you.
+
+<Shot id="go-to-offer" alt="Claude Code holds it: the agent with a key lit for each badge it holds, and below it Home and Make Claude Code the go-to" />
+
+- Click <UI>Make \{agent\} the go-to</UI> to choose this agent for the badge. When it already is the go-to, the button reads <UI>Keep \{agent\} as the go-to</UI>, and clicking it records that you chose it again.
+- Click <UI>Home</UI>, or press Escape, to leave without choosing. After a test held up by a pulled handoff, that button reads <UI>Hand over \{badge\}</UI> and goes back to that test.
+
+## From the badge's page
+
+Open a badge from home. Under <UI>Holders</UI>, the go-to's row says <UI>Go-to</UI>, and every other holder has <UI>Make go-to</UI> under its row.
+
+<Shot id="go-to-badge" alt="Check an answer key's Holders: Codex, Met, with Make go-to under its row" />
+
+Click <UI>Make go-to</UI> under the agent you want. It makes that agent's latest result your choice.
+
+## On home
+
+A badge with a go-to names it under its holders: <UI>Go-to: \{agent\}</UI>.
+
+The go-to stays yours until you choose another agent. Two things flag it, and the line adds a few words:
+
+- <UI>not met</UI>: its latest result on the badge is Not yet, so it no longer holds the badge. The badge's page shows it under the holders.
+- <UI>setup changed</UI>: the harness, model or effort in the agent's file no longer matches its latest result.
+
+A later Met from the same agent clears the flag. While the agent is in the trash, the badge has no go-to. Moving its files back brings it back.
+
+## Every choice stays
+
+Each choice, even the same agent again, is saved as a small file in your folder, and the newest one decides. [Your data](/help/your-data/) shows where they live.

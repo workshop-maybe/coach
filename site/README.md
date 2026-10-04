@@ -71,7 +71,7 @@ Screenshots are data in `src/shots/shots.ts`. Each one opens the real app in a d
 4. Use it on its page with `<Shot id="<id>" alt="…" />`.
 
 Things that make a shot misbehave:
-- After a step that waits on a timer, such as the 1400 ms landing after Met, end with a `waitFor`.
+- After a step that waits on a timer, such as the 700 ms the dots run after Copy, end with a `waitFor`.
 - A screen that focuses its heading as it opens undoes a `scroll` step. Wait for something that appears only after the data loads, then scroll.
 - Sample text pasted in a step must not look like a path or a key: the seed tests reject `/Users/`, `~/` and runs of 20 or more letters and digits.
 
