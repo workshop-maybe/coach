@@ -27,10 +27,10 @@ import { parse as parseYaml } from "yaml";
 import { SHOTS } from "../../src/shots/shots";
 import { filesUnder } from "../../src/test/files";
 import { PART_IDS, pageHref } from "../src/parts";
+import { guidePages } from "./guidePages";
 
 const ROOT = join(__dirname, "..", "..");
 const SITE = join(ROOT, "site");
-const GUIDE = join(SITE, "src", "content", "guide");
 const PUBLIC = join(SITE, "public");
 const SHOTS_DIR = join(PUBLIC, "shots");
 /** Where the app's labels live (KTD8). */
@@ -260,13 +260,6 @@ export function shotProblems(shots: readonly { id: string; page: string }[], pag
     if (!ids.has(file.replace(/\.png$/, ""))) out.push(`site/public/shots/${file}: no entry in src/shots/shots.ts`);
   }
   return out;
-}
-
-/** The guide's pages as the collection reads them: each .md or .mdx file under content/guide. */
-function guidePages(): Page[] {
-  return filesUnder(GUIDE)
-    .filter((f) => /\.mdx?$/.test(f))
-    .map((f) => ({ id: relative(GUIDE, f).replace(/\.mdx?$/, "").split("\\").join("/"), text: readFileSync(f, "utf8") }));
 }
 
 function pictures(): string[] {

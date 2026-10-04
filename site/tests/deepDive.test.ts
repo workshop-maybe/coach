@@ -19,17 +19,10 @@ import { parse as parseYaml } from "yaml";
 import { filesUnder } from "../../src/test/files";
 import { MAX_EXCERPT_LINES, excerpt, excerptFromText, forbiddenIn, repoRoot } from "../src/deep-dive/excerpt";
 import { buildExamples } from "../src/deep-dive/examples";
+import { guidePages } from "./guidePages";
 
 const ROOT = join(__dirname, "..", "..");
-const GUIDE = join(ROOT, "site", "src", "content", "guide");
 const EXAMPLES = join(ROOT, "site", "src", "deep-dive", "examples");
-
-/** The guide's pages, as the content check reads them. */
-function guidePages(): { id: string; text: string }[] {
-  return filesUnder(GUIDE)
-    .filter((f) => /\.mdx?$/.test(f))
-    .map((f) => ({ id: relative(GUIDE, f).replace(/\.mdx?$/, "").split("\\").join("/"), text: readFileSync(f, "utf8") }));
-}
 
 /** One attribute's value from a component tag's attribute text. */
 const attr = (attrs: string, name: string) => new RegExp(`\\b${name}\\s*=\\s*"([^"]*)"`).exec(attrs)?.[1];
@@ -38,12 +31,12 @@ const attr = (attrs: string, name: string) => new RegExp(`\\b${name}\\s*=\\s*"([
 const withoutComments = (text: string) => text.replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
 
 /** Every <Source> a page cites, as file, symbol and optional end symbol. */
-export function sourcesIn(text: string): { file?: string; symbol?: string; to?: string }[] {
+function sourcesIn(text: string): { file?: string; symbol?: string; to?: string }[] {
   return [...withoutComments(text).matchAll(/<Source\b([^>]*?)\/?>/g)].map(([, attrs]) => ({ file: attr(attrs, "file"), symbol: attr(attrs, "symbol"), to: attr(attrs, "to") }));
 }
 
 /** Everything wrong with the excerpts one page cites. */
-export function sourceProblems(page: { id: string; text: string }, root: string): string[] {
+function sourceProblems(page: { id: string; text: string }, root: string): string[] {
   const out: string[] = [];
   for (const { file, symbol, to } of sourcesIn(page.text)) {
     if (!file || !symbol) {
@@ -137,7 +130,7 @@ describe("excerpts", () => {
 });
 
 /** Every example file a page shows. */
-export function examplesIn(text: string): string[] {
+function examplesIn(text: string): string[] {
   return [...withoutComments(text).matchAll(/<Example\b([^>]*?)\/?>/g)].map(([, attrs]) => attr(attrs, "file") ?? "");
 }
 

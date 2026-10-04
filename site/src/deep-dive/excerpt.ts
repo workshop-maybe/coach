@@ -49,9 +49,9 @@ export function excerpt(file: string, symbol: string, to?: string, root: string 
 
 /** As `excerpt`, over text in hand. */
 export function excerptFromText(file: string, text: string, symbol: string, to?: string): Excerpt {
-  const find = file.endsWith(".rs") ? rustItem : tsDeclaration;
-  const first = find(file, text, symbol);
-  const last = to ? find(file, text, to) : first;
+  const find = finder(file, text);
+  const first = find(symbol);
+  const last = to ? find(to) : first;
   if (last.end < first.start) throw new Error(`${file}: ${to} comes before ${symbol}.`);
   const lines = text.split("\n").slice(first.start - 1, last.end);
   return { file, text: dedent(lines).join("\n"), start: first.start, end: last.end };
@@ -81,12 +81,28 @@ interface Span {
   end: number;
 }
 
-/** A TypeScript declaration by name: a function, a const or let, a type, an interface, a class or a method. */
-function tsDeclaration(file: string, text: string, symbol: string): Span {
+/** Finds a symbol's span in one file. */
+type Finder = (symbol: string) => Span;
+
+// A page cites several symbols from one file, and the build renders every page, so each
+// file is read into a finder once and kept while its text is the same.
+const finders = new Map<string, { text: string; find: Finder }>();
+
+/** The finder for a file's text, parsed once per text. */
+function finder(file: string, text: string): Finder {
+  const cached = finders.get(file);
+  if (cached?.text === text) return cached.find;
+  const find = file.endsWith(".rs") ? rustItems(file, text) : tsDeclarations(file, text);
+  finders.set(file, { text, find });
+  return find;
+}
+
+/** TypeScript declarations by name: functions, consts and lets, types, interfaces, classes and methods. */
+function tsDeclarations(file: string, text: string): Finder {
   const kind = file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
   const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, kind);
-  const found: ts.Node[] = [];
-  const named = (name: ts.Node | undefined) => !!name && ts.isIdentifier(name) && name.text === symbol;
+  const byName = new Map<string, ts.Node[]>();
+  const add = (name: string, node: ts.Node) => byName.set(name, [...(byName.get(name) ?? []), node]);
   const visit = (node: ts.Node) => {
     if (
       (ts.isFunctionDeclaration(node) ||
@@ -95,26 +111,35 @@ function tsDeclaration(file: string, text: string, symbol: string): Span {
         ts.isClassDeclaration(node) ||
         ts.isEnumDeclaration(node) ||
         ts.isMethodDeclaration(node)) &&
-      named(node.name)
+      node.name &&
+      ts.isIdentifier(node.name)
     ) {
-      found.push(node);
-    } else if (ts.isVariableStatement(node) && node.declarationList.declarations.some((d) => named(d.name))) {
-      found.push(node);
+      add(node.name.text, node);
+    } else if (ts.isVariableStatement(node)) {
+      const names = new Set(node.declarationList.declarations.flatMap((d) => (ts.isIdentifier(d.name) ? [d.name.text] : [])));
+      for (const name of names) add(name, node);
     }
     ts.forEachChild(node, visit);
   };
   visit(source);
-  if (found.length !== 1) throw new Error(`${file}: ${symbol} is declared ${found.length} times; an excerpt needs exactly one.`);
-  const node = found[0];
   const line = (pos: number) => source.getLineAndCharacterOfPosition(pos).line + 1;
-  return { start: line(node.getStart(source, true)), end: line(node.getEnd()) };
+  return (symbol) => {
+    const found = byName.get(symbol) ?? [];
+    if (found.length !== 1) throw new Error(`${file}: ${symbol} is declared ${found.length} times; an excerpt needs exactly one.`);
+    return { start: line(found[0].getStart(source, true)), end: line(found[0].getEnd()) };
+  };
 }
 
-/** A Rust item by name, above the file's tests: `fn`, `const`, `static`, `struct`, `enum`, `trait` or `type`. */
-function rustItem(file: string, text: string, symbol: string): Span {
+/** Rust items by name, above the file's tests: `fn`, `const`, `static`, `struct`, `enum`, `trait` or `type`. */
+function rustItems(file: string, text: string): Finder {
   const all = text.split("\n");
   const testsAt = all.findIndex((l) => l.trim() === "#[cfg(test)]");
   const lines = testsAt < 0 ? all : all.slice(0, testsAt);
+  return (symbol) => rustItem(file, lines, symbol);
+}
+
+/** One Rust item's span, from its comments and attributes to its closing brace. */
+function rustItem(file: string, lines: readonly string[], symbol: string): Span {
   const name = symbol.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const item = new RegExp(`^(\\s*)(?:pub(?:\\([^)]*\\))?\\s+)?(?:async\\s+)?(?:fn|const|static|struct|enum|trait|type)\\s+${name}\\b`);
   const hits = lines.flatMap((l, i) => (item.test(l) ? [i] : []));

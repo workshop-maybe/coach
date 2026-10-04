@@ -14,14 +14,14 @@
 // pane sends this request and saves this reading.
 
 import YAML from "yaml";
-import { DEFAULT_CUT_OFFS, WRONG_CALL_COST, calibrationOf, callOf, isOverrule, ranksAsOverrule, wholePercent, type Call, type CutOffs } from "../../../src/domain/calls";
+import { DEFAULT_CUT_OFFS, calibrationOf, callOf, candidate, isOverrule, ranksAsOverrule, tally, wholePercent, type Calibration, type CutOffs, type JudgedReading } from "../../../src/domain/calls";
 import { assessmentPath, loadFolder } from "../../../src/domain/folder";
 import { BUILT_IN_HANDOFF, SKELETON_ID, fillHandoff } from "../../../src/domain/handoffs";
 import { assignmentVersion } from "../../../src/domain/hash";
-import { JEV_LIMITS, JEV_MODEL, answeringModel, type JevAnswers, type JevExampleEntry, type SecondOpinionRequest } from "../../../src/domain/jevRequest";
+import { JEV_LIMITS, JEV_MODEL, answeringModel, type CriteriaSide, type JevAnswers, type JevExample, type JevExampleEntry, type SecondOpinionRequest } from "../../../src/domain/jevRequest";
 import { fitSecondOpinion, fitsTokens, jevTokens } from "../../../src/domain/jevBudget";
-import { examplesFor, rankExamples } from "../../../src/domain/jevExamples";
-import { cutOffAfter, joinLines, lineBreakBatches, lineBreakState } from "../../../src/domain/lineBreaks";
+import { examplesFor, rankExamples, type ExampleCandidate } from "../../../src/domain/jevExamples";
+import { cutOffAfter, joinLines, lineBreakBatches, lineBreakState, lineId } from "../../../src/domain/lineBreaks";
 import { scanLines } from "../../../src/domain/markdownLines";
 import { recordAssessment } from "../../../src/domain/operations";
 import { findJoinCandidates, fixPastedText, looksTerminalCopied, wrapWidth } from "../../../src/domain/pasteText";
@@ -44,19 +44,37 @@ export const CASE_RECORDED_AT = "2026-10-01T09:14:00.000Z";
 
 /** The second-opinion case study, as the app builds and saves it. */
 export interface SecondOpinionCase {
+  /** The folder before the result is saved. */
   state: FolderState;
   reply: string;
+  /** The badge's results as example sources, best first. */
+  ranked: ExampleCandidate[];
   request: SecondOpinionRequest;
   sources: string[];
   answers: JevAnswers;
+  /** The badge's cut-offs and track record for the model that answered. */
+  calibration: Calibration;
   /** The saved result file as recordAssessment wrote it, whole. */
   savedFile: string;
   /** That result, as the folder reads it back. */
   saved: Assessment;
 }
 
+// Each is built once per process: the tests and the generator read them, and never change them.
+let secondOpinion: Promise<SecondOpinionCase> | undefined;
+let examples: Promise<Record<string, string>> | undefined;
+
 /** The second-opinion case study: Claude Code's reply to Check an answer key over the judged sample. */
-export async function secondOpinionCase(): Promise<SecondOpinionCase> {
+export function secondOpinionCase(): Promise<SecondOpinionCase> {
+  return (secondOpinion ??= buildSecondOpinionCase());
+}
+
+/** Every example file the deep dive shows, by its path under examples/. */
+export function buildExamples(): Promise<Record<string, string>> {
+  return (examples ??= secondOpinionExamples().then((built) => ({ ...built, ...cleanupExamples() })));
+}
+
+async function buildSecondOpinionCase(): Promise<SecondOpinionCase> {
   const storage = sampleStorage(await sampleFolder("judged"));
   const state = await loadFolder(storage);
   const key = SAMPLE.badges.answerKey;
@@ -103,12 +121,8 @@ export async function secondOpinionCase(): Promise<SecondOpinionCase> {
   );
   const savedFile = (await storage.readText("data", assessmentPath(profile.slug, credential.collectionSlug, credential.slug, fileStem)))!;
   const saved = (await loadFolder(storage)).assessments.find((a) => a.profileSlug === profile.slug && credentialKey(a) === key && a.fileStem === fileStem)!;
-  return { state, reply, request: fitted.request, sources: fitted.sources, answers, savedFile, saved };
-}
-
-/** Every example file the deep dive shows, by its path under examples/. */
-export async function buildExamples(): Promise<Record<string, string>> {
-  return { ...(await secondOpinionExamples()), ...cleanupExamples() };
+  const { request, sources } = fitted;
+  return { state, reply, ranked, request, sources, answers, calibration: inHand.calibration, savedFile, saved };
 }
 
 // ---------------------------------------------------------------------------
@@ -116,14 +130,11 @@ export async function buildExamples(): Promise<Record<string, string>> {
 
 async function secondOpinionExamples(): Promise<Record<string, string>> {
   const c = await secondOpinionCase();
-  const key = SAMPLE.badges.answerKey;
-  const credential = c.state.credentials.find((x) => credentialKey(x) === key)!;
-  const version = await assignmentVersion(credential.task, credential.rubric);
-  const calibration = calibrationOf(c.state, key, JEV_MODEL);
+  const { calibration } = c;
   const name = (slug: string) => c.state.profiles.find((p) => p.slug === slug)?.name ?? slug;
 
   // The badge's results as example sources, in the order the ranking puts them.
-  const ranked = rankExamples(c.state, key, version).map((r) => ({
+  const ranked = c.ranked.map((r) => ({
     rank: r.rank,
     result: `${name(r.result.profileSlug)}, ${r.result.recordedAt.slice(0, 10)}`,
     verdict: r.result.result,
@@ -136,13 +147,14 @@ async function secondOpinionExamples(): Promise<Record<string, string>> {
   const q = c.request.questions;
   const tokens = Object.fromEntries(Object.entries(q).map(([id, question]) => [id, jevTokens(question)]));
   const questionTokens = Object.values(tokens);
+  const stateTokens = jevTokens(c.request.state);
   const budget = {
-    state_tokens: jevTokens(c.request.state),
+    state_tokens: stateTokens,
     question_tokens: tokens,
-    state_plus_longest: jevTokens(c.request.state) + Math.max(...questionTokens),
-    state_plus_all: jevTokens(c.request.state) + questionTokens.reduce((a, b) => a + b, 0),
-    limits: { questions: JEV_LIMITS.maxQuestions, state_plus_longest: JEV_LIMITS.stateAndLongest, state_plus_all: JEV_LIMITS.whole },
-    fits: fitsTokens(jevTokens(c.request.state), questionTokens),
+    state_plus_longest: stateTokens + Math.max(...questionTokens),
+    state_plus_all: stateTokens + sum(questionTokens),
+    limits: LIMITS,
+    fits: fitsTokens(stateTokens, questionTokens),
   };
 
   // Each answer as the reading shows it: whole percent, and its call under both pairs.
@@ -174,40 +186,32 @@ async function secondOpinionExamples(): Promise<Record<string, string>> {
     "second-opinion/budget.json": json(budget),
     "second-opinion/answers.json": json(c.answers),
     "second-opinion/reading.json": json(reading),
-    "second-opinion/fit.json": json(fitExample(c.state)),
+    "second-opinion/fit.json": json(fitExample(c.state, calibration)),
     "second-opinion/saved-result.md": savedForPage(c.savedFile),
     "second-opinion/forced-drops.json": json(forcedDrops()),
   };
 }
 
 /** The judged sample's readings on Check an answer key, each read under both pairs, and what the fit and the track record make of them. */
-function fitExample(state: FolderState) {
-  const key = SAMPLE.badges.answerKey;
-  const calibration = calibrationOf(state, key, JEV_MODEL);
+function fitExample(state: FolderState, calibration: Calibration) {
   const results = state.assessments
-    .filter((a) => credentialKey(a) === key && a.jev?.model === JEV_MODEL)
+    .filter((a) => credentialKey(a) === SAMPLE.badges.answerKey && a.jev?.model === JEV_MODEL)
     .sort((a, b) => a.recordedAt.localeCompare(b.recordedAt));
-  const tally = (pair: CutOffs) => {
-    let matches = 0;
-    let wrong = 0;
-    let cantCalls = 0;
-    for (const a of results) {
-      const call = callOf(a.jev!.overall, pair);
-      if (call === "cant_call") cantCalls++;
-      else if (call === (a.result === "met" ? "meets" : "misses")) matches++;
-      else wrong++;
-    }
-    return { matches, wrong, cant_calls: cantCalls, score: matches - WRONG_CALL_COST * wrong };
+  const readings: JudgedReading[] = results.map((a) => ({ overall: a.jev!.overall, verdict: a.result }));
+  // The fit's own counting and score, under one pair.
+  const scored = (pair: CutOffs) => {
+    const { matches, wrong, cantCalls } = tally(readings, pair);
+    return { pair, matches, wrong, cant_calls: cantCalls, score: candidate(readings, pair).score };
   };
   return {
-    readings: results.map((a) => ({
-      verdict: a.result,
-      overall: wholePercent(a.jev!.overall),
-      default_call: callOf(a.jev!.overall, DEFAULT_CUT_OFFS) satisfies Call,
-      fitted_call: callOf(a.jev!.overall, calibration.pair) satisfies Call,
+    readings: readings.map((r) => ({
+      verdict: r.verdict,
+      overall: wholePercent(r.overall),
+      default_call: callOf(r.overall, DEFAULT_CUT_OFFS),
+      fitted_call: callOf(r.overall, calibration.pair),
     })),
-    default_pair: { pair: DEFAULT_CUT_OFFS, ...tally(DEFAULT_CUT_OFFS) },
-    fitted_pair: { pair: calibration.pair, ...tally(calibration.pair) },
+    default_pair: scored(DEFAULT_CUT_OFFS),
+    fitted_pair: scored(calibration.pair),
     fitted: calibration.fitted,
     judged: calibration.judged,
     track_record: calibration.trackRecord,
@@ -249,29 +253,28 @@ function forcedDrops() {
   }
   const kept = (length: number) => {
     const fitted = fitSecondOpinion({ ...input, reply: filler(length) }, entries);
-    return fitted ? Object.values(fitted.request.questions).reduce((n, question) => n + examplesOn(question), 0) : -1;
+    return fitted ? sum(Object.values(fitted.request.questions).flatMap((question) => examplesBySide(question).map(({ examples }) => examples.length))) : -1;
   };
   // The shortest reply that drops every example but still fits, then halfway back to the
   // shortest that drops any: a reply that keeps some examples and drops others.
   const offered = kept(0);
-  const firstDrop = smallest((n) => kept(n) < offered);
-  const allDropped = smallest((n) => kept(n) <= 0);
+  const firstDrop = smallest((n) => kept(n) < offered, 0);
+  const allDropped = smallest((n) => kept(n) <= 0, firstDrop);
   const length = Math.round((firstDrop + allDropped) / 2);
   const fitted = fitSecondOpinion({ ...input, reply: filler(length) }, entries)!;
-  const sent = new Set<string>();
-  for (const [questionId, question] of Object.entries(fitted.request.questions)) {
-    for (const side of ["true", "false"] as const) {
-      const criterion = question.criteria?.[side];
-      if (criterion && typeof criterion !== "string") for (const ex of criterion.examples) sent.add(`${questionId}:${side}:${ex.reply_opening.slice(0, 8)}`);
-    }
-  }
-  const status = entries.map((e) => ({ question: e.questionId, side: e.side, rank: e.rank, kept: sent.has(`${e.questionId}:${e.side}:${e.item.reply_opening.slice(0, 8)}`) }));
+  // Each rank's opening is its own, so an example is known by its question, side and opening.
+  const sent = new Set(
+    Object.entries(fitted.request.questions).flatMap(([questionId, question]) =>
+      examplesBySide(question).flatMap(({ side, examples }) => examples.map((ex) => `${questionId}:${side}:${ex.reply_opening}`)),
+    ),
+  );
+  const status = entries.map((e) => ({ question: e.questionId, side: e.side, rank: e.rank, kept: sent.has(`${e.questionId}:${e.side}:${e.item.reply_opening}`) }));
   const questionTokens = Object.values(fitted.request.questions).map(jevTokens);
   return {
     reply_characters: length,
     state_tokens: jevTokens(fitted.request.state),
     longest_question_tokens: Math.max(...questionTokens),
-    all_question_tokens: questionTokens.reduce((a, t) => a + t, 0),
+    all_question_tokens: sum(questionTokens),
     limits: { state_plus_longest: JEV_LIMITS.stateAndLongest, state_plus_all: JEV_LIMITS.whole },
     offered: status.length,
     kept: status.filter((e) => e.kept).length,
@@ -279,11 +282,12 @@ function forcedDrops() {
   };
 }
 
-function examplesOn(question: SecondOpinionRequest["questions"][string]): number {
-  return (["true", "false"] as const).reduce((n, side) => {
-    const c = question.criteria?.[side];
-    return n + (c && typeof c !== "string" ? c.examples.length : 0);
-  }, 0);
+/** The examples on each side of a question's criteria. A plain side has none. */
+function examplesBySide(question: SecondOpinionRequest["questions"][string]): { side: CriteriaSide; examples: readonly JevExample[] }[] {
+  return (["true", "false"] as const).map((side) => {
+    const criterion = question.criteria?.[side];
+    return { side, examples: criterion && typeof criterion !== "string" ? criterion.examples : [] };
+  });
 }
 
 /** Plain prose of the given length, standing in for a long reply. */
@@ -292,9 +296,9 @@ function filler(length: number): string {
   return sentence.repeat(Math.ceil(length / sentence.length)).slice(0, length);
 }
 
-/** The smallest whole number for which `holds` is true, over a range wide enough for Jev's budget. */
-function smallest(holds: (n: number) => boolean): number {
-  let lo = 0;
+/** The smallest whole number from `from` for which `holds` is true, over a range wide enough for Jev's budget. */
+function smallest(holds: (n: number) => boolean, from: number): number {
+  let lo = from;
   let hi = 400_000;
   while (lo < hi) {
     const mid = Math.floor((lo + hi) / 2);
@@ -310,7 +314,7 @@ function smallest(holds: (n: number) => boolean): number {
 function cleanupExamples(): Record<string, string> {
   const fixed = fixPastedText(TERMINAL_REPLY);
   const lines = scanLines(fixed.text);
-  const id = (i: number) => `L${String(i + 1).padStart(Math.max(3, String(lines.length).length), "0")}`;
+  const id = (i: number) => lineId(i, lines.length);
   const candidates = findJoinCandidates(fixed.text);
   const batches = lineBreakBatches(fixed.text)!;
   const joined = joinLines(fixed.text, CLEANUP_CALLS);
@@ -348,10 +352,17 @@ function twoBatches() {
     batches: batches.map((b) => {
       const ids = Object.keys(b.questions);
       const tokens = Object.values(b.questions).map(jevTokens);
-      return { questions: ids.length, first: ids[0], last: ids[ids.length - 1], state_tokens: state, question_tokens: tokens.reduce((a, t) => a + t, 0) };
+      return { questions: ids.length, first: ids[0], last: ids[ids.length - 1], state_tokens: state, question_tokens: sum(tokens) };
     }),
-    limits: { questions: JEV_LIMITS.maxQuestions, state_plus_longest: JEV_LIMITS.stateAndLongest, state_plus_all: JEV_LIMITS.whole },
+    limits: LIMITS,
   };
+}
+
+/** Jev's limits as the examples name them. */
+const LIMITS = { questions: JEV_LIMITS.maxQuestions, state_plus_longest: JEV_LIMITS.stateAndLongest, state_plus_all: JEV_LIMITS.whole };
+
+function sum(numbers: readonly number[]): number {
+  return numbers.reduce((total, n) => total + n, 0);
 }
 
 function json(value: unknown): string {
