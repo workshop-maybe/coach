@@ -696,28 +696,29 @@ button:focus-visible {
   font-size: inherit;
 }
 
-/* A pasted image (src/ui/richImage.ts): it fits the measure on a cell rule. One that can't
-   be read is a quiet mono label naming its file. */
-:is(.rich-input, .rich-prose) .rich-image {
+/* A pasted image (src/ui/richImage.ts) or a video's player (src/ui/richVideo.ts): it fits the
+   measure on a cell rule. One that can't be read or played is a quiet mono label naming its
+   file. */
+:is(.rich-input, .rich-prose) :is(.rich-image, .rich-video) {
   display: inline-block;
   max-width: 100%;
   vertical-align: bottom;
 }
 
-:is(.rich-input, .rich-prose) .rich-image img {
+:is(.rich-input, .rich-prose) :is(.rich-image img, .rich-video video) {
   display: block;
   max-width: 100%;
   height: auto;
   border: 1px solid var(--cell);
 }
 
-:is(.rich-input, .rich-prose) .rich-image[aria-busy="true"] {
+:is(.rich-input, .rich-prose) :is(.rich-image, .rich-video)[aria-busy="true"] {
   min-width: 48px;
   min-height: 32px;
   background: var(--grid);
 }
 
-:is(.rich-input, .rich-prose) .rich-image-missing {
+:is(.rich-input, .rich-prose) :is(.rich-image-missing, .rich-video-missing) {
   padding: 1px 4px;
   border: 1px dashed var(--cell);
   color: var(--ink-muted);
@@ -727,7 +728,7 @@ button:focus-visible {
   overflow-wrap: anywhere;
 }
 
-.rich-input .rich-image.ProseMirror-selectednode {
+.rich-input :is(.rich-image, .rich-video).ProseMirror-selectednode {
   outline: 1.5px solid var(--data);
 }
 

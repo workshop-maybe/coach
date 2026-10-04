@@ -1,20 +1,24 @@
 // A box's images (KTD6, KTD7 of docs/plans/2026-10-04-0033-feat-paste-images-into-rich-boxes-plan.md).
 // An image lives beside the file its box saves to, and the box's Markdown names it bare.
 //
-// Reads go through src/ui/imageSource.ts. A paste is written the moment it lands (KTD6), so
-// the editor can show it through the same read; `busy` counts writes in flight, so a deck
-// can hold its forward action until they land (R11). When the folder changes under a mounted
-// box (a reply whose agent or badge changed), the images it saved this visit that its text
-// still names are copied into the new folder (R10). Content addressing keeps their names.
+// Reads go through src/ui/imageSource.ts, and so do the box's videos: a bare video name gets
+// a counted URL from the storage port's data root, never from the network (KTD2, KTD4 of the
+// video plan). A paste is written the moment it lands (KTD6), so the editor can show it
+// through the same read; `busy` counts writes in flight, so a deck can hold its forward
+// action until they land (R11). When the folder changes under a mounted box (a reply whose
+// agent or badge changed), the images it saved this visit that its text still names are
+// copied into the new folder (R10). Content addressing keeps their names.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { IMAGE_TOO_LARGE, ONLY_PNG_OR_JPEG, PASTED_IMAGE_MAX_BYTES, dataUriToBytes, folderOf, localImageNames } from "../domain/images";
 import { forgetImage, imageSource } from "./imageSource";
+import type { RichImageSource } from "./richImage";
 import type { RichImages } from "./RichText";
 import { fileName } from "./shared";
 import { describeError, useFolder } from "./useFolderState";
 
-const NOTHING = { load: () => Promise.resolve(null) };
+/** With no folder yet: no images, and no videos (they show as placeholders). */
+const NOTHING: RichImageSource = { load: () => Promise.resolve(null) };
 
 /**
  * The images of a box whose file is in `dir` (null: no folder yet, so nothing saves), and
@@ -39,9 +43,10 @@ export function useRichImages(dir: string | null, text = ""): { images: RichImag
   }, []);
 
   const images = useMemo<RichImages>(() => {
-    const { load } = dir === null ? NOTHING : imageSource(storage, dir);
+    const { load, video } = dir === null ? NOTHING : imageSource(storage, dir);
     return {
       load,
+      video,
       async save(file) {
         const refuse = (message: string): never => {
           setNotice(message);

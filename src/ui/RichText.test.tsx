@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { createRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
-import { TextSelection } from "@tiptap/pm/state";
+import { NodeSelection, TextSelection } from "@tiptap/pm/state";
 import { RichText, looksLikeMarkdown, type RichImages, type RichTextHandle } from "./RichText";
 import { RichText as StubRichText } from "./richTextStub";
 import { useRichDraft } from "./richDraft";
@@ -165,18 +165,27 @@ describe("RichText", () => {
   });
 });
 
-describe("images in the Markdown (KTD1, R9)", () => {
-  /** Opens `md`, makes an unrelated edit at the end, and returns what the box saves. */
-  function editedOnce(md: string): string {
-    const { ed, onChange } = setup(md);
-    act(() => {
-      ed.commands.focus("end");
-    });
-    typeInto(ed, " x");
-    const saved = onChange.mock.lastCall?.[0] as string;
-    return saved.endsWith(" x") ? saved.slice(0, -2) : saved;
-  }
+/** Opens `md`, makes an unrelated edit at the end, and returns what the box saves. */
+function editedOnce(md: string): string {
+  const { ed, onChange } = setup(md);
+  act(() => {
+    ed.commands.focus("end");
+  });
+  typeInto(ed, " x");
+  const saved = onChange.mock.lastCall?.[0] as string;
+  return saved.endsWith(" x") ? saved.slice(0, -2) : saved;
+}
 
+/** Each image and video node in the box, in order, as "type:src". */
+function leaves(ed: Editor): string[] {
+  const out: string[] = [];
+  ed.state.doc.descendants((n) => {
+    if (n.type.name === "image" || n.type.name === "video") out.push(`${n.type.name}:${n.attrs.src as string}`);
+  });
+  return out;
+}
+
+describe("images in the Markdown (KTD1, R9)", () => {
   it.each([
     ["a block image between paragraphs", "Before\n\n![](image-1a2b3c4d.png)\n\nAfter"],
     ["alt and title", 'See ![alt](a.png "t") here'],
@@ -210,6 +219,210 @@ describe("images in the Markdown (KTD1, R9)", () => {
   it("copies an image as its Markdown in plain text", () => {
     const { ed } = setup("![shot](image-1a2b3c4d.png)");
     expect(ed.getText()).toBe("![shot](image-1a2b3c4d.png)");
+  });
+});
+
+describe("videos in the Markdown (KTD1, R11)", () => {
+  it.each([
+    ["a block video between paragraphs", "Before\n\n![](video-1a2b3c4d.mp4)\n\nAfter", "video-1a2b3c4d.mp4"],
+    ["alt and title on a movie", '![alt](a.mov "t")', "a.mov"],
+    ["a video mid-sentence", "Look ![](video-1a2b3c4d.webm) here", "video-1a2b3c4d.webm"],
+    ["a src with a space", "![](<my clip.webm>)", "my clip.webm"],
+    ["an upper-case extension", "![](x.MP4)", "x.MP4"],
+    ["an M4V mid-sentence", "Clip ![](c.m4v) end", "c.m4v"],
+    ["a remote video", "Remote ![](https://example.com/v.mp4) here", "https://example.com/v.mp4"],
+  ])("keeps %s after an edit, as a video node", (_, md, src) => {
+    const { ed } = setup(md);
+    expect(leaves(ed)).toEqual([`video:${src}`]);
+    cleanup();
+    expect(editedOnce(md)).toBe(md);
+    cleanup();
+  });
+
+  it("keeps a paragraph that holds only a video, in a document the schema accepts", () => {
+    const { ed } = setup("![](x.MP4)");
+    expect(() => ed.state.doc.check()).not.toThrow();
+    expect(ed.state.doc.firstChild?.type.name).toBe("paragraph");
+    expect(ed.state.doc.firstChild?.firstChild?.type.name).toBe("video");
+    expect(ed.getMarkdown()).toBe("![](x.MP4)");
+  });
+
+  it("keeps an image and a video side by side as their own nodes", () => {
+    const { ed } = setup("A ![](shot.png) B ![](clip.mp4) C");
+    expect(leaves(ed)).toEqual(["image:shot.png", "video:clip.mp4"]);
+    expect(ed.getMarkdown()).toBe("A ![](shot.png) B ![](clip.mp4) C");
+  });
+
+  it.each([
+    ["an escaped bracket in alt", "![a\\]b](x.mp4)", "![a\\]b](x.mp4)"],
+    ["an escaped backslash in alt", "![a\\\\b](x.mp4)", "![a\\\\b](x.mp4)"],
+    ["an escaped underscore in alt", "![a\\_b](x.mp4)", "![a_b](x.mp4)"],
+    ["an escaped quote in a title", '![](x.mov "say \\"hi\\"")', '![](x.mov "say \\"hi\\"")'],
+    ["angle brackets in a bracketed src", "![](<a\\<b\\>.webm>)", "![](<a\\<b\\>.webm>)"],
+  ])("settles %s after one edit, and a second edit changes nothing more", (_, md, settled) => {
+    const { ed } = setup(md);
+    expect(leaves(ed)[0]).toMatch(/^video:/);
+    cleanup();
+    const once = editedOnce(md);
+    expect(once).toBe(settled);
+    cleanup();
+    expect(editedOnce(once)).toBe(settled);
+    cleanup();
+  });
+
+  it("copies a video as its Markdown in plain text, and as HTML with no src and no player", () => {
+    const { ed } = setup('![a clip](video-1a2b3c4d.mp4 "t")');
+    expect(ed.getText()).toBe('![a clip](video-1a2b3c4d.mp4 "t")');
+    const html = ed.getHTML();
+    expect(html).toContain('data-md-video="video-1a2b3c4d.mp4"');
+    expect(html).not.toMatch(/\ssrc=/);
+    expect(html).not.toMatch(/<video|poster=/);
+  });
+
+  /** Selects the first `type` node, cuts it as a person would, and pastes it at the end of the box. */
+  function cutAndPaste(ed: Editor, type: string) {
+    let pos = -1;
+    ed.state.doc.descendants((n, p) => {
+      if (pos < 0 && n.type.name === type) pos = p;
+    });
+    expect(pos).toBeGreaterThanOrEqual(0);
+    act(() => {
+      ed.view.dispatch(ed.state.tr.setSelection(NodeSelection.create(ed.state.doc, pos)));
+    });
+    const { dom, text } = ed.view.serializeForClipboard(ed.state.selection.content());
+    act(() => {
+      ed.view.dispatch(ed.state.tr.deleteSelection());
+      ed.commands.focus("end");
+    });
+    firePaste(box(), { "text/html": dom.innerHTML, "text/plain": text });
+  }
+
+  it("rebuilds a cut video, and a cut image beside it, as the same nodes", () => {
+    const { ed, onChange } = setup("A ![](clip.mp4) B ![](shot.png) C");
+    cutAndPaste(ed, "video");
+    expect(leaves(ed)).toEqual(["image:shot.png", "video:clip.mp4"]);
+    cutAndPaste(ed, "image");
+    expect(leaves(ed)).toEqual(["video:clip.mp4", "image:shot.png"]);
+    expect(onChange).toHaveBeenLastCalledWith("A  B  C![](clip.mp4)![](shot.png)");
+  });
+
+  it("never makes an image node of a video name in pasted HTML", () => {
+    const { ed } = setup("");
+    firePaste(box(), { "text/html": '<p>x <img data-md-src="clip.mp4" src="https://example.com/clip.mp4"></p>', "text/plain": "x" });
+    expect(leaves(ed)).not.toContain("image:clip.mp4");
+  });
+});
+
+describe("a video in a box (KTD2)", () => {
+  /** A box whose videos each get a fresh handle per ask; the editor may ask twice as it mounts. */
+  function setupVideo(value: string) {
+    const handed: { name: string; release: ReturnType<typeof vi.fn> }[] = [];
+    const images: RichImages = {
+      load: () => Promise.resolve(null),
+      video: vi.fn(async (name: string) => {
+        const release = vi.fn();
+        handed.push({ name, release });
+        return { url: "blob:x", preload: "metadata" as const, release };
+      }),
+    };
+    /** The names whose handles are not yet released. */
+    const held = () => handed.filter((h) => h.release.mock.calls.length === 0).map((h) => h.name);
+    const onChange = vi.fn();
+    render(<RichText aria-label="Task" value={value} onChange={onChange} images={images} />);
+    return { ed: editorOf(box()), onChange, handed, held, images };
+  }
+
+  async function shown(): Promise<HTMLVideoElement> {
+    await waitFor(() => expect(box().querySelector("video[src]")).not.toBeNull());
+    return box().querySelector("video")!;
+  }
+
+  function videoPos(ed: Editor): number {
+    let pos = -1;
+    ed.state.doc.descendants((n, p) => {
+      if (n.type.name === "video") pos = p;
+    });
+    return pos;
+  }
+
+  it("plays from the box's source, with controls and no autoplay", async () => {
+    const { images } = setupVideo("Watch ![](clip.mp4)");
+    const video = await shown();
+    expect(video.getAttribute("src")).toBe("blob:x");
+    expect(video.controls).toBe(true);
+    expect(video.autoplay).toBe(false);
+    expect(images.video).toHaveBeenCalledWith("clip.mp4");
+  });
+
+  it("keeps Space and Backspace inside the video from replacing the selected node", async () => {
+    const { ed, onChange } = setupVideo("A ![](clip.mp4) B");
+    const video = await shown();
+    act(() => {
+      ed.view.dispatch(ed.state.tr.setSelection(NodeSelection.create(ed.state.doc, videoPos(ed))));
+    });
+    fireEvent.keyDown(video, { key: " ", code: "Space", keyCode: 32 });
+    fireEvent.keyPress(video, { key: " ", code: "Space", charCode: 32, keyCode: 32 });
+    fireEvent.keyDown(video, { key: "Backspace", code: "Backspace", keyCode: 8 });
+    expect(leaves(ed)).toEqual(["video:clip.mp4"]);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("leaves pointer, mouse, key and drag events inside the video to the video", async () => {
+    setupVideo("A ![](clip.mp4) B");
+    const video = await shown();
+    const frame = video.closest(".rich-video") as HTMLElement & { pmViewDesc?: { stopEvent(e: Event): boolean } };
+    const desc = frame.pmViewDesc!;
+    const seen: Record<string, boolean> = {};
+    const types = ["mousedown", "mouseup", "pointerdown", "click", "dblclick", "keydown", "keypress", "dragstart", "drop", "contextmenu"];
+    for (const type of types) {
+      video.addEventListener(type, (e) => (seen[type] = desc.stopEvent(e)), { once: true });
+      fireEvent(video, new Event(type, { bubbles: true, cancelable: true }));
+    }
+    expect(Object.keys(seen)).toEqual(types);
+    expect(Object.entries(seen).filter(([, stopped]) => !stopped)).toEqual([]);
+    // The frame around the player still belongs to the editor, so a click there selects the node.
+    let frameStopped: boolean | undefined;
+    frame.addEventListener("mousedown", (e) => (frameStopped = desc.stopEvent(e)), { once: true });
+    fireEvent.mouseDown(frame);
+    expect(frameStopped).toBe(false);
+  });
+
+  it("marks a selected video without making it draggable", async () => {
+    const { ed } = setupVideo("A ![](clip.mp4) B");
+    const video = await shown();
+    const frame = video.closest(".rich-video") as HTMLElement;
+    act(() => {
+      ed.view.dispatch(ed.state.tr.setSelection(NodeSelection.create(ed.state.doc, videoPos(ed))));
+    });
+    expect(frame.classList.contains("ProseMirror-selectednode")).toBe(true);
+    expect(frame.draggable).toBe(false);
+    act(() => {
+      ed.view.dispatch(ed.state.tr.setSelection(TextSelection.create(ed.state.doc, 1)));
+    });
+    expect(frame.classList.contains("ProseMirror-selectednode")).toBe(false);
+  });
+
+  it("keeps the webview's menu and drag off a video, and leaves the menu alone on text", async () => {
+    setupVideo("Words ![](clip.mp4)");
+    const video = await shown();
+    expect(fireEvent.contextMenu(video)).toBe(false);
+    expect(fireEvent.dragStart(video)).toBe(false);
+    expect(fireEvent.contextMenu(box().querySelector("p")!)).toBe(true);
+  });
+
+  it("releases its URL when the src changes and when the box closes", async () => {
+    const { ed, handed, held, images } = setupVideo("![](a.mp4)");
+    await shown();
+    expect(held()).toEqual(["a.mp4"]);
+    act(() => {
+      ed.view.dispatch(ed.state.tr.setNodeMarkup(videoPos(ed), undefined, { src: "b.mp4", alt: "", title: null }));
+    });
+    expect(held()).not.toContain("a.mp4");
+    await waitFor(() => expect(images.video).toHaveBeenLastCalledWith("b.mp4"));
+    await waitFor(() => expect(held()).toEqual(["b.mp4"]));
+    cleanup();
+    expect(held()).toEqual([]);
+    expect(handed.every((h) => h.release.mock.calls.length === 1)).toBe(true);
   });
 });
 

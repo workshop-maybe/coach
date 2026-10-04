@@ -14,7 +14,7 @@
 // any other: it reaches `onChange`, never `onPaste`.
 
 import { useEffect, useImperativeHandle, useRef, useState } from "react";
-import type { KeyboardEvent as ReactKeyboardEvent, Ref } from "react";
+import type { DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, Ref } from "react";
 import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
@@ -90,6 +90,16 @@ export function looksLikeMarkdown(text: string): boolean {
 /** The editor's Markdown, without the blank lines an empty last paragraph leaves. */
 function markdownOf(editor: Editor): string {
   return editor.getMarkdown().replace(/\n+$/, "");
+}
+
+/**
+ * Keeps the webview's own menu and drag off a video, so it offers no "Open Video in New
+ * Window" or "Download Video" (KTD2 of the video plan). Caught on the box, since the video
+ * node view hands every mouse and drag event inside the player back to the browser.
+ */
+function stopOnVideo(e: ReactMouseEvent<HTMLElement> | ReactDragEvent<HTMLElement>) {
+  const video = e.target instanceof Element ? e.target.closest("video") : null;
+  if (video && e.currentTarget.contains(video)) e.preventDefault();
 }
 
 /** Whether a paste now would replace everything in the box: nothing but blanks lies outside the selection. */
@@ -297,7 +307,7 @@ export function RichText({ value, onChange, onNormalized, placeholder, autoFocus
     editor.commands.setContent(value, { contentType: "markdown", emitUpdate: false });
   }, [editor, value]);
 
-  // Images from a new source (another folder) are read again.
+  // Images and videos from a new source (another folder) are read again.
   const imagesShown = useRef(images);
   useEffect(() => {
     if (!editor || imagesShown.current === images) return;
@@ -306,7 +316,7 @@ export function RichText({ value, onChange, onNormalized, placeholder, autoFocus
   }, [editor, images]);
 
   return (
-    <div className="rich">
+    <div className="rich" onContextMenuCapture={stopOnVideo} onDragStartCapture={stopOnVideo}>
       {editor && <Toolbar editor={editor} full label="Formatting" />}
       <EditorContent editor={editor} />
       {editor && <SelectionMenu editor={editor} />}
