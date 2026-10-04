@@ -14,7 +14,7 @@ import { useState } from "react";
 import type { KeyboardEvent } from "react";
 import { PALETTES } from "../badge/palettes";
 import type { BadgeSettings, BadgeTitle } from "../badge/settings";
-import { collectionPath, credentialPath, loadFolder, profilePath } from "../domain/folder";
+import { collectionPath, credentialPath, credentialsDir, loadFolder, profilePath } from "../domain/folder";
 import { folderOf } from "../domain/images";
 import { cellKey, type Matrix } from "../domain/matrix";
 import { importBadgeArt, setCredentialBadgeOverride, updateCredential, updateProfile } from "../domain/operations";
@@ -192,8 +192,8 @@ function EditCredential({ credentialKey: key, part, credential: atOpen, collecti
   const task = taskDraft.value;
   const rubric = rubricDraft.value;
   // Pasted images go beside the credential's file.
-  const taskImages = useRichImages(folderOf(credPath), task);
-  const rubricImages = useRichImages(folderOf(credPath), rubric);
+  const taskImages = useRichImages(credentialsDir(collectionSlug), task);
+  const rubricImages = useRichImages(credentialsDir(collectionSlug), rubric);
   const [look, setLook] = useState<BadgeSettings>(() => opened.collection.badgeOverrides?.[slug] ?? {});
   const [artError, setArtError] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);

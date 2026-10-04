@@ -6,10 +6,11 @@
 
 import { renderBadgeFor } from "../badge/resolve";
 import { buildExport, writeExport } from "../domain/export";
-import { collectionPath, credentialPath, loadFolder, parseCollection, saveCollection } from "../domain/folder";
-import { dataUriToBytes, folderOf, localImageNames, withAssetsRefs } from "../domain/images";
+import { collectionPath, credentialsDir, loadFolder, parseCollection, saveCollection } from "../domain/folder";
+import { dataUriToBytes, localImageNames, withAssetsRefs } from "../domain/images";
 import type { Credential, FolderState } from "../domain/types";
 import type { Storage } from "../storage/storage";
+import { fileName } from "./shared";
 
 export interface ExportAllResult {
   /** Files written across every collection. */
@@ -35,7 +36,7 @@ async function copyTaskImages(
   credential: Credential,
   moduleDir: string,
 ): Promise<{ task: string; copied: number; notCopied: string[] }> {
-  const from = folderOf(credentialPath(credential.collectionSlug, credential.slug));
+  const from = credentialsDir(credential.collectionSlug);
   const renamed = new Map<string, string>();
   const saved = new Set<string>();
   const notCopied: string[] = [];
@@ -43,10 +44,13 @@ async function copyTaskImages(
     const path = `${from}/${name}`;
     try {
       const uri = await storage.readDataUri("data", path);
-      if (uri === null) throw new Error(`${path} does not exist.`);
+      if (uri === null) {
+        notCopied.push(path);
+        continue;
+      }
       const to = await storage.saveImage("export", `${moduleDir}/assets`, dataUriToBytes(uri));
       saved.add(to);
-      renamed.set(name, to.slice(to.lastIndexOf("/") + 1));
+      renamed.set(name, fileName(to));
     } catch {
       notCopied.push(path);
     }

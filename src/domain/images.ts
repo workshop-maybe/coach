@@ -58,7 +58,14 @@ export function folderOf(path: string): string {
 }
 
 // A Markdown image: `![alt](src "title")`, where src may be wrapped in <...>.
-const IMAGE_REF = /(!\[(?:\\.|[^\]\\])*\]\(\s*)(<(?:\\.|[^>\\\n])*>|[^\s)]+)((?:\s+"(?:\\.|[^"\\])*")?\s*\))/g;
+const IMAGE = String.raw`(!\[(?:\\.|[^\]\\])*\]\(\s*)(<(?:\\.|[^>\\\n])*>|[^\s)]+)((?:\s+"(?:\\.|[^"\\])*")?\s*\))`;
+const IMAGE_REF = new RegExp(IMAGE, "g");
+const IMAGES_ONLY = new RegExp(String.raw`^\s*(?:${IMAGE}\s*)+$`);
+
+/** Whether a line holds nothing but Markdown images. */
+export function isImagesOnlyLine(line: string): boolean {
+  return IMAGES_ONLY.test(line);
+}
 
 /** The src as written: without its angle brackets, with backslash escapes resolved. */
 function srcOf(raw: string): string {

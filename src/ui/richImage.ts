@@ -65,7 +65,6 @@ export function imageMarkdown(attrs: { src?: string | null; alt?: string | null;
 class ImageView {
   readonly dom: HTMLElement;
   private node: PMNode;
-  private shown: string | null = null;
   private ticket = 0;
   private loadedOnce = false;
 
@@ -86,7 +85,6 @@ class ImageView {
     const changed = node.attrs.src !== this.node.attrs.src;
     this.node = node;
     if (changed) {
-      this.shown = null;
       this.loadedOnce = false;
       this.render();
     } else {
@@ -117,7 +115,7 @@ class ImageView {
       this.placeholder();
       return;
     }
-    if (!this.loadedOnce && this.shown === null) this.dom.setAttribute("aria-busy", "true");
+    if (!this.loadedOnce) this.dom.setAttribute("aria-busy", "true");
     let read: Promise<string | null>;
     try {
       read = source.load(src);
@@ -139,15 +137,13 @@ class ImageView {
   }
 
   private image(uri: string): void {
-    this.shown = uri;
-    let img = this.dom.firstElementChild;
-    if (!(img instanceof HTMLImageElement)) {
-      img = document.createElement("img");
-      (img as HTMLImageElement).draggable = false;
+    const shown = this.dom.firstElementChild;
+    const img = shown instanceof HTMLImageElement ? shown : document.createElement("img");
+    if (img !== shown) {
       img.setAttribute("draggable", "false");
       this.dom.replaceChildren(img);
     }
-    (img as HTMLImageElement).src = uri;
+    img.src = uri;
     this.label();
   }
 
@@ -162,7 +158,6 @@ class ImageView {
   }
 
   private placeholder(): void {
-    this.shown = null;
     this.dom.removeAttribute("aria-busy");
     const label = document.createElement("span");
     label.className = "rich-image-missing";

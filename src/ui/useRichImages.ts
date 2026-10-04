@@ -11,18 +11,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { IMAGE_TOO_LARGE, ONLY_PNG_OR_JPEG, PASTED_IMAGE_MAX_BYTES, dataUriToBytes, folderOf, localImageNames } from "../domain/images";
 import { forgetImage, imageSource } from "./imageSource";
 import type { RichImages } from "./RichText";
+import { fileName } from "./shared";
 import { describeError, useFolder } from "./useFolderState";
-
-/** The file's bytes. `File.arrayBuffer` where there is one, a FileReader otherwise. */
-function bytesOf(file: File): Promise<Uint8Array> {
-  if (typeof file.arrayBuffer === "function") return file.arrayBuffer().then((b) => new Uint8Array(b));
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(new Uint8Array(reader.result as ArrayBuffer));
-    reader.onerror = () => reject(reader.error ?? new Error("The image could not be read."));
-    reader.readAsArrayBuffer(file);
-  });
-}
 
 const NOTHING = { load: () => Promise.resolve(null) };
 
@@ -57,15 +47,15 @@ export function useRichImages(dir: string | null, text = ""): { images: RichImag
           setNotice(message);
           throw new Error(message);
         };
-        if (dir === null) return refuse("This box has no folder yet.");
+        if (dir === null) refuse("This box has no folder yet.");
         if (file.type !== "image/png" && file.type !== "image/jpeg") refuse(ONLY_PNG_OR_JPEG);
         if (file.size > PASTED_IMAGE_MAX_BYTES) refuse(IMAGE_TOO_LARGE);
         return track(async () => {
           try {
-            const path = await storage.saveImage("data", dir, await bytesOf(file));
+            const path = await storage.saveImage("data", dir!, new Uint8Array(await file.arrayBuffer()));
             // A file read as missing before this paste is there now.
             forgetImage(storage, path);
-            const name = path.slice(path.lastIndexOf("/") + 1);
+            const name = fileName(path);
             saved.current.set(name, path);
             return name;
           } catch (e) {

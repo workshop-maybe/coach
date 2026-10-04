@@ -37,7 +37,7 @@ export interface Beat {
   valid?: boolean;
   /** The answer as plain text, shown above later cards. */
   settled?: ReactNode;
-  /** A side effect of moving on from this beat (never a write to the data folder; a pasted image is written by its box, not here). */
+  /** A side effect of moving on from this beat (never a write to the data folder). */
   onForward?(): void | Promise<void>;
   /** The beat claims the window as a pane (R7): its card fills the height and Escape steps back rather than out (KTD8). */
   pane?: boolean;

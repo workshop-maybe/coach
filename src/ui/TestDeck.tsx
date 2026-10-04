@@ -38,9 +38,8 @@ import { SKELETON_ID, defaultHandoff, fillHandoff, handoffsFor, skeletonOf, winn
 import { assignmentVersion } from "../domain/hash";
 import { sameSetup } from "../domain/matrix";
 import { fitsJev } from "../domain/jevBudget";
+import { assessmentDir, credentialsDir } from "../domain/folder";
 import { cleanUpLineBreaks, lineBreakBatches } from "../domain/lineBreaks";
-import { assessmentPath, credentialsDir } from "../domain/folder";
-import { folderOf } from "../domain/images";
 import { recordAssessment } from "../domain/operations";
 import { readingParts, secondOpinionRequest, type JevReadingParts } from "../domain/secondOpinion";
 import {
@@ -62,6 +61,7 @@ import { handoffKeys, machineKeys, openingChoice, replyScreen, trigPages, type H
 import { Deck, type Beat } from "./Deck";
 import { backToTest } from "./HandoffDecks";
 import { handoffLabel } from "./format";
+import { imageSource } from "./imageSource";
 import { useJev } from "./jevContext";
 import { JevReadingPanel } from "./JevReading";
 import { useNav } from "./nav";
@@ -73,7 +73,6 @@ import type { TestPick } from "./routes";
 import { StoredSwitch, focusOnMount } from "./shared";
 import { describeError, useFolder } from "./useFolderState";
 import { useMatrix } from "./useMatrix";
-import { imageSource } from "./imageSource";
 import { useRichImages } from "./useRichImages";
 
 /** How long the landing plays before home returns. */
@@ -187,7 +186,7 @@ export function TestDeck(props: TestDeckProps) {
   const waiting = pending.find((p) => p.profileSlug === profileSlug && p.credentialKey === key);
   // A pasted image goes in the folder the result will be recorded in. Picking another agent
   // or badge moves the folder, and the images the reply still names go along (R10).
-  const replyImages = useRichImages(profile && credential ? folderOf(assessmentPath(profile.slug, credential.collectionSlug, credential.slug, "_")) : null, reply);
+  const replyImages = useRichImages(profile && credential ? assessmentDir(profile.slug, credential.collectionSlug, credential.slug) : null, reply);
   const rubricImages = credential ? imageSource(storage, credentialsDir(credential.collectionSlug)) : undefined;
 
   // The second opinion this reply would ask for, and whether it fits Jev's budget (KTD19).

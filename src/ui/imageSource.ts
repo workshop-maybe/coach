@@ -3,8 +3,7 @@
 // every reload as it does badge art: a mounted image keeps showing, and the next one to
 // mount reads fresh.
 
-import { assessmentPath } from "../domain/folder";
-import { folderOf } from "../domain/images";
+import { assessmentDir } from "../domain/folder";
 import type { Assessment } from "../domain/types";
 import type { Storage } from "../storage/storage";
 import type { RichImageSource } from "./richImage";
@@ -35,8 +34,8 @@ function readImage(storage: Storage, path: string): Promise<string | null> {
 }
 
 /** The images beside a recorded result's file. */
-export function resultImages(storage: Storage, a: Pick<Assessment, "profileSlug" | "collectionSlug" | "credentialSlug" | "fileStem">): RichImageSource {
-  return imageSource(storage, folderOf(assessmentPath(a.profileSlug, a.collectionSlug, a.credentialSlug, a.fileStem)));
+export function resultImages(storage: Storage, a: Pick<Assessment, "profileSlug" | "collectionSlug" | "credentialSlug">): RichImageSource {
+  return imageSource(storage, assessmentDir(a.profileSlug, a.collectionSlug, a.credentialSlug));
 }
 
 /** The images beside a file in `dir`. One object per storage and folder, so it never changes identity. */

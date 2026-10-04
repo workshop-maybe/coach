@@ -2,7 +2,7 @@
 // its flow-test stub, so both take the same pastes.
 
 /** The image files a paste carries, from its files or, failing that, its items. */
-export function pastedImages(data: DataTransfer): File[] {
+function pastedImages(data: DataTransfer): File[] {
   const files = Array.from(data.files ?? []).filter((f) => f.type.startsWith("image/"));
   if (files.length) return files;
   return Array.from(data.items ?? [])
@@ -24,7 +24,7 @@ export function htmlHasText(html: string): boolean {
  * Whether a paste carries real text: plain text other than a lone address, or HTML with text
  * in it. An Office or iWork copy puts a picture of the text beside the text; the text wins.
  */
-export function pasteHasText(data: DataTransfer): boolean {
+function pasteHasText(data: DataTransfer): boolean {
   const text = data.getData("text/plain").trim();
   if (text !== "" && !/^[a-z][a-z0-9+.-]*:\/\/\S+$/i.test(text)) return true;
   const html = data.getData("text/html");
