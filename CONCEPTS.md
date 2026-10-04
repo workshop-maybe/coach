@@ -44,7 +44,7 @@ A reply the user saved without a verdict, to judge later, usually beside other a
 
 ### Go-to
 
-The agent the user chose for a badge, even when several hold it. The user marks a Met result to choose it, and every mark stays in the record; a badge's go-to is the agent of its most recent mark. A go-to that no longer holds the badge stays its go-to, flagged, until the user marks another.
+The agent the user chose for a badge, even when several hold it. The user marks a Met result to choose it, and every mark stays in the record; a badge's go-to is the agent of its most recent mark. The go-to stays until the user marks another, flagged when it no longer holds the badge, when the badge's task or rubric changed since its latest result, or when its setup changed.
 
 ## Jev Mode
 

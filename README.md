@@ -36,7 +36,7 @@ This is a tool people should want to use for its own sake. If it helps you think
 
 Planning. Built with Tauri 2 and React + TypeScript. The prototype targets Mac and Linux, with Windows optional. It does not include a marketplace.
 
-On first run the app asks for a data folder. It keeps everything there as plain files you can read, edit and put under git: collections and credentials as Markdown and JSON, agent profiles as JSON, and each recorded result as a Markdown file.
+On first run the app asks for a data folder. It keeps everything there as plain files you can read, edit and put under git: collections and credentials as Markdown and JSON, agent profiles as JSON, each recorded result and each reply held to compare as a Markdown file, each go-to choice as JSON, and pictures and videos as files beside the text that names them.
 
 The app has one home: what needs you, your agents, your badges, and two doors to create an agent or a credential. Every step after that asks one thing at a time.
 

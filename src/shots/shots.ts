@@ -156,6 +156,11 @@ const CODEX_ANSWER_KEY = { profileSlug: CODEX, fileStem: "20260927T112000Z" };
 const CLAUDE_HELD = { profileSlug: CLAUDE, fileStem: "20260929T101500Z" };
 const CODEX_HELD = { profileSlug: CODEX, fileStem: "20260929T114000Z" };
 
+/** What Claude Code sends back when it takes Say how sure you are again, with Jev Mode on. */
+const HOW_SURE_REPLY = `1. Answer: 5. Confidence: 95%
+2. Answer: More than one answer. The largest can be anything from 9 to 13. Confidence: 85%
+3. Answer: 48. Confidence: 80%`;
+
 /**
  * A short release note as a terminal shows it: a harness marker, a two-space gutter and
  * lines wrapped at one width mid-sentence, so the paste offers "Clean up with Jev".
@@ -285,6 +290,24 @@ export const SHOTS: readonly Shot[] = [
     expect: { selector: "details.reply-jev[open]" },
     steps: [{ click: { selector: "details.reply-jev > summary" } }, { scroll: { selector: "details.reply-jev" } }],
   },
+  {
+    // Say how sure you are has two judged replies, one with a note, so the line under Ask Jev
+    // says what goes with the ask. The picture is the rubric's side of the judge card.
+    id: "jev-sends",
+    page: "help/jev-mode",
+    route: { view: "deck", deck: "test", profileSlug: CLAUDE, credentialKey: HOW_SURE },
+    seed: "full",
+    jev: "on",
+    expect: { selector: ".meet-jev .jev-note" },
+    steps: [
+      { click: { button: "Copy" } },
+      { waitFor: { text: "What came back" } },
+      { paste: HOW_SURE_REPLY },
+      { click: { button: "Next" } },
+      { waitFor: { selector: ".meet-jev .jev-note" } },
+    ],
+    clip: { selector: ".meet-text-rubric", pad: 8 },
+  },
 
   // How to (U7): every picture over the full sample with Jev Mode off (KTD7).
   {
@@ -384,6 +407,27 @@ export const SHOTS: readonly Shot[] = [
     expect: { text: "Make go-to" },
     steps: [{ waitFor: { text: "Make go-to" } }],
     clip: { selector: 'section[aria-labelledby="badge-holders"]', pad: 24 },
+  },
+  {
+    // Claude Code is Say how sure you are's go-to. Saving a changed rubric opens the badge's
+    // page, and closing it shows home's Badges with the go-to's line flagged. The sample
+    // folder stays unflagged, so no other picture changes.
+    id: "go-to-flagged",
+    page: "how-to/choose-a-go-to",
+    route: { view: "deck", deck: "edit-credential", credentialKey: HOW_SURE, part: "rubric" },
+    seed: "full",
+    jev: "off",
+    expect: { text: "Go-to: Claude Code · task changed" },
+    steps: [
+      { paste: "Each confidence comes with a reason. " },
+      { click: { button: "Next" } },
+      { waitFor: { text: "Holders will re-test" } },
+      { click: { button: "Save" } },
+      { waitFor: { selector: 'section[aria-labelledby="badge-holders"]' } },
+      { click: { button: "Close" } },
+      { waitFor: { text: "Go-to: Claude Code · task changed" } },
+    ],
+    clip: { selector: 'section[aria-labelledby="home-badges"]', pad: 8 },
   },
   {
     id: "badge-replies",
@@ -590,8 +634,8 @@ export const COVERAGE: Record<RouteKind, readonly string[] | typeof NOT_PICTURED
   home: ["home-empty", "home", "home-needs"],
   "deck:credential": ["credential-start", "credential-target"],
   "deck:agent": ["first-test-agent", "first-test-hand", "first-test-judge", "first-test-home", "agent-new"],
-  "deck:test": ["test-hand", "test-reply", "judge", "go-to-offer", "missed-points", "held", "jev-ask", "jev-cleanup"],
-  "deck:edit-credential": ["edit-retest", "paste-image", "add-video"],
+  "deck:test": ["test-hand", "test-reply", "judge", "go-to-offer", "missed-points", "held", "jev-ask", "jev-cleanup", "jev-sends"],
+  "deck:edit-credential": ["edit-retest", "go-to-flagged", "paste-image", "add-video"],
   "deck:edit-agent": ["agent-params"],
   "deck:handoffs": ["handoffs-box"],
   "deck:edit-handoff": ["handoff-edit"],
