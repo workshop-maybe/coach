@@ -3,6 +3,7 @@
 // the editors' own component state, so a reload never resets them.
 
 import { clearArtCache } from "../badge/resolve";
+import { clearImageCache } from "./imageSource";
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { loadFolder } from "../domain/folder";
@@ -64,10 +65,11 @@ export function FolderProvider({ storage, folder, children }: FolderProviderProp
     setLoading(true);
     try {
       const next = await loadFolder(storage);
-      // A hand edit may have replaced an art file in place, which the text comparison
+      // A hand edit may have replaced an art or pasted image file in place, which the text comparison
       // below cannot see, so every reload drops cached art.
       if (ticket === latest.current) {
         clearArtCache(storage);
+        clearImageCache(storage);
         setArtGeneration((g) => g + 1);
       }
       // Keep the same state object when nothing on disk changed, so a focus reload

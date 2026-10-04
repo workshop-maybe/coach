@@ -42,8 +42,13 @@ export function collectionPath(slug: Slug): string {
   return `${COLLECTIONS_DIR}/${slug}/collection.json`;
 }
 
+/** The folder every credential in a collection saves to, and their pasted images with them. */
+export function credentialsDir(collectionSlug: Slug): string {
+  return `${COLLECTIONS_DIR}/${collectionSlug}/credentials`;
+}
+
 export function credentialPath(collectionSlug: Slug, slug: Slug): string {
-  return `${COLLECTIONS_DIR}/${collectionSlug}/credentials/${slug}.md`;
+  return `${credentialsDir(collectionSlug)}/${slug}.md`;
 }
 
 export function profilePath(slug: Slug): string {

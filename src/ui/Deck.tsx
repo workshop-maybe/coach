@@ -2,7 +2,9 @@
 // current card asks one thing and offers one forward action named for what happens
 // next, Back is quiet, and answers already given settle above the card as plain text.
 // Leaving (Escape, the corner control, Back on the first beat) discards the answers.
-// Nothing is written until the last beat's forward action runs `onFinish`.
+// Nothing is written until the last beat's forward action runs `onFinish`, except an image
+// pasted into a rich box, which is saved beside the box's file the moment it is pasted so the
+// box can show it (KTD6 of the paste-images plan). An abandoned deck leaves that file behind.
 //
 // A beat can be a pane (R7, KTD3): it claims the window, its card fills the height with
 // the actions in view, and the answers above it keep to one line. Escape follows KTD8
@@ -35,7 +37,7 @@ export interface Beat {
   valid?: boolean;
   /** The answer as plain text, shown above later cards. */
   settled?: ReactNode;
-  /** A side effect of moving on from this beat (never a write to the data folder). */
+  /** A side effect of moving on from this beat (never a write to the data folder; a pasted image is written by its box, not here). */
   onForward?(): void | Promise<void>;
   /** The beat claims the window as a pane (R7): its card fills the height and Escape steps back rather than out (KTD8). */
   pane?: boolean;
