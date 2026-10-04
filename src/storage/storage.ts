@@ -6,6 +6,28 @@ import type { ContextReading } from "../domain/types";
 
 export type RootKind = "data" | "export";
 
+/**
+ * Where `addFiles` takes its files from (video plan KTD5): Rust's own picker, the paths a
+ * drop on the window gave the page, or the Finder files a paste named by base name and size.
+ */
+export type AddFrom =
+  | { kind: "pick" }
+  | { kind: "drop"; paths: string[] }
+  | { kind: "paste"; files: { name: string; size: number }[] };
+
+/** One file `addFiles` considered: exactly one of its root-relative path or a refusal to show. */
+export interface AddedFile {
+  name: string;
+  path: string | null;
+  error: string | null;
+}
+
+/** A URL a `<video>` can play. The caller owns it and calls `release` once it lets go. */
+export interface VideoUrl {
+  url: string;
+  release(): void;
+}
+
 export interface Storage {
   /** Returns the file's text, or null when it does not exist. */
   readText(root: RootKind, path: string): Promise<string | null>;
@@ -29,6 +51,19 @@ export interface Storage {
    * different file at that name is an error, never overwritten.
    */
   saveImage(root: RootKind, dir: string, bytes: Uint8Array): Promise<string>;
+  /**
+   * Copies videos, and PNG or JPEG pictures, into `dir` in the data root, sorted by content,
+   * with no bytes crossing to the page (video plan KTD5, KTD6). One result per file, in order;
+   * a refusal for one never stops the rest. A cancelled pick gives an empty list.
+   */
+  addFiles(dir: string, from: AddFrom): Promise<AddedFile[]>;
+  /**
+   * Copies a video from the data root into `toDir` in either root under its content-addressed
+   * name and returns the target path (KTD7). The same bytes already there are not written again.
+   */
+  copyVideo(from: string, toRoot: RootKind, toDir: string): Promise<string>;
+  /** A playable URL for a video in the data root, or null when it is missing or refused (KTD4). */
+  videoUrl(path: string): Promise<VideoUrl | null>;
   /**
    * This machine plus a fingerprint of the harness's memory for the agent's repo (R1). File
    * contents never cross; only the digest does. Reads outside the chosen folders.

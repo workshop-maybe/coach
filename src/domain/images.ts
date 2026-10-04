@@ -16,8 +16,12 @@ export const ONLY_PNG_OR_JPEG = "Only PNG and JPEG images can be pasted.";
  * ending .png, .jpg or .jpeg. Only such a name is ever read; anything else stays inert.
  */
 export function isLocalImageName(src: string): boolean {
-  if (/[/\\:<>"\u0000-\u001f\u007f]/.test(src) || src.includes("..") || src.startsWith(".")) return false;
-  return /^.+\.(png|jpe?g)$/i.test(src);
+  return isBareName(src) && /^.+\.(png|jpe?g)$/i.test(src);
+}
+
+/** The segment rule `isLocalImageName` and `isLocalVideoName` share; the extension is theirs. */
+export function isBareName(src: string): boolean {
+  return !(/[/\\:<>"\u0000-\u001f\u007f]/.test(src) || src.includes("..") || src.startsWith("."));
 }
 
 /** Whether `uri` is a base64 PNG or JPEG data URI, the only image source the app sets. */
@@ -77,15 +81,26 @@ function srcOf(raw: string): string {
 
 /** Every bare-name image a Markdown text refers to, in order, once each. */
 export function localImageNames(markdown: string): string[] {
+  return localRefNames(markdown, isLocalImageName);
+}
+
+/**
+ * Every src a Markdown text writes with image syntax that `keep` accepts, as written, in
+ * order, once each. Videos use the same syntax, so their name list walks the same refs.
+ */
+export function localRefNames(markdown: string, keep: (src: string) => boolean): string[] {
   const names: string[] = [];
   for (const m of markdown.matchAll(IMAGE_REF)) {
     const src = srcOf(m[2]);
-    if (isLocalImageName(src) && !names.includes(src)) names.push(src);
+    if (keep(src) && !names.includes(src)) names.push(src);
   }
   return names;
 }
 
-/** `markdown` with each bare-name ref in `renamed` pointed at `assets/<new name>` (KTD9). */
+/**
+ * `markdown` with each bare-name ref in `renamed` pointed at `assets/<new name>` (KTD9).
+ * It is keyed by name alone, so a video ref is rewritten the same way as a picture's.
+ */
 export function withAssetsRefs(markdown: string, renamed: ReadonlyMap<string, string>): string {
   return markdown.replace(IMAGE_REF, (whole, head: string, raw: string, tail: string) => {
     const to = renamed.get(srcOf(raw));
