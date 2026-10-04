@@ -36,9 +36,12 @@ export interface ExampleCandidate {
 
 /**
  * The badge's results ranked as example sources (KTD10, KTD11): an overrule with a reason,
- * then an overrule, then any other result, newest first within each. An overrule opposes
- * its verdict under the default pair or under the badge's current pair for its reading's
- * model, so a fit that absorbs a confidently wrong reading never demotes it.
+ * then an overrule, then any other result, newest first within each. A result with a note
+ * ranks as an overrule with a reason whatever the cut-offs say: the reason step is asked
+ * only when the user went against Jev, so the saved note is the proof, and a later fit that
+ * reads its reading as can't call cannot demote it. A result with no note is an overrule
+ * when its verdict opposes its reading under the default pair or under the badge's current
+ * pair for that reading's model.
  *
  * Every result counts for the overall question, on the side of its verdict. Only those at
  * `version` count for the point questions (KTD9): a Met result holds for every point, and
@@ -56,9 +59,10 @@ export function rankExamples(state: FolderState, key: string, version: string): 
     .filter((a) => credentialKey(a) === key)
     .map((result) => {
       const reason = reasonOf(result.note);
+      if (result.note.trim() !== "") return { result, reason, tier: 0 };
       const pair = result.jev && calibrations.get(result.jev.model)?.pair;
       const overrule = !!pair && ranksAsOverrule(result, pair);
-      return { result, reason, tier: overrule ? (reason !== "" ? 0 : 1) : 2 };
+      return { result, reason, tier: overrule ? 1 : 2 };
     });
   tiered.sort((a, b) => a.tier - b.tier || newestFirst(a.result, b.result));
 

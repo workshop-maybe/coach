@@ -121,6 +121,33 @@ describe("examples from a badge's results", () => {
     expect(no[0].item.user_reason).toBe("skips the rollback");
   });
 
+  it("Covers AE3. A result with a reason still ranks first after saving it moves the cut-offs so its reading reads can't call", () => {
+    const met = [62, 90, 95].map((pct, i) => result("codex", "met", 10 + i, { jev: reading(pct / 100) }));
+    const notMet = [5, 10, 12, 15, 20].map((pct, i) => result("claude", "not_met", 20 + i, { jev: reading(pct / 100) }));
+    // Before the save, the fitted pair calls 65% meets, so a Not yet there asks "What did Jev miss".
+    const before = calibrationOf(folder([...met, ...notMet]), KEY, MODEL).pair;
+    expect(before).toEqual({ low: 30, high: 60 });
+    expect(callOf(0.65, before)).toBe("meets");
+
+    const reasoned = result("codex", "not_met", 1, { jev: reading(0.65), note: "skips the rollback" });
+    const state = folder([reasoned, ...met, ...notMet]);
+    // Saving it refits the pair, and 65% now reads can't call under the fitted and the default pair alike.
+    const after = calibrationOf(state, KEY, MODEL).pair;
+    expect(after).toEqual({ low: 30, high: 70 });
+    expect(callOf(0.65, after)).toBe("cant_call");
+
+    expect(rankExamples(state, KEY, "v1")[0].sourceId).toBe(id(reasoned));
+    const no = side(examples(state), "overall", "false");
+    expect(no[0].sourceId).toBe(id(reasoned));
+    expect(no[0].item.user_reason).toBe("skips the rollback");
+  });
+
+  it("a hand-written note ranks its result as an overrule even with no reading", () => {
+    const noted = result("codex", "not_met", 1, { note: "Never ran the tests it names." });
+    const plain = result("claude", "not_met", 5);
+    expect(rankExamples(folder([noted, plain]), KEY, "v1").map((c) => c.sourceId)).toEqual([id(noted), id(plain)]);
+  });
+
   it("Covers AE8. Three Met results with no readings hold for every point: the two newest", () => {
     const [oldest, middle, newest] = [1, 2, 3].map((m) => result("codex", "met", m));
     expect(sides(examples(folder([oldest, middle, newest])))).toEqual({
