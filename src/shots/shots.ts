@@ -32,6 +32,8 @@ export type Target = { button: string } | { label: string } | { text: string } |
  * One in-page step, run in order before the page reports ready. Each waits for its target.
  * `click` waits until the target is enabled. `fill` types a whole value into a field.
  * `paste` pastes text into the rich editor (`.rich-input` unless `into` names another).
+ * `pasteImage` pastes one of the sample pictures in src/shots/ (SAMPLE_IMAGES) at the end of
+ * the rich editor, as a copied screenshot arrives, so the shot runs the real image paste.
  * `waitFor` waits until a target appears, such as a beat that lands after a timer.
  * `scroll` brings a target to the middle of the window, as far as the page scrolls, for a
  * screen taller than the window (U6).
@@ -40,8 +42,13 @@ export type Step =
   | { click: Target }
   | { fill: Target; value: string }
   | { paste: string; into?: Target }
+  | { pasteImage: SampleImage; into?: Target }
   | { waitFor: Target }
   | { scroll: Target };
+
+/** The sample pictures a `pasteImage` step can paste, each a PNG in src/shots/ under that name. */
+export const SAMPLE_IMAGES = ["pasted-sample"] as const;
+export type SampleImage = (typeof SAMPLE_IMAGES)[number];
 
 /** What must be on screen once the page is ready: exact text, or a CSS selector that matches. */
 export type Expect = { text: string } | { selector: string };
@@ -393,6 +400,17 @@ export const SHOTS: readonly Shot[] = [
     ],
   },
   {
+    // A screenshot of the merged changes pasted at the end of Write a release note's task.
+    // Ready once the picture has been saved and read back into the box.
+    id: "paste-image",
+    page: "how-to/paste-an-image",
+    route: { view: "deck", deck: "edit-credential", credentialKey: RELEASE_NOTE, part: "task" },
+    seed: "full",
+    jev: "off",
+    expect: { selector: ".rich-input .rich-image img[src^='data:image/png']" },
+    steps: [{ pasteImage: "pasted-sample" }, { waitFor: { selector: ".rich-input .rich-image img[src^='data:image/png']" } }],
+  },
+  {
     id: "handoffs-box",
     page: "how-to/change-a-badge",
     route: { view: "deck", deck: "handoffs", credentialKey: RELEASE_NOTE },
@@ -472,7 +490,7 @@ export const COVERAGE: Record<RouteKind, readonly string[] | typeof NOT_PICTURED
   "deck:credential": ["credential-start", "credential-target"],
   "deck:agent": ["first-test-agent", "first-test-hand", "first-test-judge", "first-test-home", "agent-new"],
   "deck:test": ["test-hand", "test-reply", "judge", "jev-ask", "jev-cleanup"],
-  "deck:edit-credential": ["edit-retest"],
+  "deck:edit-credential": ["edit-retest", "paste-image"],
   "deck:edit-agent": ["agent-params"],
   "deck:handoffs": ["handoffs-box"],
   "deck:edit-handoff": ["handoff-edit"],

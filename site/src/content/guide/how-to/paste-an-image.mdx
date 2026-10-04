@@ -1,0 +1,35 @@
+---
+title: Paste an image
+part: how-to
+order: 65
+description: Paste a screenshot into a task, a rubric, an agent's notes or a reply, and keep it as a file beside the text it belongs to.
+---
+
+{/* How to (the paste-images plan, U7, R13): which boxes take a picture, where its file goes, what a paste can be, and what to know about a picture that's in your folder. Labels are checked against src/ui/EditDecks.tsx, src/ui/CredentialDeck.tsx, src/ui/TestDeck.tsx and src/domain/images.ts (KTD8). */}
+
+Copy a screenshot, click where it belongs in a <UI>Task</UI>, <UI>Rubric</UI>, <UI>Notes</UI> or <UI>Reply</UI> box, and paste. The picture shows in the box where you pasted it.
+
+<Shot id="paste-image" alt="The task card for Write a release note, with a pasted screenshot of a terminal listing four merged changes below the task's text" />
+
+## Where it goes
+
+The app saves the picture as a file beside the file the box saves to, with a name such as `image-1a2b3c4d.png`. The text names that file in a Markdown image, so it stays plain Markdown.
+
+- A task or a rubric: in the collection's `credentials/` folder, beside the badge's file.
+- Notes: in `agents/`, beside the agent's file.
+- A reply: in the result's folder, beside the file the result is saved in when you record it.
+
+The file's name comes from the picture itself, so pasting the same picture twice saves one file. [Your data](/help/your-data/) shows the folders.
+
+## What it takes
+
+- A PNG or a JPEG, up to 10 MB. A screenshot copied on a Mac is a PNG. Anything else shows <UI>Only PNG and JPEG images can be pasted.</UI>
+- A copy that has text in it, such as cells from a spreadsheet, pastes as text.
+
+## Good to know
+
+- The picture is saved the moment you paste it. If you take it out of the text, or close the card without saving, its file stays in your folder. Check before you share the folder or put it under git, since a screenshot can show more than you meant it to.
+- When you copy a handoff, your agent gets the picture's name, not the picture. If it needs to see it, give it the file yourself.
+- A picture the app can't find or read shows as its file name. A picture from the web never loads.
+- [Export](/how-to/export/) puts a task's pictures in each module's `assets/` folder.
+- On Linux, a paste brings a picture in only when your system's WebKitGTK is recent enough to hand it over.
