@@ -3,6 +3,7 @@
 
 import { render } from "@testing-library/react";
 import {
+  COST_ORDER_PATH,
   MARKER_PATH,
   assessmentPath,
   collectionPath,
@@ -14,6 +15,7 @@ import {
   profilePath,
   serializeAssessment,
   serializeCollection,
+  serializeCostOrder,
   serializeHeld,
   serializeMark,
   serializeProfile,
@@ -92,6 +94,8 @@ export function storageWith(
     skeleton?: string;
     /** Go-to marks, each written as its own file. */
     marks?: Mark[];
+    /** The cost order's agent slugs, cheapest first. Absent means the folder has none. */
+    costOrder?: string[];
   } = {},
 ): MemoryStorage {
   const credentials = opts.credentials ?? [];
@@ -114,6 +118,7 @@ export function storageWith(
   for (const h of opts.handoffs ?? []) files[handoffPath(h.collectionSlug, h.credentialSlug, h.id)] = h.text;
   if (opts.skeleton !== undefined) files[SKELETON_PATH] = opts.skeleton;
   for (const m of opts.marks ?? []) files[markPath(m.collectionSlug, m.credentialSlug, m.id)] = serializeMark(m);
+  if (opts.costOrder) files[COST_ORDER_PATH] = serializeCostOrder(opts.costOrder);
   return new MemoryStorage(files);
 }
 

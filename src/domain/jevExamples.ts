@@ -154,7 +154,7 @@ export function reasonOf(note: string): string {
  * unassigned, not a format character). The user judged the rendered reply and never saw
  * them. Dropping the zero-width joiner splits a joined emoji into its parts.
  */
-const INVISIBLE = /(?!\t)[\p{Cc}\p{Cf}\u{E0000}-\u{E007F}]/gu;
+export const INVISIBLE = /(?!\t)[\p{Cc}\p{Cf}\u{E0000}-\u{E007F}]/gu;
 
 // A Markdown image, inline (`![alt](src "title")`) or by reference (`![alt][ref]`,
 // `![alt][]`), with any src, data URIs included. A video in a rich box uses the same syntax
@@ -165,11 +165,11 @@ const INVISIBLE = /(?!\t)[\p{Cc}\p{Cf}\u{E0000}-\u{E007F}]/gu;
 const ALT = String.raw`!\[(?:\\.|[^[\]\\])*\]`;
 const INLINE_SRC = String.raw`\(\s*(?:<(?:\\.|[^<>\\])*>|[^<\s()][^\s()]*)(?:\s+"(?:\\.|[^"\\])*")?\s*\)`;
 const REFERENCE = String.raw`\[(?:\\.|[^[\]\\])*\]`;
-const IMAGE = new RegExp(`${ALT}(?:${INLINE_SRC}|${REFERENCE})`, "g");
+export const IMAGE = new RegExp(`${ALT}(?:${INLINE_SRC}|${REFERENCE})`, "g");
 /** A reference definition whose destination is an image or video data URI: `[ref]: data:image/png;base64,…`. */
-const IMAGE_DEFINITION = /^ {0,3}\[(?:\\.|[^[\]\\])+\]:\s*<?data:(?:image|video)\//i;
+export const IMAGE_DEFINITION = /^ {0,3}\[(?:\\.|[^[\]\\])+\]:\s*<?data:(?:image|video)\//i;
 /** An image or video data URI anywhere: its type and parameters, then its data up to whitespace, a closing bracket or a quote. */
-const IMAGE_DATA = /data:(?:image|video)\/[\w.+;=-]*,[^\s)\]"'<>]*/gi;
+export const IMAGE_DATA = /data:(?:image|video)\/[\w.+;=-]*,[^\s)\]"'<>]*/gi;
 
 // Lines that look like secrets (KTD10). A heuristic, not a guarantee: earlier replies may
 // hold keys an agent printed, and some never left the machine before.
