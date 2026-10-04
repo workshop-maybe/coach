@@ -5,8 +5,9 @@
 // The providers mount in src/App.tsx's order around AppShell, with two swaps (KTD6): the
 // window frame is a fixed `maximized` context instead of WindowFrameProvider, whose mount
 // would write data-window="normal" with no Tauri bridge; and storage and Jev Mode are the
-// sample's MemoryStorage and FakeJev. No `window.__TAURI_INTERNALS__` is defined, so the
-// window-frame and window-key code makes no plugin calls.
+// sample's MemoryStorage and FakeJev, answering as the shot scripts it. No
+// `window.__TAURI_INTERNALS__` is defined, so the window-frame and window-key code makes
+// no plugin calls.
 //
 // The page signals on <html>: data-shot="ready" once its steps have run, no badge
 // placeholder is still loading (aria-busy), fonts are loaded, every image has decoded, every
@@ -76,7 +77,7 @@ export async function startShot(root: HTMLElement, search: string, shots: readon
   const reactRoot = createRoot(root);
   reactRoot.render(
     <StrictMode>
-      <ShotApp shot={shot} storage={storage} jev={sampleJev(shot.jev)} />
+      <ShotApp shot={shot} storage={storage} jev={sampleJev(shot.jev, shot.jevAnswers)} />
     </StrictMode>,
   );
   const stop = () => reactRoot.unmount();

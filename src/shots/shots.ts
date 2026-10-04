@@ -14,10 +14,17 @@
 import type { PartId } from "../../site/src/parts";
 import type { DeckRoute, ItemRoute, Route } from "../ui/routes";
 
-/** The sample folder a shot opens over (src/shots/seed.ts): a first run's empty folder, or the full one. */
-export type SeedVariant = "empty" | "full";
+/**
+ * The sample folder a shot opens over (src/shots/seed.ts): a first run's empty folder, the
+ * full one, or the full one with enough judged readings on Check an answer key for Jev's
+ * track record and fitted cut-offs.
+ */
+export type SeedVariant = "empty" | "full" | "judged";
 
-/** Jev Mode for a shot: off with no key, or on with FakeJev's sample key hint (AE4). How to pages use "off". */
+/**
+ * Jev Mode for a shot: off with no key, or on with FakeJev's sample key hint (AE4). How to
+ * pages use "off", except the pictures of Jev making a call.
+ */
 export type JevState = "off" | "on";
 
 /**
@@ -81,6 +88,12 @@ export interface Shot {
   expect: Expect;
   clip?: Clip;
   steps?: readonly Step[];
+  /**
+   * What Jev answers every ask, as a chance by question id: `p1`… for rubric points,
+   * `overall`, `t1`… for learning targets. An id left out gets FakeJev's default, 0.5,
+   * which reads as can't call. Only with Jev Mode on.
+   */
+  jevAnswers?: Readonly<Record<string, number>>;
 }
 
 /**

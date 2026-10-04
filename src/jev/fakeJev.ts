@@ -3,9 +3,11 @@
 // turns Jev Mode off, and an ask is refused while off or with no key. Tests queue what
 // the next call of a method returns, fails with or waits on, and read `calls` to see what
 // the UI asked for. The budget check is the web view's own, so a test queues "tooLong".
-// An ask with nothing queued answers every requested id with FAKE_ANSWER and names the
-// pinned model, as the native side names the model that answered; a queued answer is
-// returned as queued, and one with no model reads as the pinned one.
+// An ask with nothing queued answers each requested id from the answer map the fake was
+// made with, and FAKE_ANSWER for every id not in it, and names the pinned model, as the
+// native side names the model that answered; a queued answer is returned as queued, and
+// one with no model reads as the pinned one. The screenshot harness scripts a shot's
+// reading through that map.
 //
 // The key is never recorded in `calls` and is held only in a private field, so printing
 // the fake never shows it. `holdsKey` answers whether a given key was the one set.
@@ -37,7 +39,7 @@ export type FakeJevCall =
 /** Jev Mode on with a key in the keychain. */
 export const FAKE_ON: JevStatus = { on: true, hasKey: true, storage: "keychain", hint: "c0de" };
 
-/** The probability an ask gives every requested id when no answer is queued. */
+/** The probability an ask gives a requested id when no answer is queued and the answer map has none. */
 export const FAKE_ANSWER = 0.5;
 
 const MAX_KEY_CHARS = 512;
@@ -50,11 +52,16 @@ export class FakeJev implements Jev {
 
   #state: JevStatus;
   #key: string | null = null;
+  readonly #answers: ReadonlyMap<string, number>;
   readonly #queues: { [M in JevMethod]: FakeOutcome<M>[] } = { status: [], setKey: [], clearKey: [], setOn: [], ask: [] };
 
-  /** Starts from a status, off by default. A status with `hasKey` models a key already saved. */
-  constructor(initial: JevStatus = JEV_OFF) {
+  /**
+   * Starts from a status, off by default. A status with `hasKey` models a key already saved.
+   * `answers` gives the probability an unqueued ask returns for each question id it names.
+   */
+  constructor(initial: JevStatus = JEV_OFF, answers: Readonly<Record<string, number>> = {}) {
     this.#state = { ...initial };
+    this.#answers = new Map(Object.entries(answers));
   }
 
   /**
@@ -117,7 +124,7 @@ export class FakeJev implements Jev {
     if (!this.#state.hasKey) throw new JevError("keyMissing");
     try {
       return await this.#serve("ask", () => ({
-        answers: Object.fromEntries(Object.keys(request.questions).map((id) => [id, FAKE_ANSWER])),
+        answers: Object.fromEntries(Object.keys(request.questions).map((id) => [id, this.#answers.get(id) ?? FAKE_ANSWER])),
         model: JEV_MODEL,
       }));
     } catch (e) {
