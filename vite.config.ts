@@ -10,9 +10,10 @@ export default defineConfig(() => ({
 
   // Domain tests run in Node. UI tests opt into jsdom with a `// @vitest-environment jsdom` header,
   // which keeps Web Crypto and TextEncoder in the same realm for the version hash.
+  // The user guide site's checks run here too (U2, KTD11).
   test: {
     environment: "node",
-    include: ["src/**/*.test.{ts,tsx}"],
+    include: ["src/**/*.test.{ts,tsx}", "site/**/*.test.ts"],
     // ProseMirror's jsdom stand-ins, a no-op in the node environment (KTD11).
     setupFiles: ["src/test/setup.ts"],
     // Vitest stubs CSS imports as empty strings, even with `?raw`. The badge renderer

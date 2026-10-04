@@ -1,0 +1,24 @@
+---
+// Search across the guide (U2, KTD5, R13, R17): Pagefind's Component UI, loaded from the
+// index that `npm run site:build` writes into the site's own /pagefind/, so a search never
+// leaves the site. The box starts hidden and shows only once the UI has loaded: without
+// JavaScript, or under `site:dev` where there is no index, the reader still has
+// navigation. Its look comes from the custom properties in styles/guide.css; its
+// stylesheet is linked from the layout's head.
+---
+
+<div class="guide-search" hidden>
+  <pagefind-searchbox placeholder="Search the guide"></pagefind-searchbox>
+</div>
+
+<script is:inline type="module" src="/pagefind/pagefind-component-ui.js"></script>
+<script is:inline type="module">
+  // Runs after the UI above, since module scripts run in order. No UI, no box.
+  const ui = window.PagefindComponents;
+  if (ui) {
+    ui.getInstanceManager()
+      .getInstance("default")
+      .setTranslations({ zero_results: "Nothing in the guide matches “[SEARCH_TERM]”" });
+    document.querySelector(".guide-search")?.removeAttribute("hidden");
+  }
+</script>

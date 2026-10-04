@@ -34,3 +34,6 @@ src-tauri/gen
 
 # Compound Engineering scratch
 .context/compound-engineering/
+
+# Astro's generated types for the guide site
+.astro/

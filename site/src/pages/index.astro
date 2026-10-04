@@ -1,0 +1,34 @@
+---
+// The guide's home (U2, R9, R13): what the guide is, then each part's pages with the line
+// that says what each one is for. The parts and pages come from the guide collection, so
+// a new page shows up here and in navigation without touching this file.
+
+import { getCollection } from "astro:content";
+import Guide from "../layouts/Guide.astro";
+import { byPart, pageHref } from "../parts";
+
+const groups = byPart((await getCollection("guide")).map((entry) => ({ id: entry.id, ...entry.data })));
+---
+
+<Guide
+  title="Andamio Desktop guide"
+  description="How each part of Andamio Desktop works."
+  current="/"
+>
+  <p>How each part of Andamio Desktop works. The app is an early preview, and this guide grows with it.</p>
+  {
+    groups.map((group) => (
+      <section class="guide-contents">
+        <h2>{group.label}</h2>
+        <ul>
+          {group.pages.map((page) => (
+            <li>
+              <a href={pageHref(page.id)}>{page.title}</a>
+              <span>{page.description}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+    ))
+  }
+</Guide>

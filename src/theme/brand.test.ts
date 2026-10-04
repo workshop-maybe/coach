@@ -1,21 +1,33 @@
 /// <reference types="node" />
 // Brand guard: component styles take colors from the token layer and keep square
 // corners. src/theme holds the tokens themselves; src/badge draws badge art,
-// which follows credential-badges rather than the app's brand.
+// which follows credential-badges rather than the app's brand. The user guide's
+// own styles under site/src hold to the same rules (U2, R16), and the guide never
+// takes the app shell's App.css (KTD3).
 
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const SRC = join(__dirname, "..");
+const SITE = join(SRC, "..", "site", "src");
 const EXEMPT = ["theme", "badge"];
 
-function cssFiles(dir: string): string[] {
-  return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
-    const path = join(dir, e.name);
-    if (e.isDirectory()) return EXEMPT.includes(relative(SRC, path)) ? [] : cssFiles(path);
-    return e.name.endsWith(".css") ? [path] : [];
-  });
+/** Every file under root whose name passes `keep`, skipping exempt folders (relative to root). */
+function filesUnder(root: string, keep: (name: string) => boolean, exempt: string[] = []): string[] {
+  if (!existsSync(root)) return [];
+  const walk = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      const path = join(dir, e.name);
+      if (e.isDirectory()) return exempt.includes(relative(root, path)) ? [] : walk(path);
+      return keep(e.name) ? [path] : [];
+    });
+  return walk(root);
+}
+
+function cssFiles(root: string, exempt: string[] = []): string[] {
+  return filesUnder(root, (name) => name.endsWith(".css"), exempt);
 }
 
 /** Lines that break the guard, as "line: text". */
@@ -30,6 +42,13 @@ function brandViolations(css: string): string[] {
     if (colorLiteral || badRadius) out.push(`${i + 1}: ${text.trim()}`);
   });
   return out;
+}
+
+/** Every break in the stylesheets under root, as "file:line: text" with the file relative to root. */
+function stylesheetViolations(root: string, exempt: string[] = []): string[] {
+  return cssFiles(root, exempt).flatMap((file) =>
+    brandViolations(readFileSync(file, "utf8")).map((v) => `${relative(root, file)}:${v}`),
+  );
 }
 
 describe("brandViolations", () => {
@@ -60,8 +79,42 @@ describe("brandViolations", () => {
   });
 });
 
+describe("stylesheetViolations", () => {
+  it("names the file and line of each break in a site stylesheet", () => {
+    const root = mkdtempSync(join(tmpdir(), "brand-"));
+    try {
+      mkdirSync(join(root, "styles"));
+      writeFileSync(join(root, "styles", "guide.css"), "a {\n  color: #fff;\n  border-radius: 4px;\n}\n");
+      writeFileSync(join(root, "styles", "fine.css"), "a { color: var(--ink); border-radius: 0; }\n");
+      expect(stylesheetViolations(root)).toEqual([
+        "styles/guide.css:2: color: #fff;",
+        "styles/guide.css:3: border-radius: 4px;",
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("component stylesheets", () => {
-  it.each(cssFiles(SRC).map((f) => [relative(SRC, f), f]))("%s stays on the token layer", (_, file) => {
+  it.each(cssFiles(SRC, EXEMPT).map((f) => [relative(SRC, f), f]))("%s stays on the token layer", (_, file) => {
     expect(brandViolations(readFileSync(file, "utf8"))).toEqual([]);
+  });
+});
+
+describe("the guide site's stylesheets", () => {
+  it("scans the site's own stylesheet", () => {
+    expect(cssFiles(SITE).map((f) => relative(SITE, f))).toContain("styles/guide.css");
+  });
+
+  it("keep to the token layer and square corners", () => {
+    expect(stylesheetViolations(SITE)).toEqual([]);
+  });
+
+  it("never take the app shell's App.css", () => {
+    const sources = filesUnder(SITE, (name) => /\.(astro|mdx?|tsx?|css|mjs)$/.test(name));
+    const takesAppCss = /(?:import|@import)\s[^;\n]*App\.css/;
+    const takers = sources.filter((f) => takesAppCss.test(readFileSync(f, "utf8"))).map((f) => relative(SITE, f));
+    expect(takers).toEqual([]);
   });
 });
