@@ -219,7 +219,7 @@ export const TERMINAL_REPLY = `⏺ Release notes for 0.9.
 export const CASE_REPLY = `1. Holds. 100 has 20 multiples of 5, and the 4 multiples of 25 add one more each: 24 zeros.
 2. Holds. 2100 is divisible by 4, so it is a leap year.
 3. Does not hold. The chance is 1 − (5/6)^4 = 671/1296, about 0.52. Adding 1/6 four times counts the rolls with more than one six twice.
-4. Holds. Sorting in reverse gives [3, 2, 1], and [1:] drops the 3.
+4. Holds. Sorting in reverse gives 3, 2, 1, and the slice from 1 drops the 3.
 5. Does not hold. 2^10 = 1,024 is a little more than 10^3, so 2^100 is larger than 10^30.`;
 
 /**

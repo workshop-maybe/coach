@@ -15,7 +15,7 @@
       "I can check whether an answer key is right instead of trusting it.",
       "I can find the step where a convincing rationale goes wrong."
     ],
-    "reply": "1. Holds. 100 has 20 multiples of 5, and the 4 multiples of 25 add one more each: 24 zeros.\n2. Holds. 2100 is divisible by 4, so it is a leap year.\n3. Does not hold. The chance is 1 − (5/6)^4 = 671/1296, about 0.52. Adding 1/6 four times counts the rolls with more than one six twice.\n4. Holds. Sorting in reverse gives [3, 2, 1], and [1:] drops the 3.\n5. Does not hold. 2^10 = 1,024 is a little more than 10^3, so 2^100 is larger than 10^30."
+    "reply": "1. Holds. 100 has 20 multiples of 5, and the 4 multiples of 25 add one more each: 24 zeros.\n2. Holds. 2100 is divisible by 4, so it is a leap year.\n3. Does not hold. The chance is 1 − (5/6)^4 = 671/1296, about 0.52. Adding 1/6 four times counts the rolls with more than one six twice.\n4. Holds. Sorting in reverse gives 3, 2, 1, and the slice from 1 drops the 3.\n5. Does not hold. 2^10 = 1,024 is a little more than 10^3, so 2^100 is larger than 10^30."
   },
   "questions": {
     "p1": {
