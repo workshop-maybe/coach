@@ -14,6 +14,7 @@ import { InkDefs } from "../cast/InkDefs";
 import { AgentDetail } from "./AgentDetail";
 import { BadgeDetail } from "./BadgeDetail";
 import { CompareView } from "./CompareView";
+import { CostOrderDeck } from "./CostOrderDeck";
 import { CredentialDeck } from "./CredentialDeck";
 import { EditAgentDeck, EditCredentialDeck } from "./EditDecks";
 import { EditHandoffDeck, HandoffsDeck } from "./HandoffDecks";
@@ -156,6 +157,8 @@ function DeckView({ route }: { route: DeckRoute }) {
       return <TrashDeck item={route.item} />;
     case "jev":
       return <JevDeck />;
+    case "cost-order":
+      return <CostOrderDeck returnTo={route.returnTo} />;
   }
 }
 

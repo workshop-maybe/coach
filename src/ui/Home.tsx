@@ -13,6 +13,7 @@ import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { goToOf, goToStanding } from "../domain/goTo";
 import { cellKey } from "../domain/matrix";
+import { byCost } from "../domain/recommend";
 import { credentialKey, type AgentProfile, type Collection, type Credential, type FolderState } from "../domain/types";
 import { Cartridge } from "../cast/Cartridge";
 import { Machine } from "../cast/Machine";
@@ -83,7 +84,8 @@ export function Home() {
   // One tree whatever has loaded, so the doors never remount under a click.
   const holds = (profileSlug: string, key: string) => matrix?.cells.get(cellKey(profileSlug, key))?.status === "met";
   const shown = all ? items : items.slice(0, SHOWN);
-  const profiles = shelf ? (state?.profiles ?? []) : [];
+  // Agents cheapest first once the user set a cost order, the rest after them by name (router R10, R11).
+  const profiles = shelf ? byCost(shelf.state) : [];
   const showNeeds = !!shelf && items.length > 0;
   const showAgents = !!shelf && profiles.length > 0;
   const showBadges = !!shelf && shelf.credentials.length > 0;
@@ -139,6 +141,9 @@ export function Home() {
                   );
                 })}
               </ul>
+              <button type="button" className="link more" onClick={() => navigate({ view: "deck", deck: "cost-order" })}>
+                Order by cost
+              </button>
             </section>
           )}
 

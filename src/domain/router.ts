@@ -35,3 +35,17 @@ export function jobFirstLine(job: string): string {
     .find((l) => l.trim() !== "");
   return line === undefined ? "" : reasonLine(line);
 }
+
+/** What a routing ask found (KTD4, KTD11), kept with the job text and the badges it was asked about. */
+export interface RouteOutcome {
+  /** The job as it stood when Jev was asked. */
+  job: string;
+  /** The badges asked about, by credential key, in Home's order. */
+  keys: string[];
+  /** Jev's probability that the job is like each badge asked about, by credential key. */
+  answers: Record<string, number>;
+  /** The difficulty levels' probabilities, routine first, or null when none came back. */
+  levels: number[] | null;
+  /** The Jev model that answered the first request. */
+  model: string;
+}
