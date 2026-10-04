@@ -2,10 +2,10 @@
 title: Run a bake-off
 part: how-to
 order: 52
-description: Give one handoff to several agents, hold each reply, then read them side by side and choose.
+description: Give one handoff to several agents, hold each reply, then read them side by side with Jev's calls and choose.
 ---
 
-{/* How to, the bake-off (hold-and-compare R12): holding a reply, the next agent on the same handoff, the held replies on home, and judging and choosing in the compare. Labels are checked against src/ui/TestDeck.tsx, src/ui/Home.tsx, src/ui/CompareView.tsx and src/ui/takeActions.tsx (KTD8). */}
+{/* How to, the bake-off (hold-and-compare R12; jev-in-compare R18): holding a reply, the next agent on the same handoff, the held replies on home, Compare with Jev and its grid of calls and head-to-heads, judging against Jev's call, changing a verdict, and choosing in the compare. Labels are checked against src/ui/TestDeck.tsx, src/ui/Home.tsx, src/ui/CompareView.tsx, src/ui/CompareGrid.tsx, src/ui/JudgeStep.tsx, src/ui/verdictSteps.tsx, src/ui/takeActions.tsx and src/domain/compareJev.ts (KTD8). */}
 
 When several of your agents could do a job, you can give each one the same handoff and read their replies side by side before you judge any of them. Each reply waits, held, until you've seen them all.
 
@@ -34,15 +34,51 @@ Home lists the handoff under <UI>What needs you</UI>: <UI>Compare \{n\} replies<
 
 <Shot id="home-needs" alt="What needs you on home: Pull Codex's handoff, for Name what matters next, then Compare 2 replies, for Check an answer key on the skeleton, then Write a release note, which nobody holds yet" />
 
-Click it. A strip at the top names every held reply with its agent, setup, state and date. The two lit ones are open side by side below it, the first two to start with.
+Click it. Every held reply gets a column across the top, headed by its agent, setup, state and date. The two lit ones are open side by side below, the first two to start with. Once Jev has read any of them, the columns hold Jev's calls on each rubric point, each learning target and the whole bar. Until then they are a strip of names.
 
-<Shot id="compare-held" alt="Check an answer key's bake-off: a strip naming Claude Code, Held, Codex, Held, and Codex's earlier Met take, with the two held replies open below, each with Met and Not yet at its foot" />
+<Shot id="compare-held" alt="Check an answer key's bake-off: a grid naming Claude Code, Held, Codex, Held, and Codex's earlier Met take, with Jev's call and chance on each rubric point, learning target and Overall, and the two held replies open below it, each with Met and Not yet at its foot" />
 
-Click another reply in the strip to open it on the right. The left one stays. Click the reply open on the right to swap the two sides, so the one you're keeping to read against moves left.
+Click another reply's heading to open it on the right. The left one stays. Click the reply open on the right to swap the two sides, so the one you're keeping to read against moves left. Under each reply, its reading is folded, and so is the handoff text it answered. When the replies answered different texts of the handoff, a line above them says so, and each fold names its text.
+
+## Compare with Jev
+
+With [Jev Mode](/help/jev-mode/) on and a rubric on the badge, <UI>Compare with Jev</UI> sits above the grid. One click asks Jev for everything the compare is still missing:
+
+- a reading of each held reply that has none, the same second opinion a test asks for;
+- a head-to-head for each pair of replies: for every rubric point, whether one reply covers it better than the other, and the reverse.
+
+Before anything goes, a line beside it says how many requests it will send, such as "Sends 3 requests: 1 reading and 2 head-to-heads", and when the readings also send earlier replies on this badge. A reply, or a pair of replies, too long for Jev is named and left out.
+
+<Shot id="compare-grid" alt="Claude Code's and Codex's held replies on Check an answer key after Compare with Jev: each column's calls and chances, and Better than Codex in Claude Code's cells for points 3 and 4" />
+
+The requests go one at a time, readings first, and each answer is saved as it comes back. While they run, the link counts them, as in <UI>Asking Jev, \{k\} of \{n\}…</UI>, and <UI>Met</UI> and <UI>Not yet</UI> wait. If one fails, the run stops and says why. What came back stays, and the next click sends only the rest. Closing the compare stops the run.
+
+### Read the grid
+
+Each cell holds Jev's call, <UI>Meets</UI>, <UI>Misses</UI> or <UI>Can't call</UI>, with its chance beside it, read with the badge's cut-offs as [Jev Mode](/help/jev-mode/#how-a-call-is-read) explains. The cut-offs fit your verdicts, so a call can shift after you judge.
+
+A head-to-head counts only when both of its answers agree. When Jev gives one reply more than 70% for covering a point better and the other less than 30%, that reply's cell says <UI>Better than \{names\}</UI>. Any other pair of answers is no clear difference, and nothing is marked. These 30% and 70% never move to fit your verdicts. The grid never ranks the replies or names a winner: you judge them.
+
+A blank cell means Jev hasn't read that reply against the badge as it is now. It may not have been asked yet, or the reply was judged before it was read, since a judged reply keeps the reading it was judged with and gets no new one. The reply may also have been read before the task or rubric changed, or be too long for Jev. Changing the task or rubric clears the grid's calls and marks until you compare again.
 
 ## Judge each one
 
-Under each held reply, click <UI>Met</UI> or <UI>Not yet</UI>. The verdict saves at once, as an ordinary result dated when the reply came back, and the strip shows it. A Met reply holds the badge for its agent, as a Met in a test does.
+Under each held reply, click <UI>Met</UI> or <UI>Not yet</UI>. The verdict saves at once, as an ordinary result dated when the reply came back, when it agrees with Jev's call on the whole bar, or when Jev hasn't read the reply or can't call it. A Met reply holds the badge for its agent, as a Met in a test does.
+
+When your verdict goes against Jev's call, a short step opens under that reply before anything saves:
+
+1. On <UI>Not yet</UI>, <UI>Which points did it miss</UI> lists the rubric's points, with Jev's call beside each and none pressed. Press the ones it missed, then <UI>Next</UI>, or <UI>Skip</UI>.
+2. <UI>What did Jev miss</UI> asks for one line on why. Write it, or leave it empty, and click <UI>Save</UI>.
+
+<Shot id="compare-against-jev" alt="Not yet pressed under Codex's held reply, which Jev called meets: Which points did it miss under the reply, with the five rubric points as buttons, none pressed, Jev's call beside each, and Back and Skip" />
+
+<UI>Back</UI> goes back a step, or from the first one to the reply with nothing saved, and so does Escape. Your line becomes the result's note, as in a test: see [Judge a reply](/how-to/judge-a-reply/#a-second-opinion). Only the reply's own reading can open the step. A head-to-head never does.
+
+## Change a verdict
+
+A Met reply also offers <UI>Change to Not yet</UI> at its foot, and a Not met one <UI>Change to Met</UI>, here and when you open the reply on its own. The change asks why in the same way when it goes against Jev's call, then saves.
+
+The reply then shows its new verdict everywhere, keeps its date and its place among the others, and says <UI>Changed from Met</UI> or <UI>Changed from Not met</UI>. The earlier verdict stays in your folder. Whether an agent holds the badge still follows its latest reply, so changing an older reply doesn't change who holds it. If the reply was the badge's go-to, the badge has no go-to until you choose another.
 
 ## Choose the go-to
 

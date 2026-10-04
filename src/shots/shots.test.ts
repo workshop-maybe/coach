@@ -135,12 +135,12 @@ describe("the shot manifest", () => {
     }
   });
 
-  it("scripts Jev's answers only where Jev Mode is on, as chances by question id", () => {
+  it("scripts Jev's answers only where Jev Mode is on, as chances by question id, a head-to-head's included", () => {
     for (const shot of SHOTS) {
       if (!shot.jevAnswers) continue;
       expect(shot.jev, shot.id).toBe("on");
       for (const [id, p] of Object.entries(shot.jevAnswers)) {
-        expect(id, shot.id).toMatch(/^(?:overall|[pt][1-9]\d*)$/);
+        expect(id, shot.id).toMatch(/^(?:overall|[ptab][1-9]\d*)$/);
         expect(p >= 0 && p <= 1, `${shot.id}: ${id}`).toBe(true);
       }
     }

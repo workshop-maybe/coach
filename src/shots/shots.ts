@@ -90,7 +90,8 @@ export interface Shot {
   steps?: readonly Step[];
   /**
    * What Jev answers every ask, as a chance by question id: `p1`… for rubric points,
-   * `overall`, `t1`… for learning targets. An id left out gets FakeJev's default, 0.5,
+   * `overall`, `t1`… for learning targets, and a head-to-head's `a1`… and `b1`… (whether the
+   * first reply covers a point better, and the reverse). An id left out gets FakeJev's default, 0.5,
    * which reads as can't call. Only with Jev Mode on.
    */
   jevAnswers?: Readonly<Record<string, number>>;
@@ -168,6 +169,13 @@ const CODEX_ANSWER_KEY = { profileSlug: CODEX, fileStem: "20260927T112000Z" };
 /** The bake-off on Check an answer key: each agent's reply held without a verdict. */
 const CLAUDE_HELD = { profileSlug: CLAUDE, fileStem: "20260929T101500Z" };
 const CODEX_HELD = { profileSlug: CODEX, fileStem: "20260929T114000Z" };
+/**
+ * Jev's head-to-head answers on the two held replies, by question id: "aN" asks whether Claude
+ * Code's reply covers point N better than Codex's, "bN" the reverse. Both orders agree beyond
+ * 30/70 only on point 3, where Claude Code names the failing step, and point 4, where Codex
+ * calls a right key wrong (jev-in-compare KTD6).
+ */
+const HEAD_TO_HEAD_CALLS = { a1: 0.46, b1: 0.41, a2: 0.58, b2: 0.33, a3: 0.81, b3: 0.14, a4: 0.94, b4: 0.04, a5: 0.55, b5: 0.38 };
 
 /** What Claude Code sends back when it takes Say how sure you are again, with Jev Mode on. */
 const HOW_SURE_REPLY = `1. Answer: 5. Confidence: 95%
@@ -597,7 +605,8 @@ export const SHOTS: readonly Shot[] = [
   },
   {
     // The bake-off on Check an answer key, as What needs you opens it, with Codex's Met take
-    // there as a third in the strip: both held replies open, each with Met and Not yet.
+    // there as a third: both held replies open, each with Met and Not yet, under the grid of
+    // the calls Jev made on each reply (jev-in-compare R6).
     id: "compare-held",
     page: "how-to/run-a-bake-off",
     route: {
@@ -609,7 +618,32 @@ export const SHOTS: readonly Shot[] = [
     },
     seed: "full",
     jev: "off",
-    expect: { selector: ".compare-strip" },
+    expect: { selector: ".compare-grid" },
+  },
+  {
+    // The two held replies alone, with Jev Mode on: Compare with Jev sends the one head-to-head
+    // left, and Jev's scripted answers put Claude Code ahead on the two points where Codex's
+    // reply is wrong or bare (jev-in-compare R3, R4, R7).
+    id: "compare-grid",
+    page: "how-to/run-a-bake-off",
+    route: { view: "item", item: "compare", credentialKey: ANSWER_KEY, takes: [CLAUDE_HELD, CODEX_HELD], picks: [CLAUDE_HELD, CODEX_HELD] },
+    seed: "full",
+    jev: "on",
+    jevAnswers: HEAD_TO_HEAD_CALLS,
+    expect: { text: "Better than Codex" },
+    steps: [{ click: { button: "Compare with Jev" } }, { waitFor: { text: "Better than Codex" } }],
+  },
+  {
+    // Not yet under Codex's held reply, which Jev's reading calls meets: the step under it asks
+    // which points the reply missed, with Jev's call beside each and none pressed
+    // (jev-in-compare R11).
+    id: "compare-against-jev",
+    page: "how-to/run-a-bake-off",
+    route: { view: "item", item: "compare", credentialKey: ANSWER_KEY, takes: [CODEX_HELD, CLAUDE_HELD], picks: [CODEX_HELD, CLAUDE_HELD] },
+    seed: "full",
+    jev: "off",
+    expect: { text: "Which points did it miss" },
+    steps: [{ click: { button: "Not yet" } }, { waitFor: { text: "Which points did it miss" } }],
   },
   {
     id: "badge-page",
@@ -751,5 +785,5 @@ export const COVERAGE: Record<RouteKind, readonly string[] | typeof NOT_PICTURED
   // A handoff opens as its own item only once two or more have results; the sample's has none.
   "item:handoff": NOT_PICTURED,
   "item:reply": ["reply-view", "jev-reading"],
-  "item:compare": ["compare", "compare-held"],
+  "item:compare": ["compare", "compare-held", "compare-grid", "compare-against-jev"],
 };
