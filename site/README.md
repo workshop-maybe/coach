@@ -65,7 +65,7 @@ Screenshots are data in `src/shots/shots.ts`. Each one opens the real app in a d
    - `seed` picks the folder, `"empty"` or `"full"`;
    - `jev` is `"off"` (How to pages) or `"on"`;
    - `expect` is text or a selector that must be on screen, so a wrong route fails instead of photographing the "Not in the folder" card;
-   - optional `steps` (`click`, `fill`, `paste`, `waitFor`, `scroll`) and an optional `clip`.
+   - optional `steps` (`click`, `fill`, `paste`, `pasteImage`, `focusEnd`, `waitFor`, `scroll`) and an optional `clip`.
 2. List the id under its route kind in `COVERAGE`, the screen the shot opens at. A new route kind fails the type check until it has a shot or is marked `NOT_PICTURED`.
 3. Run `npm run site:shots -- --only <id>` and look at the picture.
 4. Use it on its page with `<Shot id="<id>" alt="…" />`.

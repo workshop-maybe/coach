@@ -7,7 +7,7 @@ description: What's in your folder, how to read and edit it, and the little the 
 
 {/* Jev Mode, data and help, second page (U8, R7): the data folder as plain text you own. The layout follows src/domain/folder.ts and the trash src/domain/operations.ts. What lives outside the folder follows src/ui/pendingTests.ts (local storage) and src-tauri/src/settings.rs and jev.rs (the settings file and the keychain). */}
 
-Everything you make lives in the folder you chose, as plain text. Credentials and results are Markdown, and agents are JSON. A picture you paste is a PNG or JPEG file beside the text that names it. You can open any file in a text editor, back the folder up, sync it or put it under git. The app has no database and no account.
+Everything you make lives in the folder you chose, as plain text. Credentials and results are Markdown, and agents are JSON. A picture or a video you add is a file beside the text that names it. You can open any file in a text editor, back the folder up, sync it or put it under git. The app has no database and no account.
 
 ## What's in the folder
 
@@ -22,6 +22,7 @@ Andamio/
       credentials/
         say-how-sure-you-are.md
         image-5e6f7a8b.png
+        video-9c0d1e2f.mp4
       handoffs/
         say-how-sure-you-are/
           20260928T090000Z.md
@@ -46,7 +47,7 @@ Andamio/
 
 - `andamio-desktop.json` marks the folder as the app's. The app writes it the first time it opens the folder.
 - `collections/` holds your credentials, grouped in collections. Most folders have one, `my-credentials`. Its `collection.json` holds the collection's name, the order of its badges, their numbers for [export](/how-to/export/) and their looks.
-- `credentials/` has one Markdown file per badge. An `image-….png` beside them is a picture pasted into a task or rubric; see [Paste an image](/how-to/paste-an-image/).
+- `credentials/` has one Markdown file per badge. An `image-….png` or `video-….mp4` beside them is a picture or a video added to a task or rubric; see [Paste an image](/how-to/paste-an-image/) and [Add a video](/how-to/add-a-video/).
 - `handoffs/` inside a collection holds the handoffs a badge has of its own, one file each, named for when it was made.
 - `marks/` inside a collection holds every time you chose a badge's go-to, one small file each, named for when you chose. Each names the agent and the result you chose it on, and the newest one is the badge's go-to. See [Choose a go-to](/how-to/choose-a-go-to/).
 - `badge/` holds the art you chose for a badge's look.
@@ -113,7 +114,7 @@ You can change any file while the app is open. It reads the folder again when it
 
 ## The trash
 
-<UI>Move to trash</UI> deletes nothing. It moves the files into `trash/`, in a folder named for when you moved them, at the same paths they had. An agent goes with its results and its held replies, and while it's there no badge has it as its go-to. A badge goes with its handoffs, its go-to choices, every agent's results and held replies on it and a copy of its collection's file as it was. Pictures pasted into a result go with it. Pictures beside a badge or an agent stay where they are, since other badges or agents may name the same file.
+<UI>Move to trash</UI> deletes nothing. It moves the files into `trash/`, in a folder named for when you moved them, at the same paths they had. An agent goes with its results and its held replies, and while it's there no badge has it as its go-to. A badge goes with its handoffs, its go-to choices, every agent's results and held replies on it and a copy of its collection's file as it was. Pictures and videos added to a result go with it. Pictures and videos beside a badge or an agent stay where they are, since other badges or agents may name the same file.
 
 To get something back, move its files from the trash to the same places in your folder, then click <UI>Reload</UI>. To delete something for good, delete it from `trash/`.
 

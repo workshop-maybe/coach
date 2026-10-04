@@ -4,14 +4,18 @@
 // one image node shows only a PNG or JPEG the caller's image source returns for a bare file
 // name beside the reply's file, so nothing loads from the network or outside the data folder
 // either (KTD2 of the paste-images plan, which supersedes in part this view's "no image
-// node"). Stored, it is the exact string the file holds, in the record mono (R12, KTD6).
-// The caller owns the switch between the two.
+// node"). Its video node holds to the same rule: it plays only a URL the caller's source
+// returns for a bare local video name, never autoplays, and decodes nothing of a reply's
+// video before play (KTD2 of the video plan). On Linux the source still reads the whole file
+// into a Blob when the view mounts, since WebKitGTK plays only blob URLs (KTD4). Stored, it is the exact string the file holds, in the
+// record mono (R12, KTD6). The caller owns the switch between the two.
 //
 // Links leave for the system browser. A click, a middle-click, the context menu and a drag
 // on a rendered link are all stopped, since the webview would otherwise follow the link or
 // offer its own "Open Link" in the frameless window. Only http, https and mailto addresses
-// reach the opener (KTD5). The context menu and a drag are stopped on an image too, so the
-// webview offers no "Open Image" and a drag never carries the image's data URI as text.
+// reach the opener (KTD5). The context menu and a drag are stopped on an image and a video
+// too, so the webview offers no "Open Image", "Open Video in New Window" or "Download Video",
+// and a drag never carries the image's data URI or the video's URL as text.
 //
 // The region scrolls on its own, spans its container and holds the prose to a centered
 // measure of about 70 characters (R9). It is focusable, so the keyboard can scroll it.
@@ -30,7 +34,7 @@ export interface RichViewProps {
   stored?: boolean;
   /** Names the scrolling region. */
   "aria-label": string;
-  /** Reads the images beside the reply's file. Without it, images show as placeholders. */
+  /** Reads the images and videos beside the reply's file. Without it, they show as placeholders. */
   images?: RichImageSource;
 }
 
@@ -54,10 +58,10 @@ function linkOf(e: ReactMouseEvent<HTMLElement> | ReactDragEvent<HTMLElement>): 
   return a && e.currentTarget.contains(a) ? a : null;
 }
 
-/** Whether an event landed on an image inside the region. */
-function onImage(e: ReactMouseEvent<HTMLElement> | ReactDragEvent<HTMLElement>): boolean {
-  const img = e.target instanceof Element ? e.target.closest("img") : null;
-  return !!img && e.currentTarget.contains(img);
+/** Whether an event landed on an image or a video inside the region. */
+function onMedia(e: ReactMouseEvent<HTMLElement> | ReactDragEvent<HTMLElement>): boolean {
+  const media = e.target instanceof Element ? e.target.closest("img, video") : null;
+  return !!media && e.currentTarget.contains(media);
 }
 
 function open(a: HTMLAnchorElement) {
@@ -81,7 +85,7 @@ export function RichView({ value, stored = false, images, "aria-label": label }:
   }
 
   function onStop(e: ReactMouseEvent<HTMLElement> | ReactDragEvent<HTMLElement>) {
-    if (linkOf(e) || onImage(e)) e.preventDefault();
+    if (linkOf(e) || onMedia(e)) e.preventDefault();
   }
 
   return (
@@ -104,7 +108,7 @@ export function RichView({ value, stored = false, images, "aria-label": label }:
 function Rendered({ value, images }: { value: string; images?: RichImageSource }) {
   // The Markdown the view last showed, so a value that comes back unchanged is not re-parsed.
   const shown = useRef(value);
-  // The image source as it is now: the image node reads it on every render.
+  // The image source as it is now: the image and video nodes read it on every render.
   const source = useRef(images);
   const editor = useEditor({
     extensions: [...richExtensions("", () => source.current ?? null), TableAsText],
@@ -125,7 +129,7 @@ function Rendered({ value, images }: { value: string; images?: RichImageSource }
     editor.commands.setContent(value, { contentType: "markdown", emitUpdate: false });
   }, [editor, value]);
 
-  // A new source (another folder) redraws the images that show.
+  // A new source (another folder) redraws the images and videos that show.
   useEffect(() => {
     if (source.current === images) return;
     source.current = images;

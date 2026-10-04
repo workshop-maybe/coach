@@ -34,6 +34,8 @@ export type Target = { button: string } | { label: string } | { text: string } |
  * `paste` pastes text into the rich editor (`.rich-input` unless `into` names another).
  * `pasteImage` pastes one of the sample pictures in src/shots/ (SAMPLE_IMAGES) at the end of
  * the rich editor, as a copied screenshot arrives, so the shot runs the real image paste.
+ * `focusEnd` puts the cursor at the end of a rich editor, as a person clicking after its
+ * text would, so a later Video key click adds there.
  * `waitFor` waits until a target appears, such as a beat that lands after a timer.
  * `scroll` brings a target to the middle of the window, as far as the page scrolls, for a
  * screen taller than the window (U6).
@@ -43,6 +45,7 @@ export type Step =
   | { fill: Target; value: string }
   | { paste: string; into?: Target }
   | { pasteImage: SampleImage; into?: Target }
+  | { focusEnd: Target }
   | { waitFor: Target }
   | { scroll: Target };
 
@@ -494,6 +497,22 @@ export const SHOTS: readonly Shot[] = [
     steps: [{ pasteImage: "pasted-sample" }, { waitFor: { selector: ".rich-input .rich-image img[src^='data:image/png']" } }],
   },
   {
+    // A short clip added at the end of Write a release note's task with the Video key. The
+    // sample's picker adds src/shots/sample-clip.webm, which Chromium plays. Ready once the
+    // player shows a frame.
+    id: "add-video",
+    page: "how-to/add-a-video",
+    route: { view: "deck", deck: "edit-credential", credentialKey: RELEASE_NOTE, part: "task" },
+    seed: "full",
+    jev: "off",
+    expect: { selector: ".rich-input .rich-video video[src^='blob:']" },
+    steps: [
+      { focusEnd: { selector: ".rich-input" } },
+      { click: { button: "Video" } },
+      { waitFor: { selector: ".rich-input .rich-video video[src^='blob:']" } },
+    ],
+  },
+  {
     id: "handoffs-box",
     page: "how-to/change-a-badge",
     route: { view: "deck", deck: "handoffs", credentialKey: RELEASE_NOTE },
@@ -572,7 +591,7 @@ export const COVERAGE: Record<RouteKind, readonly string[] | typeof NOT_PICTURED
   "deck:credential": ["credential-start", "credential-target"],
   "deck:agent": ["first-test-agent", "first-test-hand", "first-test-judge", "first-test-home", "agent-new"],
   "deck:test": ["test-hand", "test-reply", "judge", "go-to-offer", "missed-points", "held", "jev-ask", "jev-cleanup"],
-  "deck:edit-credential": ["edit-retest", "paste-image"],
+  "deck:edit-credential": ["edit-retest", "paste-image", "add-video"],
   "deck:edit-agent": ["agent-params"],
   "deck:handoffs": ["handoffs-box"],
   "deck:edit-handoff": ["handoff-edit"],

@@ -9,8 +9,8 @@
 // window-frame and window-key code makes no plugin calls.
 //
 // The page signals on <html>: data-shot="ready" once its steps have run, no badge
-// placeholder is still loading (aria-busy), fonts are loaded, every image has decoded and
-// the DOM has gone 300 ms without a change (KTD7). Anything else (an id missing from the
+// placeholder is still loading (aria-busy), fonts are loaded, every image has decoded, every
+// video shows a frame and the DOM has gone 300 ms without a change (KTD7). Anything else (an id missing from the
 // manifest, a step that finds nothing, a page that never settles) sets data-shot-error to
 // a message naming the shot, and the ready flag is never set.
 
@@ -27,6 +27,7 @@ import { WindowFrameContext } from "../ui/windowFrame";
 import { SAMPLE_FOLDER, sampleFolder, sampleJev, sampleStorage } from "./seed";
 import { SHOTS, type SampleImage, type Shot, type Step, type Target } from "./shots";
 import pastedSample from "./pasted-sample.png";
+import sampleClip from "./sample-clip.webm";
 
 /** Each sample picture's address, served by Vite. */
 const SAMPLE_IMAGE_URLS: Record<SampleImage, string> = { "pasted-sample": pastedSample };
@@ -69,10 +70,13 @@ export async function startShot(root: HTMLElement, search: string, shots: readon
     // Blocked storage shows no waiting tests, as in the app.
   }
 
+  const storage = sampleStorage(sample);
+  // The Video key's picker adds the sample clip, served by Vite (the video plan's KTD12).
+  storage.useSampleClip(sampleClip);
   const reactRoot = createRoot(root);
   reactRoot.render(
     <StrictMode>
-      <ShotApp shot={shot} storage={sampleStorage(sample)} jev={sampleJev(shot.jev)} />
+      <ShotApp shot={shot} storage={storage} jev={sampleJev(shot.jev)} />
     </StrictMode>,
   );
   const stop = () => reactRoot.unmount();
@@ -188,6 +192,9 @@ async function runStep(step: Step, n: number, timeout: number): Promise<void> {
     const data = new DataTransfer();
     data.items.add(new File([blob], "Screenshot.png", { type: "image/png" }));
     el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+  } else if ("focusEnd" in step) {
+    const el = await waitFor(() => find(step.focusEnd), `${label} found no ${describeTarget(step.focusEnd)} to focus`, timeout);
+    (el as HTMLElement & { editor?: { commands: { focus(at: string): void } } }).editor?.commands.focus("end");
   } else if ("scroll" in step) {
     const el = await waitFor(() => find(step.scroll), `${label} found no ${describeTarget(step.scroll)} to scroll to`, timeout);
     // To the middle of the window, as far as the page scrolls: a target scrolled to an
@@ -242,6 +249,25 @@ const busy = () => document.querySelector('[aria-busy="true"]') !== null;
 /** An image the browser has decoded. jsdom decodes nothing, so there every image counts. */
 const decoded = (img: HTMLImageElement) => typeof img.decode !== "function" || img.complete;
 
+/**
+ * A video with enough data to play, or one that failed. With less, Chromium draws its
+ * loading spinner over the frame. jsdom plays nothing, so there every video counts.
+ */
+const showsFrame = (video: HTMLVideoElement) => !("requestVideoFrameCallback" in video) || video.readyState >= 4 || video.error !== null;
+
+/** How long a player's loading spinner may take to leave after the video is ready, in ms. */
+const VIDEO_SPINNER_MS = 2000;
+
+/**
+ * Asks each video still without a frame to load one. A player with preload "metadata" may
+ * stop before its first frame, which would leave a blank box in the picture.
+ */
+function loadFirstFrames() {
+  for (const video of document.querySelectorAll("video")) {
+    if (!showsFrame(video) && video.preload !== "auto") video.preload = "auto";
+  }
+}
+
 async function settle(quietMs: number, timeout: number): Promise<void> {
   let timedOut = false;
   const timer = setTimeout(() => (timedOut = true), timeout);
@@ -257,8 +283,14 @@ async function settle(quietMs: number, timeout: number): Promise<void> {
       }
       await document.fonts?.ready;
       await Promise.all([...document.images].map((img) => (typeof img.decode === "function" ? img.decode().catch(() => undefined) : undefined)));
+      loadFirstFrames();
       await quiet(quietMs);
-      if (!busy() && [...document.images].every(decoded)) return;
+      const videos = [...document.querySelectorAll("video")];
+      if (!busy() && [...document.images].every(decoded) && videos.every(showsFrame)) {
+        // Chromium's loading spinner leaves only at the end of its animation cycle.
+        if (videos.length > 0 && "requestVideoFrameCallback" in videos[0]) await sleep(VIDEO_SPINNER_MS);
+        return;
+      }
     }
   } finally {
     clearTimeout(timer);

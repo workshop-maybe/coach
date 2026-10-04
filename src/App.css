@@ -413,7 +413,7 @@ button:focus-visible {
   min-height: 0;
 }
 
-.deck-body .rich > :not(.rich-bar):not(.rich-link):not(.rich-menu) {
+.deck-body .rich > :not(.rich-bar):not(.rich-link):not(.rich-menu):not(.rich-foot) {
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -521,6 +521,13 @@ button:focus-visible {
   box-shadow: var(--focus-ring);
 }
 
+/* The box a file dragged over the window would land in (src/ui/dropFiles.ts): an outline in
+   data blue, never a fill. */
+.rich-drop {
+  outline: 1.5px solid var(--data);
+  outline-offset: 2px;
+}
+
 .rich-bar {
   display: flex;
   flex-wrap: wrap;
@@ -533,6 +540,23 @@ button:focus-visible {
   width: 1px;
   margin: 6px 4px;
   background: var(--cell);
+}
+
+/* A box that can add files keeps one line free under its text, so the text never moves when
+   the box says it is saving a file there. */
+.rich-foot {
+  flex: none;
+  height: 22px;
+  padding: 0 14px;
+}
+
+.rich-status {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 22px;
+  letter-spacing: var(--value-tracking);
+  color: var(--ink-muted);
 }
 
 :is(.rich-input, .rich-prose) {
@@ -696,28 +720,29 @@ button:focus-visible {
   font-size: inherit;
 }
 
-/* A pasted image (src/ui/richImage.ts): it fits the measure on a cell rule. One that can't
-   be read is a quiet mono label naming its file. */
-:is(.rich-input, .rich-prose) .rich-image {
+/* A pasted image (src/ui/richImage.ts) or a video's player (src/ui/richVideo.ts): it fits the
+   measure on a cell rule. One that can't be read or played is a quiet mono label naming its
+   file. */
+:is(.rich-input, .rich-prose) :is(.rich-image, .rich-video) {
   display: inline-block;
   max-width: 100%;
   vertical-align: bottom;
 }
 
-:is(.rich-input, .rich-prose) .rich-image img {
+:is(.rich-input, .rich-prose) :is(.rich-image img, .rich-video video) {
   display: block;
   max-width: 100%;
   height: auto;
   border: 1px solid var(--cell);
 }
 
-:is(.rich-input, .rich-prose) .rich-image[aria-busy="true"] {
+:is(.rich-input, .rich-prose) :is(.rich-image, .rich-video)[aria-busy="true"] {
   min-width: 48px;
   min-height: 32px;
   background: var(--grid);
 }
 
-:is(.rich-input, .rich-prose) .rich-image-missing {
+:is(.rich-input, .rich-prose) :is(.rich-image-missing, .rich-video-missing) {
   padding: 1px 4px;
   border: 1px dashed var(--cell);
   color: var(--ink-muted);
@@ -727,7 +752,7 @@ button:focus-visible {
   overflow-wrap: anywhere;
 }
 
-.rich-input .rich-image.ProseMirror-selectednode {
+.rich-input :is(.rich-image, .rich-video).ProseMirror-selectednode {
   outline: 1.5px solid var(--data);
 }
 

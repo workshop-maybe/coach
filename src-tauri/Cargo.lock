@@ -48,6 +48,7 @@ name = "andamio-desktop"
 version = "0.1.0"
 dependencies = [
  "apple-native-keyring-store",
+ "arboard",
  "base64 0.22.1",
  "keyring-core",
  "percent-encoding",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bytesToBase64, dataUriToBytes, folderOf, imageExtension, isImageDataUri, isImagesOnlyLine, isLocalImageName, localImageNames, withAssetsRefs } from "./images";
+import { bytesToBase64, dataUriToBytes, folderOf, imageExtension, isImageDataUri, isImagesOnlyLine, isLocalImageName, localImageNames, localRefNames, withAssetsRefs } from "./images";
 
 const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
 const JPEG_BYTES = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 9]);
@@ -71,6 +71,11 @@ describe("isImagesOnlyLine", () => {
     expect(isImagesOnlyLine("![](a.png) and text")).toBe(false);
   });
 
+  it("counts a video ref as an image line, since videos use the image syntax", () => {
+    expect(isImagesOnlyLine("![](video-1a2b3c4d.mp4)")).toBe(true);
+    expect(isImagesOnlyLine("![](a.png) ![clip](<my clip.mov>)")).toBe(true);
+  });
+
   it("answers at once for a long run of bracketed refs followed by text, which once backtracked for minutes", () => {
     for (const ref of ["![](<a>)", "![](<x\\<y>)"]) {
       const started = performance.now();
@@ -89,6 +94,18 @@ describe("localImageNames", () => {
   it("skips remote, nested and non-image refs, and links", () => {
     expect(localImageNames("![](https://e.com/p.png) ![](sub/x.png) ![](x.gif) [link](a.png)")).toEqual([]);
   });
+
+  it("skips video refs", () => {
+    expect(localImageNames("![](video-1a2b3c4d.mp4) ![](a.png)")).toEqual(["a.png"]);
+  });
+});
+
+describe("localRefNames", () => {
+  it("lists the image-syntax srcs a rule keeps, as written, in order, once each", () => {
+    const md = "![](b.mov) ![](<a b.png> \"t\") ![](b.mov) ![](https://e.com/c.png)";
+    expect(localRefNames(md, () => true)).toEqual(["b.mov", "a b.png", "https://e.com/c.png"]);
+    expect(localRefNames(md, (src) => src.endsWith(".mov"))).toEqual(["b.mov"]);
+  });
 });
 
 describe("withAssetsRefs (KTD9)", () => {
@@ -96,6 +113,12 @@ describe("withAssetsRefs (KTD9)", () => {
     const md = "![](a.png) and ![alt](a.png \"t\") and ![](<my shot.png>) and ![](https://e.com/a.png)";
     const out = withAssetsRefs(md, new Map([["a.png", "image-1a2b3c4d.png"], ["my shot.png", "image-00000000.png"]]));
     expect(out).toBe('![](assets/image-1a2b3c4d.png) and ![alt](assets/image-1a2b3c4d.png "t") and ![](assets/image-00000000.png) and ![](https://e.com/a.png)');
+  });
+
+  it("points a renamed video ref at assets/ the same way", () => {
+    const md = "![](clip.mov) and ![a](<my clip.mp4> \"t\") and ![](video-1a2b3c4d.webm)";
+    const out = withAssetsRefs(md, new Map([["clip.mov", "video-00000000.mov"], ["my clip.mp4", "video-11111111.mp4"]]));
+    expect(out).toBe('![](assets/video-00000000.mov) and ![a](assets/video-11111111.mp4 "t") and ![](video-1a2b3c4d.webm)');
   });
 
   it("leaves a ref with no entry unchanged", () => {
