@@ -12,6 +12,11 @@
 // pane it goes back a card, and while the deck holds unsaved work it never closes the
 // deck. The corner control and Back still leave on a click. A beat can also send first
 // focus into its body (R21), so a paste lands in the reply box.
+//
+// A one-tap card moves on only after its press has rendered (KTD5 of the growing-context
+// plan). The press queues the move, and the move runs from the render the press's own state
+// change produced, so a beat the press adds is there to land on and `onFinish` reads the
+// answer the press set.
 
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
@@ -21,7 +26,7 @@ import { useEscape } from "./shared";
 import { describeError } from "./useFolderState";
 
 export interface BeatContext {
-  /** Moves on as the forward action would, for a card whose answer is one tap. */
+  /** Moves on as the forward action would, for a card whose answer is one tap, once the press's own state change has rendered. */
   advance(): void;
 }
 
@@ -167,8 +172,21 @@ export function Deck({ label, beats, startAt = 0, onClose, onFinish, onUseTheirs
     }
   }
 
+  // The card a one-tap press queued a move from. The move runs from the next committed render,
+  // with that render's beats, `last` and `onFinish`, and only while the deck is still on that
+  // card. Setting it renders even when the press changed nothing else, so a re-tap still moves on.
+  const [queued, setQueued] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (queued === null) return;
+    setQueued(null);
+    if (queued === index) void forward();
+  }, [queued, index]); // eslint-disable-line react-hooks/exhaustive-deps
+
   function back() {
     setTrouble({ kind: "none" });
+    // Back on the first card closes without changing the card, so it drops a queued move itself.
+    setQueued(null);
     if (index === 0) onClose();
     else setIndex((i) => i - 1);
   }
@@ -216,7 +234,7 @@ export function Deck({ label, beats, startAt = 0, onClose, onFinish, onUseTheirs
             {beat.title}
           </h2>
           <div className="deck-body" ref={body}>
-            {typeof beat.body === "function" ? beat.body({ advance: () => void forward() }) : beat.body}
+            {typeof beat.body === "function" ? beat.body({ advance: () => setQueued(index) }) : beat.body}
           </div>
           {trouble.kind === "error" && (
             <p className="deck-error" role="alert">

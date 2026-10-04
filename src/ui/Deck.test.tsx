@@ -158,6 +158,35 @@ describe("Deck", () => {
     expect(screen.getByRole("heading", { name: "Hand it over" })).toBeTruthy();
   });
 
+  it("a re-tap of the answer already picked still advances, though it changes no state", async () => {
+    function Repick() {
+      const [who, setWho] = useState("Opus");
+      const beats: Beat[] = [
+        {
+          id: "who",
+          title: "Who takes it",
+          body: ({ advance }) => (
+            <button
+              type="button"
+              aria-pressed={who === "Opus"}
+              onClick={() => {
+                setWho("Opus");
+                advance();
+              }}
+            >
+              Opus
+            </button>
+          ),
+        },
+        { id: "copy", title: "Hand it over", forward: "Copy", body: <p>Prompt</p> },
+      ];
+      return <Deck label="Test" beats={beats} onClose={() => {}} onFinish={async () => {}} />;
+    }
+    render(<Repick />);
+    await userEvent.click(screen.getByRole("button", { name: "Opus" }));
+    expect(screen.getByRole("heading", { name: "Hand it over" })).toBeTruthy();
+  });
+
   it("can open on a later beat", () => {
     function Resume() {
       const beats: Beat[] = [
@@ -169,6 +198,160 @@ describe("Deck", () => {
     render(<Resume />);
     expect(screen.getByRole("heading", { name: "What came back" })).toBeTruthy();
     expect(within(screen.getByRole("list", { name: "Answered" })).getByText("Opus")).toBeTruthy();
+  });
+});
+
+// A one-tap card's press moves the deck on only after the press's own state change has
+// rendered (KTD5 of the growing-context plan), so the press can add or remove the beats after
+// it, or set the answer the finish reads, and the move sees the result.
+describe("Deck advance after a press renders", () => {
+  /** A pick, with an optional card after it that the press decides on, as the meet card's Not yet does. */
+  function Branching({ startWithMore = false, onFinish = async () => {} }: { startWithMore?: boolean; onFinish?: (opts: { keepMine: boolean }) => Promise<void> }) {
+    const [more, setMore] = useState(startWithMore);
+    const beats: Beat[] = [
+      {
+        id: "pick",
+        title: "Did it meet it",
+        body: ({ advance }) => (
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                setMore(false);
+                advance();
+              }}
+            >
+              Met
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMore(true);
+                advance();
+              }}
+            >
+              Not yet
+            </button>
+          </>
+        ),
+      },
+      ...(more ? [{ id: "missed", title: "What it missed", forward: "Save", body: <p>Points</p> }] : []),
+    ];
+    return <Deck label="Test" beats={beats} onClose={() => {}} onFinish={onFinish} />;
+  }
+
+  it("a press that adds a following beat lands on it and does not finish", async () => {
+    const onFinish = vi.fn(async () => {});
+    render(<Branching onFinish={onFinish} />);
+    await userEvent.click(screen.getByRole("button", { name: "Not yet" }));
+    expect(screen.getByRole("heading", { name: "What it missed" })).toBeTruthy();
+    expect(onFinish).not.toHaveBeenCalled();
+  });
+
+  it("a press that removes every following beat finishes", async () => {
+    const onFinish = vi.fn(async () => {});
+    render(<Branching startWithMore onFinish={onFinish} />);
+    await userEvent.click(screen.getByRole("button", { name: "Met" }));
+    await waitFor(() => expect(onFinish).toHaveBeenCalledWith({ keepMine: false }));
+    expect(screen.queryByRole("heading", { name: "What it missed" })).toBeNull();
+  });
+
+  it("a press on the last beat finishes with the answer the press set", async () => {
+    const seen: string[] = [];
+    function LastPick() {
+      const [choice, setChoice] = useState("none");
+      const beats: Beat[] = [
+        {
+          id: "pick",
+          title: "Did it meet it",
+          body: ({ advance }) => (
+            <button
+              type="button"
+              onClick={() => {
+                setChoice("met");
+                advance();
+              }}
+            >
+              Met
+            </button>
+          ),
+        },
+      ];
+      return <Deck label="Test" beats={beats} onClose={() => {}} onFinish={async () => void seen.push(choice)} />;
+    }
+    render(<LastPick />);
+    await userEvent.click(screen.getByRole("button", { name: "Met" }));
+    await waitFor(() => expect(seen).toEqual(["met"]));
+  });
+
+  /** Three one-tap cards, so a press counted twice would skip the middle one. */
+  function ThreeTaps({ onClose = () => {}, startAt }: { onClose?: () => void; startAt?: number }) {
+    const tap = (id: string, title: string): Beat => ({
+      id,
+      title,
+      body: ({ advance }) => (
+        <button type="button" onClick={advance}>
+          Pick
+        </button>
+      ),
+    });
+    const beats = [tap("one", "First"), tap("two", "Second"), tap("three", "Third")];
+    return <Deck label="Test" beats={beats} startAt={startAt} onClose={onClose} onFinish={async () => {}} />;
+  }
+
+  it("two quick presses advance once", () => {
+    render(<ThreeTaps />);
+    const pick = screen.getByRole("button", { name: "Pick" });
+    act(() => {
+      pick.click();
+      pick.click();
+    });
+    expect(heading("Second")).toBeTruthy();
+  });
+
+  it("Back after a press, before it renders, drops the move", () => {
+    render(<ThreeTaps startAt={1} />);
+    act(() => {
+      screen.getByRole("button", { name: "Pick" }).click();
+      screen.getByRole("button", { name: "Back" }).click();
+    });
+    expect(heading("First")).toBeTruthy();
+  });
+
+  it("Back on the first card after a press, before it renders, closes without moving on", () => {
+    const onClose = vi.fn();
+    render(<ThreeTaps onClose={onClose} />);
+    act(() => {
+      screen.getByRole("button", { name: "Pick" }).click();
+      screen.getByRole("button", { name: "Back" }).click();
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(heading("First")).toBeTruthy();
+  });
+
+  it("a press while the beat is not valid does nothing", async () => {
+    const onFinish = vi.fn(async () => {});
+    function Invalid() {
+      const beats: Beat[] = [
+        { id: "pick", title: "Did it meet it", valid: false, body: ({ advance }) => <button type="button" onClick={advance}>Met</button> },
+        { id: "after", title: "After", forward: "Save", body: null },
+      ];
+      return <Deck label="Test" beats={beats} onClose={() => {}} onFinish={onFinish} />;
+    }
+    render(<Invalid />);
+    await userEvent.click(screen.getByRole("button", { name: "Met" }));
+    expect(heading("Did it meet it")).toBeTruthy();
+    expect(onFinish).not.toHaveBeenCalled();
+  });
+
+  it("a press that adds a following beat lands on it under StrictMode", async () => {
+    render(
+      <StrictMode>
+        <Branching />
+      </StrictMode>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Not yet" }));
+    expect(heading("What it missed")).toBeTruthy();
   });
 });
 
