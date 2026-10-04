@@ -306,6 +306,29 @@ describe("an excerpt", () => {
     expect(excerptOf(`One. Two "three." ${"x".repeat(400)}`)).toBe('One. Two "three."');
   });
 
+  it("never ends on a list marker with nothing after it, though the cut falls right after one", () => {
+    // The cut lands after "3.", which reads as a sentence end; the excerpt stops at item 2.
+    const second = `2. ${"step ".repeat(50)}done.`;
+    const reply = ["1. Fixed the parser.", second, `3. ${"more words without an end ".repeat(10)}`].join("\n");
+    expect(excerptOf(reply)).toBe(`1. Fixed the parser.\n${second}`);
+    // A bare bullet, or a marker with an empty task box, on the last kept line goes too.
+    expect(excerptOf(`Intro line.\n-\n${"x".repeat(400)}`)).toBe("Intro line.");
+    expect(excerptOf(`Plan:\n- [ ]\n${"x".repeat(400)}`)).toBe("Plan:");
+  });
+
+  it("drops a bare marker that ends a short reply, and keeps periods that end a sentence", () => {
+    expect(excerptOf("1. Done.\n2.")).toBe("1. Done.");
+    expect(excerptOf("1. Done.\n2)\n  -")).toBe("1. Done.");
+    expect(excerptOf("We ship version 2.\n3. Done.")).toBe("We ship version 2.\n3. Done.");
+    expect(excerptOf("3.")).toBe("");
+  });
+
+  it("gives no example from a reply that is only a list marker", () => {
+    const bare = result("codex", "met", 1, { handBack: "1." });
+    const words = result("claude", "met", 2, { handBack: "1. Fixed it." });
+    expect(side(examples(folder([bare, words])), "overall", "true").map((e) => e.sourceId)).toEqual([id(words)]);
+  });
+
   it("keeps the first 300 characters when nothing inside them ends a line or sentence", () => {
     const excerpt = excerptOf(`Edited parse.ts then ${"y".repeat(400)}`);
     expect(Array.from(excerpt)).toHaveLength(MAX_OPENING_CHARS);

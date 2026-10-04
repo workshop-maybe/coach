@@ -105,8 +105,10 @@ export function examplesFor(ranked: readonly ExampleCandidate[], reply: string):
 /**
  * The opening of a reply as an example shows it (KTD10): cleaned (see `cleanLines`), then
  * its first 300 code points, cut back to the last line or sentence end inside them when
- * there is one. A reply of 300 code points or fewer is kept whole. Empty when nothing is
- * left after cleaning, and such a reply is no example.
+ * there is one. A reply of 300 code points or fewer is kept whole. Either way, lines at its
+ * end that hold only a list marker are dropped, so an opening never stops on "3." (the cut
+ * reads a marker's period as a sentence end). Empty when nothing is left after cleaning,
+ * and such a reply is no example.
  */
 export function excerptOf(reply: string): string {
   // Lines are cleaned only until enough are kept for the cut: twice the cap in UTF-16
@@ -117,7 +119,7 @@ export function excerptOf(reply: string): string {
     head.push(ch);
     if (head.length > MAX_OPENING_CHARS) break;
   }
-  if (head.length <= MAX_OPENING_CHARS) return text;
+  if (head.length <= MAX_OPENING_CHARS) return withoutBareMarkers(text);
 
   // The cut ends before the last line break, or after the last sentence's punctuation and
   // any closing quotes or brackets, whichever comes later inside the cap.
@@ -130,7 +132,17 @@ export function excerptOf(reply: string): string {
       if (/\s/.test(head[end])) cut = end;
     }
   }
-  return head.slice(0, cut || MAX_OPENING_CHARS).join("").trimEnd();
+  return withoutBareMarkers(head.slice(0, cut || MAX_OPENING_CHARS).join(""));
+}
+
+/** A line that is only a list marker: a bullet, an ordered marker, either with an empty task box. */
+const BARE_MARKER = /^\s*(?:[-*+]|\d{1,9}[.)])(?:\s+\[[ xX]\])?\s*$/;
+
+/** The text with any blank or marker-only lines at its end dropped, trimmed at the end. */
+function withoutBareMarkers(text: string): string {
+  const lines = text.split("\n");
+  while (lines.length > 0 && (lines[lines.length - 1].trim() === "" || BARE_MARKER.test(lines[lines.length - 1]))) lines.pop();
+  return lines.join("\n").trimEnd();
 }
 
 /**
