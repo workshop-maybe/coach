@@ -58,6 +58,14 @@ describe("FakeJev's ask with nothing queued", () => {
     expect(FAKE_LEVELS).toEqual([1, 0, 0]);
   });
 
+  it("answers a Score from the levels map it was made with, a fresh copy each time", async () => {
+    const fake = new FakeJev(FAKE_ON, { m1: 0.8 }, { difficulty: [0.6, 0.3, 0.1] });
+    const first = await fake.ask(route(1));
+    expect(first).toEqual({ answers: { m1: 0.8 }, levels: { difficulty: [0.6, 0.3, 0.1] }, model: JEV_MODEL });
+    first.levels!.difficulty[0] = 0;
+    expect((await fake.ask(route(1))).levels).toEqual({ difficulty: [0.6, 0.3, 0.1] });
+  });
+
   it("returns a queued answer as queued", async () => {
     const fake = new FakeJev(FAKE_ON);
     const queued = { answers: { m1: 0.2 }, levels: { difficulty: [0.1, 0.3, 0.6] }, model: "jev-1.14.0" };

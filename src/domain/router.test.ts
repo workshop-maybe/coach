@@ -12,6 +12,8 @@ import {
   jobFirstLine,
   matchOf,
   ratingOf,
+  ROUTINE_BELOW,
+  JUDGMENT_BELOW,
   routeBadges,
   routeBatches,
   routeText,
@@ -157,6 +159,15 @@ describe("matchOf (KTD4)", () => {
 });
 
 describe("ratingOf (KTD2)", () => {
+  it("rates below ROUTINE_BELOW as routine, below JUDGMENT_BELOW as needing judgment, and the rest as unusual or high-stakes", () => {
+    expect([ROUTINE_BELOW, JUDGMENT_BELOW]).toEqual([0.5, 1.5]);
+    // Expected levels of 0.49, 0.5, 1.49 and 1.5.
+    expect(ratingOf([0.51, 0.49, 0])).toBe("routine");
+    expect(ratingOf([0.5, 0.5, 0])).toBe("judgment");
+    expect(ratingOf([0, 0.51, 0.49])).toBe("judgment");
+    expect(ratingOf([0, 0.5, 0.5])).toBe("high-stakes");
+  });
+
   it("rates the level nearest the expected level", () => {
     expect(ratingOf([0.1, 0.3, 0.6])).toBe("high-stakes");
     expect(ratingOf([0.2, 0.6, 0.2])).toBe("judgment");

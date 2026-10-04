@@ -144,9 +144,9 @@ export function sampleStorage(sample: SampleFolder): SampleStorage {
   return new SampleStorage(sample.files);
 }
 
-/** Jev Mode for a shot: off with no key, or on with FakeJev's sample key hint, answering as `answers` scripts it. */
-export function sampleJev(state: JevState, answers?: Readonly<Record<string, number>>): FakeJev {
-  return new FakeJev(state === "on" ? FAKE_ON : JEV_OFF, answers);
+/** Jev Mode for a shot: off with no key, or on with FakeJev's sample key hint, answering as `answers` and `levels` script it. */
+export function sampleJev(state: JevState, answers?: Readonly<Record<string, number>>, levels?: Readonly<Record<string, readonly number[]>>): FakeJev {
+  return new FakeJev(state === "on" ? FAKE_ON : JEV_OFF, answers, levels);
 }
 
 const COLLECTION_NAME = "My credentials";

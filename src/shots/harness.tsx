@@ -77,7 +77,7 @@ export async function startShot(root: HTMLElement, search: string, shots: readon
   const reactRoot = createRoot(root);
   reactRoot.render(
     <StrictMode>
-      <ShotApp shot={shot} storage={storage} jev={sampleJev(shot.jev, shot.jevAnswers)} />
+      <ShotApp shot={shot} storage={storage} jev={sampleJev(shot.jev, shot.jevAnswers, shot.jevLevels)} />
     </StrictMode>,
   );
   const stop = () => reactRoot.unmount();

@@ -96,6 +96,12 @@ export interface Shot {
    * call, or no match. Only with Jev Mode on.
    */
   jevAnswers?: Readonly<Record<string, number>>;
+  /**
+   * What Jev answers a routing ask's Score, as level probabilities by question id
+   * (`difficulty`), routine first. A Score left out gets FakeJev's default, certain the job
+   * is routine. Only with Jev Mode on.
+   */
+  jevLevels?: Readonly<Record<string, readonly number[]>>;
 }
 
 /**
@@ -135,8 +141,8 @@ const CLAUDE_HOW_SURE = { profileSlug: CLAUDE, fileStem: "20260926T164500Z" };
 /** Write a release note's own handoff, A, its default. */
 const RELEASE_NOTE_HANDOFF = "20260928T090000Z";
 
-/** The job the router's pictures paste (router KTD15), as someone would hand it to an agent. */
-const ROUTER_JOB = `Go through the answers to this week's support quiz and say how sure you are of each one.
+/** The job the router's pictures and its case study paste (router KTD15), as someone would hand it to an agent. */
+export const ROUTER_JOB = `Go through the answers to this week's support quiz and say how sure you are of each one.
 
 Mark any answer you would want a second person to check before we publish it.`;
 
@@ -181,7 +187,7 @@ const CODEX_HELD = { profileSlug: CODEX, fileStem: "20260929T114000Z" };
  * 30/70 only on point 3, where Claude Code names the failing step, and point 4, where Codex
  * calls a right key wrong (jev-in-compare KTD6).
  */
-const HEAD_TO_HEAD_CALLS = { a1: 0.46, b1: 0.41, a2: 0.58, b2: 0.33, a3: 0.81, b3: 0.14, a4: 0.94, b4: 0.04, a5: 0.55, b5: 0.38 };
+export const HEAD_TO_HEAD_CALLS = { a1: 0.46, b1: 0.41, a2: 0.58, b2: 0.33, a3: 0.81, b3: 0.14, a4: 0.94, b4: 0.04, a5: 0.55, b5: 0.38 };
 
 /** What Claude Code sends back when it takes Say how sure you are again, with Jev Mode on. */
 const HOW_SURE_REPLY = `1. Answer: 5. Confidence: 95%
@@ -249,6 +255,20 @@ export const CASE_REASON = "Lets key 2 stand, but 2100 is not a leap year.";
 /** The rubric point the case study taps as missed: the second, the leap-year key. */
 export const CASE_MISSED_POINT =
   "Wrong. The answer is no. A year divisible by 100 is a leap year only when it is also divisible by 400, and the rationale leaves that rule out.";
+
+/**
+ * What Jev answers the router case study's routing ask, by question id: whether the job is
+ * like each badge, in the sample's Home order (Name what matters next, Say how sure you are,
+ * Check an answer key, Write a release note). Illustrative, not a real reading: Say how sure
+ * you are matches, Check an answer key is also like it, and the other two are not.
+ */
+export const ROUTER_CALLS = { m1: 0.12, m2: 0.93, m3: 0.74, m4: 0.08 };
+
+/**
+ * What Jev answers the routing ask's difficulty Score in the case study, routine first.
+ * Illustrative: mostly routine, some judgment, so the expected level, 0.41, rates it routine.
+ */
+export const ROUTER_LEVELS = [0.64, 0.31, 0.05] as const;
 
 /** The case study's test: Claude Code takes Check an answer key, which opens at "Hand it over". */
 const CASE_TEST: Route = { view: "deck", deck: "test", profileSlug: CLAUDE, credentialKey: ANSWER_KEY };
@@ -910,7 +930,8 @@ export const SHOTS: readonly Shot[] = [
     route: { view: "deck", deck: "router" },
     seed: "full",
     jev: "on",
-    jevAnswers: { m1: 0.12, m2: 0.93, m3: 0.74, m4: 0.08 },
+    jevAnswers: ROUTER_CALLS,
+    jevLevels: { difficulty: ROUTER_LEVELS },
     expect: { text: "Go-to for Say how sure you are" },
     steps: [{ paste: ROUTER_JOB }, { click: { button: "Next" } }, { click: { button: "Ask Jev" } }, { waitFor: { text: "Go-to for Say how sure you are" } }],
     clip: { selector: ".deck", pad: 8 },
