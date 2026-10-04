@@ -130,6 +130,27 @@ const RELEASE_REPLY = `# Release notes for 0.9
 /** From "Hand it over" to the release note pasted under "What came back". */
 const RELEASE_TO_REPLY: readonly Step[] = [{ click: { button: "Copy" } }, { waitFor: { text: "What came back" } }, { paste: RELEASE_REPLY }];
 
+// Jev Mode's pictures (U8): the judge card and the reply box with Jev Mode on, and a take
+// that keeps a saved reading. Check an answer key's take by Codex is the sample's one
+// result with a reading.
+const ANSWER_KEY = "my-credentials/check-an-answer-key";
+const CODEX_ANSWER_KEY = { profileSlug: CODEX, fileStem: "20260927T112000Z" };
+
+/**
+ * A short release note as a terminal shows it: a harness marker, a two-space gutter and
+ * lines wrapped at one width mid-sentence, so the paste offers "Clean up with Jev".
+ */
+const TERMINAL_REPLY = `⏺ Release notes for 0.9.
+
+  Sync is now on by default. If you sync through your own
+  server, add its address under Settings, then Sync, before
+  you update.
+
+  Edits no longer go missing when the server is busy. The app
+  waits and tries again instead of dropping the change. Tags
+  have their own column, so searching by tag is faster, and
+  every note keeps its tags.`;
+
 export const SHOTS: readonly Shot[] = [
   {
     id: "first-run",
@@ -210,6 +231,35 @@ export const SHOTS: readonly Shot[] = [
     seed: "full",
     jev: "on",
     expect: { text: "Your key ends in c0de." },
+  },
+  {
+    // With Jev Mode on, Ask Jev sits under the rubric, and Met and Not yet wait for Save.
+    id: "jev-ask",
+    page: "help/jev-mode",
+    route: RELEASE_TEST,
+    seed: "full",
+    jev: "on",
+    expect: { text: "Ask Jev" },
+    steps: [...RELEASE_TO_REPLY, { click: { button: "Next" } }, { waitFor: { text: "Ask Jev" } }],
+  },
+  {
+    id: "jev-cleanup",
+    page: "help/jev-mode",
+    route: RELEASE_TEST,
+    seed: "full",
+    jev: "on",
+    expect: { text: "Clean up with Jev" },
+    steps: [{ click: { button: "Copy" } }, { waitFor: { text: "What came back" } }, { paste: TERMINAL_REPLY }],
+  },
+  {
+    // The saved reading is folded under the reply, so the picture opens it and scrolls to it.
+    id: "jev-reading",
+    page: "help/jev-mode",
+    route: { view: "item", item: "reply", credentialKey: ANSWER_KEY, take: CODEX_ANSWER_KEY },
+    seed: "full",
+    jev: "on",
+    expect: { selector: "details.reply-jev[open]" },
+    steps: [{ click: { selector: "details.reply-jev > summary" } }, { scroll: { selector: "details.reply-jev" } }],
   },
 
   // How to (U7): every picture over the full sample with Jev Mode off (KTD7).
@@ -414,7 +464,7 @@ export const COVERAGE: Record<RouteKind, readonly string[] | typeof NOT_PICTURED
   home: ["home-empty", "home", "home-needs"],
   "deck:credential": ["credential-start", "credential-target"],
   "deck:agent": ["first-test-agent", "first-test-hand", "first-test-judge", "first-test-home", "agent-new"],
-  "deck:test": ["test-hand", "test-reply", "judge"],
+  "deck:test": ["test-hand", "test-reply", "judge", "jev-ask", "jev-cleanup"],
   "deck:edit-credential": ["edit-retest"],
   "deck:edit-agent": ["agent-params"],
   "deck:handoffs": ["handoffs-box"],
@@ -425,6 +475,6 @@ export const COVERAGE: Record<RouteKind, readonly string[] | typeof NOT_PICTURED
   "item:agent": ["agent-page"],
   // A handoff opens as its own item only once two or more have results; the sample's has none.
   "item:handoff": NOT_PICTURED,
-  "item:reply": ["reply-view"],
+  "item:reply": ["reply-view", "jev-reading"],
   "item:compare": ["compare"],
 };

@@ -5,7 +5,7 @@ order: 10
 description: Turn on Jev Mode with your own TypeSafe key, what each use sends, and how to change the key or turn it off.
 ---
 
-{/* Jev Mode (U5, U6, R7, R11, AE4): what it is, turning it on, what each use sends in the Jev Mode card's own words, the key, and turning it off. Labels are checked against src/ui/JevDeck.tsx and src/ui/TestDeck.tsx (KTD8). */}
+{/* Jev Mode (U5, U6, U8, R7, R11, AE4): what it is, turning it on, what each use sends in the Jev Mode card's own words, the judge card and the reply box with Jev Mode on, a saved reading, the key, and turning it off. Labels are checked against src/ui/JevDeck.tsx, src/ui/TestDeck.tsx and src/ui/JevReading.tsx (KTD8). */}
 
 Jev Mode connects the app to Jev, TypeSafe's model, with your own TypeSafe key. It is off by default, and it is the app's only network connection. Jev acts only when you ask, in two places: a second opinion on a reply, and a cleanup of a reply pasted from a terminal.
 
@@ -35,13 +35,23 @@ When Jev Mode is on and the badge has a rubric, <UI>Did it meet it</UI> changes 
 - <UI>Met</UI> and <UI>Not yet</UI> become choices, and <UI>Save</UI> records the one you pick.
 - <UI>Ask Jev</UI> appears under the rubric. Once you've picked, it reads <UI>Check with Jev</UI>.
 
+<Shot id="jev-ask" alt="Did it meet it with Jev Mode on: the badge's rubric with Ask Jev under it, the reply beside it, the Met and Not yet buttons, and Save, greyed out until you pick" />
+
 Jev's reading shows below the rubric: a chance that the reply meets each rubric point, and one <UI>Overall</UI>. A point Jev can't call either way says <UI>Can't call: sharpen this point</UI>. You still make the call, and the reading is saved with your result.
+
+To see it again, open the reply from the badge's <UI>Replies</UI>, as [Compare takes](/how-to/compare-takes/) shows. The reading is folded under the reply, with its overall chance on the fold. Click the fold to open it.
+
+<Shot id="jev-reading" alt="Codex's reply on Check an answer key, with Jev's reading open below it: each rubric point as Jev read it with a chance from 88% to 95%, and 91% overall" />
 
 A reply too long for Jev shows <UI>This reply is too long for Jev</UI>, and you judge it as usual.
 
 ## A cleanup
 
-A reply copied out of a terminal often breaks lines where the terminal wrapped them. When a paste looks like that, <UI>Clean up with Jev</UI> appears under the reply box. Jev finds the breaks that are only wraps and joins those lines. Nothing else in the reply changes. <UI>Put back the paste</UI> puts the reply back as you pasted it.
+A reply copied out of a terminal often breaks lines where the terminal wrapped them. When a paste looks like that, <UI>Clean up with Jev</UI> appears under the reply box.
+
+<Shot id="jev-cleanup" alt="What came back with a reply pasted from a terminal, its sentences broken where the terminal wrapped them, and Clean up with Jev under the reply box" />
+
+Jev finds the breaks that are only wraps and joins those lines. Nothing else in the reply changes. <UI>Put back the paste</UI> puts the reply back as you pasted it.
 
 ## Use a new key or remove it
 
@@ -50,7 +60,7 @@ A reply copied out of a terminal often breaks lines where the terminal wrapped t
 With a key saved, the card says <UI>Jev Mode is on</UI> or <UI>Jev Mode is off</UI>, and <UI>Your key ends in \{hint\}.</UI>
 
 - To use a new key, click <UI>Use a new key</UI>, paste it under <UI>A new key</UI>, and click <UI>Replace the key</UI>. Jev Mode stays on or off, as it was.
-- To delete the key, click <UI>Remove the key</UI>. That also turns Jev Mode off.
+- To delete the key from your keychain, click <UI>Remove the key</UI>. That also turns Jev Mode off.
 
 ## Turn it off
 
@@ -58,4 +68,4 @@ Open <UI>Jev Mode</UI> and click <UI>Turn off Jev Mode</UI>. The app keeps your 
 
 ## When Jev can't answer
 
-The judge card says why in one line, such as when TypeSafe refuses the key or Jev has had too many asks. A key problem points you back to <UI>Jev Mode</UI> in the top bar. Either way, you can still record your verdict.
+The judge card says why in one line, such as when TypeSafe refuses the key or Jev has had too many asks. A key problem points you back to <UI>Jev Mode</UI> in the top bar. Either way, you can still record your verdict. [When something breaks](/help/when-something-breaks/#jev-mode) lists each line and what to do.
