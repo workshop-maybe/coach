@@ -346,7 +346,12 @@ describe("what the deck says leaves the machine", () => {
     const d = within(deck());
     expect(d.getByText(/TypeSafe's Jev model/)).toBeTruthy();
     expect(d.getByText(/Nothing is sent until you ask\./)).toBeTruthy();
-    expect(d.getByText("A second opinion sends the reply, the badge's task and its rubric.")).toBeTruthy();
+    expect(
+      d.getByText(
+        "A second opinion sends the reply, the badge's task, rubric and learning targets, and the openings of a few earlier replies on this badge with your notes on them.",
+      ),
+    ).toBeTruthy();
+    expect(d.queryByText("A second opinion sends the reply, the badge's task and its rubric.")).toBeNull();
     expect(d.getByText("A cleanup sends only the text you pasted.")).toBeTruthy();
     expect(d.getByText(/TypeSafe keeps what it receives under/)).toBeTruthy();
     expect(d.getByRole("link", { name: "its terms" }).getAttribute("href")).toBe(TERMS);
