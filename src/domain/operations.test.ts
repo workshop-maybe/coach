@@ -8,13 +8,22 @@ import {
   COST_ORDER_PATH,
   credentialPath,
   handoffPath,
+  headToHeadDir,
+  headToHeadPath,
   heldPath,
+  heldReadingPath,
   loadFolder,
+  readingsDir,
+  rejudgedDir,
   markPath,
   marksDir,
   profilePath,
+  rejudgedPath,
   routingPath,
+  serializeHeadToHead,
+  serializeHeldReading,
   serializeMark,
+  serializeRejudge,
   SKELETON_PATH,
 } from "./folder";
 import { buildMatrix, cellKey } from "./matrix";
@@ -37,8 +46,11 @@ import {
   judgeHeldReply,
   markGoTo,
   recordAssessment,
+  rejudgeResult,
   reorderCredentials,
   saveCostOrder,
+  saveHeadToHead,
+  saveHeldReading,
   saveSkeleton,
   setCredentialBadgeOverride,
   takeAgentForJob,
@@ -52,7 +64,7 @@ import {
   updateProfile,
 } from "./operations";
 import { findPreset, presetCredential } from "./presets";
-import { credentialKey, type AgentProfile, type AssessmentResult, type FolderState, type JevReading } from "./types";
+import { credentialKey, type AgentProfile, type AssessmentResult, type FolderState, type HeadToHead, type HeldReading, type JevReading, type Rejudge } from "./types";
 
 /** Records a result and returns only the folder, as most tests here need. */
 async function recordState(...args: Parameters<typeof recordAssessment>): Promise<FolderState> {
@@ -802,6 +814,76 @@ describe("moving to trash", () => {
     expect(storage.file(markPath("go-basics", "read-a-file", "20260929T093000Z"))).toBeDefined();
     expect(state.marks.map((m) => m.credentialSlug)).toEqual(["read-a-file"]);
   });
+
+  describe("what compare saves (jev-in-compare KTD1, KTD3, KTD4)", () => {
+    const stem = "20260929T084900Z";
+    const reading: JevReading = { model: "jev-1", assignmentVersion: "v1", askedAt: "2026-09-30T08:00:00.000Z", seen: "before", overall: 0.5, points: [] };
+    const rejudge = (profileSlug: string, credentialSlug = "write-a-cli"): Rejudge => ({
+      profileSlug,
+      collectionSlug: "go-basics",
+      credentialSlug,
+      id: "20260930T080000Z",
+      fileStem: stem,
+      result: "not_met",
+      judgedAt: "2026-09-30T08:00:00.000Z",
+      note: "",
+    });
+    const heldReading = (profileSlug: string, credentialSlug = "write-a-cli"): HeldReading => ({
+      profileSlug,
+      collectionSlug: "go-basics",
+      credentialSlug,
+      id: "20260930T081000Z",
+      fileStem: "20260930T070000Z",
+      reading,
+    });
+    const headToHead = (credentialSlug: string): HeadToHead => ({
+      collectionSlug: "go-basics",
+      credentialSlug,
+      id: "20260930T082000Z",
+      model: "jev-1",
+      assignmentVersion: "v1",
+      askedAt: "2026-09-30T08:20:00.000Z",
+      first: { profileSlug: "claude-opus", fileStem: stem },
+      second: { profileSlug: "other", fileStem: "20260930T070000Z" },
+      points: [{ text: "Flags parse.", firstOver: 0.9, secondOver: 0.1 }],
+    });
+    const files = (r: Rejudge[], h: HeldReading[], x: HeadToHead[]): Record<string, string> => ({
+      ...Object.fromEntries(r.map((v) => [rejudgedPath(v.profileSlug, v.collectionSlug, v.credentialSlug, v.id), serializeRejudge(v)])),
+      ...Object.fromEntries(h.map((v) => [heldReadingPath(v.profileSlug, v.collectionSlug, v.credentialSlug, v.id), serializeHeldReading(v)])),
+      ...Object.fromEntries(x.map((v) => [headToHeadPath(v.collectionSlug, v.credentialSlug, v.id), serializeHeadToHead(v)])),
+    });
+
+    it("trashing a badge moves its head-to-heads and every agent's re-judges and readings under the same stamp, and leaves another badge's", async () => {
+      const { storage, state: first } = await withOneAssessment();
+      const second = await createCredential(storage, first, "go-basics", "Read a file");
+      const moving = files([rejudge("claude-opus"), rejudge("other")], [heldReading("claude-opus"), heldReading("other")], [headToHead("write-a-cli")]);
+      const staying = files([rejudge("claude-opus", "read-a-file")], [heldReading("claude-opus", "read-a-file")], [headToHead("read-a-file")]);
+      storage.seed({ ...moving, ...staying });
+      const state = await trashCredential(storage, second.state, "go-basics", "write-a-cli", now);
+      for (const [path, text] of Object.entries(moving)) {
+        expect(storage.file(path)).toBeUndefined();
+        expect(storage.file(`trash/20260930T100000Z/${path}`)).toBe(text);
+      }
+      for (const [path, text] of Object.entries(staying)) expect(storage.file(path)).toBe(text);
+      expect(state.headToHeads.map((h) => h.credentialSlug)).toEqual(["read-a-file"]);
+      expect(state.heldReadings.map((h) => h.credentialSlug)).toEqual(["read-a-file"]);
+    });
+
+    it("trashing an agent moves its re-judges and readings and leaves the badge's head-to-heads", async () => {
+      const { storage, state } = await withOneAssessment();
+      const moving = files([rejudge("claude-opus")], [heldReading("claude-opus")], []);
+      const staying = files([rejudge("other")], [heldReading("other")], [headToHead("write-a-cli")]);
+      storage.seed({ ...moving, ...staying });
+      const next = await trashProfile(storage, state, "claude-opus", now);
+      for (const [path, text] of Object.entries(moving)) {
+        expect(storage.file(path)).toBeUndefined();
+        expect(storage.file(`trash/20260930T100000Z/${path}`)).toBe(text);
+      }
+      for (const [path, text] of Object.entries(staying)) expect(storage.file(path)).toBe(text);
+      expect(next.headToHeads).toEqual([headToHead("write-a-cli")]);
+      expect(next.heldReadings.map((h) => h.profileSlug)).toEqual(["other"]);
+    });
+  });
 });
 
 describe("go-to marks", () => {
@@ -1296,5 +1378,277 @@ describe("holding and judging replies", () => {
     expect(storage.file(`trash/20261002T110000Z/${heldPath("other", "go-basics", "write-a-cli", theirs.fileStem)}`)).toBeDefined();
     expect(heldFiles(storage).filter((p) => !p.startsWith("trash/"))).toEqual([]);
     expect(afterBadge.held).toEqual([]);
+  });
+});
+
+describe("writing from compare (jev-in-compare U4)", () => {
+  const ids = { profileSlug: "claude-opus", collectionSlug: "go-basics", credentialSlug: "write-a-cli" };
+  const TASK = "Build a CLI.";
+  const RUBRIC = "- Flags parse.\n- Help prints.\n\nMet when both hold.";
+  const at = new Date("2026-10-01T09:00:00.123Z");
+  const now = new Date("2026-10-02T10:00:00.000Z");
+  const filesUnder = (storage: MemoryStorage, dir: string) => Object.keys(storage.files()).filter((p) => p.startsWith(`${dir}/`)).sort();
+  const reading = (assignmentVersion: string, askedAt: string, overall = 0.9): JevReading => ({
+    model: "jev-1.13.0",
+    assignmentVersion,
+    askedAt,
+    seen: "before",
+    overall,
+    points: [
+      { text: "Flags parse.", probability: 0.9 },
+      { text: "Help prints.", probability: 0.8 },
+    ],
+    targets: [{ text: "I can parse flags", probability: 0.7 }],
+    examplesSent: 0,
+  });
+
+  /** A folder whose badge has two rubric points, a note and a learning target, and a second agent. */
+  async function compareSetup() {
+    const { storage, state: first } = await setup();
+    const credential = first.credentials[0];
+    const state = await updateCredential(storage, { ...credential, task: TASK, rubric: RUBRIC }, first.raw[credentialPath("go-basics", "write-a-cli")]);
+    const other = await createProfile(storage, state, { ...baseProfile, name: "Other" });
+    return { storage, state: other.state, version: await assignmentVersion(TASK, RUBRIC) };
+  }
+
+  describe("judging a held reply with a reason and missed points", () => {
+    it("Covers AE6. Not yet with two points and a reason writes a result with both, its reading and the held reply's time and stem", async () => {
+      const { storage, state, version } = await compareSetup();
+      const jev = reading(version, "2026-10-01T08:59:00.000Z");
+      const held = await holdReply(storage, state, { ...ids, handBack: "Here it is.", jev }, at);
+      const heldText = storage.file(heldPath("claude-opus", "go-basics", "write-a-cli", held.fileStem));
+      const next = await judgeHeldReply(storage, held.state, { ...ids, fileStem: held.fileStem }, "not_met", {
+        note: "It never ran the tests.",
+        missedPoints: ["Help prints.", "Flags parse."],
+      });
+      expect(next.held).toEqual([]);
+      expect(next.assessments).toHaveLength(1);
+      expect(next.assessments[0]).toMatchObject({
+        ...ids,
+        fileStem: held.fileStem,
+        result: "not_met",
+        recordedAt: "2026-10-01T09:00:00.123Z",
+        note: "It never ran the tests.",
+        missedPoints: ["Flags parse.", "Help prints."],
+        jev,
+      });
+      expect(storage.file(heldPath("claude-opus", "go-basics", "write-a-cli", held.fileStem))).toBe(heldText);
+    });
+
+    it("copies a reading taken in compare when it is newer than the hold-time one", async () => {
+      const { storage, state, version } = await compareSetup();
+      const atHold = reading(version, "2026-10-01T08:59:00.000Z", 0.2);
+      const held = await holdReply(storage, state, { ...ids, handBack: "Here it is.", jev: atHold }, at);
+      const newer = reading(version, "2026-10-02T09:00:00.000Z", 0.95);
+      const read = await saveHeldReading(storage, held.state, { ...ids, fileStem: held.fileStem, reading: newer }, now);
+      const next = await judgeHeldReply(storage, read, { ...ids, fileStem: held.fileStem }, "met");
+      expect(next.assessments[0].jev).toEqual(newer);
+    });
+
+    it("copies a reading taken in compare when the reply was held without one", async () => {
+      const { storage, state, version } = await compareSetup();
+      const held = await holdReply(storage, state, { ...ids, handBack: "Here it is." }, at);
+      const later = reading(version, "2026-10-02T09:00:00.000Z");
+      const read = await saveHeldReading(storage, held.state, { ...ids, fileStem: held.fileStem, reading: later }, now);
+      const next = await judgeHeldReply(storage, read, { ...ids, fileStem: held.fileStem }, "not_met");
+      expect(next.assessments[0].jev).toEqual(later);
+    });
+
+    it("Met keeps no missed points, even when some are passed, and the reason goes through the reason line", async () => {
+      const { storage, state } = await compareSetup();
+      const held = await holdReply(storage, state, { ...ids, handBack: "Here it is." }, at);
+      const next = await judgeHeldReply(storage, held.state, { ...ids, fileStem: held.fileStem }, "met", {
+        note: "  ## It did\nall of it  ",
+        missedPoints: ["Flags parse."],
+      });
+      expect(next.assessments[0]).not.toHaveProperty("missedPoints");
+      expect(next.assessments[0].note).toBe("It did all of it");
+      expect(storage.file(assessmentPath("claude-opus", "go-basics", "write-a-cli", held.fileStem))).not.toContain("missed_points");
+    });
+
+    it("drops a missed point that is not a point of the current rubric", async () => {
+      const { storage, state } = await compareSetup();
+      const held = await holdReply(storage, state, { ...ids, handBack: "Here it is." }, at);
+      const next = await judgeHeldReply(storage, held.state, { ...ids, fileStem: held.fileStem }, "not_met", {
+        missedPoints: ["Tests pass.", "Help prints."],
+      });
+      expect(next.assessments[0].missedPoints).toEqual(["Help prints."]);
+    });
+  });
+
+  describe("saving a held reply's reading", () => {
+    it("writes a new file beside the held reply, and the folder reads it back", async () => {
+      const { storage, state, version } = await compareSetup();
+      const held = await holdReply(storage, state, { ...ids, handBack: "Here it is." }, at);
+      const heldText = storage.file(heldPath("claude-opus", "go-basics", "write-a-cli", held.fileStem));
+      const r = reading(version, "2026-10-02T09:59:00.000Z");
+      const next = await saveHeldReading(storage, held.state, { ...ids, fileStem: held.fileStem, reading: r }, now);
+      expect(filesUnder(storage, readingsDir("claude-opus", "go-basics", "write-a-cli"))).toEqual([
+        heldReadingPath("claude-opus", "go-basics", "write-a-cli", "20261002T100000Z"),
+      ]);
+      expect(next.heldReadings).toEqual([{ ...ids, id: "20261002T100000Z", fileStem: held.fileStem, reading: r }]);
+      expect(next.held.map((h) => h.fileStem)).toEqual([held.fileStem]);
+      expect(storage.file(heldPath("claude-opus", "go-basics", "write-a-cli", held.fileStem))).toBe(heldText);
+    });
+
+    it("two saves in one second get two stems", async () => {
+      const { storage, state, version } = await compareSetup();
+      const held = await holdReply(storage, state, { ...ids, handBack: "Here it is." }, at);
+      const ref = { ...ids, fileStem: held.fileStem };
+      const one = await saveHeldReading(storage, held.state, { ...ref, reading: reading(version, "2026-10-02T09:59:00.000Z") }, now);
+      const two = await saveHeldReading(storage, one, { ...ref, reading: reading(version, "2026-10-02T09:59:30.000Z") }, now);
+      expect(two.heldReadings.map((h) => h.id)).toEqual(["20261002T100000Z", "20261002T100001Z"]);
+    });
+
+    it("refuses a reply that has been judged or was never held, and writes nothing", async () => {
+      const { storage, state, version } = await compareSetup();
+      const held = await holdReply(storage, state, { ...ids, handBack: "Here it is." }, at);
+      const judged = await judgeHeldReply(storage, held.state, { ...ids, fileStem: held.fileStem }, "met");
+      const before = storage.files();
+      await expect(
+        saveHeldReading(storage, judged, { ...ids, fileStem: held.fileStem, reading: reading(version, "2026-10-02T09:59:00.000Z") }, now),
+      ).rejects.toThrow("That reply is no longer held.");
+      await expect(
+        saveHeldReading(storage, held.state, { ...ids, fileStem: "20200101T000000Z", reading: reading(version, "2026-10-02T09:59:00.000Z") }, now),
+      ).rejects.toThrow("That reply is no longer held.");
+      expect(storage.files()).toEqual(before);
+    });
+
+    it("refuses a reading asked against another version of the badge, and writes nothing", async () => {
+      const { storage, state } = await compareSetup();
+      const held = await holdReply(storage, state, { ...ids, handBack: "Here it is." }, at);
+      const before = storage.files();
+      await expect(
+        saveHeldReading(storage, held.state, { ...ids, fileStem: held.fileStem, reading: reading("old", "2026-10-02T09:59:00.000Z") }, now),
+      ).rejects.toThrow("The badge's task or rubric changed. Compare with Jev again.");
+      expect(storage.files()).toEqual(before);
+    });
+  });
+
+  describe("saving a head-to-head", () => {
+    const points = [
+      { text: "Flags parse.", firstOver: 0.9, secondOver: 0.1 },
+      { text: "Help prints.", firstOver: 0.4, secondOver: 0.6 },
+    ];
+
+    async function twoReplies() {
+      const { storage, state, version } = await compareSetup();
+      const mine = await holdReply(storage, state, { ...ids, handBack: "Mine." }, at);
+      const theirs = await recordAssessment(storage, mine.state, { ...ids, profileSlug: "other", result: "met", note: "", handBack: "Theirs." }, at);
+      const pair = {
+        collectionSlug: "go-basics",
+        credentialSlug: "write-a-cli",
+        model: "jev-1.13.0",
+        assignmentVersion: version,
+        askedAt: "2026-10-02T09:59:00.000Z",
+        first: { profileSlug: "claude-opus", fileStem: mine.fileStem },
+        second: { profileSlug: "other", fileStem: theirs.fileStem },
+        points,
+      };
+      return { storage, state: theirs.state, pair };
+    }
+
+    it("writes a new file beside the badge's marks naming both replies, a held one and a result, and the folder reads it back", async () => {
+      const { storage, state, pair } = await twoReplies();
+      const next = await saveHeadToHead(storage, state, pair, now);
+      expect(filesUnder(storage, headToHeadDir("go-basics", "write-a-cli"))).toEqual([headToHeadPath("go-basics", "write-a-cli", "20261002T100000Z")]);
+      expect(next.headToHeads).toEqual([{ ...pair, id: "20261002T100000Z" }]);
+    });
+
+    it("two saves in one second get two stems", async () => {
+      const { storage, state, pair } = await twoReplies();
+      const one = await saveHeadToHead(storage, state, pair, now);
+      const two = await saveHeadToHead(storage, one, { ...pair, first: pair.second, second: pair.first }, now);
+      expect(two.headToHeads.map((h) => h.id)).toEqual(["20261002T100000Z", "20261002T100001Z"]);
+    });
+
+    it("refuses when either reply is gone from the folder, and writes nothing", async () => {
+      const { storage, state, pair } = await twoReplies();
+      const before = storage.files();
+      const gone = { profileSlug: "claude-opus", fileStem: "20200101T000000Z" };
+      await expect(saveHeadToHead(storage, state, { ...pair, first: gone }, now)).rejects.toThrow("One of those replies is no longer in the folder.");
+      await expect(saveHeadToHead(storage, state, { ...pair, second: { ...pair.second, profileSlug: "nobody" } }, now)).rejects.toThrow(
+        "One of those replies is no longer in the folder.",
+      );
+      expect(storage.files()).toEqual(before);
+    });
+
+    it("refuses a pair asked against another version of the badge, and writes nothing", async () => {
+      const { storage, state, pair } = await twoReplies();
+      const before = storage.files();
+      await expect(saveHeadToHead(storage, state, { ...pair, assignmentVersion: "old" }, now)).rejects.toThrow(
+        "The badge's task or rubric changed. Compare with Jev again.",
+      );
+      expect(storage.files()).toEqual(before);
+    });
+  });
+
+  describe("re-judging a result", () => {
+    async function oneMet() {
+      const { storage, state, version } = await compareSetup();
+      const jev = reading(version, "2026-10-01T08:59:00.000Z");
+      const recorded = await recordAssessment(storage, state, { ...ids, result: "met", note: "Looks right.", handBack: "Done.", jev }, at);
+      const ref = { ...ids, fileStem: recorded.fileStem };
+      const path = assessmentPath("claude-opus", "go-basics", "write-a-cli", recorded.fileStem);
+      return { storage, state: recorded.state, ref, path, jev };
+    }
+
+    it("Met to Not yet writes one re-judge file, leaves the result file byte for byte, and reads back as Not met", async () => {
+      const { storage, state, ref, path, jev } = await oneMet();
+      const resultText = storage.file(path);
+      const next = await rejudgeResult(storage, state, ref, "not_met", { note: "# Missed the help\ntext.", missedPoints: ["Help prints."] }, now);
+      expect(filesUnder(storage, rejudgedDir("claude-opus", "go-basics", "write-a-cli"))).toEqual([
+        rejudgedPath("claude-opus", "go-basics", "write-a-cli", "20261002T100000Z"),
+      ]);
+      expect(storage.file(path)).toBe(resultText);
+      expect(next.assessments).toHaveLength(1);
+      expect(next.assessments[0]).toMatchObject({
+        ...ref,
+        result: "not_met",
+        recordedAt: "2026-10-01T09:00:00.123Z",
+        note: "Missed the help text.",
+        missedPoints: ["Help prints."],
+        earlierVerdicts: ["met"],
+        handBack: "Done.",
+        jev,
+      });
+      const reloaded = await loadFolder(storage);
+      expect(reloaded.assessments[0].result).toBe("not_met");
+      expect(reloaded.assessments[0].earlierVerdicts).toEqual(["met"]);
+    });
+
+    it("Met, then Not yet, then Met again: each re-judge checks the verdict it has now, and both earlier verdicts stay", async () => {
+      const { storage, state, ref } = await oneMet();
+      const once = await rejudgeResult(storage, state, ref, "not_met", { missedPoints: ["Flags parse."] }, now);
+      const twice = await rejudgeResult(storage, once, ref, "met", { missedPoints: ["Flags parse."] }, now);
+      expect(filesUnder(storage, rejudgedDir("claude-opus", "go-basics", "write-a-cli"))).toHaveLength(2);
+      expect(twice.assessments[0].result).toBe("met");
+      expect(twice.assessments[0].earlierVerdicts).toEqual(["met", "not_met"]);
+      expect(twice.assessments[0]).not.toHaveProperty("missedPoints");
+    });
+
+    it("refuses the verdict the result already has, and a result that has gone, and writes nothing", async () => {
+      const { storage, state, ref } = await oneMet();
+      const before = storage.files();
+      await expect(rejudgeResult(storage, state, ref, "met", undefined, now)).rejects.toThrow("That result already has that verdict.");
+      await expect(rejudgeResult(storage, state, { ...ref, fileStem: "20200101T000000Z" }, "not_met", undefined, now)).rejects.toThrow(
+        "That result is no longer in the folder.",
+      );
+      await expect(rejudgeResult(storage, state, ref, "maybe" as never, undefined, now)).rejects.toThrow();
+      expect(storage.files()).toEqual(before);
+    });
+
+    it("drops a missed point that is not a point of the current rubric", async () => {
+      const { storage, state, ref } = await oneMet();
+      const next = await rejudgeResult(storage, state, ref, "not_met", { missedPoints: ["Tests pass.", "Flags parse."] }, now);
+      expect(next.assessments[0].missedPoints).toEqual(["Flags parse."]);
+    });
+
+    it("a re-judge with no reason or points saves an empty note and no missed points", async () => {
+      const { storage, state, ref } = await oneMet();
+      const next = await rejudgeResult(storage, state, ref, "not_met", undefined, now);
+      expect(next.assessments[0].note).toBe("");
+      expect(next.assessments[0]).not.toHaveProperty("missedPoints");
+    });
   });
 });

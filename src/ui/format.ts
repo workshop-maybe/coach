@@ -108,3 +108,8 @@ export function firstLine(text: string): string {
   const lines = text.trim().split("\n");
   return lines.find((l) => l.trim() !== "" && !isImagesOnlyLine(l))?.trim() ?? lines[0] ?? "";
 }
+
+/** Names as one phrase: "a", "a and b", "a, b and c". */
+export function listNames(names: readonly string[]): string {
+  return names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}

@@ -1,8 +1,8 @@
-//! Jev Mode: a second opinion, a line-break cleanup and a routing ask from TypeSafe's
-//! Jev model, sent with the user's own API key (KTD1–KTD4, KTD19, KTD20; router KTD1,
-//! KTD3, KTD7). The key lives in the OS keychain, status reads only `settings.json` and
-//! memory, and an ask is checked before any key store is read, so a bad call never
-//! raises a prompt.
+//! Jev Mode: a second opinion, a head-to-head, a line-break cleanup and a routing ask
+//! from TypeSafe's Jev model, sent with the user's own API key (KTD1–KTD4, KTD19, KTD20;
+//! jev-in-compare KTD5; router KTD1, KTD3, KTD7). The key lives in the OS keychain,
+//! status reads only `settings.json` and memory, and an ask is checked before any key
+//! store is read, so a bad call never raises a prompt.
 //!
 //! # Command contract
 //!
@@ -24,7 +24,7 @@
 //! reports `storage: "session"`. `jev_clear_key` deletes the key and turns Jev
 //! Mode off, and changes nothing unless the delete succeeds. `jev_set_on` with
 //! `false` keeps the key. `jev_ask` checks, in order, that Jev Mode is on, that the
-//! request is one of the three shapes below with no other field, and that it fits
+//! request is one of the four shapes below with no other field, and that it fits
 //! the budget, examples included; only then does it read the key and post. It is
 //! never retried here.
 //!
@@ -96,6 +96,31 @@
 //! // criteria are strings; no other question names a `target`. Examples ride only on
 //! // "p" questions and "overall", and a "p" question's true side carries no `user_reason`.
 //!
+//! // A head-to-head (jev-in-compare KTD5): two replies to one handoff, compared point by
+//! // point in both orders. Backticked references in question text (`reply_1`, `reply_2`,
+//! // `point`, `rubric_notes`, `task`) resolve against these wire names.
+//! type HeadToHeadRequest = {
+//!   kind: "headToHead";
+//!   state: {
+//!     task: string;
+//!     rubric_points: string[];    // the rubric's top-level list items, in order; at least one
+//!     rubric_notes: string;       // the rubric's lines outside its list
+//!     rubric: string;             // the full rubric
+//!     learning_targets: string[]; // the badge's learning targets, in order; may be empty
+//!     reply_1: string;            // the first reply, in the compare's order
+//!     reply_2: string;            // the second reply
+//!   };
+//!   // Exactly these keys, for N = rubric_points.length: "a1" … "aN", whether `reply_1`
+//!   // covers rubric_points[i-1] better than `reply_2`, and "b1" … "bN", the reverse.
+//!   questions: Record<string, {
+//!     type: "noul";
+//!     instructions: { point: string; rubric_notes?: string; question: string };
+//!     criteria?: JevCriteria;
+//!   }>;
+//! };
+//! // Each "a{i}" and "b{i}" question's `point` is rubric_points[i-1]. Its instructions are
+//! // never text and never name a `target`, and its criteria are plain strings: no examples.
+//!
 //! // A line-break cleanup (KTD17): one question per candidate break.
 //! type LineBreaksRequest = {
 //!   kind: "lineBreaks";
@@ -135,7 +160,7 @@
 //! // points), since TypeSafe's `legend` echoes the levels back.
 //! type DifficultyQuestion = { type: "score"; instructions: string; criteria: [string, string, string] };
 //!
-//! type JevRequest = SecondOpinionRequest | LineBreaksRequest | RouteRequest;
+//! type JevRequest = SecondOpinionRequest | HeadToHeadRequest | LineBreaksRequest | RouteRequest;
 //!
 //! // Every requested id, and the model that answered (growing context KTD3). Nothing
 //! // else from TypeSafe. `model` is the versioned id TypeSafe names when it is a short
@@ -154,8 +179,9 @@
 //!
 //! Any other field, at any level (a `model` field included), is refused as
 //! `"other"`, as are other question types, a Score anywhere but a route's
-//! `"difficulty"`, keys outside the rules above, and examples, targets or levels
-//! placed or sized outside them.
+//! `"difficulty"`, keys outside the rules above, a head-to-head question whose
+//! `point` isn't its key's, and examples, targets or levels placed or sized outside
+//! them.
 //!
 //! An answer is `"other"` when an id is missing, extra or of the wrong type, or a Noul
 //! is outside 0 to 1. A Score's answer must be `type: "score"` with `probabilities` an
@@ -550,13 +576,14 @@ pub struct Prepared {
     ask: Ask,
 }
 
-/// The three shapes the web view may send. No field beyond these passes, so the
+/// The four shapes the web view may send. No field beyond these passes, so the
 /// web view can write question wording but can't set the model or add to the body.
 #[derive(Debug, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
 enum Ask {
     SecondOpinion(SecondOpinion),
     LineBreaks(LineBreaks),
+    HeadToHead(HeadToHead),
     Route(Route),
 }
 
@@ -577,6 +604,39 @@ struct OpinionState {
     rubric: String,
     learning_targets: Vec<String>,
     reply: String,
+}
+
+/// One pair of replies compared point by point, in both orders (jev-in-compare KTD5).
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct HeadToHead {
+    state: PairState,
+    questions: BTreeMap<String, Question<PairInstructions, Criteria>>,
+}
+
+/// Only the two replies, in the compare's order, and the badge's task, rubric and
+/// learning targets (jev-in-compare R3).
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PairState {
+    task: String,
+    rubric_points: Vec<String>,
+    rubric_notes: String,
+    rubric: String,
+    learning_targets: Vec<String>,
+    reply_1: String,
+    reply_2: String,
+}
+
+/// A head-to-head question's instructions: always structured, always naming its point,
+/// never a target.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PairInstructions {
+    point: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    rubric_notes: Option<String>,
+    question: String,
 }
 
 /// Only the pasted text (R5).
@@ -683,7 +743,7 @@ struct StructuredInstructions {
     question: String,
 }
 
-/// A cleanup's criteria: plain strings only.
+/// A cleanup's or a head-to-head's criteria: plain strings only.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Criteria {
@@ -728,9 +788,10 @@ struct Example {
 }
 
 impl Ask {
-    /// Reads the web view's request into one of the three shapes, with its keys
+    /// Reads the web view's request into one of the four shapes, with its keys
     /// following the shape's rules, a second opinion's targets and examples placed and
-    /// sized as the contract says, and a route's one Score where and as it says.
+    /// sized as the contract says, each head-to-head question naming its point, and a
+    /// route's one Score where and as it says.
     fn parse(request: Value) -> Result<Ask, JevError> {
         let malformed = JevError::of(Kind::Other);
         let ask: Ask = serde_json::from_value(request).map_err(|_| malformed)?;
@@ -745,6 +806,14 @@ impl Ask {
                     && o.questions.iter().all(|(id, q)| opinion_question_fits(id, q))
             }
             Ask::LineBreaks(l) => !l.questions.is_empty() && l.questions.keys().all(|id| is_line_id(id)),
+            Ask::HeadToHead(h) => {
+                let points = &h.state.rubric_points;
+                let expected: BTreeSet<String> =
+                    (1..=points.len()).flat_map(|i| [format!("a{i}"), format!("b{i}")]).collect();
+                !points.is_empty()
+                    && h.questions.keys().cloned().collect::<BTreeSet<_>>() == expected
+                    && h.questions.iter().all(|(id, q)| asks_its_point(id, q, points))
+            }
             Ask::Route(r) => route_fits(r),
         };
         if checked {
@@ -759,6 +828,7 @@ impl Ask {
         let (state, questions): (usize, Vec<usize>) = match self {
             Ask::SecondOpinion(o) => (tokens(&o.state), o.questions.values().map(tokens).collect()),
             Ask::LineBreaks(l) => (tokens(&l.state), l.questions.values().map(tokens).collect()),
+            Ask::HeadToHead(h) => (tokens(&h.state), h.questions.values().map(tokens).collect()),
             Ask::Route(r) => (tokens(&r.state), r.questions.values().map(tokens).collect()),
         };
         let longest = questions.iter().copied().max().unwrap_or(0);
@@ -778,6 +848,7 @@ impl Ask {
         match self {
             Ask::SecondOpinion(o) => o.questions.keys().cloned().collect(),
             Ask::LineBreaks(l) => l.questions.keys().cloned().collect(),
+            Ask::HeadToHead(h) => h.questions.keys().cloned().collect(),
             Ask::Route(r) => r.questions.keys().cloned().collect(),
         }
     }
@@ -801,6 +872,7 @@ impl Ask {
         let (state, questions) = match self {
             Ask::SecondOpinion(o) => (serde_json::json!(o.state), serde_json::json!(o.questions)),
             Ask::LineBreaks(l) => (serde_json::json!(l.state), serde_json::json!(l.questions)),
+            Ask::HeadToHead(h) => (serde_json::json!(h.state), serde_json::json!(h.questions)),
             Ask::Route(r) => (serde_json::json!(r.state), serde_json::json!(r.questions)),
         };
         serde_json::json!({ "state": state, "model": MODEL, "questions": questions })
@@ -826,6 +898,16 @@ fn opinion_question_fits(id: &str, question: &Question<Instructions, OpinionCrit
     }
     let is_point = id.starts_with('p');
     side_fits(&criteria.yes, !is_point) && side_fits(&criteria.no, true)
+}
+
+/// Whether a head-to-head question, under a key already checked as "a{i}" or "b{i}",
+/// names point i as the state lists it (jev-in-compare KTD5).
+fn asks_its_point(id: &str, question: &Question<PairInstructions, Criteria>, points: &[String]) -> bool {
+    id.get(1..)
+        .and_then(|digits| digits.parse::<usize>().ok())
+        .and_then(|i| i.checked_sub(1))
+        .and_then(|i| points.get(i))
+        .is_some_and(|point| *point == question.instructions.point)
 }
 
 fn side_fits(side: &Side, reasons: bool) -> bool {
@@ -1300,6 +1382,61 @@ mod tests {
         })
     }
 
+    /// A head-to-head on `points` rubric points: "a{i}" asks whether `reply_1` covers point
+    /// i better than `reply_2`, "b{i}" the reverse, each with string criteria.
+    fn pair(points: usize) -> Value {
+        let rubric_points: Vec<String> = (1..=points).map(|i| format!("Point {i}")).collect();
+        let mut questions = serde_json::Map::new();
+        for i in 1..=points {
+            for (id, over, under) in [("a", "reply_1", "reply_2"), ("b", "reply_2", "reply_1")] {
+                questions.insert(
+                    format!("{id}{i}"),
+                    json!({
+                        "type": "noul",
+                        "instructions": {
+                            "point": format!("Point {i}"),
+                            "rubric_notes": "A rewrite in other words passes.",
+                            "question": format!("Does `{over}` cover `point` better than `{under}`, read with `rubric_notes`, given `task`?")
+                        },
+                        "criteria": criteria()
+                    }),
+                );
+            }
+        }
+        json!({
+            "kind": "headToHead",
+            "state": {
+                "task": "Write the README",
+                "rubric_points": rubric_points,
+                "rubric_notes": "A rewrite in other words passes.",
+                "rubric": "- Point 1\n- Point 2",
+                "learning_targets": ["Target 1"],
+                "reply_1": "Done. I wrote README.md with an install section.",
+                "reply_2": "Done, the README is updated."
+            },
+            "questions": questions
+        })
+    }
+
+    /// The web view's budget test for a head-to-head sends this same request (`pairForBudget`
+    /// in src/domain/jevBudget.test.ts).
+    fn pair_for_budget(reply_chars: usize) -> Value {
+        let question = json!({ "type": "noul", "instructions": { "point": "Point 1", "question": "q" }, "criteria": { "true": "w", "false": "w" } });
+        json!({
+            "kind": "headToHead",
+            "state": {
+                "task": "Write the README",
+                "rubric_points": ["Point 1"],
+                "rubric_notes": "",
+                "rubric": "- Point 1",
+                "learning_targets": ["Target 1"],
+                "reply_1": "y".repeat(reply_chars),
+                "reply_2": "z".repeat(reply_chars)
+            },
+            "questions": { "a1": question.clone(), "b1": question }
+        })
+    }
+
     fn line_breaks(ids: &[&str]) -> Value {
         let questions: serde_json::Map<String, Value> = ids
             .iter()
@@ -1727,6 +1864,38 @@ mod tests {
         long_reason["questions"]["p1"]["criteria"]["false"]["examples"][0]["user_reason"] = json!("r".repeat(201));
         let mut reason_on_holds = base();
         reason_on_holds["questions"]["p1"]["criteria"]["true"]["examples"][0]["user_reason"] = json!("shows the install");
+
+        // Head-to-head (jev-in-compare KTD5). Each changes one thing in `pair(2)`, which is
+        // accepted as it stands. A question under a key outside the rule is a clone of "a1",
+        // so the key rule is what refuses it.
+        let mut pair_extra_state = pair(2);
+        pair_extra_state["state"]["reply_3"] = json!("A third reply.");
+        let mut pair_no_reply_2 = pair(2);
+        pair_no_reply_2["state"].as_object_mut().unwrap().remove("reply_2");
+        let mut pair_no_targets = pair(2);
+        pair_no_targets["state"].as_object_mut().unwrap().remove("learning_targets");
+        let mut pair_missing_b2 = pair(2);
+        pair_missing_b2["questions"].as_object_mut().unwrap().remove("b2");
+        let pair_extra = |id: &str| {
+            let mut p = pair(2);
+            p["questions"][id] = p["questions"]["a1"].clone();
+            p
+        };
+        let (pair_overall, pair_p1, pair_a3) = (pair_extra("overall"), pair_extra("p1"), pair_extra("a3"));
+        let mut pair_text = pair(2);
+        pair_text["questions"]["a1"]["instructions"] =
+            json!("Does `reply_1` cover `point` better than `reply_2`, given `task`?");
+        let mut pair_target = pair(2);
+        pair_target["questions"]["b1"]["instructions"]["target"] = json!("Target 1");
+        let mut pair_wrong_point = pair(2);
+        pair_wrong_point["questions"]["a2"]["instructions"]["point"] = json!("Point 1");
+        let mut pair_no_point = pair(2);
+        pair_no_point["questions"]["b2"]["instructions"].as_object_mut().unwrap().remove("point");
+        let mut pair_examples = pair(2);
+        pair_examples["questions"]["a1"]["criteria"]["true"] = side(vec![example("I added README.md.", None)]);
+        let mut pair_extra_instructions = pair(2);
+        pair_extra_instructions["questions"]["a1"]["instructions"]["memory"] = json!("x");
+
         let breaks = [
             ("a reason with a line feed", '\n'),
             ("a reason with a carriage return", '\r'),
@@ -1775,6 +1944,20 @@ mod tests {
             ("a reply_opening over 300 characters", long_opening),
             ("a user_reason over 200 characters", long_reason),
             ("a user_reason on a point's true side", reason_on_holds),
+            ("an unknown head-to-head state field", pair_extra_state),
+            ("a head-to-head with no reply_2", pair_no_reply_2),
+            ("a head-to-head with no learning_targets", pair_no_targets),
+            ("a head-to-head with no points", pair(0)),
+            ("a head-to-head missing b2", pair_missing_b2),
+            ("an overall question in a head-to-head", pair_overall),
+            ("a p1 question in a head-to-head", pair_p1),
+            ("a head-to-head question for no point", pair_a3),
+            ("a head-to-head question with text instructions", pair_text),
+            ("a head-to-head question naming a target", pair_target),
+            ("a head-to-head point that isn't rubric_points[i-1]", pair_wrong_point),
+            ("a head-to-head question with no point", pair_no_point),
+            ("examples in a head-to-head", pair_examples),
+            ("an unknown head-to-head instructions field", pair_extra_instructions),
         ];
         for (what, line_break) in breaks {
             let mut broken = base();
@@ -1849,6 +2032,28 @@ mod tests {
     }
 
     #[test]
+    fn a_head_to_head_sends_exactly_its_state_the_pinned_model_and_its_questions() {
+        let r = rig_on();
+        let request = pair(2);
+        let prepared = r.jev.prepare(&r.file, request.clone()).unwrap();
+        assert_eq!(r.store.reads(), 1);
+        assert_eq!(prepared.ask.ids(), ids(&["a1", "a2", "b1", "b2"]));
+        assert_eq!(
+            prepared.ask.body(),
+            json!({ "state": request["state"], "model": MODEL, "questions": request["questions"] })
+        );
+
+        // Notes and criteria are optional on each question, as elsewhere.
+        let mut bare = pair(1);
+        for id in ["a1", "b1"] {
+            bare["questions"][id].as_object_mut().unwrap().remove("criteria");
+            bare["questions"][id]["instructions"].as_object_mut().unwrap().remove("rubric_notes");
+        }
+        let prepared = r.jev.prepare(&r.file, bare.clone()).unwrap();
+        assert_eq!(prepared.ask.body()["questions"], bare["questions"]);
+    }
+
+    #[test]
     fn examples_at_their_largest_are_accepted_counting_code_points() {
         let r = rig_on();
         let mut request = opinion_with_examples();
@@ -1900,6 +2105,7 @@ mod tests {
     fn only_a_route_has_score_ids() {
         assert!(Ask::parse(opinion_with_examples()).unwrap().score_ids().is_empty());
         assert!(Ask::parse(line_breaks(&["L002", "L003"])).unwrap().score_ids().is_empty());
+        assert!(Ask::parse(pair(2)).unwrap().score_ids().is_empty());
     }
 
     #[test]
@@ -2003,6 +2209,11 @@ mod tests {
                 l["questions"]["L002"] = score.clone();
                 l
             }),
+            ("a score in a head-to-head", {
+                let mut h = pair(1);
+                h["questions"]["a1"] = score.clone();
+                h
+            }),
         ];
         let mut difficulty_in_opinion = opinion(1);
         difficulty_in_opinion["questions"]["difficulty"] = difficulty_question();
@@ -2042,6 +2253,22 @@ mod tests {
         };
         assert!(r.jev.prepare(&r.file, with_job(127_558)).is_ok());
         assert_eq!(kind(r.jev.prepare(&r.file, with_job(127_559))), Kind::TooLong);
+    }
+
+    #[test]
+    fn two_replies_together_count_toward_a_head_to_heads_budget_at_the_web_views_sizes() {
+        // The same request refuses at the same reply length in src/domain/jevBudget.test.ts.
+        // Each reply alone is about half the 32k, so only the two together pass it.
+        let r = rig_on();
+        let Ask::HeadToHead(h) = Ask::parse(pair_for_budget(0)).unwrap() else {
+            panic!("a head-to-head");
+        };
+        assert_eq!(tokens(&h.questions["a1"]), 26);
+        assert_eq!(tokens(&h.state), 38);
+        assert_eq!(kind(r.jev.prepare(&r.file, pair_for_budget(63_873))), Kind::TooLong);
+        assert_eq!(r.store.reads(), 0);
+        assert!(r.jev.prepare(&r.file, pair_for_budget(63_872)).is_ok());
+        assert_eq!(r.store.reads(), 1);
     }
 
     #[test]

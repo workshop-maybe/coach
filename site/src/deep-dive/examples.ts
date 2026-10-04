@@ -9,8 +9,8 @@
 // show the files through the <Example> component.
 //
 // The second opinion follows src/ui/TestDeck.tsx: the ranked examples, the fitted request,
-// the reading frozen with the pair for the model that answered, `savedReading`, then
-// `recordAssessment`. The UI cross-check (site/tests/deepDiveFlow.test.tsx) proves the judge
+// the reading frozen with the pair for the model that answered, `savedReading` (in
+// src/domain/savedReading.ts), then `recordAssessment`. The UI cross-check (site/tests/deepDiveFlow.test.tsx) proves the judge
 // pane sends this request and saves this reading.
 
 import YAML from "yaml";
@@ -30,7 +30,8 @@ import { readingParts, rubricParts, tappedPoints } from "../../../src/domain/sec
 import { credentialKey, type Assessment, type FolderState } from "../../../src/domain/types";
 import { SAMPLE, SAMPLE_READING, sampleFolder, sampleStorage } from "../../../src/shots/seed";
 import { CASE_CALLS, CASE_MISSED_POINT, CASE_REASON, CASE_REPLY, TERMINAL_REPLY } from "../../../src/shots/shots";
-import { savedReading, type ReadingInHand } from "../../../src/ui/TestDeck";
+import { savedReading } from "../../../src/domain/savedReading";
+import type { ReadingInHand } from "../../../src/ui/TestDeck";
 
 /**
  * What Jev answers about each candidate break in the cleanup case study. Illustrative, not

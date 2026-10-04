@@ -57,6 +57,8 @@ function folder(parts: Partial<FolderState>): FolderState {
     skeleton: null,
     handoffs: [],
     marks: [],
+    heldReadings: [],
+    headToHeads: [],
     errors: [],
     warnings: [],
     raw: {},

@@ -5,7 +5,7 @@ order: 40
 description: Read the reply beside the badge's rubric, then record Met or Not yet, or hold it to compare.
 ---
 
-{/* How to, fourth page (U7, R6, R11): the judge pane and what each verdict does. Jev Mode only in passing; help/jev-mode covers it, and these pictures are taken with it off (KTD7), except the one of the What did Jev miss step. Labels are checked against src/ui/TestDeck.tsx and src/ui/shared.tsx (KTD8). */}
+{/* How to, fourth page (U7, R6, R11): the judge pane and what each verdict does. Jev Mode only in passing; help/jev-mode covers it, and these pictures are taken with it off (KTD7), except the one of the What did Jev miss step. Changing a verdict (jev-in-compare R14) is named here and shown in how-to/run-a-bake-off. Labels are checked against src/ui/TestDeck.tsx, src/ui/verdictSteps.tsx, src/ui/takeActions.tsx and src/ui/shared.tsx (KTD8). */}
 
 After you bring back a reply and click <UI>Next</UI>, the test asks <UI>Did it meet it</UI>. The badge's rubric is on the left and the reply is on the right.
 
@@ -35,13 +35,15 @@ The points you tap are kept with the result. When you ask Jev about a later repl
 
 On <UI>Met</UI> or <UI>Not yet</UI>, the app saves a result in your folder: your verdict, the reply as it stands in the reply box, the handoff you copied, and any points you tapped. The badge's page lists the reply under <UI>Replies</UI>, and on <UI>Met</UI> the agent lights a key for the badge on home.
 
-A result is never overwritten. To judge an agent again, test it again. Its newest result is the one that counts, and the older ones stay on the badge's page. [Compare takes](/how-to/compare-takes/) shows how to read them.
+A result is never overwritten. To see whether an agent does better now, test it again. Its newest result is the one that counts, and the older ones stay on the badge's page. [Compare takes](/how-to/compare-takes/) shows how to read them.
+
+To change your verdict on a reply, open it from the badge's page and click <UI>Change to Not yet</UI> or <UI>Change to Met</UI> at its foot. The reply keeps its date and shows the new verdict everywhere, and the earlier one stays in your folder: see [Run a bake-off](/how-to/run-a-bake-off/#change-a-verdict).
 
 ## A second opinion
 
 With [Jev Mode](/help/jev-mode/) on, the card can also offer <UI>Ask Jev</UI>, and <UI>Met</UI>, <UI>Not yet</UI> and <UI>Hold to compare</UI> become choices you confirm with <UI>Save</UI>, or <UI>Next</UI> when a step follows. Jev Mode is off by default, and you can judge every reply without it. [Judging a result](/ideas/judging/) explains why the call is always yours.
 
-When you asked Jev, the points step shows Jev's call beside each point, with none of them tapped for you. When your verdict goes against Jev's call on the whole bar, one more step asks <UI>What did Jev miss</UI>. Write a line, such as "skips the rollback", or leave it empty, and click <UI>Save</UI>. The line becomes the result's note, and Jev sees it beside that reply the next time you ask about this badge.
+When you asked Jev, the points step shows Jev's call beside each point, with none of them tapped for you. When your verdict goes against Jev's call on the whole bar, one more step asks <UI>What did Jev miss</UI>. Write a line, such as "skips the rollback", or leave it empty, and click <UI>Save</UI>. The line becomes the result's note, and Jev sees it beside that reply the next time you ask about this badge. Judging a reply in a compare asks the same, but only when your verdict goes against Jev's call: [Run a bake-off](/how-to/run-a-bake-off/#judge-each-one) shows it.
 
 <Shot id="jev-reason" alt="What did Jev miss, after Jev called Claude Code's release note meets and the verdict was Not yet: the line Jev called it meets. You said Not yet., a reason typed in the box, and Save" />
 

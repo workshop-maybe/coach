@@ -7,7 +7,7 @@ description: Turn on Jev Mode with your own TypeSafe key, what each use sends, a
 
 {/* Jev Mode (U5, U6, U8, R7, R11, AE4): what it is, turning it on, what each use sends in the Jev Mode card's own words, the judge card and the reply box with Jev Mode on, what a routing ask sends, a reading with its calls, the track record and fitted cut-offs, a saved reading, the key, and turning it off. Labels are checked against src/ui/JevDeck.tsx, src/ui/TestDeck.tsx and src/ui/JevReading.tsx (KTD8). */}
 
-Jev Mode connects the app to Jev, TypeSafe's model, with your own TypeSafe key. It is off by default, and it is the app's only network connection. Jev acts only when you ask, in three places: a second opinion on a reply, a cleanup of a reply pasted from a terminal, and a routing ask that finds which badge a new job is like.
+Jev Mode connects the app to Jev, TypeSafe's model, with your own TypeSafe key. It is off by default, and it is the app's only network connection. Jev acts only when you ask, in four places: a second opinion on a reply, a comparison of replies side by side, a cleanup of a reply pasted from a terminal, and a routing ask that finds which badge a new job is like.
 
 ## Turn it on
 
@@ -24,10 +24,11 @@ Turning it on sends nothing. The app keeps the key in your system's keychain and
 Nothing is sent until you ask.
 
 - **A second opinion** sends the reply, the badge's task, rubric and learning targets, and the openings of a few earlier replies on this badge with your notes on them.
+- **A comparison** sends two replies at a time, with the badge's task, rubric and learning targets. It also asks a second opinion on each held reply that has none, which sends what a second opinion sends.
 - **A cleanup** sends only the text you pasted.
 - **A routing ask** sends the job, and the names, tasks and learning targets of your badges.
 
-The earlier replies a second opinion sends come from any of your agents, and only from the badge you're judging. Each is cut to its first few lines, without pictures or videos, and lines that look like keys or passwords are left out. Nothing else from your folder goes with a second opinion or a cleanup.
+The earlier replies a second opinion sends come from any of your agents, and only from the badge you're judging. Each is cut to its first few lines, without pictures or videos, and lines that look like keys or passwords are left out. The replies a comparison sends go whole, as they stand in your folder, like the reply a second opinion is about. Nothing else from your folder goes with a second opinion, a comparison or a cleanup.
 
 A routing ask sends the job without its pictures or videos, but otherwise as you pasted it, so keys or customer details in it go too. Take them out first, or pick the badge yourself, which sends nothing. It sends no rubric, and nothing about your agents or your results. [Find an agent for a job](/how-to/find-an-agent-for-a-job/) shows the card that says what goes.
 
@@ -48,7 +49,7 @@ When the badge has earlier replies, a line under <UI>Ask Jev</UI> says how many 
 
 Jev sees them as examples of your own verdicts: a reply you judged Met, and a reply that missed a point you tapped. Replies where you went against Jev's call, and your notes on why, go first. When your verdict goes against Jev's call on the whole bar, one more step asks <UI>What did Jev miss</UI>, and the line you write becomes that note: see [Judge a reply](/how-to/judge-a-reply/#a-second-opinion).
 
-Jev's reading shows below the rubric as calls. Each rubric point, the <UI>Overall</UI> bar and each of the badge's learning targets reads <UI>Meets</UI>, <UI>Misses</UI> or <UI>Can't call</UI>, with Jev's chance beside it in small type. A point Jev can't call either way says <UI>Can't call: sharpen this point</UI>. You still make the call, and the reading is saved with your result. If you hold the reply to compare instead, the reading stays with it and goes into the result when you judge it.
+Jev's reading shows below the rubric as calls. Each rubric point, the <UI>Overall</UI> bar and each of the badge's learning targets reads <UI>Meets</UI>, <UI>Misses</UI> or <UI>Can't call</UI>, with Jev's chance beside it in small type. A point Jev can't call either way says <UI>Can't call: sharpen this point</UI>. You still make the call, and the reading is saved with your result. If you hold the reply to compare instead, the reading stays with it and goes into the result when you judge it. A held reply can also get its reading later, in the compare: see [Run a bake-off](/how-to/run-a-bake-off/#compare-with-jev).
 
 <Shot id="jev-calls" alt="Jev's reading under the Write a release note rubric: Can't call: sharpen this point at 45% on the first point, Meets on the other two, Meets overall at 81%, and Meets on both learning targets" />
 

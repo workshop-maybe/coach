@@ -23,6 +23,7 @@ import type { RichImageSource } from "./richImage";
 import type { RichImages } from "./RichText";
 import { fileName } from "./shared";
 import { describeError, useFolder } from "./useFolderState";
+import { listNames } from "./format";
 
 /** With no folder yet: no images, and no videos (they show as placeholders). */
 const NOTHING: RichImageSource = { load: () => Promise.resolve(null) };
@@ -32,11 +33,6 @@ const NOT_ADDED = "It could not be added.";
 
 /** Whether a ref is one a carry may move: a bare-name picture or video. */
 const isLocalFileName = (src: string) => isLocalImageName(src) || isLocalVideoName(src);
-
-/** "a", "a and b", "a, b and c". */
-function listNames(names: string[]): string {
-  return names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
-}
 
 /**
  * One notice for every file one add refused (R5): each reason once, after the names of the

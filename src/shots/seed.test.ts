@@ -3,14 +3,15 @@
 // waiting test reaches What needs you, and nothing in it looks like a real key or a path
 // outside the sample folder.
 import { describe, expect, it } from "vitest";
-import { calibrationOf } from "../domain/calls";
+import { calibrationOf, callOf, DEFAULT_CUT_OFFS } from "../domain/calls";
 import { loadFolder } from "../domain/folder";
 import { assignmentVersion } from "../domain/hash";
 import { defaultHandoff, isHandoffLocked } from "../domain/handoffs";
 import { buildMatrix } from "../domain/matrix";
 import { PRESETS } from "../domain/presets";
 import { JEV_MODEL } from "../domain/jevRequest";
-import { OVERALL_ID, pointId } from "../domain/secondOpinion";
+import { OVERALL_ID, pointId, rubricParts } from "../domain/secondOpinion";
+import { readingOfTake } from "../domain/handoffResults";
 import { credentialKey } from "../domain/types";
 import { FAKE_ANSWER, FAKE_ON } from "../jev/fakeJev";
 import { JEV_OFF } from "../jev/jev";
@@ -140,6 +141,23 @@ describe("the full sample folder", () => {
     const items = needsYou(state, await buildMatrix(state), readPending(SAMPLE_FOLDER, store));
     expect(items.slice(0, 2).map((i) => i.kind)).toEqual(["reply", "held"]);
     expect(items[1]).toMatchObject({ credentialKey: SAMPLE.badges.answerKey, takes: [{ fileStem: SAMPLE.held.claudeAnswerKey }, { fileStem: SAMPLE.held.codexAnswerKey }] });
+  });
+
+  it("gives each held reply a later reading at its own version, Codex's meeting the bar overall (jev-in-compare KTD3)", async () => {
+    const { state } = await loadSample("full");
+    const answerKey = state.credentials.find((c) => credentialKey(c) === SAMPLE.badges.answerKey)!;
+    const version = await assignmentVersion(answerKey.task, answerKey.rubric);
+    const byAgent = new Map(state.held.map((h) => [h.profileSlug, readingOfTake(state, h, version)]));
+    const claude = byAgent.get(SAMPLE.agents.claude)!;
+    const codex = byAgent.get(SAMPLE.agents.codex)!;
+    for (const r of [claude, codex]) {
+      expect(r.assignmentVersion).toBe(version);
+      expect(r.seen).toBe("before");
+      expect(r.points.map((p) => p.text)).toEqual(rubricParts(answerKey.rubric).points);
+      expect(r.targets?.map((t) => t.text)).toEqual(answerKey.learningTargets);
+    }
+    expect(callOf(codex.overall, DEFAULT_CUT_OFFS)).toBe("meets");
+    expect(state.heldReadings.map((r) => r.id)).toEqual([SAMPLE.readings.claudeAnswerKey, SAMPLE.readings.codexAnswerKey]);
   });
 
   it("gives Write a release note one handoff of its own, its default, which no result has run", async () => {

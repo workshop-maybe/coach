@@ -24,12 +24,14 @@ import {
   credentialPath,
   handoffPath,
   heldPath,
+  heldReadingPath,
   markPath,
   profilePath,
   serializeAssessment,
   serializeCollection,
   serializeCostOrder,
   serializeHeld,
+  serializeHeldReading,
   serializeMark,
   serializeMarker,
   serializeProfile,
@@ -48,6 +50,7 @@ import {
   type ContextReading,
   type Credential,
   type HandoffTemplate,
+  type HeldReading,
   type HeldReply,
   type Mark,
   type TestContext,
@@ -90,6 +93,8 @@ export const SAMPLE = {
   marks: { howSure: "20260926T170000Z" },
   /** Held replies by their file stem: both agents' on Check an answer key's skeleton. */
   held: { claudeAnswerKey: "20260929T101500Z", codexAnswerKey: "20260929T114000Z" },
+  /** Jev's readings of those held replies, taken in compare after they were held, by file stem. */
+  readings: { claudeAnswerKey: "20260929T120500Z", codexAnswerKey: "20260929T120600Z" },
 } as const;
 
 /** The sample folder's files by path, and the waiting tests the harness puts in local storage. */
@@ -323,6 +328,33 @@ async function heldTake(
     setup: { harness: profile.harness, model: profile.model, effort: profile.effort },
     context: contextAt(profile, copiedAt),
     handoff: skeletonFor(credential),
+  };
+}
+
+/** Jev's reading of a held reply, taken in compare at the held reply's own version, five minutes after the bake-off's last hold. */
+function heldReadingFor(
+  held: HeldReply,
+  id: string,
+  credential: Credential,
+  chances: { points: number[]; overall: number; targets: number[] },
+): HeldReading {
+  const points = rubricParts(credential.rubric).points;
+  return {
+    profileSlug: held.profileSlug,
+    collectionSlug: held.collectionSlug,
+    credentialSlug: held.credentialSlug,
+    id,
+    fileStem: held.fileStem,
+    reading: {
+      model: JEV_MODEL,
+      assignmentVersion: held.assignmentVersion,
+      askedAt: `${id.slice(0, 4)}-${id.slice(4, 6)}-${id.slice(6, 8)}T${id.slice(9, 11)}:${id.slice(11, 13)}:${id.slice(13, 15)}.000Z`,
+      seen: "before",
+      overall: chances.overall,
+      points: points.map((text, i) => ({ text, probability: chances.points[i] })),
+      targets: credential.learningTargets.map((text, i) => ({ text, probability: chances.targets[i] })),
+      examplesSent: 1,
+    },
   };
 }
 
@@ -575,6 +607,16 @@ export async function sampleFolder(variant: SeedVariant): Promise<SampleFolder> 
     await heldTake(CODEX, answerKey, SAMPLE.held.codexAnswerKey, { heldAt: "2026-09-29T11:40:00.000Z", copiedAt: "2026-09-29T11:21:00.000Z", handBack: ANSWER_KEY_CODEX_REPLY }),
   ];
   for (const h of held) files[heldPath(h.profileSlug, h.collectionSlug, h.credentialSlug, h.fileStem)] = serializeHeld(h);
+
+  // Jev read both held replies in compare after they were held (jev-in-compare KTD3), so the
+  // bake-off opens on a grid of calls. Claude Code's reading meets throughout. Codex's meets
+  // overall although its reply calls point 4's right key wrong, so judging it Not yet goes
+  // against Jev's call and asks why.
+  const heldReadings: HeldReading[] = [
+    heldReadingFor(held[0], SAMPLE.readings.claudeAnswerKey, answerKey, { points: [0.93, 0.92, 0.9, 0.91, 0.9], overall: 0.9, targets: [0.88, 0.64] }),
+    heldReadingFor(held[1], SAMPLE.readings.codexAnswerKey, answerKey, { points: [0.9, 0.84, 0.72, 0.62, 0.86], overall: 0.78, targets: [0.8, 0.52] }),
+  ];
+  for (const r of heldReadings) files[heldReadingPath(r.profileSlug, r.collectionSlug, r.credentialSlug, r.id)] = serializeHeldReading(r);
 
   // Claude Code is Say how sure you are's go-to, marked on the Met take that earned it.
   const goTo: Mark = {

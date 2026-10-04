@@ -30,6 +30,9 @@ Andamio/
       marks/
         say-how-sure-you-are/
           20260926T170000Z.json
+      head-to-head/
+        check-an-answer-key/
+          20260929T121500Z.json
       badge/
         say-how-sure-you-are-1a2b3c4d.png
   agents/
@@ -41,6 +44,10 @@ Andamio/
           20260926T164500Z.md
           held/
             20260929T101500Z.md
+          readings/
+            20260929T120500Z.json
+          rejudged/
+            20261002T091000Z.md
   handoffs/
     skeleton.md
   routing/
@@ -54,14 +61,15 @@ Andamio/
 - `credentials/` has one Markdown file per badge. An `image-….png` or `video-….mp4` beside them is a picture or a video added to a task or rubric; see [Paste an image](/how-to/paste-an-image/) and [Add a video](/how-to/add-a-video/).
 - `handoffs/` inside a collection holds the handoffs a badge has of its own, one file each, named for when it was made.
 - `marks/` inside a collection holds every time you chose a badge's go-to, one small file each, named for when you chose. Each names the agent and the result you chose it on, and the newest one is the badge's go-to. See [Choose a go-to](/how-to/choose-a-go-to/).
+- `head-to-head/` inside a collection holds what Jev said when it compared two replies to a badge, one small file per pair, named for when it was asked. Each names both replies and keeps Jev's chances for each rubric point, in both orders. See [Run a bake-off](/how-to/run-a-bake-off/).
 - `badge/` holds the art you chose for a badge's look.
 - `agents/` has one JSON file per agent: its name, harness, model, effort, repo, notes and parameters. A picture or a video in an agent's notes sits beside its file.
-- `assessments/` holds your results: a folder for each agent, then its collection, then the badge, with one file per result. A picture or a video in a reply sits beside its result. A `held/` folder inside holds the replies you held to compare, one file each. When you judge one, its result is written beside the others under the same name, and the held file stays as it was. See [Run a bake-off](/how-to/run-a-bake-off/).
+- `assessments/` holds your results: a folder for each agent, then its collection, then the badge, with one file per result. A picture or a video in a reply sits beside its result. A `held/` folder inside holds the replies you held to compare, one file each. When you judge one, its result is written beside the others under the same name, and the held file stays as it was. A `readings/` folder holds Jev's readings of held replies taken in a compare, and a `rejudged/` folder holds each verdict you changed, one small file each, naming the result it changes. The result file itself never changes. See [Run a bake-off](/how-to/run-a-bake-off/).
 - `handoffs/skeleton.md`, at the top, is the skeleton. It appears only once you edit it. Until then the app uses its built-in one.
 - `routing/` holds every time you took an agent for a job, one small file each, named for when. Each keeps the job's first line, the badge, the agent you took and its setup, the agent the card picked and why, and Jev's rating when you asked Jev. Moving an agent or a badge to the trash leaves these files where they are.
 - `trash/` holds what you moved to the trash.
 
-A badge or an agent gets its file name from its name when you make it: *Say how sure you are* becomes `say-how-sure-you-are.md`. Renaming it later keeps the file name. A result is named for when you recorded it, in UTC, and a held reply for when you held it. A result judged from a held reply keeps the held reply's name and time.
+A badge or an agent gets its file name from its name when you make it: *Say how sure you are* becomes `say-how-sure-you-are.md`. Renaming it later keeps the file name. A result is named for when you recorded it, in UTC, and a held reply for when you held it. A result judged from a held reply keeps the held reply's name and time. A changed verdict keeps the result's name and time too, so the reply stays where it was among the others. An older version of the app doesn't read `readings/`, `rejudged/` or `head-to-head/`, so a folder opened there shows each reply's first verdict.
 
 ## A credential
 
@@ -119,7 +127,7 @@ You can change any file while the app is open. It reads the folder again when it
 
 ## The trash
 
-<UI>Move to trash</UI> deletes nothing. It moves the files into `trash/`, in a folder named for when you moved them, at the same paths they had. An agent goes with its results and its held replies, and while it's there no badge has it as its go-to. A badge goes with its handoffs, its go-to choices, every agent's results and held replies on it and a copy of its collection's file as it was. Pictures and videos added to a result go with it. Pictures and videos beside a badge or an agent stay where they are, since other badges or agents may name the same file.
+<UI>Move to trash</UI> deletes nothing. It moves the files into `trash/`, in a folder named for when you moved them, at the same paths they had. An agent goes with its results, held replies, readings and changed verdicts, and while it's there no badge has it as its go-to. A badge goes with its handoffs, its go-to choices, Jev's head-to-heads, every agent's results, held replies, readings and changed verdicts on it, and a copy of its collection's file as it was. Pictures and videos added to a result go with it. Pictures and videos beside a badge or an agent stay where they are, since other badges or agents may name the same file.
 
 To get something back, move its files from the trash to the same places in your folder, then click <UI>Reload</UI>. To delete something for good, delete it from `trash/`.
 

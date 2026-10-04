@@ -1,5 +1,5 @@
 // Test fixtures for the deck tests: a data folder in memory with credentials, agents
-// and results, and the app rendered over it on a chosen route.
+// and results, and the app rendered over it on a chosen route, with Jev Mode or without.
 
 import { render } from "@testing-library/react";
 import {
@@ -10,21 +10,29 @@ import {
   SKELETON_PATH,
   credentialPath,
   handoffPath,
+  headToHeadPath,
   heldPath,
+  heldReadingPath,
   markPath,
   profilePath,
+  rejudgedPath,
   serializeAssessment,
   serializeCollection,
   serializeCostOrder,
+  serializeHeadToHead,
   serializeHeld,
+  serializeHeldReading,
   serializeMark,
   serializeProfile,
+  serializeRejudge,
 } from "../domain/folder";
 import { serializeCredentialMd } from "../domain/credential-md";
 import { assignmentVersion } from "../domain/hash";
-import type { AgentProfile, Assessment, Credential, Handoff, HeldReply, Mark } from "../domain/types";
+import type { AgentProfile, Assessment, Credential, Handoff, HeadToHead, HeldReading, HeldReply, Mark, Rejudge } from "../domain/types";
+import type { FakeJev } from "../jev/fakeJev";
 import { MemoryStorage } from "../storage/memory";
 import { AppShell, type Route } from "./AppShell";
+import { JevProvider } from "./jevContext";
 import { FolderProvider } from "./useFolderState";
 
 export const FOLDER = "/data";
@@ -94,6 +102,12 @@ export function storageWith(
     skeleton?: string;
     /** Go-to marks, each written as its own file. */
     marks?: Mark[];
+    /** Readings of held replies, each written as its own file (jev-in-compare KTD3). */
+    heldReadings?: HeldReading[];
+    /** Head-to-heads, each written as its own file (jev-in-compare KTD4). */
+    headToHeads?: HeadToHead[];
+    /** Re-judges, each written as its own file (jev-in-compare KTD1). */
+    rejudges?: Rejudge[];
     /** The cost order's agent slugs, cheapest first. Absent means the folder has none. */
     costOrder?: string[];
   } = {},
@@ -118,6 +132,9 @@ export function storageWith(
   for (const h of opts.handoffs ?? []) files[handoffPath(h.collectionSlug, h.credentialSlug, h.id)] = h.text;
   if (opts.skeleton !== undefined) files[SKELETON_PATH] = opts.skeleton;
   for (const m of opts.marks ?? []) files[markPath(m.collectionSlug, m.credentialSlug, m.id)] = serializeMark(m);
+  for (const r of opts.heldReadings ?? []) files[heldReadingPath(r.profileSlug, r.collectionSlug, r.credentialSlug, r.id)] = serializeHeldReading(r);
+  for (const h of opts.headToHeads ?? []) files[headToHeadPath(h.collectionSlug, h.credentialSlug, h.id)] = serializeHeadToHead(h);
+  for (const r of opts.rejudges ?? []) files[rejudgedPath(r.profileSlug, r.collectionSlug, r.credentialSlug, r.id)] = serializeRejudge(r);
   if (opts.costOrder) files[COST_ORDER_PATH] = serializeCostOrder(opts.costOrder);
   return new MemoryStorage(files);
 }
@@ -127,6 +144,17 @@ export function renderApp(storage: MemoryStorage, initialRoute?: Route) {
     <FolderProvider storage={storage} folder={FOLDER}>
       <AppShell onChangeFolder={() => {}} initialRoute={initialRoute} />
     </FolderProvider>,
+  );
+}
+
+/** The app over the folder with Jev Mode from `fake`, on a chosen route. Every ask goes to the fake. */
+export function renderWithJev(storage: MemoryStorage, fake: FakeJev, initialRoute?: Route) {
+  return render(
+    <JevProvider jev={fake}>
+      <FolderProvider storage={storage} folder={FOLDER}>
+        <AppShell onChangeFolder={() => {}} initialRoute={initialRoute} />
+      </FolderProvider>
+    </JevProvider>,
   );
 }
 

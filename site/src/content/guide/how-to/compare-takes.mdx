@@ -5,7 +5,7 @@ order: 50
 description: Read every reply to a badge, open one in full, and compare them two side by side.
 ---
 
-{/* How to, fifth page (U7, R6, R11; hold-and-compare R7, R8): a badge's replies, one reply opened, and replies compared under a strip (the old tester's sheet, step 8). Labels are checked against src/ui/BadgeDetail.tsx, src/ui/ReplyList.tsx, src/ui/ReplyView.tsx and src/ui/CompareView.tsx (KTD8). */}
+{/* How to, fifth page (U7, R6, R11; hold-and-compare R7, R8; jev-in-compare R13, R14, R18): a badge's replies, one reply opened, and replies compared under a strip or a grid of Jev's calls, with the handoff text each answered and changing a verdict (the old tester's sheet, step 8). Labels are checked against src/ui/BadgeDetail.tsx, src/ui/ReplyList.tsx, src/ui/ReplyView.tsx, src/ui/CompareView.tsx and src/ui/takeActions.tsx (KTD8). */}
 
 Every result keeps the reply that earned it. A badge's page lists them all, so you can read what each agent sent back and compare them. Each reply is a take: one agent's try at the badge.
 
@@ -30,9 +30,11 @@ Once two or more of the badge's handoffs have replies, <UI>Replies</UI> lists ea
 
 Click an agent's name or its reply to open the take.
 
-<Shot id="reply-view" alt="Codex's take on Say how sure you are: a bar with codex · gpt-6-astra · medium, Not met and Sep 25, 2026, a note on the result, then the reply in full, and the Skeleton handoff it ran, folded, below" />
+<Shot id="reply-view" alt="Codex's take on Say how sure you are: a bar with codex · gpt-6-astra · medium, Not met and Sep 25, 2026, a note on the result, then the reply in full with Change to Met at its foot, and the Skeleton handoff it ran, folded, below" />
 
 The bar at the top shows the agent, its setup, the verdict and the date. <UI>Show as stored</UI> shows the reply as Markdown. Below the reply, the handoff it ran is folded under its name, such as <UI>Skeleton</UI>. Click the name to read the exact text the agent got. A take judged with Jev's help also keeps Jev's reading there, with its call on the whole bar on the fold.
+
+At the reply's foot, a Met take offers <UI>Change to Not yet</UI> and a Not met one <UI>Change to Met</UI>, to change your verdict on that reply. [Run a bake-off](/how-to/run-a-bake-off/#change-a-verdict) explains what changes.
 
 Close the take with the × or Escape. You're back on the badge, with that take's row lit.
 
@@ -41,10 +43,12 @@ Close the take with the × or Escape. You're back on the badge, with that take's
 1. Tick the boxes beside two or more takes, held or judged. Until you have two, the button reads <UI>Pick two to compare</UI>.
 2. Click <UI>Compare</UI>.
 
-<Shot id="compare" alt="A compare of two takes: a strip naming Codex, Not met, and Claude Code, Met, both lit, then the two replies side by side, each with its setup and date above it, Claude Code's marked Go-to at its foot, and Show as stored above" />
+<Shot id="compare" alt="A compare of two takes: a strip naming Codex, Not met, and Claude Code, Met, both lit, then the two replies side by side, each with its setup and date above it and the Skeleton handoff it ran folded at its foot, Claude Code's marked Go-to with Change to Not yet, and Show as stored above" />
 
-A strip at the top names every take you ticked, with its agent, setup, state and date. Two of them are open side by side below it, the first two you ticked to start with, and they're lit in the strip. Click another take in the strip to open it on the right; the left one stays. Click the one open on the right to swap the two sides.
+A strip at the top names every take you ticked, with its agent, setup, state and date. Two of them are open side by side below it, the first two you ticked to start with, and they're lit in the strip. Click another take in the strip to open it on the right; the left one stays. Click the one open on the right to swap the two sides. Once Jev has read any of the takes, the strip becomes the head of a grid of Jev's calls, as [Run a bake-off](/how-to/run-a-bake-off/#read-the-grid) shows.
 
-Each reply scrolls on its own. One <UI>Show as stored</UI> switch changes both. A held reply has <UI>Met</UI> and <UI>Not yet</UI> at its foot, and a Met one offers <UI>Make go-to</UI>, or says <UI>Go-to</UI> when it's the one your go-to was chosen on. Close the compare, and you're back on the badge with the takes still ticked.
+Each reply scrolls on its own. One <UI>Show as stored</UI> switch changes both. Under each reply, the handoff it answered is folded under its name. When the takes answered different texts of the same handoff, a line above them says so, such as <UI>These replies answered different texts of the skeleton</UI>, and each fold names its text, such as Skeleton, text 1 of 2.
+
+A held reply has <UI>Met</UI> and <UI>Not yet</UI> at its foot, a Met one offers <UI>Make go-to</UI>, or says <UI>Go-to</UI> when it's the one your go-to was chosen on, and each judged take offers to change its verdict. Close the compare, and you're back on the badge with the takes still ticked.
 
 Once you know which one you'll use, make it the badge's go-to: [Choose a go-to](/how-to/choose-a-go-to/).

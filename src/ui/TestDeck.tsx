@@ -57,22 +57,27 @@
 // asking what Jev missed, saved as the result's note. Hold adds neither. A change of choice
 // clears both drafts, the save re-derives both from the choice as it stands, and leaving
 // the judge card forward drops any ask in flight, so no reading lands on a later card.
+//
+// Compare shares pieces of this deck (jev-in-compare U1, KTD14): the two steps' bodies and
+// words live in `verdictSteps.tsx`, the reading as it is saved in `domain/savedReading.ts`,
+// and the failed-ask line in `jevFailure.ts`, re-exported here for this deck's tests.
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { SKELETON_ID, defaultHandoff, fillHandoff, handoffsFor, skeletonOf, winnerFor } from "../domain/handoffs";
 import { assignmentVersion } from "../domain/hash";
 import { sameSetup } from "../domain/matrix";
-import { calibrationOf, callOf, isOverrule, type Calibration } from "../domain/calls";
+import { calibrationOf, isOverrule, type Calibration } from "../domain/calls";
 import { fitSecondOpinion } from "../domain/jevBudget";
 import { examplesFor, rankExamples } from "../domain/jevExamples";
-import { MAX_REASON_CHARS, answeringModel } from "../domain/jevRequest";
+import { answeringModel } from "../domain/jevRequest";
 import { assessmentDir, credentialsDir } from "../domain/folder";
 import { cleanUpLineBreaks, lineBreakBatches } from "../domain/lineBreaks";
 import { goToOf, resultOf } from "../domain/goTo";
 import { heldOn, runIdOf } from "../domain/handoffResults";
 import { holdReply, markGoTo, recordAssessment } from "../domain/operations";
 import { reasonLine } from "../domain/reasonLine";
+import { readingBeforeVerdict, savedReading } from "../domain/savedReading";
 import { readingParts, rubricParts, tappedPoints, type JevReadingParts } from "../domain/secondOpinion";
 import {
   credentialKey,
@@ -80,11 +85,10 @@ import {
   type AssessmentResult,
   type Credential,
   type HandoffTemplate,
-  type JevReading,
   type Slug,
   type TestContext,
 } from "../domain/types";
-import { JevError, toJevError } from "../jev/jev";
+import { JevError } from "../jev/jev";
 import { Cartridge } from "../cast/Cartridge";
 import { HandoffBox } from "../cast/HandoffBox";
 import { Machine } from "../cast/Machine";
@@ -95,7 +99,8 @@ import { backToTest } from "./HandoffDecks";
 import { handoffLabel } from "./format";
 import { imageSource } from "./imageSource";
 import { useJev } from "./jevContext";
-import { CALL_WORDS, JevReadingPanel } from "./JevReading";
+import { jevFailure } from "./jevFailure";
+import { JevReadingPanel } from "./JevReading";
 import { useNav } from "./nav";
 import { livePlugs, plugFor, usePendingTests, type PendingTest } from "./pendingTests";
 import { RichText } from "./RichText";
@@ -105,7 +110,11 @@ import type { TestPick } from "./routes";
 import { Missing, StoredSwitch, focusOnMount, useEscape } from "./shared";
 import { describeError, useFolder } from "./useFolderState";
 import { useMatrix } from "./useMatrix";
+import { useAssignmentVersion } from "./useAssignmentVersion";
 import { useRichImages } from "./useRichImages";
+import { MISSED_POINTS_TITLE, MissedPointsList, REASON_TITLE, ReasonBody } from "./verdictSteps";
+
+export { jevFailure };
 
 /** How long the dots run across the screen after Copy before the cursor waits. */
 export const SENDING_MS = 700;
@@ -188,7 +197,6 @@ export function TestDeck(props: TestDeckProps) {
   // The handoff that ran before "Test another agent", lit for the next agent on the same badge (hold-and-compare KTD9).
   const [carried, setCarried] = useState<{ key: string; id: string } | null>(null);
   const [recording, setRecording] = useState(false);
-  const [version, setVersion] = useState<string | null>(null);
   // The machine's screen through Copy: dots out, then the cursor waits.
   const [sending, setSending] = useState(false);
   // A failed Copy again, shown on the card as the deck shows its own errors.
@@ -232,6 +240,8 @@ export function TestDeck(props: TestDeckProps) {
 
   const profile = state?.profiles.find((p) => p.slug === profileSlug);
   const credential = state?.credentials.find((c) => credentialKey(c) === key);
+  // The credential's current assignment version, to tell whether a copied prompt is stale.
+  const version = useAssignmentVersion(credential);
   const collectionOf = (c: Credential) => state?.collections.find((x) => x.slug === c.collectionSlug);
   const waiting = pending.find((p) => p.profileSlug === profileSlug && p.credentialKey === key);
   // A pasted image goes in the folder the result will be recorded in. Picking another agent
@@ -272,16 +282,6 @@ export function TestDeck(props: TestDeckProps) {
       cleanGen.current++;
     };
   }, []);
-
-  // The credential's current assignment version, to tell whether a copied prompt is stale.
-  useEffect(() => {
-    let live = true;
-    setVersion(null);
-    if (credential) void assignmentVersion(credential.task, credential.rubric).then((v) => live && setVersion(v));
-    return () => {
-      live = false;
-    };
-  }, [credential?.task, credential?.rubric]);
 
   const home = () => navigate({ view: "home" });
   // Where a finished test goes: home, or back to the test this pull held up (AE5).
@@ -1174,38 +1174,29 @@ export function TestDeck(props: TestDeckProps) {
   if (asksMissed) {
     beats.push({
       id: "missed",
-      title: "Which points did it miss",
+      title: MISSED_POINTS_TITLE,
       forward: asksReason ? (missed.length > 0 ? "Next" : "Skip") : "Save",
       body: (
-        <ul className="missed-points" aria-label="Rubric points">
-          {points.map((point, i) => {
-            const read = shown?.parts.points[i];
-            return (
-              <li key={i} className="missed-point">
-                <button type="button" aria-pressed={missed.includes(point)} disabled={recording} onClick={() => toggleMissed(point)}>
-                  {point}
-                </button>
-                {shown && read?.text === point && <span className="missed-call">{CALL_WORDS[callOf(read.probability, shown.calibration.pair)]}</span>}
-              </li>
-            );
-          })}
-        </ul>
+        <MissedPointsList
+          points={points}
+          readingPoints={shown?.parts.points}
+          pair={shown?.calibration.pair}
+          picked={missed}
+          onToggle={toggleMissed}
+          disabled={recording}
+        />
       ),
     });
   }
 
   // Why the verdict went against Jev's call (growing context R7), saved as the result's note.
-  if (asksReason) {
+  // asksReason already needs a verdict; the second test only narrows its type.
+  if (asksReason && verdictChosen) {
     beats.push({
       id: "reason",
-      title: "What did Jev miss",
+      title: REASON_TITLE,
       forward: "Save",
-      body: (
-        <>
-          <p className="muted">{verdictChosen === "not_met" ? "Jev called it meets. You said Not yet." : "Jev called it misses. You said Met."}</p>
-          <input aria-label="Reason" value={reason} maxLength={MAX_REASON_CHARS} autoComplete="off" onChange={(e) => setReason(e.target.value)} />
-        </>
-      ),
+      body: <ReasonBody verdict={verdictChosen} value={reason} onChange={setReason} />,
     });
   }
 
@@ -1248,73 +1239,6 @@ function OnLeave({ run }: { run(): void }) {
   latest.current = run;
   useEffect(() => () => latest.current(), []);
   return null;
-}
-
-/**
- * What every saved reading keeps (growing context KTD14): the model that answered, the
- * targets when any were asked, and how many earlier replies went, zero included, so a
- * reading taken before asks quoted any stays distinguishable.
- */
-function readingFields(reading: ReadingInHand): Omit<JevReading, "seen" | "verdictWhenSeen" | "verdictChanged"> {
-  const { overall, points, targets } = reading.parts;
-  return {
-    model: reading.model,
-    assignmentVersion: reading.assignmentVersion,
-    askedAt: reading.askedAt,
-    overall,
-    points,
-    ...(targets.length > 0 ? { targets } : {}),
-    examplesSent: reading.examplesSent,
-  };
-}
-
-/** The reading as a held reply keeps it: seen before the verdict, which is given later (hold-and-compare KTD9). */
-function readingBeforeVerdict(reading: ReadingInHand): JevReading {
-  return { ...readingFields(reading), seen: "before" };
-}
-
-/** The reading as the result keeps it. One seen after a pick says whether the saved verdict differs (R13). */
-export function savedReading(reading: ReadingInHand, verdict: AssessmentResult): JevReading {
-  const base = readingFields(reading);
-  return reading.verdictWhenSeen === null
-    ? { ...base, seen: "before" }
-    : { ...base, seen: "after", verdictWhenSeen: reading.verdictWhenSeen, verdictChanged: verdict !== reading.verdictWhenSeen };
-}
-
-/** Where a key problem is fixed (KTD20). */
-const FIX_THE_KEY = "Jev Mode in the top bar, on home";
-
-/**
- * One line for a failed ask, and whether asking again can help (KTD20). Nothing from the
- * error's own text: "other" carries at most its status number. A key problem, Jev Mode off
- * or a reply too long can't succeed on a retry, so those take the ask away for the round.
- */
-export function jevFailure(e: unknown): { line: string; retry: boolean } {
-  const error = toJevError(e);
-  switch (error.kind) {
-    case "keyRefused":
-      return { line: `TypeSafe refused the key. Change it in ${FIX_THE_KEY}.`, retry: false };
-    case "keyMissing":
-      return { line: `Jev has no key. Add one in ${FIX_THE_KEY}.`, retry: false };
-    case "invalidKey":
-      return { line: `The key doesn't look right. Change it in ${FIX_THE_KEY}.`, retry: false };
-    case "off":
-      return { line: `Jev Mode is off. Turn it on in ${FIX_THE_KEY}.`, retry: false };
-    case "tooLong":
-      return { line: "This reply is too long for Jev.", retry: false };
-    case "rateLimited":
-      return { line: "Jev has had too many asks. Try again in a moment.", retry: true };
-    case "overloaded":
-      return { line: "Jev is overloaded. Try again shortly.", retry: true };
-    case "unreachable":
-      return { line: "Jev couldn't be reached.", retry: true };
-    case "keychain":
-      return { line: "The keychain didn't give up the key.", retry: true };
-    case "settings":
-      return { line: "Jev Mode's settings couldn't be read.", retry: true };
-    case "other":
-      return { line: error.status === null ? "Jev couldn't answer." : `Jev couldn't answer (${error.status}).`, retry: true };
-  }
 }
 
 /** The motion for each phase of the test: the handoff card going in, or ejecting. */

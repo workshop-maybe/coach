@@ -33,7 +33,7 @@ Only the app's Rust side talks to TypeSafe. The window you work in never makes a
 The command checks three things, in this order, before it reads your key:
 
 1. Jev Mode is on.
-2. The request is one of the two shapes the app sends, a second opinion or a line-break cleanup, with no field it doesn't expect.
+2. The request is one of the four shapes the app sends, a second opinion, a head-to-head, a line-break cleanup or a routing ask, with no field it doesn't expect.
 3. The request fits Jev's size limits.
 
 Only then does it read the key and send the request. A request that fails a check never reaches your keychain, so it can't raise a keychain prompt.
@@ -66,10 +66,12 @@ Reading Jev Mode's status never touches the keychain. Only an ask, or changing t
 
 ## When anything is sent
 
-Nothing is sent until you click one of three things:
+Nothing is sent until you click one of these:
 
 - <UI>Ask Jev</UI> or <UI>Check with Jev</UI> on <UI>Did it meet it</UI> sends one second opinion.
+- <UI>Compare with Jev</UI> in a compare sends a second opinion for each held reply without a current one, and a head-to-head for each pair of replies, one request at a time.
 - <UI>Clean up with Jev</UI> under the reply box sends one cleanup, which may take more than one request for a long paste.
+- <UI>Ask Jev</UI> on <UI>Ask Jev which badge it's like</UI> sends one routing ask, which may take more than one request when you have many badges.
 
 Turning Jev Mode on, opening a badge, judging without asking, or pasting a reply sends nothing. A second opinion is never retried on its own. A cleanup retries a request only when TypeSafe says it is busy, as [The paste cleanup, end to end](/jev/paste-cleanup/#batches-and-retries) explains.
 
@@ -81,9 +83,13 @@ A second opinion sends:
 - the reply you're judging, as the Markdown in the reply box;
 - the openings of up to a few earlier replies on the same badge, with your notes on them, inside the questions as examples.
 
+A head-to-head sends the same task, rubric and learning targets with two replies, each whole, and no earlier replies.
+
 A cleanup sends only the text you pasted, after the app's own fixes, with each line tagged by its number.
 
-Neither sends your agents' names or setups, other badges, your folder's location, or any result you didn't judge on this badge. A picture or a video never goes as an image: the reply goes as its Markdown text, so a picture in it goes only as its file name, and earlier replies' openings drop picture and video Markdown altogether. Rust holds the second opinion's state to exactly these fields and refuses any other:
+A routing ask sends the job, and the names, tasks and learning targets of your badges, never a rubric.
+
+None of them sends your agents' names or setups, your folder's location, or a reply from another badge. Only a routing ask sends other badges, and only their names, tasks and learning targets. A picture or a video never goes as an image: the reply goes as its Markdown text, so a picture in it goes only as its file name, and earlier replies' openings drop picture and video Markdown altogether. Rust holds the second opinion's state to exactly these fields and refuses any other:
 
 <Source file="src-tauri/src/jev.rs" symbol="OpinionState" />
 
@@ -136,4 +142,4 @@ On the judge card, or under the reply box for a cleanup, each kind gets one line
 
 The place a key line names is <UI>Jev Mode in the top bar, on home</UI>. The first four can't succeed on a second try, so they take <UI>Ask Jev</UI> away for the rest of that test; you can ask again after the others. Whatever the line says, you can still record your verdict. [When something breaks](/help/when-something-breaks/#jev-mode) says what to do about each.
 
-<Source file="src/ui/TestDeck.tsx" symbol="jevFailure" />
+<Source file="src/ui/jevFailure.ts" symbol="jevFailure" />

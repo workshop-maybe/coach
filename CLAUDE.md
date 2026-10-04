@@ -16,7 +16,7 @@ The question the app answers: **which of my agents can actually meet my acceptan
 
 ## Constraints
 
-- **Local only.** No account, no external database, no blockchain, no network calls in the prototype, with one exception: Jev Mode, off by default, calls TypeSafe's API with the user's own key, from Rust only, and only when the user asks for a second opinion, a paste cleanup, or which badge a job is like.
+- **Local only.** No account, no external database, no blockchain, no network calls in the prototype, with one exception: Jev Mode, off by default, calls TypeSafe's API with the user's own key, from Rust only, and only when the user asks for a second opinion, a comparison of replies (Compare with Jev, which sends two replies at a time), a paste cleanup, or which badge a job is like.
 - **The app never talks to agents.** It produces text the user copies and pastes.
 - **No marketplace in the prototype.**
 - **Useful first.** The tool has to be worth using on its own. The link to Andamio is a consequence, never the pitch. No hype, no sales language in the UI.
@@ -41,7 +41,7 @@ The question the app answers: **which of my agents can actually meet my acceptan
 
 ### Interaction rules
 
-- **Home is the only room.** Home shows what needs you, your agents, your badges and the three doors (Create an agent, Create a credential, Find an agent for a job). Everything else is a deck in progress or one item open (a badge, an agent, one of a badge's handoffs once two or more have run, one reply, or replies compared two side by side under a strip that names them all), and each one returns home. A handoff returns to its badge. A reply returns to the badge or handoff that lists it, with its row lit. A compare returns there too, with its replies still picked. No sidebar, no other views.
+- **Home is the only room.** Home shows what needs you, your agents, your badges and the three doors (Create an agent, Create a credential, Find an agent for a job). Everything else is a deck in progress or one item open (a badge, an agent, one of a badge's handoffs once two or more have run, one reply, or replies compared two side by side under a strip that names them all, which becomes a grid of Jev's calls once any are saved), and each one returns home. A handoff returns to its badge. A reply returns to the badge or handoff that lists it, with its row lit. A compare returns there too, with its replies still picked. No sidebar, no other views.
 - **Decks, not forms.** Every flow is a list of beats handed to `src/ui/Deck.tsx`. No screen shows a set of labeled fields to fill and submit. Editing an existing badge or agent opens one part at a time as a one-beat deck.
 - **One thing per card.** Each card asks one thing and offers one forward action named for what happens next ("Make the badge", "Copy"). Back is quiet.
 - **No eyebrows.** Nothing sits above a heading as a kicker or label.

@@ -182,6 +182,8 @@ async function facts(): Promise<{ page: string; says: string }[]> {
   const calls = await import("../../src/domain/calls");
   const request = await import("../../src/domain/jevRequest");
   const lineBreaks = await import("../../src/domain/lineBreaks");
+  // A cleanup's batches wait and retry as every batched ask does (router KTD5).
+  const batches = await import("../../src/domain/jevBatches");
   const rs = "src-tauri/src/jev.rs";
   const paste = "src/domain/pasteText.ts";
   const fit = parse("second-opinion/fit.json");
@@ -247,9 +249,9 @@ async function facts(): Promise<{ page: string; says: string }[]> {
       `at ${lineBreaks.JOIN_AFTER_OPEN} or above`,
       `at ${lineBreaks.JOIN_AFTER_STOP} or above`,
       `at most ${request.JEV_LIMITS.maxQuestions} questions`,
-      `up to ${lineBreaks.LINE_BREAK_RETRIES} times`,
-      `or ${lineBreaks.BACKOFF_MS / 1000} second, then ${(2 * lineBreaks.BACKOFF_MS) / 1000}, then ${(4 * lineBreaks.BACKOFF_MS) / 1000}`,
-      `longer than ${lineBreaks.MAX_WAIT_MS / 1000} seconds`,
+      `up to ${batches.BATCH_RETRIES} times`,
+      `or ${batches.BACKOFF_MS / 1000} second, then ${(2 * batches.BACKOFF_MS) / 1000}, then ${(4 * batches.BACKOFF_MS) / 1000}`,
+      `longer than ${batches.MAX_WAIT_MS / 1000} seconds`,
     ),
     ...say(
       "jev/paste-cleanup-case-study",
