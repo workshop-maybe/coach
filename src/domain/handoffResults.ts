@@ -5,10 +5,12 @@
 // use its filter: current agents only, on badges whose collection is in the folder. The
 // takes themselves come from the folder state, which an apply() updates a render before
 // the matrix does, so a take never drops out of a mounted list while the matrix rebuilds.
+// A held reply's reading is the newest of the one it was held with and those taken of it
+// since, in compare (jev-in-compare KTD3).
 
 import { SKELETON_ID, handoffsFor } from "./handoffs";
 import { cellKey, type Matrix } from "./matrix";
-import { credentialKey, type AgentProfile, type Assessment, type FolderState, type HeldReply, type Slug } from "./types";
+import { credentialKey, type AgentProfile, type Assessment, type FolderState, type HeldReply, type JevReading, type Slug } from "./types";
 
 /** One of an agent's replies on a badge: a result, or a reply held without a verdict. */
 export type Take = Assessment | HeldReply;
@@ -70,6 +72,34 @@ export function heldOn(state: FolderState, key: string): HeldReply[] {
 /** One agent's held reply on a badge by its file stem, while it is still held. */
 export function heldOf(state: FolderState, profileSlug: Slug, key: string, fileStem: string): HeldReply | undefined {
   return state.held.find((h) => h.profileSlug === profileSlug && credentialKey(h) === key && h.fileStem === fileStem);
+}
+
+/**
+ * A held reply's reading (jev-in-compare KTD3): among the reading it was held with and the
+ * readings taken of it since, the newest by asked time at `version`, else the newest of all,
+ * so a rubric edited and then put back finds its reading again. Undefined when it has none.
+ */
+export function heldReadingOf(state: FolderState, held: HeldReply, version: string | null): JevReading | undefined {
+  const key = credentialKey(held);
+  const readings = [
+    ...(held.jev ? [held.jev] : []),
+    ...state.heldReadings
+      .filter((r) => r.profileSlug === held.profileSlug && credentialKey(r) === key && r.fileStem === held.fileStem)
+      .map((r) => r.reading),
+  ];
+  return newestReading(readings.filter((r) => r.assignmentVersion === version)) ?? newestReading(readings);
+}
+
+/** A take's reading: a held reply's as `heldReadingOf` picks it, a result's own. */
+export function readingOfTake(state: FolderState, take: Take, version: string | null): JevReading | undefined {
+  return isHeld(take) ? heldReadingOf(state, take, version) : take.jev;
+}
+
+/** The reading asked last; on a tie, the later in the list. */
+function newestReading(readings: readonly JevReading[]): JevReading | undefined {
+  let newest: JevReading | undefined;
+  for (const r of readings) if (!newest || Date.parse(r.askedAt) >= Date.parse(newest.askedAt)) newest = r;
+  return newest;
 }
 
 /** A badge's runs in order: the skeleton first, then its handoffs in creation order; an id with no file comes last. */

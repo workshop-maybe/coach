@@ -1,5 +1,6 @@
 // Domain operations (U4): create and edit collections, credentials and profiles,
-// duplicate profiles, and record assessments. Each operation writes through the
+// duplicate profiles, and record assessments, re-judges and what compare asks Jev
+// (jev-in-compare KTD1, KTD3, KTD4). Each operation writes through the
 // folder layer's saves (which refuse outdated base texts, KTD6) and returns the
 // folder freshly reloaded, so `raw` always matches what is on disk.
 
@@ -14,29 +15,38 @@ import {
   handoffPath,
   handoffsDir,
   headToHeadDir,
+  headToHeadPath,
   heldPath,
+  heldReadingPath,
   isCredentialResult,
   loadFolder,
   markPath,
   marksDir,
   profilePath,
   profileResultsDir,
+  readingsDir,
+  rejudgedDir,
+  rejudgedPath,
   saveAssessment,
   saveCollection,
   saveCredential,
   saveProfile,
   saveText,
+  serializeHeadToHead,
   serializeHeld,
+  serializeHeldReading,
   serializeMark,
+  serializeRejudge,
   SKELETON_PATH,
   trashPath,
   type AssessmentIds,
 } from "./folder";
 import { checkHandoff, isHandoffLocked, type HandoffProblem } from "./handoffs";
 import { resultOf } from "./goTo";
-import { heldOf } from "./handoffResults";
+import { heldOf, heldReadingOf } from "./handoffResults";
 import { assignmentVersion } from "./hash";
 import { findPreset, presetCredential } from "./presets";
+import { reasonLine } from "./reasonLine";
 import { rubricParts, tappedPoints } from "./secondOpinion";
 import { uniqueSlug } from "./slug";
 import {
@@ -48,9 +58,13 @@ import {
   type Collection,
   type Credential,
   type FolderState,
+  type HeadToHead,
+  type HeldReading,
   type HeldReply,
   type JevReading,
   type Mark,
+  type Rejudge,
+  type ReplyRef,
   type Slug,
   type TestContext,
 } from "./types";
@@ -523,20 +537,140 @@ export async function holdReply(storage: Storage, state: FolderState, input: Hol
   return { state: await loadFolder(storage), fileStem };
 }
 
+/** What a verdict given beside Jev's reading can carry (jev-in-compare KTD10): the reason line and the missed points. */
+export interface VerdictExtras {
+  /** What Jev missed, kept as one line (`reasonLine`). */
+  note?: string;
+  /** The rubric points the reply missed. Kept only on Not met, and only points of the current rubric. */
+  missedPoints?: readonly string[];
+}
+
+/** The note and missed points a verdict keeps, read against the badge's current rubric. */
+function verdictExtras(result: AssessmentResult, rubric: string, extras: VerdictExtras | undefined): { note: string; missed: string[] } {
+  const missed = result === "not_met" ? keptMissedPoints(extras?.missedPoints ?? [], rubric) : [];
+  return { note: reasonLine(extras?.note ?? ""), missed };
+}
+
+/** The badge's task or rubric changed since Jev was asked: compare's own line for it (jev-in-compare KTD9). */
+export const BADGE_CHANGED = "The badge's task or rubric changed. Compare with Jev again.";
+
 /**
  * Judges a held reply, named by its agent, badge and stem (R6, R9, R10): a new result under
- * the held reply's own stem and time, with what it recorded about its test (KTD3). The held
- * file is never touched; the folder stops listing it as held once the result is there
+ * the held reply's own stem and time, with what it recorded about its test (KTD3) and its
+ * reading as `heldReadingOf` picks it at the badge's current version (jev-in-compare KTD3).
+ * A reason and missed points, when given, are kept as `recordAssessment` keeps them. The
+ * held file is never touched; the folder stops listing it as held once the result is there
  * (KTD4). Refuses a reply no longer held.
  */
-export async function judgeHeldReply(storage: Storage, state: FolderState, ref: AssessmentIds, result: AssessmentResult): Promise<FolderState> {
+export async function judgeHeldReply(
+  storage: Storage,
+  state: FolderState,
+  ref: AssessmentIds,
+  result: AssessmentResult,
+  extras?: VerdictExtras,
+): Promise<FolderState> {
   if (result !== "met" && result !== "not_met") throw new Error('Choose "met" or "not met" before saving.');
   findProfile(state, ref.profileSlug);
   const credential = findCredential(state, ref.collectionSlug, ref.credentialSlug);
   const held = heldOf(state, ref.profileSlug, credentialKey(credential), ref.fileStem);
   if (!held) throw new Error("That reply is no longer held.");
-  const { heldAt, ...rest } = held;
-  await saveAssessment(storage, { ...rest, result, recordedAt: heldAt, note: "" });
+  const reading = heldReadingOf(state, held, await assignmentVersion(credential.task, credential.rubric));
+  const { note, missed } = verdictExtras(result, credential.rubric, extras);
+  const { heldAt, jev: _atHold, ...rest } = held;
+  await saveAssessment(storage, {
+    ...rest,
+    ...(reading ? { jev: reading } : {}),
+    result,
+    recordedAt: heldAt,
+    note,
+    ...(missed.length > 0 ? { missedPoints: missed } : {}),
+  });
+  return loadFolder(storage);
+}
+
+/** A reading of a held reply to save: the reply by its agent, badge and stem, and the reading. */
+export interface HeldReadingInput extends AssessmentIds {
+  reading: JevReading;
+}
+
+/**
+ * Saves Jev's reading of a held reply, taken in compare (jev-in-compare KTD3): a new file
+ * beside the held reply, never a change to it. Refuses a reply no longer held, and a reading
+ * asked against any other version of the badge than the current one.
+ */
+export async function saveHeldReading(storage: Storage, state: FolderState, input: HeldReadingInput, now: Date = new Date()): Promise<FolderState> {
+  findProfile(state, input.profileSlug);
+  const credential = findCredential(state, input.collectionSlug, input.credentialSlug);
+  if (!heldOf(state, input.profileSlug, credentialKey(credential), input.fileStem)) throw new Error("That reply is no longer held.");
+  if (input.reading.assignmentVersion !== (await assignmentVersion(credential.task, credential.rubric))) throw new Error(BADGE_CHANGED);
+  const ids = { profileSlug: input.profileSlug, collectionSlug: credential.collectionSlug, credentialSlug: credential.slug };
+  const id = await nextStamp(storage, readingsDir(ids.profileSlug, ids.collectionSlug, ids.credentialSlug), ".json", now);
+  const saved: HeldReading = { ...ids, id, fileStem: input.fileStem, reading: input.reading };
+  await saveText(storage, heldReadingPath(ids.profileSlug, ids.collectionSlug, ids.credentialSlug, id), serializeHeldReading(saved), null);
+  return loadFolder(storage);
+}
+
+/** A head-to-head to save: everything but its id, which the save names. */
+export type HeadToHeadSaveInput = Omit<HeadToHead, "id">;
+
+/**
+ * Saves Jev's head-to-head of two replies on a badge (jev-in-compare KTD4): a new file beside
+ * the badge's marks. Refuses when either reply, a result or a held reply, is gone from the
+ * folder, and a pair asked against any other version of the badge than the current one.
+ */
+export async function saveHeadToHead(storage: Storage, state: FolderState, input: HeadToHeadSaveInput, now: Date = new Date()): Promise<FolderState> {
+  const credential = findCredential(state, input.collectionSlug, input.credentialSlug);
+  const key = credentialKey(credential);
+  const there = (r: ReplyRef) => !!(resultOf(state, r.profileSlug, key, r.fileStem) ?? heldOf(state, r.profileSlug, key, r.fileStem));
+  if (!there(input.first) || !there(input.second)) throw new Error("One of those replies is no longer in the folder.");
+  if (input.assignmentVersion !== (await assignmentVersion(credential.task, credential.rubric))) throw new Error(BADGE_CHANGED);
+  const id = await nextStamp(storage, headToHeadDir(credential.collectionSlug, credential.slug), ".json", now);
+  const saved: HeadToHead = {
+    ...input,
+    collectionSlug: credential.collectionSlug,
+    credentialSlug: credential.slug,
+    id,
+    first: { profileSlug: input.first.profileSlug, fileStem: input.first.fileStem },
+    second: { profileSlug: input.second.profileSlug, fileStem: input.second.fileStem },
+    points: input.points.map((p) => ({ text: p.text, firstOver: p.firstOver, secondOver: p.secondOver })),
+  };
+  await saveText(storage, headToHeadPath(credential.collectionSlug, credential.slug, id), serializeHeadToHead(saved), null);
+  return loadFolder(storage);
+}
+
+/**
+ * Judges a result again (jev-in-compare KTD1, R14, R15): a new re-judge file under the
+ * agent's results for the badge, which the loader lays over the result. The result file is
+ * never touched, so the reply keeps its stem and time. A reason and missed points are kept
+ * as `judgeHeldReply` keeps them. Refuses a result that is gone, and the verdict it has now.
+ */
+export async function rejudgeResult(
+  storage: Storage,
+  state: FolderState,
+  ref: AssessmentIds,
+  result: AssessmentResult,
+  extras?: VerdictExtras,
+  now: Date = new Date(),
+): Promise<FolderState> {
+  if (result !== "met" && result !== "not_met") throw new Error('Choose "met" or "not met" before saving.');
+  findProfile(state, ref.profileSlug);
+  const credential = findCredential(state, ref.collectionSlug, ref.credentialSlug);
+  const current = resultOf(state, ref.profileSlug, credentialKey(credential), ref.fileStem);
+  if (!current) throw new Error("That result is no longer in the folder.");
+  if (current.result === result) throw new Error("That result already has that verdict.");
+  const { note, missed } = verdictExtras(result, credential.rubric, extras);
+  const ids = { profileSlug: ref.profileSlug, collectionSlug: credential.collectionSlug, credentialSlug: credential.slug };
+  const id = await nextStamp(storage, rejudgedDir(ids.profileSlug, ids.collectionSlug, ids.credentialSlug), ".md", now);
+  const rejudge: Rejudge = {
+    ...ids,
+    id,
+    fileStem: ref.fileStem,
+    result,
+    judgedAt: now.toISOString(),
+    note,
+    ...(missed.length > 0 ? { missedPoints: missed } : {}),
+  };
+  await saveText(storage, rejudgedPath(ids.profileSlug, ids.collectionSlug, ids.credentialSlug, id), serializeRejudge(rejudge), null);
   return loadFolder(storage);
 }
 

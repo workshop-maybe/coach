@@ -1,8 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { SKELETON_ID } from "./handoffs";
-import { handoffRuns, heldOn, isHeld, latestRunId, takeTime } from "./handoffResults";
+import { handoffRuns, heldOn, heldReadingOf, isHeld, latestRunId, readingOfTake, takeTime } from "./handoffResults";
 import { buildMatrix } from "./matrix";
-import { credentialKey, type AgentProfile, type Assessment, type Credential, type FolderState, type Handoff, type HeldReply } from "./types";
+import {
+  credentialKey,
+  type AgentProfile,
+  type Assessment,
+  type Credential,
+  type FolderState,
+  type Handoff,
+  type HeldReading,
+  type HeldReply,
+  type JevReading,
+} from "./types";
 
 const review: Credential = {
   slug: "review",
@@ -45,7 +55,7 @@ function result(profile: AgentProfile, handoffId: string | null, overrides: Part
   };
 }
 
-function folder(opts: { profiles?: AgentProfile[]; assessments?: Assessment[]; held?: HeldReply[]; handoffs?: Handoff[] }): FolderState {
+function folder(opts: { profiles?: AgentProfile[]; assessments?: Assessment[]; held?: HeldReply[]; handoffs?: Handoff[]; heldReadings?: HeldReading[] }): FolderState {
   return {
     collections: [{ slug: "eng", name: "Engineering", description: "", order: ["review"], codes: { review: 1 } }],
     credentials: [review],
@@ -54,7 +64,7 @@ function folder(opts: { profiles?: AgentProfile[]; assessments?: Assessment[]; h
     held: opts.held ?? [],
     handoffs: opts.handoffs ?? [],
     marks: [],
-    heldReadings: [],
+    heldReadings: opts.heldReadings ?? [],
     headToHeads: [],
     skeleton: null,
     errors: [],
@@ -242,5 +252,102 @@ describe("latestRunId", () => {
 
   it("is null for an agent with no result on the badge", async () => {
     expect(latestRunId(await buildMatrix(folder({})), opus.slug, key)).toBeNull();
+  });
+});
+
+describe("a held reply's reading (jev-in-compare KTD3)", () => {
+  const reading = (assignmentVersion: string, askedAt: string, overall = 0.5): JevReading => ({
+    model: "jev-1",
+    assignmentVersion,
+    askedAt,
+    seen: "before",
+    overall,
+    points: [],
+  });
+  /** A reading file of `of`, taken after it was held. */
+  const later = (of: HeldReply, id: string, r: JevReading, overrides: Partial<HeldReading> = {}): HeldReading => ({
+    profileSlug: of.profileSlug,
+    collectionSlug: of.collectionSlug,
+    credentialSlug: of.credentialSlug,
+    id,
+    fileStem: of.fileStem,
+    reading: r,
+    ...overrides,
+  });
+
+  it("is the hold-time reading when no later one was taken, and undefined when there is none", () => {
+    stem = 0;
+    const atHold = reading("v", "2026-09-01T08:00:00.000Z");
+    const h = held(opus, null, { jev: atHold });
+    const bare = held(codex, null);
+    const state = folder({ held: [h, bare] });
+    expect(heldReadingOf(state, h, "v")).toEqual(atHold);
+    expect(heldReadingOf(state, bare, "v")).toBeUndefined();
+  });
+
+  it("a later reading at the current version is the reply's, over the hold-time one", () => {
+    stem = 0;
+    const h = held(opus, null, { jev: reading("v", "2026-09-01T08:00:00.000Z", 0.2) });
+    const newer = reading("v", "2026-09-03T08:00:00.000Z", 0.9);
+    const state = folder({ held: [h], heldReadings: [later(h, "20260903T080000Z", newer)] });
+    expect(heldReadingOf(state, h, "v")).toEqual(newer);
+  });
+
+  it("the newest by asked time wins, whatever order the files are in", () => {
+    stem = 0;
+    const h = held(opus, null);
+    const newest = reading("v", "2026-09-05T08:00:00.000Z", 0.9);
+    const state = folder({
+      held: [h],
+      heldReadings: [later(h, "20260904T080000Z", newest), later(h, "20260906T080000Z", reading("v", "2026-09-04T08:00:00.000Z", 0.1))],
+    });
+    expect(heldReadingOf(state, h, "v")).toEqual(newest);
+  });
+
+  it("prefers a reading at the current version over a newer one at another, so a rubric edited and put back finds its reading again", () => {
+    stem = 0;
+    const atV = reading("v", "2026-09-02T08:00:00.000Z", 0.3);
+    const atEdit = reading("edited", "2026-09-04T08:00:00.000Z", 0.8);
+    const h = held(opus, null, { jev: atV });
+    const state = folder({ held: [h], heldReadings: [later(h, "20260904T080000Z", atEdit)] });
+    expect(heldReadingOf(state, h, "v")).toEqual(atV);
+    expect(heldReadingOf(state, h, "edited")).toEqual(atEdit);
+  });
+
+  it("with none at the current version, or the version unknown, it is the newest overall", () => {
+    stem = 0;
+    const older = reading("a", "2026-09-02T08:00:00.000Z");
+    const newer = reading("b", "2026-09-03T08:00:00.000Z");
+    const h = held(opus, null, { jev: older });
+    const state = folder({ held: [h], heldReadings: [later(h, "20260903T080000Z", newer)] });
+    expect(heldReadingOf(state, h, "c")).toEqual(newer);
+    expect(heldReadingOf(state, h, null)).toEqual(newer);
+  });
+
+  it("ignores readings of another stem, another agent or another badge", () => {
+    stem = 0;
+    const h = held(opus, null);
+    const other = reading("v", "2026-09-09T08:00:00.000Z");
+    const state = folder({
+      held: [h],
+      heldReadings: [
+        later(h, "20260909T080000Z", other, { fileStem: "20200101T000000Z" }),
+        later(h, "20260909T080001Z", other, { profileSlug: codex.slug }),
+        later(h, "20260909T080002Z", other, { credentialSlug: "other" }),
+      ],
+    });
+    expect(heldReadingOf(state, h, "v")).toBeUndefined();
+  });
+
+  it("readingOfTake: a held take's reading as above, a result's own", () => {
+    stem = 0;
+    const own = reading("v", "2026-09-01T08:00:00.000Z");
+    const r = result(opus, null, { jev: own });
+    const h = held(codex, null);
+    const newer = reading("v", "2026-09-03T08:00:00.000Z");
+    const state = folder({ assessments: [r], held: [h], heldReadings: [later(h, "20260903T080000Z", newer)] });
+    expect(readingOfTake(state, r, "v")).toEqual(own);
+    expect(readingOfTake(state, h, "v")).toEqual(newer);
+    expect(readingOfTake(state, result(opus, null), "v")).toBeUndefined();
   });
 });
