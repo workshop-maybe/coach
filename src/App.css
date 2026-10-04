@@ -413,7 +413,7 @@ button:focus-visible {
   min-height: 0;
 }
 
-.deck-body .rich > :not(.rich-bar):not(.rich-link):not(.rich-menu) {
+.deck-body .rich > :not(.rich-bar):not(.rich-link):not(.rich-menu):not(.rich-foot) {
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -533,6 +533,23 @@ button:focus-visible {
   width: 1px;
   margin: 6px 4px;
   background: var(--cell);
+}
+
+/* A box that can add files keeps one line free under its text, so the text never moves when
+   the box says it is saving a file there. */
+.rich-foot {
+  flex: none;
+  height: 22px;
+  padding: 0 14px;
+}
+
+.rich-status {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 22px;
+  letter-spacing: var(--value-tracking);
+  color: var(--ink-muted);
 }
 
 :is(.rich-input, .rich-prose) {

@@ -13,7 +13,8 @@ export type ToolName =
   | "numbers"
   | "tasks"
   | "quote"
-  | "codeBlock";
+  | "codeBlock"
+  | "video";
 
 /** Icon strokes in a 36 × 30 key, centered on (18, 15). */
 const ICONS: Record<ToolName, string> = {
@@ -27,6 +28,8 @@ const ICONS: Record<ToolName, string> = {
   tasks: "M9.5 9.5H15V15H9.5ZM10.8 12.3L12.2 13.7L15.6 9.8M18.5 12.2H26.5M9.5 17.5H15V23H9.5ZM18.5 20.2H26.5",
   quote: "M14 10Q10.5 12 10.5 16V20H14.5V16H11.5M24 10Q20.5 12 20.5 16V20H24.5V16H21.5",
   codeBlock: `${sketchRect(11, 9, 14, 12, 1, 0.3)}M16.5 12L14.5 15L16.5 18M19.5 12L21.5 15L19.5 18`,
+  // A wide frame, a screen, with the play triangle centered in it.
+  video: `${sketchRect(9.5, 8.5, 17, 13, 1, 0.3)}M16.6 12.2L21.2 15L16.6 17.8Z`,
 };
 
 export function ToolKey({ tool, on }: { tool: ToolName; on: boolean }) {

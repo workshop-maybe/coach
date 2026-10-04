@@ -12,6 +12,11 @@
 // carries no real text, so every text paste is unchanged. Each image is saved beside the
 // box's file, then its ref goes in where the paste happened. An image paste is an edit like
 // any other: it reaches `onChange`, never `onPaste`.
+//
+// A box whose `images` can `add` files also takes videos (KTD8, KTD9 of the video plan): its
+// Video key adds a picked file, and each name the add returns goes in where the cursor was,
+// as a video or an image by its extension. While an add runs the box says so on a line kept
+// free under the text.
 
 import { useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, Ref } from "react";
@@ -24,17 +29,26 @@ import { Mapping } from "@tiptap/pm/transform";
 import type { EditorView } from "@tiptap/pm/view";
 import { ToolKey, type ToolName } from "../cast/ToolKey";
 import { findJoinCandidates, fixPastedText, looksTerminalCopied } from "../domain/pasteText";
+import { hasVideoExtension } from "../domain/videos";
+import type { AddFrom } from "../storage/storage";
 import { imagePaste } from "./pasteImages";
 import { richExtensions } from "./richExtensions";
 import { refreshImages, type RichImageSource } from "./richImage";
 
-/** A box's images: read for display, and saved when pasted. */
+/** A box's images and videos: read for display, and saved when pasted or added. */
 export interface RichImages extends RichImageSource {
   /**
    * Saves a pasted image beside the box's file and resolves to its bare file name. Rejects,
    * having already told the person why, when the image can't be saved.
    */
   save?(file: File): Promise<string>;
+  /**
+   * Copies files beside the box's file, from the picker, a drop or a Finder paste, and
+   * resolves to the bare names of those it added, in order: none when the picker was closed
+   * or nothing could be added, having already told the person why. Rejects, having told
+   * them, when the add fails as a whole. Without it, the box has no Video key.
+   */
+  add?(from: AddFrom): Promise<string[]>;
 }
 
 export interface RichTextProps {
@@ -114,15 +128,17 @@ function replacesWholeBox(state: EditorState): boolean {
 type PendingPaste = Omit<PastePayload, "markdown" | "candidates">;
 
 /**
- * Puts an image for each name over `from`–`to`. In a code block, where an image can't sit,
- * they go in a new paragraph after the block. The cursor moves after them only if it is
- * still where the paste left it; a person who typed or clicked elsewhere meanwhile keeps
- * their place.
+ * Puts a node for each name over `from`–`to`: a video for a video name, an image for any
+ * other, as the Markdown would parse back (KTD1 of the video plan). In a code block, where
+ * neither can sit, they go in a new paragraph after the block. The cursor moves after them
+ * only if it is still where the paste left it; a person who typed or clicked elsewhere
+ * meanwhile keeps their place.
  */
-function insertImages(view: EditorView, from: number, to: number, names: string[]): void {
+function insertFiles(view: EditorView, from: number, to: number, names: string[]): void {
   const { state } = view;
   const untouched = state.selection.from === from && state.selection.to === to;
-  const nodes = names.map((src) => state.schema.nodes.image.create({ src }));
+  const { image, video } = state.schema.nodes;
+  const nodes = names.map((src) => (hasVideoExtension(src) ? video : image).create({ src }));
   const $from = state.doc.resolve(from);
   let tr: Transaction;
   let end: number;
@@ -158,24 +174,72 @@ export function RichText({ value, onChange, onNormalized, placeholder, autoFocus
     };
   }, []);
 
-  /** Saves pasted images, then puts their refs where the paste happened (KTD8). */
-  async function pasteImages(view: EditorView, files: File[], save: (file: File) => Promise<string>) {
+  // The adds still running. Kept here, never on `images`, whose new identity would make
+  // every view read its file again (KTD9).
+  const [adding, setAdding] = useState(0);
+
+  /**
+   * Runs `names` (a save or an add), then puts the names it resolves to over `from`–`to`,
+   * mapped through every edit made meanwhile, so typing while it runs moves the spot along
+   * with the text (KTD8). Nothing goes in if the box closed, its editor was destroyed, or its
+   * content was replaced from outside since. Resolves to whether anything went in.
+   */
+  async function insertWhenDone(from: number, to: number, names: () => Promise<string[]>): Promise<boolean> {
     const ed = editorRef.current;
-    if (!ed) return;
-    const { from, to } = view.state.selection;
+    if (!ed) return false;
     const generation = replaced.current;
-    // Typing while the images save moves the paste position along with the text.
     const mapping = new Mapping();
     const track = ({ transaction }: { transaction: Transaction }) => mapping.appendMapping(transaction.mapping);
     ed.on("transaction", track);
     try {
-      const saved = await Promise.allSettled(files.map((file) => save(file)));
-      const names = saved.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
-      if (names.length === 0 || !mounted.current || ed.isDestroyed || replaced.current !== generation) return;
-      insertImages(ed.view, mapping.map(from, -1), mapping.map(to, -1), names);
+      const done = await names();
+      if (done.length === 0 || !mounted.current || ed.isDestroyed || replaced.current !== generation) return false;
+      insertFiles(ed.view, mapping.map(from, -1), mapping.map(to, -1), done);
+      return true;
     } finally {
       ed.off("transaction", track);
     }
+  }
+
+  /** Saves pasted images, then puts their refs where the paste happened (KTD8). */
+  async function pasteImages(view: EditorView, files: File[], save: (file: File) => Promise<string>) {
+    if (!editorRef.current) return;
+    const { from, to } = view.state.selection;
+    await insertWhenDone(from, to, async () => {
+      const saved = await Promise.allSettled(files.map((file) => save(file)));
+      return saved.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
+    });
+  }
+
+  /**
+   * Runs one add of files (`run` calls `images.add`) and puts the names it returns over
+   * `from`–`to`, read from the editor's state just before. The pick, a drop and a Finder
+   * paste all come through here, so each counts toward the status line. A failed add puts
+   * nothing in: the add has already told the person. Resolves to whether anything went in.
+   */
+  async function addThenInsert(from: number, to: number, run: () => Promise<string[]>): Promise<boolean> {
+    setAdding((n) => n + 1);
+    try {
+      const added = await insertWhenDone(from, to, run);
+      // A ref already in the text, written by hand, may name a file that only now exists.
+      // Asking again keeps what shows, and a playing video plays on.
+      if (added && editorRef.current) refreshImages(editorRef.current);
+      return added;
+    } catch {
+      return false;
+    } finally {
+      if (mounted.current) setAdding((n) => n - 1);
+    }
+  }
+
+  /** The Video key: picks a file, puts it at the selection, and hands focus back to the text (KTD9). */
+  async function pickFile() {
+    const ed = editorRef.current;
+    const add = latest.current.images?.add;
+    if (!ed || !add || !ed.isEditable) return;
+    const { from, to } = ed.state.selection;
+    await addThenInsert(from, to, () => add({ kind: "pick" }));
+    if (mounted.current && !ed.isDestroyed) ed.view.focus();
   }
 
   const editor = useEditor({
@@ -315,11 +379,21 @@ export function RichText({ value, onChange, onNormalized, placeholder, autoFocus
     refreshImages(editor);
   }, [editor, images]);
 
+  const canAdd = !!images?.add;
   return (
     <div className="rich" onContextMenuCapture={stopOnVideo} onDragStartCapture={stopOnVideo}>
-      {editor && <Toolbar editor={editor} full label="Formatting" />}
+      {editor && <Toolbar editor={editor} full label="Formatting" onVideo={canAdd ? () => void pickFile() : undefined} />}
       <EditorContent editor={editor} />
       {editor && <SelectionMenu editor={editor} />}
+      {(canAdd || adding > 0) && (
+        <div className="rich-foot">
+          {adding > 0 && (
+            <p className="rich-status" role="status">
+              Saving the file
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -340,9 +414,10 @@ function SelectionMenu({ editor }: { editor: Editor }) {
 
 /**
  * The formatting tools. `full` is the bar that stands on top of every rich box, with the
- * block tools as well; the selection menu shows only the inline ones.
+ * block tools as well, and the Video key when the box can add files (`onVideo`); the
+ * selection menu shows only the inline ones.
  */
-function Toolbar({ editor, full = false, label }: { editor: Editor; full?: boolean; label: string }) {
+function Toolbar({ editor, full = false, label, onVideo }: { editor: Editor; full?: boolean; label: string; onVideo?: () => void }) {
   const [linking, setLinking] = useState(false);
   const [href, setHref] = useState("");
   const active = useEditorState({
@@ -385,7 +460,8 @@ function Toolbar({ editor, full = false, label }: { editor: Editor; full?: boole
     }
   }
 
-  const tool = (name: string, key: ToolName, on: boolean, run: () => void) => (
+  // `on` is left out for a key that is not a toggle.
+  const tool = (name: string, key: ToolName, on: boolean | undefined, run: () => void) => (
     <button
       type="button"
       aria-label={name}
@@ -394,7 +470,7 @@ function Toolbar({ editor, full = false, label }: { editor: Editor; full?: boole
       onMouseDown={(e) => e.preventDefault()}
       onClick={run}
     >
-      <ToolKey tool={key} on={on} />
+      <ToolKey tool={key} on={on ?? false} />
     </button>
   );
 
@@ -426,6 +502,8 @@ function Toolbar({ editor, full = false, label }: { editor: Editor; full?: boole
       {full && tool("Checklist", "tasks", active.tasks, () => editor.chain().focus().toggleTaskList().run())}
       {full && tool("Quote", "quote", active.quote, () => editor.chain().focus().toggleBlockquote().run())}
       {full && tool("Code block", "codeBlock", active.codeBlock, () => editor.chain().focus().toggleCodeBlock().run())}
+      {full && onVideo && <span className="rich-gap" aria-hidden="true" />}
+      {full && onVideo && tool("Video", "video", undefined, onVideo)}
     </div>
   );
 }

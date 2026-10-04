@@ -10,11 +10,15 @@
 // through `images.save`, and each saved name goes in as `![](name)` at the selection, so a
 // flow test can check which folder a deck saves its pictures in.
 //
+// With `images.add`, a Video button stands in for the box's Video key: it awaits
+// `add({ kind: "pick" })` and splices `![](name)` in at the selection for each name, only if
+// the stub is still mounted when the add lands, as the real box inserts nothing once closed.
+//
 // Use: vi.mock("./RichText", () => import("./richTextStub"));
 
 import { useEffect, useImperativeHandle, useRef } from "react";
 import type { ClipboardEvent } from "react";
-import type { RichTextProps } from "./RichText";
+import type { RichImages, RichTextProps } from "./RichText";
 import { findJoinCandidates, fixPastedText } from "../domain/pasteText";
 import { imagePaste } from "./pasteImages";
 
@@ -23,6 +27,16 @@ export function RichText({ value, onChange, onNormalized, placeholder, autoFocus
   // The text as it is now, for an image that lands after a save.
   const current = useRef(value);
   current.current = value;
+  const latestChange = useRef(onChange);
+  latestChange.current = onChange;
+  const area = useRef<HTMLTextAreaElement>(null);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const fix = (text: string) => (cleanPaste ? fixPastedText(text) : { text, terminal: false });
 
   useImperativeHandle(ref, () => ({
@@ -59,7 +73,29 @@ export function RichText({ value, onChange, onNormalized, placeholder, autoFocus
     onChange(markdown);
   }
 
+  async function pickFile(add: NonNullable<RichImages["add"]>) {
+    const from = area.current?.selectionStart ?? current.current.length;
+    const to = area.current?.selectionEnd ?? from;
+    let names: string[];
+    try {
+      names = await add({ kind: "pick" });
+    } catch {
+      return;
+    }
+    if (names.length === 0 || !mounted.current) return;
+    const text = current.current;
+    latestChange.current(text.slice(0, from) + names.map((name) => `![](${name})`).join("") + text.slice(to));
+  }
+
+  const add = images?.add;
   return (
-    <textarea aria-label={label} value={value} placeholder={placeholder} autoFocus={autoFocus} onChange={(e) => onChange(e.target.value)} onPaste={paste} />
+    <>
+      <textarea ref={area} aria-label={label} value={value} placeholder={placeholder} autoFocus={autoFocus} onChange={(e) => onChange(e.target.value)} onPaste={paste} />
+      {add && (
+        <button type="button" aria-label="Video" onClick={() => void pickFile(add)}>
+          Video
+        </button>
+      )}
+    </>
   );
 }

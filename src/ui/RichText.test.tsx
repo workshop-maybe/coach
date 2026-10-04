@@ -8,6 +8,7 @@ import { RichText, looksLikeMarkdown, type RichImages, type RichTextHandle } fro
 import { RichText as StubRichText } from "./richTextStub";
 import { useRichDraft } from "./richDraft";
 import { firePaste, pngFile } from "../test/paste";
+import type { AddFrom } from "../storage/storage";
 
 // The ProseMirror jsdom shims live in src/test/setup.ts (KTD11).
 afterEach(cleanup);
@@ -855,6 +856,251 @@ describe("pasting an image (KTD5, KTD8)", () => {
   it("still passes Escape through", () => {
     setupImages("Keep it");
     expect(fireEvent.keyDown(box(), { key: "Escape", code: "Escape", keyCode: 27 })).toBe(true);
+  });
+});
+
+describe("adding a file with the Video key (KTD9, R2, R7)", () => {
+  /** A box whose images add files the way the picker would, each add settled in turn by `land` or `fail`. */
+  function setupAdd(value = "", video?: RichImages["video"]) {
+    const onChange = vi.fn();
+    const adds: { from: AddFrom; resolve: (names: string[]) => void; reject: (e: Error) => void }[] = [];
+    const images: RichImages = {
+      load: vi.fn(() => Promise.resolve("data:image/png;base64,iVBORw0KGgo=")),
+      video,
+      add: vi.fn(
+        (from: AddFrom) =>
+          new Promise<string[]>((resolve, reject) => {
+            adds.push({ from, resolve, reject });
+          }),
+      ),
+    };
+    const ref = createRef<RichTextHandle>();
+    const utils = render(<RichText ref={ref} aria-label="Task" value={value} onChange={onChange} images={images} />);
+    const ed = editorOf(box());
+    const key = () => within(screen.getByRole("toolbar", { name: "Formatting" })).getByRole("button", { name: "Video" });
+    async function settle(run: () => void) {
+      await act(async () => {
+        run();
+        await new Promise((r) => setTimeout(r, 0));
+      });
+    }
+    /** Lets add number `i` land with `names` (none for a closed picker). */
+    const land = (i: number, ...names: string[]) => settle(() => adds[i].resolve(names));
+    const fail = (i: number) => settle(() => adds[i].reject(new Error("The data folder is not set.")));
+    const caret = (pos: number) =>
+      act(() => {
+        ed.view.dispatch(ed.state.tr.setSelection(TextSelection.create(ed.state.doc, pos)));
+      });
+    return { onChange, images, adds, ed, ref, utils, key, land, fail, caret };
+  }
+
+  it("adds through the picker and puts the video at the cursor, with focus back just after it (R2)", async () => {
+    const { onChange, images, ed, key, land, caret } = setupAdd("Look here");
+    caret(5);
+    key().focus();
+    fireEvent.click(key());
+    expect(images.add).toHaveBeenCalledTimes(1);
+    expect(images.add).toHaveBeenCalledWith({ kind: "pick" });
+    await land(0, "video-1a2b3c4d.mov");
+    expect(onChange).toHaveBeenLastCalledWith("Look![](video-1a2b3c4d.mov) here");
+    expect(leaves(ed)).toEqual(["video:video-1a2b3c4d.mov"]);
+    expect(document.activeElement).toBe(box());
+    expect(ed.state.selection.from).toBe(6);
+  });
+
+  it("is a plain button named Video, not a toggle", () => {
+    const { key } = setupAdd("");
+    expect(key().getAttribute("title")).toBe("Video");
+    expect(key().hasAttribute("aria-pressed")).toBe(false);
+  });
+
+  it("changes nothing when the picker is closed, and gives the editor its focus back where it was", async () => {
+    const { onChange, ed, key, land, caret } = setupAdd("Look here");
+    caret(5);
+    key().focus();
+    fireEvent.click(key());
+    await land(0);
+    expect(onChange).not.toHaveBeenCalled();
+    expect(ed.getMarkdown()).toBe("Look here");
+    expect(document.activeElement).toBe(box());
+    expect(ed.state.selection.from).toBe(5);
+  });
+
+  it("puts two names in the order they came, each as its own kind", async () => {
+    const { onChange, ed, key, land } = setupAdd("");
+    fireEvent.click(key());
+    await land(0, "video-1a2b3c4d.mp4", "image-1a2b3c4d.png");
+    expect(onChange).toHaveBeenLastCalledWith("![](video-1a2b3c4d.mp4)![](image-1a2b3c4d.png)");
+    expect(leaves(ed)).toEqual(["video:video-1a2b3c4d.mp4", "image:image-1a2b3c4d.png"]);
+  });
+
+  it("lands at the cursor's place when the person types while the add runs, and leaves their cursor alone", async () => {
+    const { onChange, ed, key, land, caret } = setupAdd("One two");
+    caret(4);
+    fireEvent.click(key());
+    act(() => {
+      ed.commands.focus("end");
+    });
+    typeInto(ed, " three");
+    await land(0, "video-a.mov");
+    expect(onChange).toHaveBeenLastCalledWith("One![](video-a.mov) two three");
+    expect(ed.state.selection.from).toBe(ed.state.doc.content.size - 1);
+  });
+
+  it("inserts nothing when the box is set from outside while the add runs", async () => {
+    const { onChange, ed, key, land, utils, images } = setupAdd("Old reply");
+    fireEvent.click(key());
+    utils.rerender(<RichText aria-label="Task" value="" onChange={onChange} images={images} />);
+    await land(0, "video-a.mov");
+    expect(ed.getMarkdown()).toBe("");
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("inserts nothing when replaceAsPaste writes the box while the add runs", async () => {
+    const { onChange, ed, ref, key, land } = setupAdd("Old reply");
+    fireEvent.click(key());
+    act(() => {
+      ref.current!.replaceAsPaste("New reply.");
+    });
+    await land(0, "video-a.mov");
+    expect(ed.getMarkdown()).toBe("New reply.");
+    expect(onChange).toHaveBeenLastCalledWith("New reply.");
+  });
+
+  it("inserts nothing, quietly, when the box closes while the add runs", async () => {
+    const { onChange, key, land, utils } = setupAdd("Old reply");
+    fireEvent.click(key());
+    utils.unmount();
+    await land(0, "video-a.mov");
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("lights up a ref already written by hand to the file it just added", async () => {
+    const onDisk: string[] = [];
+    const video = vi.fn(async (name: string) => (onDisk.includes(name) ? { url: "blob:x", preload: "metadata" as const, release: vi.fn() } : null));
+    const { key, land } = setupAdd("Before ![](video-1a2b3c4d.mov)", video);
+    await waitFor(() => expect(box().querySelector(".rich-video-missing")).not.toBeNull());
+    fireEvent.click(key());
+    onDisk.push("video-1a2b3c4d.mov");
+    await land(0, "video-1a2b3c4d.mov");
+    await waitFor(() => expect(box().querySelectorAll("video[src]")).toHaveLength(2));
+  });
+
+  it("puts a video picked in a code block in a new paragraph after the block", async () => {
+    const { onChange, key, land, caret } = setupAdd("```\nx\n```");
+    caret(2);
+    fireEvent.click(key());
+    await land(0, "video-a.mov");
+    expect(onChange).toHaveBeenLastCalledWith("```\nx\n```\n\n![](video-a.mov)");
+  });
+
+  it("has no Video key in the selection menu, nor in a box that can't add files", async () => {
+    const { ed } = setupAdd("make this bold");
+    act(() => {
+      ed.view.dispatch(ed.state.tr.setSelection(TextSelection.create(ed.state.doc, 6, 10)));
+    });
+    const menu = await screen.findByRole("toolbar", { name: "Format", hidden: true }, { timeout: 2000 });
+    expect(within(menu).getByRole("button", { name: "Bold", hidden: true })).toBeTruthy();
+    expect(within(menu).queryByRole("button", { name: "Video", hidden: true })).toBeNull();
+    cleanup();
+    for (const images of [undefined, { load: () => Promise.resolve(null), save: vi.fn() }]) {
+      const { container } = render(<RichText aria-label="Task" value="" onChange={vi.fn()} images={images} />);
+      expect(within(screen.getByRole("toolbar", { name: "Formatting" })).queryByRole("button", { name: "Video" })).toBeNull();
+      expect(container.querySelector(".rich-foot")).toBeNull();
+      cleanup();
+    }
+  });
+
+  it("says it is saving the file on a line kept for it while the add runs, without reading its pictures again (R7)", async () => {
+    const { images, key, land, utils } = setupAdd("![](image-1a2b3c4d.png) Look");
+    await waitFor(() => expect(images.load).toHaveBeenCalled());
+    const loads = vi.mocked(images.load).mock.calls.length;
+    const foot = utils.container.querySelector(".rich > .rich-foot");
+    expect(foot).not.toBeNull();
+    expect(screen.queryByRole("status")).toBeNull();
+    fireEvent.click(key());
+    const status = screen.getByRole("status");
+    expect(status.textContent).toBe("Saving the file");
+    expect(foot!.contains(status)).toBe(true);
+    // The count lives in the box, never on its images, so no view reads again.
+    expect(images.load).toHaveBeenCalledTimes(loads);
+    await land(0, "video-a.mov");
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(utils.container.querySelector(".rich > .rich-foot")).toBe(foot);
+  });
+
+  it("stops saying so when the add fails, inserts nothing, and the key works again", async () => {
+    const { onChange, key, land, fail } = setupAdd("Look");
+    fireEvent.click(key());
+    expect(screen.getByRole("status").textContent).toBe("Saving the file");
+    await fail(0);
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(onChange).not.toHaveBeenCalled();
+    fireEvent.click(key());
+    await land(1, "video-a.mov");
+    expect(onChange).toHaveBeenLastCalledWith("![](video-a.mov)Look");
+  });
+
+  it("shows one line for two adds at once, until both have landed", async () => {
+    const { key, land } = setupAdd("Look");
+    fireEvent.click(key());
+    fireEvent.click(key());
+    expect(screen.getAllByRole("status")).toHaveLength(1);
+    await land(0, "video-a.mov");
+    expect(screen.getByRole("status").textContent).toBe("Saving the file");
+    await land(1);
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+});
+
+describe("the flow-test stub's Video key", () => {
+  const load = () => Promise.resolve(null);
+
+  it("adds through the picker and splices each ref in at the selection", async () => {
+    const onChange = vi.fn();
+    const add = vi.fn(() => Promise.resolve(["video-x.mov", "image-y.png"]));
+    render(<StubRichText aria-label="Task" value="AB" onChange={onChange} images={{ load, add }} />);
+    const el = screen.getByRole("textbox", { name: "Task" }) as HTMLTextAreaElement;
+    el.setSelectionRange(1, 1);
+    fireEvent.click(screen.getByRole("button", { name: "Video" }));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(add).toHaveBeenCalledWith({ kind: "pick" });
+    expect(onChange).toHaveBeenLastCalledWith("A![](video-x.mov)![](image-y.png)B");
+  });
+
+  it("calls nothing for a closed picker or a failed add", async () => {
+    const onChange = vi.fn();
+    const add = vi.fn().mockResolvedValueOnce([]).mockRejectedValueOnce(new Error("The data folder is not set."));
+    render(<StubRichText aria-label="Task" value="AB" onChange={onChange} images={{ load, add }} />);
+    for (let i = 0; i < 2; i++) {
+      fireEvent.click(screen.getByRole("button", { name: "Video" }));
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 0));
+      });
+    }
+    expect(add).toHaveBeenCalledTimes(2);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("calls nothing when the add lands after it unmounts, as the real box inserts nothing", async () => {
+    const onChange = vi.fn();
+    let resolve!: (names: string[]) => void;
+    const add = vi.fn(() => new Promise<string[]>((r) => (resolve = r)));
+    const { unmount } = render(<StubRichText aria-label="Task" value="AB" onChange={onChange} images={{ load, add }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Video" }));
+    unmount();
+    await act(async () => {
+      resolve(["video-x.mov"]);
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("has no Video key without add", () => {
+    render(<StubRichText aria-label="Task" value="" onChange={vi.fn()} images={{ load, save: vi.fn() }} />);
+    expect(screen.queryByRole("button", { name: "Video" })).toBeNull();
   });
 });
 
