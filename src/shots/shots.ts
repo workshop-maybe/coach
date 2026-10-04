@@ -213,15 +213,14 @@ export const SHOTS: readonly Shot[] = [
     steps: [...FIRST_TEST_TO_JUDGE, { click: { button: "Met" } }, { waitFor: { selector: ".holder" } }],
   },
   {
-    // Home is taller than the window and its doors stay pinned to the bottom, so the
-    // picture scrolls the Badges shelf into view above them.
+    // What needs you sits beside Agents, so every shelf shows above the doors pinned to the
+    // window's foot.
     id: "home",
     page: "ideas/your-record",
     route: { view: "home" },
     seed: "full",
     jev: "off",
     expect: { text: "Badges" },
-    steps: [{ scroll: { selector: 'section[aria-labelledby="home-badges"]' } }],
   },
   {
     id: "jev-off",
@@ -350,7 +349,6 @@ export const SHOTS: readonly Shot[] = [
       { click: { label: "Pick Codex, Sep 25, 2026" } },
       { click: { label: "Pick Claude Code, Sep 26, 2026" } },
       { waitFor: { text: "Compare" } },
-      { scroll: { selector: 'section[aria-labelledby="badge-replies"]' } },
     ],
   },
   {
@@ -419,16 +417,15 @@ export const SHOTS: readonly Shot[] = [
     clip: { selector: ".deck-card", pad: 16 },
   },
   {
-    // The player card fills the window, so the picture scrolls its parts into view. The
-    // card focuses its heading once it mounts, which scrolls back to the top, so the scroll
-    // waits for the badges the agent has tried, which show only once the matrix is built.
+    // The badges the agent has tried show only once the matrix is built, and their list
+    // renders empty before that, so the picture waits for a badge in it.
     id: "agent-page",
     page: "how-to/fill-in-an-agent",
     route: { view: "item", item: "agent", profileSlug: CLAUDE },
     seed: "full",
     jev: "off",
     expect: { text: "Parameters" },
-    steps: [{ waitFor: { selector: ".detail-earned" } }, { scroll: { selector: 'ul[aria-label="Parts"]' } }],
+    steps: [{ waitFor: { selector: ".detail-earned li" } }],
   },
   {
     id: "agent-params",
