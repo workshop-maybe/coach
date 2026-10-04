@@ -1,5 +1,6 @@
 // Where the app is (KTD1): home, a deck in progress, or one item open.
 
+import type { RouteOutcome } from "../domain/router";
 import type { Slug } from "../domain/types";
 
 /** The parts of a credential that open as one-beat edits (R4). */
@@ -16,11 +17,36 @@ export interface TestPick {
   handoffId?: string;
 }
 
+/**
+ * The router deck's answers, carried through a detour (the cost order, or a badge made from
+ * the job) so its card comes back as it was, without asking Jev again (router KTD11). Held in
+ * the route only, never in storage.
+ */
+export interface RouterResume {
+  job: string;
+  /** What Jev found, when the user asked. */
+  outcome?: RouteOutcome;
+  /** The badge the user picked from the list, by credential key, or NONE_OF_THESE. */
+  picked?: string;
+  /** A badge tapped from Jev's "Also like", by credential key. */
+  tapped?: string;
+}
+
+/** A job the router matched to no badge, carried into the credential deck as its task, with the way back (router KTD14). */
+export interface FromJob {
+  task: string;
+  router: RouterResume;
+}
+
+/** A pick of "None of these" on the router's badge list. */
+export const NONE_OF_THESE = "none";
+
 /** Which handoff an edit opens: a badge handoff's id (its stem), "new", or "skeleton" (KTD3, KTD10). */
 export type HandoffTarget = string;
 
 export type DeckRoute =
-  | { view: "deck"; deck: "credential"; returnTo?: TestPick }
+  /** With `fromJob`, a badge made from a job: the job as its task, and Close back to the router's card (router KTD14). */
+  | { view: "deck"; deck: "credential"; returnTo?: TestPick; fromJob?: FromJob }
   /** With `firstTest`, making the agent also makes the first badge and starts its test (R3). */
   | { view: "deck"; deck: "agent"; returnTo?: TestPick; likeSlug?: Slug; firstTest?: true }
   | {
@@ -43,7 +69,11 @@ export type DeckRoute =
   | { view: "deck"; deck: "edit-handoff"; credentialKey: string; handoff: HandoffTarget; returnTo?: TestPick }
   | { view: "deck"; deck: "trash"; item: TrashItem }
   /** Jev Mode: turn it on with a key, turn it off, use a new key or remove it (KTD6). Opened from the top bar. */
-  | { view: "deck"; deck: "jev" };
+  | { view: "deck"; deck: "jev" }
+  /** Find an agent for a job (router R1). With `resume`, it opens on its card as it was. */
+  | { view: "deck"; deck: "router"; resume?: RouterResume }
+  /** The cost order over the agents (router R10, KTD12). With `returnTo`, it goes back to the router's card. */
+  | { view: "deck"; deck: "cost-order"; returnTo?: RouterResume };
 
 /** An agent or a credential on its way to the trash. */
 export type TrashItem = { kind: "agent"; profileSlug: Slug } | { kind: "badge"; credentialKey: string };

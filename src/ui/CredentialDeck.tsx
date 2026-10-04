@@ -8,6 +8,10 @@
 // The task card is a pane (U6 of the deep-work panes plan, R7, R18): the editor fills the
 // window and takes first focus, and once a task is written the deck holds unsaved work,
 // so Escape steps back a card but never leaves the deck (R19, R20, KTD8).
+//
+// Made from a job the router matched to no badge (router R12, KTD14), it starts on your own
+// with the job as the task, leaves out "Where to start", whose presets would drop the job,
+// and counts the job as unsaved from the start. Leaving goes back to the router's card.
 
 import { useRef, useState } from "react";
 import { credentialPath, credentialsDir, loadFolder } from "../domain/folder";
@@ -21,7 +25,7 @@ import { Outline } from "../cast/Outline";
 import { Badge } from "./Badge";
 import { Deck, type Beat } from "./Deck";
 import { useNav } from "./nav";
-import type { TestPick } from "./routes";
+import type { FromJob, TestPick } from "./routes";
 import { useRichDraft } from "./richDraft";
 import { Lines } from "./EditDecks";
 import { CopyHelper, focusOnMount } from "./shared";
@@ -32,16 +36,17 @@ import { useRichImages } from "./useRichImages";
 /** The "Where to start" answer: your own, or a preset's id. */
 const OWN = "own";
 
-export function CredentialDeck({ returnTo }: { returnTo?: TestPick }) {
+export function CredentialDeck({ returnTo, fromJob }: { returnTo?: TestPick; fromJob?: FromJob }) {
   const { storage, state, apply } = useFolder();
   const { navigate } = useNav();
-  const [start, setStart] = useState<string | null>(null);
+  const fromRouter = fromJob !== undefined;
+  const [start, setStart] = useState<string | null>(fromRouter ? OWN : null);
   const [name, setName] = useState("");
   // The targets added so far, and the line being typed, which counts as the last one.
   const [targets, setTargets] = useState<string[]>([]);
   const [line, setLine] = useState("");
   const allTargets = line.trim() ? [...targets, line.trim()] : targets;
-  const taskDraft = useRichDraft("");
+  const taskDraft = useRichDraft(fromJob?.task ?? "");
   const task = taskDraft.value;
   // Detail the target check moved out of a target. There is no rubric card here, so it waits.
   const [rubric, setRubric] = useState("");
@@ -171,6 +176,50 @@ export function CredentialDeck({ returnTo }: { returnTo?: TestPick }) {
     ),
   };
 
+  const ownBeats: Beat[] = [
+    {
+      id: "name",
+      title: "What is it called",
+      forward: "Next",
+      valid: name.trim() !== "",
+      settled: name.trim(),
+      body: <input aria-label="Name" value={name} autoComplete="off" onChange={(e) => setName(e.target.value)} />,
+    },
+    {
+      id: "targets",
+      title: "What its holder can do",
+      forward: "Next",
+      valid: allTargets.length > 0,
+      // A pane keeps its trail to one line, so several targets settle as their count.
+      settled: allTargets.length > 1 ? `${allTargets.length} learning targets` : allTargets[0],
+      body: (
+        <Lines
+          lines={targets}
+          onChange={setTargets}
+          line={line}
+          onLine={setLine}
+          label="Learning targets"
+          placeholder="I can…"
+          onMove={(rubricLine) => setRubric((r) => appendToRubric(r, rubricLine))}
+        />
+      ),
+    },
+    {
+      id: "task",
+      title: "The task",
+      forward: "Make the badge",
+      valid: task.trim() !== "" && !taskImages.busy,
+      pane: true,
+      focusBody: true,
+      body: (
+        <>
+          <RichText aria-label="Task" value={task} onChange={taskDraft.setValue} onNormalized={taskDraft.onNormalized} placeholder="What the agent is asked to do" images={taskImages.images} />
+          <CopyHelper label="Suggest a task" text={() => suggestAssignmentsPrompt(draft)} />
+        </>
+      ),
+    },
+  ];
+
   const beats: Beat[] = picked
     ? [
         where,
@@ -187,51 +236,14 @@ export function CredentialDeck({ returnTo }: { returnTo?: TestPick }) {
           ),
         },
       ]
-    : [
-        where,
-        {
-          id: "name",
-          title: "What is it called",
-          forward: "Next",
-          valid: name.trim() !== "",
-          settled: name.trim(),
-          body: <input aria-label="Name" value={name} autoComplete="off" onChange={(e) => setName(e.target.value)} />,
-        },
-        {
-          id: "targets",
-          title: "What its holder can do",
-          forward: "Next",
-          valid: allTargets.length > 0,
-          // A pane keeps its trail to one line, so several targets settle as their count.
-          settled: allTargets.length > 1 ? `${allTargets.length} learning targets` : allTargets[0],
-          body: (
-            <Lines
-              lines={targets}
-              onChange={setTargets}
-              line={line}
-              onLine={setLine}
-              label="Learning targets"
-              placeholder="I can…"
-              onMove={(rubricLine) => setRubric((r) => appendToRubric(r, rubricLine))}
-            />
-          ),
-        },
-        {
-          id: "task",
-          title: "The task",
-          forward: "Make the badge",
-          valid: task.trim() !== "" && !taskImages.busy,
-          pane: true,
-          focusBody: true,
-          body: (
-            <>
-              <RichText aria-label="Task" value={task} onChange={taskDraft.setValue} onNormalized={taskDraft.onNormalized} placeholder="What the agent is asked to do" images={taskImages.images} />
-              <CopyHelper label="Suggest a task" text={() => suggestAssignmentsPrompt(draft)} />
-            </>
-          ),
-        },
-      ];
+    : fromRouter
+      ? ownBeats
+      : [where, ...ownBeats];
 
-  // A task written for your own credential is the work Escape must not lose; a preset has no task card.
-  return <Deck label="Create a credential" beats={beats} unsaved={picked === null && taskDraft.changed} onClose={() => navigate({ view: "home" })} onFinish={make} />;
+  // A task written for your own credential is the work Escape must not lose; a preset has no
+  // task card. A job brought from the router is that work from the start, and leaving takes
+  // it back to the router's card.
+  const unsaved = picked === null && (taskDraft.changed || (fromRouter && task.trim() !== ""));
+  const leave = () => navigate(fromJob ? { view: "deck", deck: "router", resume: fromJob.router } : { view: "home" });
+  return <Deck label="Create a credential" beats={beats} unsaved={unsaved} onClose={leave} onFinish={make} />;
 }

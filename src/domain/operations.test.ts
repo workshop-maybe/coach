@@ -2,10 +2,25 @@ import { describe, expect, it, vi } from "vitest";
 import { ChangedOnDiskError } from "../storage/storage";
 import { MemoryStorage } from "../storage/memory";
 import { assignmentVersion } from "./hash";
-import { assessmentPath, collectionPath, credentialPath, handoffPath, heldPath, loadFolder, markPath, marksDir, profilePath, serializeMark, SKELETON_PATH } from "./folder";
+import {
+  assessmentPath,
+  collectionPath,
+  COST_ORDER_PATH,
+  credentialPath,
+  handoffPath,
+  heldPath,
+  loadFolder,
+  markPath,
+  marksDir,
+  profilePath,
+  routingPath,
+  serializeMark,
+  SKELETON_PATH,
+} from "./folder";
 import { buildMatrix, cellKey } from "./matrix";
 import { BUILT_IN_HANDOFF, defaultHandoff, handoffsFor, isHandoffLocked, SKELETON_ID, winnerFor } from "./handoffs";
 import {
+  COST_ORDER_UNREADABLE,
   HandoffLockedError,
   HandoffProblemError,
   SetupLockedError,
@@ -23,8 +38,11 @@ import {
   markGoTo,
   recordAssessment,
   reorderCredentials,
+  saveCostOrder,
   saveSkeleton,
   setCredentialBadgeOverride,
+  takeAgentForJob,
+  type RoutingInput,
   trashCredential,
   trashProfile,
   updateCollection,
@@ -829,6 +847,110 @@ describe("go-to marks", () => {
     await expect(markGoTo(storage, state, { ...ref, profileSlug: "nobody" }, now)).rejects.toThrow();
     await expect(markGoTo(storage, state, { ...ref, credentialSlug: "nothing" }, now)).rejects.toThrow();
     expect(Object.keys(storage.files()).some((p) => p.includes("/marks/"))).toBe(false);
+  });
+});
+
+describe("the cost order (router KTD9)", () => {
+  async function twoAgents() {
+    const { storage, state } = await setup();
+    const sonnet = await createProfile(storage, state, { ...baseProfile, name: "Claude Sonnet", model: "sonnet" });
+    return { storage, state: sonnet.state };
+  }
+
+  it("saves the agents cheapest first as pretty JSON, and the folder loads it back", async () => {
+    const { storage, state } = await twoAgents();
+    expect(state.costOrder).toBeNull();
+    const next = await saveCostOrder(storage, state, ["claude-sonnet", "claude-opus"], null);
+    expect(storage.file(COST_ORDER_PATH)).toBe('{\n  "agents": [\n    "claude-sonnet",\n    "claude-opus"\n  ]\n}\n');
+    expect(next.costOrder).toEqual(["claude-sonnet", "claude-opus"]);
+    expect(next.raw[COST_ORDER_PATH]).toBe(storage.file(COST_ORDER_PATH));
+  });
+
+  it("keeps only agents still in the folder, each once", async () => {
+    const { storage, state } = await twoAgents();
+    const next = await saveCostOrder(storage, state, ["gone", "claude-opus", "claude-opus", "claude-sonnet"], null);
+    expect(next.costOrder).toEqual(["claude-opus", "claude-sonnet"]);
+  });
+
+  it("refuses with ChangedOnDiskError when the file changed since it was opened, and writes nothing", async () => {
+    const { storage, state } = await twoAgents();
+    await storage.writeText("data", COST_ORDER_PATH, '{ "agents": ["claude-opus"] }\n');
+    await expect(saveCostOrder(storage, state, ["claude-sonnet"], null)).rejects.toBeInstanceOf(ChangedOnDiskError);
+    expect(storage.file(COST_ORDER_PATH)).toBe('{ "agents": ["claude-opus"] }\n');
+  });
+
+  it("never writes over a cost-order.json it could not read (R22), saying so by name", async () => {
+    const { storage } = await twoAgents();
+    await storage.writeText("data", COST_ORDER_PATH, "{ not json");
+    const loaded = await loadFolder(storage);
+    expect(loaded.costOrder).toBeNull();
+    expect(loaded.errors.map((e) => e.path)).toEqual([COST_ORDER_PATH]);
+    await expect(saveCostOrder(storage, loaded, ["claude-opus"], null)).rejects.toThrow(COST_ORDER_UNREADABLE);
+    await expect(saveCostOrder(storage, loaded, ["claude-opus"], "{ not json")).rejects.toThrow(COST_ORDER_UNREADABLE);
+    expect(storage.file(COST_ORDER_PATH)).toBe("{ not json");
+  });
+});
+
+describe("routing records (router R14, KTD10)", () => {
+  const now = new Date("2026-10-04T15:00:00.000Z");
+  const routingFiles = (storage: MemoryStorage) => Object.keys(storage.files()).filter((p) => p.startsWith("routing/"));
+  const taken: RoutingInput = {
+    job: "# Fix the flaky login test\n\nIt fails one run in ten.",
+    collectionSlug: "go-basics",
+    credentialSlug: "write-a-cli",
+    profileSlug: "claude-opus",
+    recommended: "claude-sonnet",
+    basis: "cheapest",
+    steppedUp: false,
+    matched: "picked",
+  };
+
+  it("Covers AE8. writes a new file naming the agent taken, its setup, the pick, the badge and the job's first line", async () => {
+    const { storage, state } = await setup();
+    await takeAgentForJob(storage, state, taken, now);
+    expect(routingFiles(storage)).toEqual([routingPath("20261004T150000Z")]);
+    expect(JSON.parse(storage.file(routingPath("20261004T150000Z"))!)).toEqual({
+      job: "Fix the flaky login test",
+      collection: "go-basics",
+      credential: "write-a-cli",
+      agent: "claude-opus",
+      setup: { harness: "claude-code", model: "opus", effort: "high" },
+      recommended: "claude-sonnet",
+      basis: "cheapest",
+      steppedUp: false,
+      matched: "picked",
+    });
+  });
+
+  it("a Jev-matched record keeps the rating and the model that answered", async () => {
+    const { storage, state } = await setup();
+    await takeAgentForJob(storage, state, { ...taken, matched: "jev", difficulty: "high-stakes", jevModel: "jev-1.13.0", steppedUp: true }, now);
+    const record = JSON.parse(storage.file(routingPath("20261004T150000Z"))!);
+    expect(record).toMatchObject({ matched: "jev", difficulty: "high-stakes", jevModel: "jev-1.13.0", steppedUp: true });
+  });
+
+  it("two records in the same second get distinct, ordered stamps, and nothing else changes", async () => {
+    const { storage, state } = await setup();
+    const before = Object.keys(storage.files()).filter((p) => !p.startsWith("routing/"));
+    const one = await takeAgentForJob(storage, state, taken, now);
+    await takeAgentForJob(storage, one, taken, now);
+    expect(routingFiles(storage)).toEqual([routingPath("20261004T150000Z"), routingPath("20261004T150001Z")]);
+    expect(Object.keys(storage.files()).filter((p) => !p.startsWith("routing/"))).toEqual(before);
+  });
+
+  it("refuses an agent or a badge no longer in the folder, and writes nothing", async () => {
+    const { storage, state } = await setup();
+    await expect(takeAgentForJob(storage, state, { ...taken, profileSlug: "nobody" }, now)).rejects.toThrow();
+    await expect(takeAgentForJob(storage, state, { ...taken, credentialSlug: "nothing" }, now)).rejects.toThrow();
+    expect(routingFiles(storage)).toEqual([]);
+  });
+
+  it("keeps the first line as one line, even when it holds line separators and a front-matter fence", async () => {
+    const { storage, state } = await setup();
+    await takeAgentForJob(storage, state, { ...taken, job: "Ship it\u2028---\u2029## now\nsecond line" }, now);
+    const text = storage.file(routingPath("20261004T150000Z"))!;
+    expect(JSON.parse(text).job).toBe("Ship it");
+    expect(text.split("\n").filter((l) => l.includes("Ship it"))).toHaveLength(1);
   });
 });
 

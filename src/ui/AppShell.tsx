@@ -14,6 +14,7 @@ import { InkDefs } from "../cast/InkDefs";
 import { AgentDetail } from "./AgentDetail";
 import { BadgeDetail } from "./BadgeDetail";
 import { CompareView } from "./CompareView";
+import { CostOrderDeck } from "./CostOrderDeck";
 import { CredentialDeck } from "./CredentialDeck";
 import { EditAgentDeck, EditCredentialDeck } from "./EditDecks";
 import { EditHandoffDeck, HandoffsDeck } from "./HandoffDecks";
@@ -31,6 +32,7 @@ import { NavContext } from "./nav";
 import { PaneContext, usePaneClaims } from "./pane";
 import { PlayerCard } from "./PlayerCard";
 import { ReplyView } from "./ReplyView";
+import { RouterDeck } from "./RouterDeck";
 import type { DeckRoute, ItemRoute, Route } from "./routes";
 import { TestDeck } from "./TestDeck";
 import { describeError, useFolder } from "./useFolderState";
@@ -139,7 +141,7 @@ export function AppShell({ onChangeFolder, initialRoute = { view: "home" } }: Ap
 function DeckView({ route }: { route: DeckRoute }) {
   switch (route.deck) {
     case "credential":
-      return <CredentialDeck returnTo={route.returnTo} />;
+      return <CredentialDeck returnTo={route.returnTo} fromJob={route.fromJob} />;
     case "agent":
       return <PlayerCard returnTo={route.returnTo} likeSlug={route.likeSlug} firstTest={route.firstTest} />;
     case "test":
@@ -156,6 +158,10 @@ function DeckView({ route }: { route: DeckRoute }) {
       return <TrashDeck item={route.item} />;
     case "jev":
       return <JevDeck />;
+    case "router":
+      return <RouterDeck resume={route.resume} />;
+    case "cost-order":
+      return <CostOrderDeck returnTo={route.returnTo} />;
   }
 }
 

@@ -1,8 +1,8 @@
-// The two requests the native `jev_ask` command accepts, and what it answers (KTD1, KTD7,
-// KTD17; growing context KTD2, KTD3). These mirror the contract at the top of
-// src-tauri/src/jev.rs; Rust refuses any other field, question type or key. State and
-// instruction keys are TypeSafe's wire names, so backticked references in question text
-// (`reply`, `point`, `rubric_notes`, `target`, `task`) resolve against them.
+// The three requests the native `jev_ask` command accepts, and what it answers (KTD1, KTD7,
+// KTD17; growing context KTD2, KTD3; router KTD1, KTD3, KTD7). These mirror the contract at
+// the top of src-tauri/src/jev.rs; Rust refuses any other field, question type or key. State
+// and instruction keys are TypeSafe's wire names, so backticked references in question text
+// (`reply`, `point`, `rubric_notes`, `target`, `task`, `job`, `badge`) resolve against them.
 
 /** The Jev model the native side pins (MODEL in src-tauri/src/jev.rs), and what an answer that names no model reads as. */
 export const JEV_MODEL = "jev-1.13.0";
@@ -80,7 +80,41 @@ export interface LineBreaksRequest {
   questions: Record<string, { type: "noul"; instructions: string; criteria?: JevCriteria }>;
 }
 
-export type JevRequest = SecondOpinionRequest | LineBreaksRequest;
+/**
+ * One match question, under an "m" id: does the `job` ask for the same kind of work as the
+ * `badge`? The badge has no field for its rubric, and the criteria are strings only.
+ */
+export interface MatchQuestion {
+  type: "noul";
+  instructions: {
+    badge: { name: string; task: string; learning_targets: string[] };
+    question: string;
+  };
+  criteria?: JevCriteria;
+}
+
+/**
+ * The job's difficulty: TypeSafe's Score, the one question that isn't a Noul, allowed under
+ * "difficulty" in a route and nowhere else. Three levels in order (routine, needs judgment,
+ * unusual or high-stakes). Rust holds the instructions and each level to 300 code points.
+ */
+export interface DifficultyQuestion {
+  type: "score";
+  instructions: string;
+  criteria: readonly [string, string, string];
+}
+
+/**
+ * A routing ask: one match question per badge ("m1" … "mN", N at least 1, no gaps), plus
+ * "difficulty" at most once. Badges ride in their own questions, never in the state.
+ */
+export interface RouteRequest {
+  kind: "route";
+  state: { job: string };
+  questions: Record<string, MatchQuestion | DifficultyQuestion>;
+}
+
+export type JevRequest = SecondOpinionRequest | LineBreaksRequest | RouteRequest;
 
 /** Examples by question id and criteria side, each side's in the order they go. */
 export type JevExampleMap = Readonly<Record<string, Partial<Record<CriteriaSide, readonly JevExample[]>>>>;
@@ -101,9 +135,15 @@ export interface JevExampleEntry {
   item: JevExample;
 }
 
-/** Every requested id, each a probability from 0 to 1, and the model that answered. Nothing else from TypeSafe. */
+/** Every requested id, and the model that answered. Nothing else from TypeSafe. */
 export interface JevAnswers {
+  /** Each Noul id, a probability from 0 to 1. */
   answers: Record<string, number>;
+  /**
+   * Each Score id ("difficulty"), its three level probabilities in the order asked, summing
+   * to 1. Absent when the request asked no Score, as for every second opinion and cleanup.
+   */
+  levels?: Record<string, number[]>;
   /** The versioned model that answered (KTD3). The native side always sends it; a missing one reads as JEV_MODEL. */
   model?: string;
 }

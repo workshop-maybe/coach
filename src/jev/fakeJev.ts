@@ -3,11 +3,13 @@
 // turns Jev Mode off, and an ask is refused while off or with no key. Tests queue what
 // the next call of a method returns, fails with or waits on, and read `calls` to see what
 // the UI asked for. The budget check is the web view's own, so a test queues "tooLong".
-// An ask with nothing queued answers each requested id from the answer map the fake was
-// made with, and FAKE_ANSWER for every id not in it, and names the pinned model, as the
-// native side names the model that answered; a queued answer is returned as queued, and
-// one with no model reads as the pinned one. The screenshot harness scripts a shot's
-// reading through that map.
+// An ask with nothing queued answers each requested Noul id from the answer map the fake
+// was made with, and FAKE_ANSWER for every id not in it, and names the pinned model, as the
+// native side names the model that answered. A Score question (a route's "difficulty")
+// gets no entry in `answers`: it comes back under `levels` as FAKE_LEVELS, routine-certain,
+// and `levels` is left out when the request asks no Score, as natively. A queued answer is
+// returned as queued, and one with no model reads as the pinned one. The screenshot harness
+// scripts a shot's reading through that map.
 //
 // The key is never recorded in `calls` and is held only in a private field, so printing
 // the fake never shows it. `holdsKey` answers whether a given key was the one set.
@@ -41,6 +43,9 @@ export const FAKE_ON: JevStatus = { on: true, hasKey: true, storage: "keychain",
 
 /** The probability an ask gives a requested id when no answer is queued and the answer map has none. */
 export const FAKE_ANSWER = 0.5;
+
+/** The levels an ask gives a Score question when no answer is queued: certain the job is routine. */
+export const FAKE_LEVELS: readonly [number, number, number] = [1, 0, 0];
 
 const MAX_KEY_CHARS = 512;
 const HINT_MIN_CHARS = 12;
@@ -123,10 +128,7 @@ export class FakeJev implements Jev {
     if (!this.#state.on) throw new JevError("off");
     if (!this.#state.hasKey) throw new JevError("keyMissing");
     try {
-      return await this.#serve("ask", () => ({
-        answers: Object.fromEntries(Object.keys(request.questions).map((id) => [id, this.#answers.get(id) ?? FAKE_ANSWER])),
-        model: JEV_MODEL,
-      }));
+      return await this.#serve("ask", () => this.#unqueued(request));
     } catch (e) {
       // As natively: an ask that finds no key clears the stored key from settings.
       if (e instanceof JevError && e.kind === "keyMissing") {
@@ -135,6 +137,16 @@ export class FakeJev implements Jev {
       }
       throw e;
     }
+  }
+
+  /** An answer for every requested id: each Noul from the answer map, each Score as FAKE_LEVELS. */
+  #unqueued(request: JevRequest): JevAnswers {
+    const questions: [string, { type: string }][] = Object.entries(request.questions);
+    const nouls = questions.filter(([, q]) => q.type !== "score").map(([id]) => id);
+    const scores = questions.filter(([, q]) => q.type === "score").map(([id]) => id);
+    const answers = Object.fromEntries(nouls.map((id) => [id, this.#answers.get(id) ?? FAKE_ANSWER]));
+    if (scores.length === 0) return { answers, model: JEV_MODEL };
+    return { answers, levels: Object.fromEntries(scores.map((id) => [id, [...FAKE_LEVELS]])), model: JEV_MODEL };
   }
 
   /** The next queued outcome for `method`, or the native rule when nothing is queued. */

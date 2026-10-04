@@ -193,6 +193,43 @@ export interface Mark {
   fileStem: string;
 }
 
+/**
+ * How hard Jev rates a job (router KTD2): routine, needs judgment, or unusual or
+ * high-stakes. Only the last steps a recommendation up one agent (R9).
+ */
+export type Rating = "routine" | "judgment" | "high-stakes";
+
+/** How a routed job's badge was chosen: Jev's strongest match, a badge tapped from Jev's "Also like", or the user's own pick. */
+export type MatchedBy = "jev" | "also-like" | "picked";
+
+/** Why the router's card picked its agent: the badge's go-to, the cheapest clean holder, or no pick at all. */
+export type PickBasis = "go-to" | "cheapest" | "none";
+
+/**
+ * One time the user took an agent for a job (router R14, KTD10). Read from
+ * routing/<stamp>.json, a new file per decision, written once and never loaded by the
+ * app yet: it keeps what counting "Decisions reused" will need later.
+ */
+export interface RoutingRecord {
+  /** The job's first line, one line of at most 200 code points. */
+  job: string;
+  collectionSlug: Slug;
+  credentialSlug: Slug;
+  /** The agent taken. */
+  profileSlug: Slug;
+  /** The taken agent's setup as it stood, since a slug can be reused. */
+  setup: AgentSetup;
+  /** The card's pick, or null when it had none. */
+  recommended: Slug | null;
+  basis: PickBasis;
+  steppedUp: boolean;
+  matched: MatchedBy;
+  /** Jev's rating, when Jev rated the job. */
+  difficulty?: Rating;
+  /** The Jev model that answered, when Jev was asked. */
+  jevModel?: string;
+}
+
 /** A file the app could not read. The app reports it and never rewrites it (R22). */
 export interface LoadError {
   path: string;
@@ -213,6 +250,12 @@ export interface FolderState {
   handoffs: Handoff[];
   /** Every badge's go-to marks, by collection, credential, then id (oldest first). */
   marks: Mark[];
+  /**
+   * The order the user set over their agents, cheapest first (router KTD9), as
+   * cost-order.json lists it with repeats dropped. It may name agents no longer in the
+   * folder. Null or absent when the folder has no cost order, or the file can't be read.
+   */
+  costOrder?: Slug[] | null;
   errors: LoadError[];
   /** Readable files with settings that fall back to defaults (KTD3). Never gate anything. */
   warnings: LoadError[];

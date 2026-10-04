@@ -353,6 +353,7 @@ describe("what the deck says leaves the machine", () => {
     ).toBeTruthy();
     expect(d.queryByText("A second opinion sends the reply, the badge's task and its rubric.")).toBeNull();
     expect(d.getByText("A cleanup sends only the text you pasted.")).toBeTruthy();
+    expect(d.getByText("A routing ask sends the job, and the names, tasks and learning targets of your badges.")).toBeTruthy();
     expect(d.getByText(/TypeSafe keeps what it receives under/)).toBeTruthy();
     expect(d.getByRole("link", { name: "its terms" }).getAttribute("href")).toBe(TERMS);
   });

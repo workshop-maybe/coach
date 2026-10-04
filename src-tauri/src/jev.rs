@@ -1,7 +1,8 @@
-//! Jev Mode: a second opinion and a line-break cleanup from TypeSafe's Jev model,
-//! sent with the user's own API key (KTD1–KTD4, KTD19, KTD20). The key lives in
-//! the OS keychain, status reads only `settings.json` and memory, and an ask is
-//! checked before any key store is read, so a bad call never raises a prompt.
+//! Jev Mode: a second opinion, a line-break cleanup and a routing ask from TypeSafe's
+//! Jev model, sent with the user's own API key (KTD1–KTD4, KTD19, KTD20; router KTD1,
+//! KTD3, KTD7). The key lives in the OS keychain, status reads only `settings.json` and
+//! memory, and an ask is checked before any key store is read, so a bad call never
+//! raises a prompt.
 //!
 //! # Command contract
 //!
@@ -23,7 +24,7 @@
 //! reports `storage: "session"`. `jev_clear_key` deletes the key and turns Jev
 //! Mode off, and changes nothing unless the delete succeeds. `jev_set_on` with
 //! `false` keeps the key. `jev_ask` checks, in order, that Jev Mode is on, that the
-//! request is one of the two shapes below with no other field, and that it fits
+//! request is one of the three shapes below with no other field, and that it fits
 //! the budget, examples included; only then does it read the key and post. It is
 //! never retried here.
 //!
@@ -104,19 +105,63 @@
 //!   questions: Record<string, { type: "noul"; instructions: string; criteria?: JevCriteria }>;
 //! };
 //!
-//! type JevRequest = SecondOpinionRequest | LineBreaksRequest;
+//! // A routing ask (router KTD1, KTD3): one match question per badge, and at most one
+//! // question on how demanding the job is. Badges ride in their own questions, never in
+//! // the state, since every question sees all of it.
+//! type RouteRequest = {
+//!   kind: "route";
+//!   state: { job: string };
+//!   // Exactly these keys: "m1" … "mN" with N at least 1 and no gap, each a
+//!   // MatchQuestion, plus "difficulty" at most once, a DifficultyQuestion. An "m" id is
+//!   // "m" and the number as written by `format!`, so "m0", "m01", "M1" and "m1 " are
+//!   // refused.
+//!   questions: Record<string, MatchQuestion | DifficultyQuestion>;
+//! };
 //!
-//! // Every requested id, each a probability from 0 to 1, and the model that answered
-//! // (growing context KTD3). Nothing else from TypeSafe. `model` is the versioned id
-//! // TypeSafe names when it is a short one (letters, digits, `.`, `_`, `:`, `/`, `+`
-//! // and `-`, at most 64 characters). One that is absent or in any other shape reads
-//! // as the pinned "jev-1.13.0" and never fails the ask, for either request.
-//! type JevAnswers = { answers: Record<string, number>; model: string };
+//! // Does the `job` ask for the same kind of work as the `badge`? The badge has no field
+//! // for its rubric, and the criteria are strings only.
+//! type MatchQuestion = {
+//!   type: "noul";
+//!   instructions: {
+//!     badge: { name: string; task: string; learning_targets: string[] };
+//!     question: string;
+//!   };
+//!   criteria?: JevCriteria;
+//! };
+//!
+//! // TypeSafe's Score: the one question that isn't a Noul, allowed under "difficulty" in
+//! // a route and nowhere else. Three levels in order (routine, needs judgment, unusual or
+//! // high-stakes). The instructions and each level are at most 300 characters (code
+//! // points), since TypeSafe's `legend` echoes the levels back.
+//! type DifficultyQuestion = { type: "score"; instructions: string; criteria: [string, string, string] };
+//!
+//! type JevRequest = SecondOpinionRequest | LineBreaksRequest | RouteRequest;
+//!
+//! // Every requested id, and the model that answered (growing context KTD3). Nothing
+//! // else from TypeSafe. `model` is the versioned id TypeSafe names when it is a short
+//! // one (letters, digits, `.`, `_`, `:`, `/`, `+` and `-`, at most 64 characters). One
+//! // that is absent or in any other shape reads as the pinned "jev-1.13.0" and never
+//! // fails the ask, for any request.
+//! type JevAnswers = {
+//!   answers: Record<string, number>; // each Noul id, a probability from 0 to 1
+//!   // Each Score id ("difficulty"), its three level probabilities in the order asked,
+//!   // always three numbers. The key is absent when the request asked no Score, as for
+//!   // every second opinion and cleanup.
+//!   levels?: Record<string, number[]>;
+//!   model: string;
+//! };
 //! ```
 //!
 //! Any other field, at any level (a `model` field included), is refused as
-//! `"other"`, as are other question types, keys outside the rules above, and
-//! examples or targets placed or sized outside them.
+//! `"other"`, as are other question types, a Score anywhere but a route's
+//! `"difficulty"`, keys outside the rules above, and examples, targets or levels
+//! placed or sized outside them.
+//!
+//! An answer is `"other"` when an id is missing, extra or of the wrong type, or a Noul
+//! is outside 0 to 1. A Score's answer must be `type: "score"` with `probabilities` an
+//! object of exactly `"0"`, `"1"` and `"2"`, each from 0 to 1 and summing to 1 within
+//! 0.02. Its `score`, `confidence` and `legend` are dropped, so no text from TypeSafe
+//! reaches the web view, and the web view works the expected level out from `levels`.
 //!
 //! Budget (KTD19), checked in the web view and again here. For a value `v`,
 //! `tokens(v) = Math.ceil(JSON.stringify(v).length / 4)`, taken separately for
@@ -153,6 +198,10 @@ pub const MAX_KEY_CHARS: usize = 512;
 pub const MAX_EXAMPLES_PER_SIDE: usize = 2;
 pub const MAX_OPENING_CHARS: usize = 300;
 pub const MAX_REASON_CHARS: usize = 200;
+/// A route's one Score question (router KTD1), and the most code points its instructions
+/// and each of its three levels may hold, since TypeSafe's `legend` echoes the levels back.
+pub const DIFFICULTY_ID: &str = "difficulty";
+pub const MAX_DIFFICULTY_CHARS: usize = 300;
 /// The longest model id an answer may name before it reads as the pinned one (KTD3).
 const MAX_MODEL_CHARS: usize = 64;
 /// Shorter keys get no hint, since four characters would give away too much of them.
@@ -367,9 +416,14 @@ pub struct JevStatus {
 }
 
 /// Jev's probabilities, keyed by the ask's own question ids, and the model that answered.
+/// A Score id's answer is its three level probabilities in `levels`, in order, and never
+/// in `answers`. `levels` is left out when empty, so a second opinion's or a cleanup's
+/// answer keeps its shape.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Answers {
     pub answers: BTreeMap<String, f64>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub levels: BTreeMap<String, [f64; 3]>,
     pub model: String,
 }
 
@@ -496,13 +550,14 @@ pub struct Prepared {
     ask: Ask,
 }
 
-/// The two shapes the web view may send. No field beyond these passes, so the
+/// The three shapes the web view may send. No field beyond these passes, so the
 /// web view can write question wording but can't set the model or add to the body.
 #[derive(Debug, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
 enum Ask {
     SecondOpinion(SecondOpinion),
     LineBreaks(LineBreaks),
+    Route(Route),
 }
 
 #[derive(Debug, Deserialize)]
@@ -532,6 +587,63 @@ struct LineBreaks {
     questions: BTreeMap<String, Question<String, Criteria>>,
 }
 
+/// Only the job (router KTD3). Badges ride in their own questions, since every question
+/// sees all of the state.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Route {
+    state: RouteState,
+    questions: BTreeMap<String, RouteQuestion>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RouteState {
+    job: String,
+}
+
+/// A route's question: a match Noul under an "m" id, or the one difficulty Score. This
+/// is the only place a Score may appear (router KTD1).
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+enum RouteQuestion {
+    Noul(Match),
+    Score(Difficulty),
+}
+
+/// Does the job ask for the same kind of work as this one badge? Criteria are strings.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Match {
+    instructions: MatchInstructions,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    criteria: Option<Criteria>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MatchInstructions {
+    badge: Badge,
+    question: String,
+}
+
+/// A badge as a match names it. There is no field for its rubric.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Badge {
+    name: String,
+    task: String,
+    learning_targets: Vec<String>,
+}
+
+/// The job's difficulty: string instructions and exactly three levels, in order.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Difficulty {
+    instructions: String,
+    criteria: [String; 3],
+}
+
 /// One question. `criteria` is optional, so its type needs no `Default` of its own.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, bound(deserialize = "I: Deserialize<'de>, C: Deserialize<'de>"))]
@@ -543,7 +655,7 @@ struct Question<I, C> {
     criteria: Option<C>,
 }
 
-/// The only question type an ask may carry.
+/// The only question type a second opinion or a cleanup may carry.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 enum Noul {
@@ -616,9 +728,9 @@ struct Example {
 }
 
 impl Ask {
-    /// Reads the web view's request into one of the two shapes, with its keys
-    /// following the shape's rules, and a second opinion's targets and examples
-    /// placed and sized as the contract says.
+    /// Reads the web view's request into one of the three shapes, with its keys
+    /// following the shape's rules, a second opinion's targets and examples placed and
+    /// sized as the contract says, and a route's one Score where and as it says.
     fn parse(request: Value) -> Result<Ask, JevError> {
         let malformed = JevError::of(Kind::Other);
         let ask: Ask = serde_json::from_value(request).map_err(|_| malformed)?;
@@ -633,6 +745,7 @@ impl Ask {
                     && o.questions.iter().all(|(id, q)| opinion_question_fits(id, q))
             }
             Ask::LineBreaks(l) => !l.questions.is_empty() && l.questions.keys().all(|id| is_line_id(id)),
+            Ask::Route(r) => route_fits(r),
         };
         if checked {
             Ok(ask)
@@ -646,6 +759,7 @@ impl Ask {
         let (state, questions): (usize, Vec<usize>) = match self {
             Ask::SecondOpinion(o) => (tokens(&o.state), o.questions.values().map(tokens).collect()),
             Ask::LineBreaks(l) => (tokens(&l.state), l.questions.values().map(tokens).collect()),
+            Ask::Route(r) => (tokens(&r.state), r.questions.values().map(tokens).collect()),
         };
         let longest = questions.iter().copied().max().unwrap_or(0);
         let all = questions.iter().fold(0usize, |sum, t| sum.saturating_add(*t));
@@ -659,10 +773,26 @@ impl Ask {
         }
     }
 
+    /// Every id the ask sends, Score ids included: each must be answered.
     fn ids(&self) -> BTreeSet<String> {
         match self {
             Ask::SecondOpinion(o) => o.questions.keys().cloned().collect(),
             Ask::LineBreaks(l) => l.questions.keys().cloned().collect(),
+            Ask::Route(r) => r.questions.keys().cloned().collect(),
+        }
+    }
+
+    /// The ids whose answer is a Score rather than a Noul: a route's difficulty when it
+    /// asks one, and none for any other kind.
+    fn score_ids(&self) -> BTreeSet<String> {
+        match self {
+            Ask::Route(r) => r
+                .questions
+                .iter()
+                .filter(|(_, q)| matches!(q, RouteQuestion::Score(_)))
+                .map(|(id, _)| id.clone())
+                .collect(),
+            _ => BTreeSet::new(),
         }
     }
 
@@ -671,6 +801,7 @@ impl Ask {
         let (state, questions) = match self {
             Ask::SecondOpinion(o) => (serde_json::json!(o.state), serde_json::json!(o.questions)),
             Ask::LineBreaks(l) => (serde_json::json!(l.state), serde_json::json!(l.questions)),
+            Ask::Route(r) => (serde_json::json!(r.state), serde_json::json!(r.questions)),
         };
         serde_json::json!({ "state": state, "model": MODEL, "questions": questions })
     }
@@ -725,6 +856,25 @@ fn is_line_break(c: char) -> bool {
 fn is_line_id(id: &str) -> bool {
     id.strip_prefix('L')
         .is_some_and(|digits| (1..=6).contains(&digits.len()) && digits.bytes().all(|b| b.is_ascii_digit()))
+}
+
+/// A route's keys and types (router KTD1, KTD3): "m1" … "mN" with N at least 1, each a
+/// match Noul, and at most one "difficulty", a Score whose instructions and three levels
+/// each fit in MAX_DIFFICULTY_CHARS code points. No other key.
+fn route_fits(route: &Route) -> bool {
+    let difficulty = route.questions.contains_key(DIFFICULTY_ID);
+    let matches = route.questions.len() - usize::from(difficulty);
+    let expected: BTreeSet<String> = (1..=matches)
+        .map(|i| format!("m{i}"))
+        .chain(difficulty.then(|| DIFFICULTY_ID.to_string()))
+        .collect();
+    let fits = |text: &String| text.chars().count() <= MAX_DIFFICULTY_CHARS;
+    matches >= 1
+        && route.questions.keys().cloned().collect::<BTreeSet<_>>() == expected
+        && route.questions.iter().all(|(id, question)| match question {
+            RouteQuestion::Noul(_) => id != DIFFICULTY_ID,
+            RouteQuestion::Score(d) => id == DIFFICULTY_ID && fits(&d.instructions) && d.criteria.iter().all(fits),
+        })
 }
 
 /// The token estimate: characters of compact JSON over four, rounded up (KTD19).
@@ -803,18 +953,47 @@ struct WireReply {
     model: Value,
 }
 
+/// One answer as far as Jev Mode reads it. Other fields (a Score's `score`, `confidence`
+/// and `legend` among them) are ignored and never returned.
 #[derive(Deserialize)]
 struct WireAnswer {
     #[serde(rename = "type")]
     kind: String,
     noul: Option<f64>,
+    /// Read as any value, and parsed only for a Score id, so a Noul answer stays as
+    /// tolerant of extra fields as before.
+    #[serde(default)]
+    probabilities: Option<Value>,
 }
 
+/// A Score's level probabilities: exactly the keys "0", "1" and "2".
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WireLevels {
+    #[serde(rename = "0")]
+    routine: f64,
+    #[serde(rename = "1")]
+    judgment: f64,
+    #[serde(rename = "2")]
+    high_stakes: f64,
+}
+
+/// How far a Score's levels may sum from 1, which allows two-decimal rounding (router KTD1).
+const LEVELS_SUM_TOLERANCE: f64 = 0.02;
+
 /// Turns TypeSafe's reply into probabilities keyed by the ask's own ids, with the
-/// model that answered. A status that isn't a success never reads the body. An answer
-/// outside 0–1, of another type, missing, or for an id the ask didn't send is "other",
-/// never clamped. The model is never a reason to fail: the cleanup ignores it.
-fn answers_from(status: u16, headers: &HeaderMap, body: &[u8], ids: &BTreeSet<String>) -> Result<Answers, JevError> {
+/// model that answered. A status that isn't a success never reads the body. Each id in
+/// `scores` must be answered with a Score's three levels, and every other id with a Noul.
+/// An answer outside 0–1, of another type, missing, or for an id the ask didn't send is
+/// "other", never clamped, as are levels that don't sum to 1. The model is never a
+/// reason to fail: the cleanup ignores it.
+fn answers_from(
+    status: u16,
+    headers: &HeaderMap,
+    body: &[u8],
+    ids: &BTreeSet<String>,
+    scores: &BTreeSet<String>,
+) -> Result<Answers, JevError> {
     if !(200..300).contains(&status) {
         return Err(kind_of(Failure::Status(status, retry_after(headers))));
     }
@@ -824,15 +1003,37 @@ fn answers_from(status: u16, headers: &HeaderMap, body: &[u8], ids: &BTreeSet<St
         return Err(malformed);
     }
     let mut answers = BTreeMap::new();
+    let mut levels = BTreeMap::new();
     for (id, answer) in reply.answers {
+        if !ids.contains(&id) {
+            return Err(malformed);
+        }
+        if scores.contains(&id) {
+            levels.insert(id, levels_of(answer).ok_or(malformed)?);
+            continue;
+        }
         match answer.noul {
-            Some(p) if ids.contains(&id) && answer.kind == "noul" && (0.0..=1.0).contains(&p) => {
+            Some(p) if answer.kind == "noul" && (0.0..=1.0).contains(&p) => {
                 answers.insert(id, p);
             }
             _ => return Err(malformed),
         }
     }
-    Ok(Answers { answers, model: answering_model(&reply.model) })
+    Ok(Answers { answers, levels, model: answering_model(&reply.model) })
+}
+
+/// A Score answer's three level probabilities, in order, when it is one: `probabilities`
+/// an object of exactly "0", "1" and "2", each from 0 to 1, summing to 1.
+fn levels_of(answer: WireAnswer) -> Option<[f64; 3]> {
+    if answer.kind != "score" {
+        return None;
+    }
+    // A derived struct would also take an array, by position, so only an object is read.
+    let read: WireLevels = serde_json::from_value(answer.probabilities.filter(Value::is_object)?).ok()?;
+    let levels = [read.routine, read.judgment, read.high_stakes];
+    let sum: f64 = levels.iter().sum();
+    let fits = levels.iter().all(|p| (0.0..=1.0).contains(p)) && (sum - 1.0).abs() <= LEVELS_SUM_TOLERANCE;
+    fits.then_some(levels)
 }
 
 /// The model TypeSafe names when it is a short id (letters, digits, `.`, `_`, `:`, `/`,
@@ -858,7 +1059,7 @@ pub async fn send(prepared: Prepared) -> Result<Answers, JevError> {
     } else {
         Vec::new()
     };
-    answers_from(status, response.headers(), &body, &ask.ids())
+    answers_from(status, response.headers(), &body, &ask.ids(), &ask.score_ids())
 }
 
 /// Reads a success body up to the cap; a longer one is "other".
@@ -1112,6 +1313,52 @@ mod tests {
         json!({ "kind": "lineBreaks", "state": "L001| The cutover touches\nL002| three teams.", "questions": questions })
     }
 
+    /// A match question for badge `i`, as the router sends it (KTD3).
+    fn match_question(i: usize) -> Value {
+        json!({
+            "type": "noul",
+            "instructions": {
+                "badge": {
+                    "name": format!("Badge {i}"),
+                    "task": "Review the diff and name the bug.",
+                    "learning_targets": ["I can find a bug in a diff", "I can point to the line"]
+                },
+                "question": "Does the `job` ask for the same kind of work as the `badge`?"
+            },
+            "criteria": {
+                "true": "the work the badge's task and learning targets describe",
+                "false": "a different kind of work, or one that only shares a topic, a tool or a word with the badge"
+            }
+        })
+    }
+
+    /// The one difficulty question (KTD1).
+    fn difficulty_question() -> Value {
+        json!({
+            "type": "score",
+            "instructions": "How demanding is the `job` for an agent?",
+            "criteria": ["routine", "needs judgment", "unusual or high-stakes"]
+        })
+    }
+
+    /// A route asking about `matches` badges, with the difficulty question when `difficulty`.
+    fn route(matches: usize, difficulty: bool) -> Value {
+        let mut questions: serde_json::Map<String, Value> =
+            (1..=matches).map(|i| (format!("m{i}"), match_question(i))).collect();
+        if difficulty {
+            questions.insert(DIFFICULTY_ID.into(), difficulty_question());
+        }
+        json!({ "kind": "route", "state": { "job": "Fix the flaky login test." }, "questions": questions })
+    }
+
+    /// The same request with one question moved to another id.
+    fn rekeyed(mut request: Value, from: &str, to: &str) -> Value {
+        let questions = request["questions"].as_object_mut().unwrap();
+        let question = questions.remove(from).unwrap();
+        questions.insert(to.to_string(), question);
+        request
+    }
+
     fn ids(list: &[&str]) -> BTreeSet<String> {
         list.iter().map(|s| s.to_string()).collect()
     }
@@ -1174,20 +1421,20 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert(RETRY_AFTER, HeaderValue::from_static("7"));
         let none = ids(&["L002"]);
-        let limited = answers_from(429, &headers, b"", &none).unwrap_err();
+        let limited = answers_from(429, &headers, b"", &none, &BTreeSet::new()).unwrap_err();
         assert_eq!(limited, JevError { kind: Kind::RateLimited, status: None, retry_after: Some(7) });
-        assert_eq!(answers_from(529, &headers, b"", &none).unwrap_err().retry_after, Some(7));
-        assert_eq!(answers_from(500, &headers, b"", &none).unwrap_err().retry_after, None);
+        assert_eq!(answers_from(529, &headers, b"", &none, &BTreeSet::new()).unwrap_err().retry_after, Some(7));
+        assert_eq!(answers_from(500, &headers, b"", &none, &BTreeSet::new()).unwrap_err().retry_after, None);
 
         headers.insert(RETRY_AFTER, HeaderValue::from_static("Wed, 21 Oct 2026 07:28:00 GMT"));
-        assert_eq!(answers_from(429, &headers, b"", &none).unwrap_err().retry_after, None);
+        assert_eq!(answers_from(429, &headers, b"", &none, &BTreeSet::new()).unwrap_err().retry_after, None);
     }
 
     #[test]
     fn a_refused_reply_never_carries_its_body_into_the_error() {
         let body = format!(r#"{{"detail":"invalid key {KEY}","state":"Done. I wrote README.md"}}"#);
         for code in [401, 422] {
-            let err = answers_from(code, &HeaderMap::new(), body.as_bytes(), &ids(&["overall"])).unwrap_err();
+            let err = answers_from(code, &HeaderMap::new(), body.as_bytes(), &ids(&["overall"]), &BTreeSet::new()).unwrap_err();
             let sent = serde_json::to_string(&err).unwrap();
             assert!(!sent.contains(KEY), "{sent}");
             assert!(!sent.contains("README"), "{sent}");
@@ -1204,12 +1451,93 @@ mod tests {
             },
             "usage": { "input_tokens": 310, "output_tokens": 20 }
         }"#;
-        let answers = answers_from(200, &HeaderMap::new(), body, &ids(&["p1", "overall"])).unwrap();
+        let answers = answers_from(200, &HeaderMap::new(), body, &ids(&["p1", "overall"]), &BTreeSet::new()).unwrap();
         assert_eq!(answers.answers, BTreeMap::from([("overall".to_string(), 0.0), ("p1".to_string(), 0.92)]));
         assert_eq!(
             serde_json::to_value(&answers).unwrap(),
             json!({ "answers": { "overall": 0.0, "p1": 0.92 }, "model": "jev-1.13.0" })
         );
+        // A second opinion asks no Score, so its answer has no levels key at all.
+        assert_eq!(serde_json::to_string(&answers).unwrap(), r#"{"answers":{"overall":0.0,"p1":0.92},"model":"jev-1.13.0"}"#);
+    }
+
+    /// TypeSafe's documented Score answer, with the levels it echoes back.
+    const SCORE_ANSWER: &str = r#"{"type":"score","score":1.43,"confidence":0.35,"legend":{"0":"routine","1":"needs judgment","2":"unusual or high-stakes"},"probabilities":{"0":0.0,"1":0.57,"2":0.43}}"#;
+
+    /// A reply to `route(2, true)`, with this answer for `difficulty`.
+    fn route_reply(difficulty: &str) -> String {
+        format!(
+            r#"{{"model":"jev-1.13.0","answers":{{"m1":{{"type":"noul","noul":0.91,"explanation":"same work"}},"m2":{{"type":"noul","noul":0.12}},"difficulty":{difficulty}}},"usage":{{"input_tokens":410}}}}"#
+        )
+    }
+
+    #[test]
+    fn a_routes_score_comes_back_as_its_three_levels_beside_the_nouls() {
+        let asked = ids(&["difficulty", "m1", "m2"]);
+        let answers = answers_from(200, &HeaderMap::new(), route_reply(SCORE_ANSWER).as_bytes(), &asked, &ids(&["difficulty"])).unwrap();
+        assert_eq!(answers.answers, BTreeMap::from([("m1".to_string(), 0.91), ("m2".to_string(), 0.12)]));
+        assert_eq!(answers.levels, BTreeMap::from([("difficulty".to_string(), [0.0, 0.57, 0.43])]));
+        assert_eq!(
+            serde_json::to_value(&answers).unwrap(),
+            json!({ "answers": { "m1": 0.91, "m2": 0.12 }, "levels": { "difficulty": [0.0, 0.57, 0.43] }, "model": "jev-1.13.0" })
+        );
+        // Nothing TypeSafe wrote beside the numbers reaches the web view.
+        let sent = serde_json::to_string(&answers).unwrap();
+        for text in ["routine", "judgment", "1.43", "0.35", "same work"] {
+            assert!(!sent.contains(text), "{text} in {sent}");
+        }
+    }
+
+    #[test]
+    fn levels_rounded_to_two_decimals_are_accepted() {
+        let asked = ids(&["difficulty", "m1", "m2"]);
+        let thirds = r#"{"type":"score","probabilities":{"0":0.33,"1":0.33,"2":0.33}}"#;
+        let answers = answers_from(200, &HeaderMap::new(), route_reply(thirds).as_bytes(), &asked, &ids(&["difficulty"])).unwrap();
+        assert_eq!(answers.levels["difficulty"], [0.33, 0.33, 0.33]);
+        let certain = r#"{"type":"score","probabilities":{"0":1,"1":0,"2":0}}"#;
+        let answers = answers_from(200, &HeaderMap::new(), route_reply(certain).as_bytes(), &asked, &ids(&["difficulty"])).unwrap();
+        assert_eq!(answers.levels["difficulty"], [1.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn a_route_answer_out_of_shape_is_other() {
+        let asked = ids(&["difficulty", "m1", "m2"]);
+        let scores = ids(&["difficulty"]);
+        let malformed = JevError::of(Kind::Other);
+        let read = |body: &str| answers_from(200, &HeaderMap::new(), body.as_bytes(), &asked, &scores);
+        let with = |probabilities: &str| {
+            route_reply(&format!(r#"{{"type":"score","score":1.0,"confidence":0.5,"probabilities":{probabilities}}}"#))
+        };
+        let refused = [
+            ("a missing level", with(r#"{"0":0.5,"1":0.5}"#)),
+            ("an extra level", with(r#"{"0":0.5,"1":0.5,"2":0,"3":0}"#)),
+            ("a level keyed 00", with(r#"{"00":0.5,"1":0.5,"2":0}"#)),
+            ("a level keyed 1.0", with(r#"{"0":0.5,"1.0":0.5,"2":0}"#)),
+            ("probabilities as an array", with("[0.0,0.57,0.43]")),
+            ("probabilities as a number", with("1")),
+            ("a level as text", with(r#"{"0":"1","1":0,"2":0}"#)),
+            ("a level over 1", with(r#"{"0":1.01,"1":0,"2":-0.01}"#)),
+            ("a level under 0", with(r#"{"0":-0.5,"1":0.5,"2":1}"#)),
+            ("a level written 1e999", with(r#"{"0":1e999,"1":0,"2":0}"#)),
+            ("levels summing to 0", with(r#"{"0":0,"1":0,"2":0}"#)),
+            ("levels summing to 0.9", with(r#"{"0":0.3,"1":0.3,"2":0.3}"#)),
+            ("levels summing to 3", with(r#"{"0":1,"1":1,"2":1}"#)),
+            ("a score with no probabilities", route_reply(r#"{"type":"score","score":1.0,"confidence":0.5}"#)),
+            ("a noul answer for difficulty", route_reply(r#"{"type":"noul","noul":0.5}"#)),
+            ("a choice answer for difficulty", route_reply(r#"{"type":"choice","choice":"routine"}"#)),
+            (
+                "a score answer for a noul id",
+                format!(r#"{{"answers":{{"m1":{SCORE_ANSWER},"m2":{{"type":"noul","noul":0.12}},"difficulty":{SCORE_ANSWER}}}}}"#),
+            ),
+            ("a missing difficulty answer", r#"{"answers":{"m1":{"type":"noul","noul":0.9},"m2":{"type":"noul","noul":0.1}}}"#.to_string()),
+        ];
+        for (what, body) in refused {
+            assert_eq!(read(&body).unwrap_err(), malformed, "{what}");
+        }
+
+        // A route that asked no difficulty gets none back.
+        let unasked = answers_from(200, &HeaderMap::new(), route_reply(SCORE_ANSWER).as_bytes(), &ids(&["m1", "m2"]), &BTreeSet::new());
+        assert_eq!(unasked.unwrap_err(), malformed, "a difficulty answer to a route that asked none");
     }
 
     #[test]
@@ -1219,7 +1547,7 @@ mod tests {
             let body = format!(
                 r#"{{"answers":{{"p1":{{"type":"noul","noul":0.5}},"t1":{{"type":"noul","noul":0.4}},"overall":{{"type":"noul","noul":0.6}}}}{model}}}"#
             );
-            answers_from(200, &HeaderMap::new(), body.as_bytes(), &asked).expect("the ask succeeds").model
+            answers_from(200, &HeaderMap::new(), body.as_bytes(), &asked, &BTreeSet::new()).expect("the ask succeeds").model
         };
         assert_eq!(model_of(r#","model":"jev-1.13.2""#), "jev-1.13.2");
         assert_eq!(model_of(r#","model":"jev:1.14/beta+2_rc.1-a""#), "jev:1.14/beta+2_rc.1-a");
@@ -1247,7 +1575,7 @@ mod tests {
         let asked = ids(&["L002"]);
         for model in [r#""model":"jev-1.13.0","#, r#""model":"not a model id!","#, r#""model":[1,2],"#, ""] {
             let body = format!(r#"{{{model}"answers":{{"L002":{{"type":"noul","noul":0.9}}}}}}"#);
-            let answers = answers_from(200, &HeaderMap::new(), body.as_bytes(), &asked).expect(model);
+            let answers = answers_from(200, &HeaderMap::new(), body.as_bytes(), &asked, &BTreeSet::new()).expect(model);
             assert_eq!(answers.answers, BTreeMap::from([("L002".to_string(), 0.9)]));
         }
     }
@@ -1255,7 +1583,7 @@ mod tests {
     #[test]
     fn an_answer_outside_zero_to_one_or_for_an_unknown_id_is_other() {
         let asked = ids(&["p1"]);
-        let other = |body: &str| answers_from(200, &HeaderMap::new(), body.as_bytes(), &asked).unwrap_err();
+        let other = |body: &str| answers_from(200, &HeaderMap::new(), body.as_bytes(), &asked, &BTreeSet::new()).unwrap_err();
         let malformed = JevError::of(Kind::Other);
         assert_eq!(other(r#"{"answers":{"p1":{"type":"noul","noul":1.01}}}"#), malformed);
         assert_eq!(other(r#"{"answers":{"p1":{"type":"noul","noul":-0.01}}}"#), malformed);
@@ -1543,6 +1871,177 @@ mod tests {
         assert!(r.jev.prepare(&r.file, opinion_for_budget(126_535, true)).is_ok());
         assert_eq!(kind(r.jev.prepare(&r.file, opinion_for_budget(126_536, true))), Kind::TooLong);
         assert!(r.jev.prepare(&r.file, opinion_for_budget(126_536, false)).is_ok());
+    }
+
+    // Routes (router KTD1, KTD3, KTD7)
+
+    #[test]
+    fn a_route_is_prepared_and_sends_only_state_model_and_questions() {
+        let r = rig_on();
+        let request = route(2, true);
+        let prepared = r.jev.prepare(&r.file, request.clone()).unwrap();
+        assert_eq!(r.store.reads(), 1);
+        assert_eq!(prepared.ask.ids(), ids(&["difficulty", "m1", "m2"]));
+        assert_eq!(prepared.ask.score_ids(), ids(&["difficulty"]));
+        let body = prepared.ask.body();
+        let fields: BTreeSet<&str> = body.as_object().unwrap().keys().map(|k| k.as_str()).collect();
+        assert_eq!(fields, BTreeSet::from(["model", "questions", "state"]));
+        assert_eq!(body["model"], MODEL);
+        assert_eq!(body["state"], json!({ "job": "Fix the flaky login test." }));
+        assert_eq!(body["questions"], request["questions"]);
+
+        let alone = r.jev.prepare(&r.file, route(1, false)).unwrap();
+        assert_eq!(alone.ask.ids(), ids(&["m1"]));
+        assert!(alone.ask.score_ids().is_empty());
+        assert_eq!(alone.ask.body()["questions"], route(1, false)["questions"]);
+    }
+
+    #[test]
+    fn only_a_route_has_score_ids() {
+        assert!(Ask::parse(opinion_with_examples()).unwrap().score_ids().is_empty());
+        assert!(Ask::parse(line_breaks(&["L002", "L003"])).unwrap().score_ids().is_empty());
+    }
+
+    #[test]
+    fn difficulty_text_at_its_largest_is_accepted_counting_code_points() {
+        let r = rig_on();
+        let longest = format!("{}😀", "a".repeat(MAX_DIFFICULTY_CHARS - 1));
+        let mut request = route(1, true);
+        request["questions"]["difficulty"]["instructions"] = json!(longest);
+        request["questions"]["difficulty"]["criteria"] = json!([longest, longest, longest]);
+        assert!(r.jev.prepare(&r.file, request).is_ok());
+    }
+
+    #[test]
+    fn malformed_routes_are_refused_before_the_key_read() {
+        let r = rig_on();
+        assert!(Ask::parse(route(2, true)).is_ok(), "each row changes one thing in a route that is accepted");
+        let base = || route(2, true);
+        let changed = |change: &dyn Fn(&mut Value)| {
+            let mut request = base();
+            change(&mut request);
+            request
+        };
+        let over = "a".repeat(MAX_DIFFICULTY_CHARS + 1);
+        let score = json!({ "type": "score", "instructions": "How demanding?", "criteria": ["a", "b", "c"] });
+
+        let mut refused = vec![
+            // The ask and its state.
+            ("a model field", changed(&|q| q["model"] = json!("jev-latest"))),
+            ("state as a string", changed(&|q| q["state"] = json!("Fix the flaky login test."))),
+            ("state.job as an object", changed(&|q| q["state"]["job"] = json!({ "text": "Fix it" }))),
+            ("an extra state field", changed(&|q| q["state"]["badges"] = json!(["Badge 1"]))),
+            ("no state", changed(&|q| _ = q.as_object_mut().unwrap().remove("state"))),
+            // Question types.
+            ("a score under m1", changed(&|q| q["questions"]["m1"] = difficulty_question())),
+            ("a noul under difficulty", changed(&|q| q["questions"]["difficulty"] = match_question(3))),
+            ("choice under m1", changed(&|q| q["questions"]["m1"]["type"] = json!("choice"))),
+            ("choice under difficulty", changed(&|q| q["questions"]["difficulty"]["type"] = json!("choice"))),
+            ("a match with no type", changed(&|q| _ = q["questions"]["m1"].as_object_mut().unwrap().remove("type"))),
+            (
+                "a difficulty with no type",
+                changed(&|q| _ = q["questions"]["difficulty"].as_object_mut().unwrap().remove("type")),
+            ),
+            // The difficulty question.
+            ("two levels", changed(&|q| q["questions"]["difficulty"]["criteria"] = json!(["routine", "unusual"]))),
+            ("four levels", changed(&|q| q["questions"]["difficulty"]["criteria"] = json!(["a", "b", "c", "d"]))),
+            (
+                "a difficulty with no criteria",
+                changed(&|q| _ = q["questions"]["difficulty"].as_object_mut().unwrap().remove("criteria")),
+            ),
+            (
+                "structured levels",
+                changed(&|q| {
+                    q["questions"]["difficulty"]["criteria"] = json!([{ "what": "routine" }, { "what": "judgment" }, { "what": "unusual" }])
+                }),
+            ),
+            (
+                "criteria as true and false on the difficulty",
+                changed(&|q| q["questions"]["difficulty"]["criteria"] = json!({ "true": "hard", "false": "easy" })),
+            ),
+            (
+                "structured difficulty instructions",
+                changed(&|q| q["questions"]["difficulty"]["instructions"] = json!({ "question": "How demanding?" })),
+            ),
+            ("a level over 300 characters", changed(&|q| q["questions"]["difficulty"]["criteria"][1] = json!(over))),
+            ("difficulty instructions over 300 characters", changed(&|q| q["questions"]["difficulty"]["instructions"] = json!(over))),
+            ("an extra difficulty field", changed(&|q| q["questions"]["difficulty"]["weight"] = json!(2))),
+            // A match question.
+            ("a rubric in the badge", changed(&|q| q["questions"]["m1"]["instructions"]["badge"]["rubric"] = json!("- Names the bug"))),
+            ("an extra badge field", changed(&|q| q["questions"]["m1"]["instructions"]["badge"]["holders"] = json!(["Claude Code"]))),
+            (
+                "a badge with no learning_targets",
+                changed(&|q| _ = q["questions"]["m1"]["instructions"]["badge"].as_object_mut().unwrap().remove("learning_targets")),
+            ),
+            ("an extra question field", changed(&|q| q["questions"]["m1"]["weight"] = json!(2))),
+            ("a point in a match's instructions", changed(&|q| q["questions"]["m1"]["instructions"]["point"] = json!("Names the bug"))),
+            ("a target in a match's instructions", changed(&|q| q["questions"]["m1"]["instructions"]["target"] = json!("I can find a bug"))),
+            ("rubric_notes in a match's instructions", changed(&|q| q["questions"]["m1"]["instructions"]["rubric_notes"] = json!("x"))),
+            ("text instructions on a match", changed(&|q| q["questions"]["m1"]["instructions"] = json!("Is the job like Badge 1?"))),
+            (
+                "structured criteria with examples on a match",
+                changed(&|q| q["questions"]["m1"]["criteria"]["true"] = side(vec![example("I fixed the test.", None)])),
+            ),
+            // Ids.
+            ("m1 and m3, a gap", rekeyed(base(), "m2", "m3")),
+            ("m0", rekeyed(route(1, true), "m1", "m0")),
+            ("m01", rekeyed(route(1, true), "m1", "m01")),
+            ("M1", rekeyed(route(1, true), "m1", "M1")),
+            ("\"m1 \"", rekeyed(route(1, true), "m1", "m1 ")),
+            ("a1", rekeyed(route(1, true), "m1", "a1")),
+            ("an unknown key", changed(&|q| q["questions"]["overall"] = match_question(3))),
+            ("a route with no match question", route(0, true)),
+            ("a route with no questions", route(0, false)),
+            // A Score anywhere but a route's difficulty.
+            ("a score in a second opinion", {
+                let mut o = opinion(1);
+                o["questions"]["overall"] = score.clone();
+                o
+            }),
+            ("a score in a cleanup", {
+                let mut l = line_breaks(&["L002"]);
+                l["questions"]["L002"] = score.clone();
+                l
+            }),
+        ];
+        let mut difficulty_in_opinion = opinion(1);
+        difficulty_in_opinion["questions"]["difficulty"] = difficulty_question();
+        refused.push(("a difficulty question in a second opinion", difficulty_in_opinion));
+
+        for (what, request) in refused {
+            assert_eq!(kind(r.jev.prepare(&r.file, request)), Kind::Other, "{what}");
+        }
+        assert_eq!(r.store.reads(), 0);
+    }
+
+    #[test]
+    fn over_budget_routes_are_refused_before_the_key_read() {
+        let r = rig_on();
+        assert_eq!(kind(r.jev.prepare(&r.file, route(MAX_QUESTIONS + 1, false))), Kind::TooLong, "too many match questions");
+        assert_eq!(kind(r.jev.prepare(&r.file, route(MAX_QUESTIONS, true))), Kind::TooLong, "too many with difficulty");
+
+        // The job beside one question over 32k tokens (128k characters).
+        let mut long_job = route(1, false);
+        long_job["state"]["job"] = json!("x".repeat(4 * STATE_PLUS_LONGEST_TOKENS));
+        assert_eq!(kind(r.jev.prepare(&r.file, long_job)), Kind::TooLong, "a job too long with one question");
+        assert_eq!(r.store.reads(), 0);
+
+        // At the cap, with difficulty counted among the questions, the ask goes ahead.
+        assert!(r.jev.prepare(&r.file, route(MAX_QUESTIONS - 1, true)).is_ok());
+
+        // The web view's budget test refuses this same route at the same job length
+        // (`route` in src/domain/jevBudget.test.ts).
+        let Ask::Route(asked) = Ask::parse(route(1, true)).unwrap() else {
+            panic!("a route");
+        };
+        assert_eq!(tokens(&asked.questions["m1"]), 108);
+        let with_job = |chars: usize| {
+            let mut request = route(1, true);
+            request["state"]["job"] = json!("x".repeat(chars));
+            request
+        };
+        assert!(r.jev.prepare(&r.file, with_job(127_558)).is_ok());
+        assert_eq!(kind(r.jev.prepare(&r.file, with_job(127_559))), Kind::TooLong);
     }
 
     #[test]

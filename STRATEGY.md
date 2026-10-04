@@ -11,7 +11,7 @@ People hand work to agents before deciding what it should accomplish. The output
 
 ## Positioning
 
-Andamio Desktop is hands-on software with no AI inside, the way an Elektron box is hands-on next to a DAW. The one exception is Jev Mode, off unless you turn it on with your own TypeSafe key: it gives a second opinion on a reply, and cleans up a terminal copy, only when you ask. You define what the work should accomplish before you hand it to an agent, turn the dials on the setup and judge each result yourself. Taking that time gets better results. Every test runs on a full credential that an agent or a person could hold, so the record shows what succeeds at the work that matters to you.
+Andamio Desktop is hands-on software with no AI inside, the way an Elektron box is hands-on next to a DAW. The one exception is Jev Mode, off unless you turn it on with your own TypeSafe key: it gives a second opinion on a reply, cleans up a terminal copy, and says which badge a new job is like, only when you ask. You define what the work should accomplish before you hand it to an agent, turn the dials on the setup and judge each result yourself. Taking that time gets better results. Every test runs on a full credential that an agent or a person could hold, so the record shows what succeeds at the work that matters to you.
 
 ## Users
 

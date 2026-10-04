@@ -262,6 +262,50 @@ describe("CredentialDeck", () => {
     expect(state.credentials.map((c) => c.name).sort()).toEqual(["Code review", "Write docs"]);
   });
 
+  describe("made from a job the router matched to no badge (router R12, KTD14)", () => {
+    const JOB = "Add a reversible migration for the users table";
+    const fromJob = { view: "deck", deck: "credential", fromJob: { task: JOB, router: { job: JOB, picked: "none" } } } as const;
+
+    it("Covers AE4 (prefill). starts on its name with no Where to start, the job as its task, and saves it", async () => {
+      const storage = storageWith();
+      renderApp(storage, fromJob);
+      expect(await screen.findByRole("heading", { name: "What is it called" })).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "Build your own" })).toBeNull();
+      await userEvent.type(screen.getByRole("textbox", { name: "Name" }), "Write a migration");
+      await userEvent.click(screen.getByRole("button", { name: "Next" }));
+      await userEvent.type(screen.getByRole("textbox", { name: "New learning target" }), "I can write a reversible migration");
+      await userEvent.click(screen.getByRole("button", { name: "Next" }));
+      expect((screen.getByRole("textbox", { name: "Task" }) as HTMLTextAreaElement).value).toBe(JOB);
+      await userEvent.click(screen.getByRole("button", { name: "Make the badge" }));
+      await screen.findByRole("button", { name: "Test it on an agent" });
+      expect((await loadFolder(storage)).credentials.map((c) => [c.name, c.task])).toEqual([["Write a migration", JOB]]);
+    });
+
+    it("counts the job as unsaved, so Escape on the task pane steps back and never leaves", async () => {
+      renderApp(storageWith(), fromJob);
+      await userEvent.type(await screen.findByRole("textbox", { name: "Name" }), "Write a migration");
+      await userEvent.click(screen.getByRole("button", { name: "Next" }));
+      await userEvent.type(screen.getByRole("textbox", { name: "New learning target" }), "I can write it");
+      await userEvent.click(screen.getByRole("button", { name: "Next" }));
+      expect(screen.getByRole("heading", { name: "The task" })).toBeTruthy();
+      await userEvent.keyboard("{Escape}");
+      await userEvent.keyboard("{Escape}");
+      await userEvent.keyboard("{Escape}");
+      expect(createDeck()).toBeTruthy();
+    });
+
+    it("Close goes back to the router's card with the job", async () => {
+      renderApp(storageWith(), fromJob);
+      await screen.findByRole("heading", { name: "What is it called" });
+      await userEvent.click(screen.getByRole("button", { name: "Close" }));
+      expect(await screen.findByRole("region", { name: "Find an agent for a job" })).toBeTruthy();
+      expect(screen.getByRole("heading", { name: "No badge like this job" })).toBeTruthy();
+      // With no badges in the folder, the job card is the only card before it.
+      await userEvent.click(screen.getByRole("button", { name: "Back" }));
+      expect((screen.getByRole("textbox", { name: "Job" }) as HTMLTextAreaElement).value).toBe(JOB);
+    });
+  });
+
   it("a preset made twice gets its own file", async () => {
     const storage = storageWith();
     for (let i = 0; i < 2; i++) {

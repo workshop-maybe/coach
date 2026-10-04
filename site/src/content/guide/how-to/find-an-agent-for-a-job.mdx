@@ -1,0 +1,78 @@
+---
+title: Find an agent for a job
+part: how-to
+order: 57
+description: Paste a new job and get one agent to hand it to, drawn from your own results and the cost order you set.
+---
+
+{/* How to, the router (router R15): the door, the job, matching with and without Jev, the card and its reasons, the step-up, misses, taking an agent, and the cost order. Labels are checked against src/ui/RouterDeck.tsx, src/ui/CostOrderDeck.tsx, src/ui/Home.tsx and src/domain/operations.ts (KTD8). */}
+
+When a new job comes up, the app can tell you which of your agents to hand it to. It finds the badge the job is like, then picks from the agents that hold that badge, using your go-to and the cost order you set. You don't have to guess, and you don't pay for more agent than the job needs.
+
+<Shot id="router-door" alt="Home's three doors: Create an agent, Create a credential, and Find an agent for a job with an empty handoff card drawn on it" />
+
+## Paste the job
+
+1. On home, click <UI>Find an agent for a job</UI>.
+2. Under <UI>The job</UI>, paste the job as you'd hand it to an agent: an issue, a plan, a request for a document or a video.
+3. Click <UI>Next</UI>.
+
+The box takes text. A picture pasted into it is left out.
+
+## With Jev Mode on
+
+The next card is <UI>Ask Jev which badge it's like</UI>. It says what goes before anything is sent: the job, and the name, task and learning targets of each of your badges. A badge's rubric never goes.
+
+<Shot id="router-ask" alt="Ask Jev which badge it's like: Sends the job, and the names, tasks and learning targets of 4 badges, to TypeSafe, with the Ask Jev button and the Pick the badge myself link" />
+
+Click <UI>Ask Jev</UI>. Jev answers two things:
+
+- Whether the job is like each badge, badge by badge. The badge with the strongest yes, at 70% or more, is the match. Any other badge at 70% or more is listed under <UI>Also like:</UI>, and clicking one switches the card to it without asking again.
+- How hard the job is: routine, needs judgment, or unusual or high-stakes.
+
+With many badges, the app asks in several requests, one after another, and uses the answers only once all of them are back. A badge whose task is too long to send beside the job is left out, and the card says how many. If the job itself is too long, the card says <UI>This job is too long for Jev.</UI> before anything is sent.
+
+The job goes without its pictures or videos, but otherwise as written. If it holds keys, passwords or customer details, take them out first, or click <UI>Pick the badge myself</UI>, which sends nothing. [Jev Mode](/help/jev-mode/) lists everything each use sends.
+
+## Without Jev Mode
+
+The next card is <UI>Which badge is it like</UI>. Click the badge, or <UI>None of these</UI>. Nothing is sent, and the job is never rated, so the card never steps up. You can also get here with Jev Mode on, by clicking <UI>Pick the badge myself</UI>.
+
+## The card
+
+The card names one agent, with its setup, and says why.
+
+<Shot id="router-card" alt="The card for Claude Code: its setup, Go-to for Say how sure you are, Met on Sep 26, 2026, Jev rates this job routine, Also like: Check an answer key, and Take Claude Code" />
+
+The agent is chosen from those that hold the badge cleanly: their latest result there is Met, with no <UI>task changed</UI> or <UI>setup changed</UI> flag.
+
+- If the badge's go-to holds it cleanly, the card names the go-to: <UI>Go-to for \{badge\}</UI>. A cheaper agent that also holds it is noted: <UI>\{agent\} also holds this, for less</UI>. [Choose a go-to](/how-to/choose-a-go-to/) explains the go-to.
+- Otherwise it names the cheapest agent that holds it cleanly, by your cost order: <UI>Cheapest agent holding \{badge\}</UI>.
+- When Jev rates the job unusual or high-stakes, the card steps up to the next agent in your cost order that holds the badge cleanly: <UI>Stepped up: Jev rates this job unusual or high-stakes</UI>. When none is above, the pick stands: <UI>Nothing above \{agent\} holds this badge</UI>. When the agents above aren't in your cost order yet, it says <UI>Didn't step up: holders above it aren't in your cost order</UI>.
+
+Below the reason, the card shows when the agent last met the badge, Jev's track record there once it has one, and <UI>Next up: \{agent\}</UI>, the next agent in your cost order that holds the badge.
+
+When several agents hold the badge cleanly, the card shows them all, with the one it picked chosen. Click another to take it instead. The button follows your choice.
+
+Click <UI>Take \{agent\}</UI>. The app saves that you took this agent for this job, and goes home. It doesn't open the agent or send it anything: you hand it the job yourself.
+
+## When nothing fits
+
+- <UI>No badge like this job</UI>: no badge was a match. Click <UI>Make a badge from this job</UI> to make one, with the job already written in as its task. The whole job is saved in the new badge. Close the new badge to go back to the card.
+- <UI>No agent holds \{badge\} yet</UI>: the job is like a badge, but no agent holds it cleanly. An agent whose result there is flagged is named: <UI>\{agent\} needs a re-test: \{flags\}</UI>. Click <UI>Run a bake-off on it</UI> to test your agents on that badge. [Run a bake-off](/how-to/run-a-bake-off/) walks through it.
+
+## Set a cost order
+
+The card picks the cheapest agent from an order you set over your agents. Until you set one, it only names go-tos, and says <UI>Your agents have no cost order yet</UI>.
+
+1. On home, under your agents, click <UI>Order by cost</UI>. A card that says your agents have no cost order yet has the same link.
+2. The card <UI>Cheapest first</UI> lists your agents. Move each one with its arrows, such as <UI>Move \{agent\} up</UI>, until the cheapest is at the top.
+3. Click <UI>Save the order</UI>.
+
+<Shot id="cost-order" alt="Cheapest first: Codex first and Claude Code second, each with its setup and its up and down arrows, and Save the order" />
+
+Home then lists your agents in that order. An agent you add later shows <UI>Not placed yet</UI> on that card, and counts as the most expensive until you place it. Opened from a recommendation, saving takes you back to the same card without asking Jev again.
+
+## What the app keeps
+
+Each time you take an agent, the app saves a small file in your folder: the job's first line, the badge, the agent you took and its setup, and the agent the card picked. The cost order is one file too. Nothing leaves your computer except what Jev Mode sends when you ask. [Your data](/help/your-data/) shows where they live.

@@ -69,6 +69,7 @@ function About() {
       <ul>
         <li>A second opinion sends the reply, the badge's task, rubric and learning targets, and the openings of a few earlier replies on this badge with your notes on them.</li>
         <li>A cleanup sends only the text you pasted.</li>
+        <li>A routing ask sends the job, and the names, tasks and learning targets of your badges.</li>
       </ul>
       <p>
         TypeSafe keeps what it receives under <TermsLink />.

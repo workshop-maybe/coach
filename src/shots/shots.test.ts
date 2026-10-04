@@ -14,7 +14,7 @@ import { COVERAGE, NOT_PICTURED, SAMPLE_IMAGES, SHOTS, routeKind, type Shot } fr
 
 const KEBAB = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
-const DECK_KINDS = ["credential", "agent", "test", "edit-credential", "edit-agent", "handoffs", "edit-handoff", "trash", "jev"];
+const DECK_KINDS = ["credential", "agent", "test", "edit-credential", "edit-agent", "handoffs", "edit-handoff", "trash", "jev", "router", "cost-order"];
 const ITEM_KINDS = ["badge", "agent", "handoff", "reply", "compare"];
 const CREDENTIAL_PARTS = ["name", "targets", "task", "rubric", "look"];
 const AGENT_PARTS = ["name", "repo", "notes", "params"];
@@ -140,7 +140,7 @@ describe("the shot manifest", () => {
       if (!shot.jevAnswers) continue;
       expect(shot.jev, shot.id).toBe("on");
       for (const [id, p] of Object.entries(shot.jevAnswers)) {
-        expect(id, shot.id).toMatch(/^(?:overall|[pt][1-9]\d*)$/);
+        expect(id, shot.id).toMatch(/^(?:overall|[ptm][1-9]\d*)$/);
         expect(p >= 0 && p <= 1, `${shot.id}: ${id}`).toBe(true);
       }
     }
