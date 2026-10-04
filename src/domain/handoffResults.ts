@@ -8,7 +8,7 @@
 // A held reply's reading is the newest of the one it was held with and those taken of it
 // since, in compare (jev-in-compare KTD3).
 
-import { SKELETON_ID, handoffsFor } from "./handoffs";
+import { BUILT_IN_HANDOFF, SKELETON_ID, handoffsFor } from "./handoffs";
 import { cellKey, type Matrix } from "./matrix";
 import { credentialKey, type AgentProfile, type Assessment, type FolderState, type HeldReply, type JevReading, type Slug } from "./types";
 
@@ -56,6 +56,11 @@ export interface BadgeRuns {
   mode: "single" | "multi";
   /** The skeleton first, then the badge's handoffs in creation order; an id with no file comes last. */
   runs: HandoffRun[];
+}
+
+/** The handoff text a take answered, as copied: the built-in skeleton for one recorded before handoffs (jev-in-compare KTD12). */
+export function handoffTextOf(t: Take): string {
+  return t.handoff?.text ?? BUILT_IN_HANDOFF;
 }
 
 /** The handoff a take ran, the skeleton for one recorded before handoffs (R2). A reply view goes back to its take's own run (KTD7). */

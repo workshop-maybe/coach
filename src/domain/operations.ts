@@ -488,6 +488,11 @@ function keptMissedPoints(tapped: readonly string[], rubric: string): string[] {
   return tappedPoints(rubricParts(rubric).points, tapped);
 }
 
+/** Refuses anything but Met or Not met, so no file is written with another verdict. */
+function assertVerdict(result: AssessmentResult): void {
+  if (result !== "met" && result !== "not_met") throw new Error('Choose "met" or "not met" before saving.');
+}
+
 /**
  * Records a result the user chose (R14, R15), stamped with the credential's current
  * assignment version and the profile's current setup (R16). Always a new file, named for
@@ -501,9 +506,7 @@ export async function recordAssessment(
   input: AssessmentInput,
   now: Date = new Date(),
 ): Promise<{ state: FolderState; fileStem: string }> {
-  if (input.result !== "met" && input.result !== "not_met") {
-    throw new Error('Choose "met" or "not met" before saving.');
-  }
+  assertVerdict(input.result);
   const { ids, ...test } = await stampTest(state, input);
   // The credential stampTest hashed, so the rubric is the one at the version stamped.
   const { rubric } = findCredential(state, ids.collectionSlug, ids.credentialSlug);
@@ -569,7 +572,7 @@ export async function judgeHeldReply(
   result: AssessmentResult,
   extras?: VerdictExtras,
 ): Promise<FolderState> {
-  if (result !== "met" && result !== "not_met") throw new Error('Choose "met" or "not met" before saving.');
+  assertVerdict(result);
   findProfile(state, ref.profileSlug);
   const credential = findCredential(state, ref.collectionSlug, ref.credentialSlug);
   const held = heldOf(state, ref.profileSlug, credentialKey(credential), ref.fileStem);
@@ -652,7 +655,7 @@ export async function rejudgeResult(
   extras?: VerdictExtras,
   now: Date = new Date(),
 ): Promise<FolderState> {
-  if (result !== "met" && result !== "not_met") throw new Error('Choose "met" or "not met" before saving.');
+  assertVerdict(result);
   findProfile(state, ref.profileSlug);
   const credential = findCredential(state, ref.collectionSlug, ref.credentialSlug);
   const current = resultOf(state, ref.profileSlug, credentialKey(credential), ref.fileStem);

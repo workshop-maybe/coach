@@ -110,6 +110,7 @@ import type { TestPick } from "./routes";
 import { Missing, StoredSwitch, focusOnMount, useEscape } from "./shared";
 import { describeError, useFolder } from "./useFolderState";
 import { useMatrix } from "./useMatrix";
+import { useAssignmentVersion } from "./useAssignmentVersion";
 import { useRichImages } from "./useRichImages";
 import { MISSED_POINTS_TITLE, MissedPointsList, REASON_TITLE, ReasonBody } from "./verdictSteps";
 
@@ -196,7 +197,6 @@ export function TestDeck(props: TestDeckProps) {
   // The handoff that ran before "Test another agent", lit for the next agent on the same badge (hold-and-compare KTD9).
   const [carried, setCarried] = useState<{ key: string; id: string } | null>(null);
   const [recording, setRecording] = useState(false);
-  const [version, setVersion] = useState<string | null>(null);
   // The machine's screen through Copy: dots out, then the cursor waits.
   const [sending, setSending] = useState(false);
   // A failed Copy again, shown on the card as the deck shows its own errors.
@@ -240,6 +240,8 @@ export function TestDeck(props: TestDeckProps) {
 
   const profile = state?.profiles.find((p) => p.slug === profileSlug);
   const credential = state?.credentials.find((c) => credentialKey(c) === key);
+  // The credential's current assignment version, to tell whether a copied prompt is stale.
+  const version = useAssignmentVersion(credential);
   const collectionOf = (c: Credential) => state?.collections.find((x) => x.slug === c.collectionSlug);
   const waiting = pending.find((p) => p.profileSlug === profileSlug && p.credentialKey === key);
   // A pasted image goes in the folder the result will be recorded in. Picking another agent
@@ -280,16 +282,6 @@ export function TestDeck(props: TestDeckProps) {
       cleanGen.current++;
     };
   }, []);
-
-  // The credential's current assignment version, to tell whether a copied prompt is stale.
-  useEffect(() => {
-    let live = true;
-    setVersion(null);
-    if (credential) void assignmentVersion(credential.task, credential.rubric).then((v) => live && setVersion(v));
-    return () => {
-      live = false;
-    };
-  }, [credential?.task, credential?.rubric]);
 
   const home = () => navigate({ view: "home" });
   // Where a finished test goes: home, or back to the test this pull held up (AE5).

@@ -7,15 +7,12 @@
 // decides what a verdict does: save it at once, or open the verdict step first when it goes
 // against Jev's reading (JudgeStep.tsx). One write at a time per view: while one saves, every
 // action is disabled and the view's Escape waits (savingNow), and a failure shows once. After
-// a save the caller moves the focus off the pressed button, which is gone by then. Both views
-// also work out the badge's current version here, once per task and rubric, to choose a held
-// reply's reading with it.
+// a save the caller moves the focus off the pressed button, which is gone by then.
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { isHeld, type Take } from "../domain/handoffResults";
-import { assignmentVersion } from "../domain/hash";
 import { judgeHeldReply, markGoTo, rejudgeResult, type VerdictExtras } from "../domain/operations";
-import type { AssessmentResult, Credential, FolderState } from "../domain/types";
+import type { AssessmentResult, FolderState } from "../domain/types";
 import { focusOnMount } from "./shared";
 import { describeError, useFolder } from "./useFolderState";
 
@@ -83,23 +80,6 @@ export function useTakeWrites(onSaved?: (take: Take) => void) {
 
 /** A view's writes, as `useTakeWrites` gives them. */
 export type TakeWrites = ReturnType<typeof useTakeWrites>;
-
-/**
- * The badge's current assignment version, worked out once per task and rubric as the test
- * deck does, or null until it has been. A view picks a held reply's reading with it.
- */
-export function useAssignmentVersion(credential: Credential | undefined): string | null {
-  const [version, setVersion] = useState<string | null>(null);
-  useEffect(() => {
-    let live = true;
-    setVersion(null);
-    if (credential) void assignmentVersion(credential.task, credential.rubric).then((v) => live && setVersion(v));
-    return () => {
-      live = false;
-    };
-  }, [credential?.task, credential?.rubric]); // eslint-disable-line react-hooks/exhaustive-deps
-  return version;
-}
 
 /** Whether a Met take offers Make go-to, already is the go-to's marked result, or offers nothing. */
 export type GoToOffer = "offer" | "is" | null;

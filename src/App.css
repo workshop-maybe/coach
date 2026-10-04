@@ -2888,6 +2888,20 @@ button:focus-visible {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: repeat(2, minmax(0, 1fr));
   }
+
+  /* Stacked, the grid takes less height, and a reply with its verdict step open takes two
+     thirds of what is left, so the step and a few lines of the reply fit together. */
+  .compare-grid {
+    max-height: 25vh;
+  }
+
+  .compare-panes:has(> :first-child > .judge-step) {
+    grid-template-rows: minmax(0, 2fr) minmax(0, 1fr);
+  }
+
+  .compare-panes:has(> :last-child > .judge-step) {
+    grid-template-rows: minmax(0, 1fr) minmax(0, 2fr);
+  }
 }
 
 /* Edit decks: lines that settle above the next, a live badge preview, palette swatches. */

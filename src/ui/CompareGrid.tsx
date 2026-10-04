@@ -18,24 +18,19 @@
 
 import { useLayoutEffect, useRef } from "react";
 import { calibrationOf, callOf, type CutOffs } from "../domain/calls";
-import { currentHeadToHead, currentReadingOf, marksOf } from "../domain/compareJev";
+import { currentHeadToHead, currentReadingOf, marksOf, type CompareTake } from "../domain/compareJev";
 import type { Take } from "../domain/handoffResults";
 import { rubricParts, targetsToSend } from "../domain/secondOpinion";
 import type { AgentProfile, Credential, FolderState, JevReading } from "../domain/types";
-import { setupText, takeWhen } from "./format";
+import { listNames, setupText, takeWhen } from "./format";
 import { CALL_WORDS, percent } from "./JevReading";
 import { Verdict } from "./shared";
 
 /** One reply in the compare, in strip order. */
-export interface CompareColumn {
-  /** The take's id (`takeIdOf`). */
-  id: string;
+export interface CompareColumn extends CompareTake {
   profile: AgentProfile;
-  take: Take;
   /** When it came back, with its time when another take by the agent in the compare shares its date. */
   when: string;
-  /** The column's name in marks and lines: the agent's, with `when` after it when the agent has two takes in the compare. */
-  name: string;
 }
 
 /** The compare's replies as columns, each named as the grid's marks name it. */
@@ -131,9 +126,11 @@ export interface CompareGridData {
  */
 export function compareGridOf(state: FolderState, key: string, credential: Credential, version: string, columns: readonly CompareColumn[]): CompareGridData | null {
   const readings = new Map<string, ColumnReading>();
+  const pairs = new Map<string, CutOffs>();
+  const pairFor = (model: string) => pairs.get(model) ?? pairs.set(model, calibrationOf(state, key, model).pair).get(model)!;
   for (const c of columns) {
     const reading = currentReadingOf(state, c.take, version);
-    if (reading) readings.set(c.id, { reading, pair: calibrationOf(state, key, reading.model).pair });
+    if (reading) readings.set(c.id, { reading, pair: pairFor(reading.model) });
   }
   const anyReading = readings.size > 0;
   const anyPair = columns.some((a, i) => columns.slice(i + 1).some((b) => currentHeadToHead(state, key, a.take, b.take, version) !== undefined));
@@ -147,10 +144,6 @@ export function compareGridOf(state: FolderState, key: string, credential: Crede
   };
 }
 
-/** Names as one phrase: "A", "A and B", "A, B and C". */
-function phrase(names: readonly string[]): string {
-  return names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
-}
 
 /** One cell: the call and its percent where the reading holds the row, then the head-to-head mark. */
 function Cell({ probability, pair, better }: { probability?: number; pair?: CutOffs; better: readonly string[] }) {
@@ -166,7 +159,7 @@ function Cell({ probability, pair, better }: { probability?: number; pair?: CutO
         </span>
       )}
       {read && better.length > 0 && " "}
-      {better.length > 0 && <span className="compare-grid-mark">{`Better than ${phrase(better)}`}</span>}
+      {better.length > 0 && <span className="compare-grid-mark">{`Better than ${listNames(better)}`}</span>}
     </td>
   );
 }

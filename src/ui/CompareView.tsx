@@ -44,8 +44,8 @@
 
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { goToOf } from "../domain/goTo";
-import { isHeld, readingOfTake, runIdOf, type Take } from "../domain/handoffResults";
-import { BUILT_IN_HANDOFF, SKELETON_ID } from "../domain/handoffs";
+import { handoffTextOf, isHeld, readingOfTake, runIdOf, type Take } from "../domain/handoffResults";
+import { SKELETON_ID } from "../domain/handoffs";
 import { rubricParts } from "../domain/secondOpinion";
 import { credentialKey, type AgentProfile } from "../domain/types";
 import { CompareGrid, CompareStrip, columnsOf, compareGridOf, type CompareColumn } from "./CompareGrid";
@@ -59,7 +59,8 @@ import { RichView } from "./RichView";
 import { SavedReading } from "./JevReading";
 import type { TakeRef } from "./routes";
 import { Missing, StoredSwitch, TakeBar, useEscape } from "./shared";
-import { TakeActions, useAssignmentVersion, useTakeWrites, type GoToOffer } from "./takeActions";
+import { TakeActions, useTakeWrites, type GoToOffer } from "./takeActions";
+import { useAssignmentVersion } from "./useAssignmentVersion";
 import { useCompareJev } from "./useCompareJev";
 import { useFolder } from "./useFolderState";
 import { useMatrix } from "./useMatrix";
@@ -80,7 +81,6 @@ function openPair(chosen: readonly (string | null)[], strip: readonly Entry[]): 
 }
 
 /** The handoff text a take answered, exactly as saved: the filled text, or the built-in skeleton before handoffs. */
-const textOf = (t: Take) => t.handoff?.text ?? BUILT_IN_HANDOFF;
 
 export function CompareView({ credentialKey: key, takes, picks }: { credentialKey: string; takes: TakeRef[]; picks?: TakeRef[] }) {
   const { state, storage } = useFolder();
@@ -186,10 +186,10 @@ export function CompareView({ credentialKey: key, takes, picks }: { credentialKe
   const chipsWait = writes.saving && !jev.running;
 
   // The handoff texts the takes answered, numbered in strip order of first appearance (KTD12).
-  const texts = [...new Set(strip.map((e) => textOf(e.take)))];
+  const texts = [...new Set(strip.map((e) => handoffTextOf(e.take)))];
   const foldName = (t: Take) => {
     const name = handoffText(state, key, t.handoff?.id);
-    return texts.length > 1 ? `${name}, text ${texts.indexOf(textOf(t)) + 1} of ${texts.length}` : name;
+    return texts.length > 1 ? `${name}, text ${texts.indexOf(handoffTextOf(t)) + 1} of ${texts.length}` : name;
   };
   const run = runIdOf(strip[0].take);
   const differ =
@@ -254,7 +254,7 @@ export function CompareView({ credentialKey: key, takes, picks }: { credentialKe
               {!step && (
                 <details className="reply-ran">
                   <summary>{foldName(a)}</summary>
-                  <pre className="handback">{textOf(a)}</pre>
+                  <pre className="handback">{handoffTextOf(a)}</pre>
                 </details>
               )}
               {step ? (

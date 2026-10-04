@@ -21,8 +21,7 @@
 // read from the agent's results folder for the badge, where the result it becomes sits.
 
 import { useId, useState } from "react";
-import { isHeld, readingOfTake, takeTime } from "../domain/handoffResults";
-import { BUILT_IN_HANDOFF } from "../domain/handoffs";
+import { handoffTextOf, isHeld, readingOfTake, takeTime } from "../domain/handoffResults";
 import { rubricParts } from "../domain/secondOpinion";
 import { credentialKey } from "../domain/types";
 import { formatDate, handoffText } from "./format";
@@ -35,7 +34,8 @@ import { backFromReply, takeIdOf, takeOf } from "./replyRoute";
 import { RichView } from "./RichView";
 import type { TakeRef } from "./routes";
 import { Missing, StoredSwitch, TakeBar, useEscape } from "./shared";
-import { TakeActions, useAssignmentVersion, useTakeWrites } from "./takeActions";
+import { TakeActions, useTakeWrites } from "./takeActions";
+import { useAssignmentVersion } from "./useAssignmentVersion";
 import { useFolder } from "./useFolderState";
 import { useMatrix } from "./useMatrix";
 
@@ -112,7 +112,7 @@ export function ReplyView({ credentialKey: key, take, picks }: { credentialKey: 
       {reading && <SavedReading reading={reading} credentialKey={key} hasVerdict={!isHeld(a)} />}
       <details className="reply-ran">
         <summary>{handoffText(state, key, a.handoff?.id)}</summary>
-        <pre className="handback">{a.handoff?.text ?? BUILT_IN_HANDOFF}</pre>
+        <pre className="handback">{handoffTextOf(a)}</pre>
       </details>
     </section>
   );

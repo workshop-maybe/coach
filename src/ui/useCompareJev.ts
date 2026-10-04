@@ -88,13 +88,14 @@ export function useCompareJev({ key, credential, version, takes, exclusive }: Co
   );
 
   // The takes are read from the folder state, so its identity, their ids and names decide the plan.
+  // Nothing reads the plan unless Jev is offered, so it is built only then.
+  const offered = jev.usable && !!credential && credential.rubric.trim() !== "";
   const takesKey = takes.map((t) => `${t.id}\n${t.name}`).join("\n\n");
   const plan = useMemo(
-    () => (state && credential && version !== null ? planCompareJev({ state, key, credential, version, takes, skipped }) : null),
-    [state, key, credential, version, takesKey, skipped], // eslint-disable-line react-hooks/exhaustive-deps
+    () => (offered && state && credential && version !== null ? planCompareJev({ state, key, credential, version, takes, skipped }) : null),
+    [offered, state, key, credential, version, takesKey, skipped], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  const offered = jev.usable && !!credential && credential.rubric.trim() !== "";
   const canAsk = offered && version !== null && !!plan && plan.countLine !== null && !hidden;
 
   async function run(): Promise<void> {
