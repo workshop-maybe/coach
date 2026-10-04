@@ -11,7 +11,7 @@ import { checkCriteriaPrompt, refinePrompt, reviewAssignmentPrompt } from "../do
 import type { Mark } from "../domain/types";
 import type { MemoryStorage } from "../storage/memory";
 import { holdersOf, parseParam } from "./EditDecks";
-import { opus, renderApp, result, review, snapshot, storageWith } from "./testFolder";
+import { heldReply, opus, renderApp, result, review, snapshot, storageWith } from "./testFolder";
 
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ writeText: vi.fn() }));
 // ProseMirror typing does not run in jsdom; these flows type into a textarea stand-in.
@@ -133,6 +133,15 @@ describe("BadgeDetail", () => {
     const rows = within(replies).getAllByRole("listitem");
     expect(rows.map((li) => li.getAttribute("aria-label")).sort()).toEqual(["Codex agent", "Opus agent"]);
     expect(within(replies).getByText(/Codex reply/)).toBeTruthy();
+  });
+
+  it("Covers AE2. A badge whose only reply is held shows it under Replies, marked Held, and its agent holds nothing", async () => {
+    renderApp(storageWith({ credentials: [review], profiles: [opus, codex], held: [await heldReply(codex, review, { handBack: "Held reply" })] }), badge);
+    const replies = await screen.findByRole("region", { name: "Replies" });
+    const [row] = within(replies).getAllByRole("listitem");
+    expect(row.getAttribute("aria-label")).toBe("Codex agent");
+    expect(row.querySelector(".take-meta")?.textContent).toContain("Held");
+    expect(within(await screen.findByRole("region", { name: "Holders" })).getByText("Nobody holds it yet")).toBeTruthy();
   });
 
   it("an agent's older take sits under its latest one and opens as its own view", async () => {
@@ -284,6 +293,23 @@ describe("BadgeDetail", () => {
       expect(replies.querySelector(".reply")).toBeNull();
       await userEvent.click(rows[1]);
       expect(await screen.findByRole("heading", { name: "Handoff B" })).toBeTruthy();
+    });
+
+    it("a run's row counts the replies still held there, and a handoff with only held replies has its row", async () => {
+      const own = { collectionSlug: "eng", credentialSlug: "review", id: "20260902T090000Z", text: BUILT_IN_HANDOFF.replace("## Task", "Be strict about tests.\n\n## Task") };
+      const storage = storageWith({
+        credentials: [review],
+        profiles: [opus, codex],
+        handoffs: [handoffs[0], own],
+        assessments: [await result(opus, review)],
+        held: [await heldReply(codex, review, { handoff: { id: own.id, text: "B" } }), await heldReply(opus, review, { fileStem: "20260903T090000Z", handoff: { id: own.id, text: "B" } })],
+      });
+      renderApp(storage, badge);
+      const replies = await screen.findByRole("region", { name: "Replies" });
+      const rows = within(replies).getAllByRole("button");
+      expect(rows.map((b) => b.querySelector(".handoff-run-count")?.textContent)).toEqual(["1 agent · 1 met", "2 agents · 0 met · 2 held"]);
+      expect(sideColumn().querySelectorAll("button.primary")).toHaveLength(0);
+      expect(document.querySelectorAll("button.primary")).toHaveLength(1);
     });
 
     it("Covers AE6. Once two handoffs have run, opening a holder opens the handoff that earned it with its row lit", async () => {

@@ -13,7 +13,7 @@ import { AppShell } from "./AppShell";
 import { formatDate } from "./format";
 import { JevProvider } from "./jevContext";
 import type { TakeRef } from "./routes";
-import { FOLDER, opus, renderApp, result, review, storageWith } from "./testFolder";
+import { FOLDER, heldReply, opus, renderApp, result, review, storageWith } from "./testFolder";
 import { FolderProvider } from "./useFolderState";
 
 // Each finished matrix build is noted, so a test can wait for the build of a reloaded folder.
@@ -279,5 +279,64 @@ describe("ReplyView", () => {
     await screen.findByRole("heading", { name: "Opus agent" });
     reloadAfter(() => write(storage, profilePath("opus"), serializeProfile({ ...opus, name: "Opus, renamed" })));
     expect(await screen.findByRole("heading", { name: "Opus, renamed" })).toBeTruthy();
+  });
+});
+
+// A held reply, opened (hold-and-compare R6, KTD3, KTD11).
+describe("ReplyView of a held reply", () => {
+  const heldDay = (n: number) => ({ fileStem: day(n).fileStem, heldAt: day(n).recordedAt });
+
+  async function heldFolder() {
+    const held = await heldReply(codex, review, { ...heldDay(2), handBack: "# Held findings" });
+    return { held, storage: storageWith({ credentials: [review], profiles: [opus, codex], handoffs: [a], held: [held] }) };
+  }
+
+  it("Covers AE2. shows Held with Met and Not yet; Met records a result under the same stem, and the view shows Met", async () => {
+    const { held, storage } = await heldFolder();
+    open(storage, take("codex", 2));
+    const heading = await screen.findByRole("heading", { name: "Codex agent", level: 2 });
+    expect(within(heading.closest<HTMLElement>(".reply-bar")!).getByText("Held")).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Reply" }).querySelector("h1")?.textContent).toBe("Held findings");
+    await userEvent.click(screen.getByRole("button", { name: "Met" }));
+    await waitFor(() => expect(within(heading.closest<HTMLElement>(".reply-bar")!).getByText("Met")).toBeTruthy());
+    expect(storage.file(resultPath({ ...held, result: "met", recordedAt: held.heldAt, note: "" } as Assessment))).toMatch(/^result: met$/m);
+    expect(screen.queryByRole("button", { name: "Not yet" })).toBeNull();
+    // The pressed button is gone; the take's heading has the focus.
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Codex agent", level: 2 }));
+  });
+
+  it("Not yet records Not met", async () => {
+    const { storage } = await heldFolder();
+    open(storage, take("codex", 2));
+    await userEvent.click(await screen.findByRole("button", { name: "Not yet" }));
+    const bar = (await screen.findByRole("heading", { name: "Codex agent", level: 2 })).closest<HTMLElement>(".reply-bar")!;
+    await waitFor(() => expect(within(bar).getByText("Not met")).toBeTruthy());
+  });
+
+  it("a judged result shows no Met or Not yet", async () => {
+    const storage = folder([await result(opus, review, day(1))]);
+    open(storage);
+    await screen.findByRole("heading", { name: "Opus agent" });
+    expect(screen.queryByRole("button", { name: "Met" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Not yet" })).toBeNull();
+  });
+
+  it("a held reply whose agent is removed while open shows Missing", async () => {
+    const { storage } = await heldFolder();
+    open(storage, take("codex", 2));
+    await screen.findByRole("heading", { name: "Codex agent" });
+    reloadAfter(() => storage.remove(profilePath("codex")));
+    expect(await screen.findByRole("heading", { name: "Not in the folder" })).toBeTruthy();
+  });
+
+  it("a failed judgment shows inline and records nothing", async () => {
+    const { held, storage } = await heldFolder();
+    open(storage, take("codex", 2));
+    await screen.findByRole("heading", { name: "Codex agent" });
+    // Something else wrote a file at the result's path since the folder was read.
+    storage.seed({ [assessmentPath("codex", "eng", "review", held.fileStem)]: "someone else's" });
+    await userEvent.click(screen.getByRole("button", { name: "Met" }));
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(storage.file(assessmentPath("codex", "eng", "review", held.fileStem))).toBe("someone else's");
   });
 });

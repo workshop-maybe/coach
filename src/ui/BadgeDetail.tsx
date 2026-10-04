@@ -216,7 +216,7 @@ function RunRow({ state, credentialKey: key, run, onOpen }: { state: FolderState
       <span className="handoff-run-name">{handoffText(state, key, run.id)}</span>
       {own && <span className="handoff-run-line">{own}</span>}
       <span className="handoff-run-count">
-        {agents === 1 ? "1 agent" : `${agents} agents`} · {run.met} met
+        {agents === 1 ? "1 agent" : `${agents} agents`} · {run.met} met{run.held > 0 && ` · ${run.held} held`}
       </span>
     </button>
   );

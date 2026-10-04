@@ -1,13 +1,13 @@
 // Pieces shared by the decks and the opened items: focus on mount, the copy helper, the
-// target check's hint and line move, a part card, the not-found card, a result's verdict,
+// target check's hint and line move, a part card, the not-found card, a take's verdict,
 // display names for a palette and a file, and Escape.
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { PALETTES } from "../badge/palettes";
+import { takeTime, type Take } from "../domain/handoffResults";
 import { checkTarget, type TargetMove } from "../domain/target-check";
-import type { Assessment } from "../domain/types";
-import { formatDate, resultLabel, setupText } from "./format";
+import { formatDate, setupText, takeLabel, takeStateOf } from "./format";
 import { describeError } from "./useFolderState";
 
 /** A stable ref callback that focuses a card's heading once, when it appears. */
@@ -120,9 +120,9 @@ export function Missing({ onHome, label = "Home" }: { onHome(): void; label?: st
   );
 }
 
-/** A result's verdict in words, green when it met. */
-export function Verdict({ result: a }: { result: Assessment }) {
-  return <span className={`verdict verdict-${a.result}`}>{resultLabel(a.result)}</span>;
+/** A take's verdict in words, green when it met, or Held in ink while it has none. */
+export function Verdict({ take }: { take: Take }) {
+  return <span className={`verdict verdict-${takeStateOf(take)}`}>{takeLabel(take)}</span>;
 }
 
 export function paletteName(slug: string | undefined | null): string {
@@ -140,16 +140,34 @@ export function StoredSwitch({ asStored, onToggle, className = "reply-stored" }:
   );
 }
 
-/** A take's record bar: the agent, its setup, the verdict and the date, then what the view adds (R15, R17). */
-export function TakeBar({ name, result: a, focus = false, children }: { name: string; result: Assessment; focus?: boolean; children?: ReactNode }) {
+/**
+ * A take's record bar: the agent, its setup, the verdict (or Held) and when it came back, then
+ * what the view adds (R15, R17). `id` names the heading, so a view can describe its actions by
+ * it and give it the focus back after a save. `when` defaults to the take's date.
+ */
+export function TakeBar({
+  name,
+  take: a,
+  focus = false,
+  id,
+  when,
+  children,
+}: {
+  name: string;
+  take: Take;
+  focus?: boolean;
+  id?: string;
+  when?: string;
+  children?: ReactNode;
+}) {
   return (
     <div className="reply-bar">
-      <h2 tabIndex={-1} ref={focus ? focusOnMount : undefined}>
+      <h2 id={id} tabIndex={-1} ref={focus ? focusOnMount : undefined}>
         {name}
       </h2>
       <span>{setupText(a.setup)}</span>
       <span>
-        <Verdict result={a} /> · {formatDate(a.recordedAt)}
+        <Verdict take={a} /> · {when ?? formatDate(takeTime(a))}
       </span>
       {children}
     </div>

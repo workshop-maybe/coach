@@ -1,19 +1,21 @@
-// One handoff's replies (U2, R6-R11): a row per agent that ran it, Met and Not met alike,
-// its latest reply first with its older takes below. Opening a take goes to its reply view,
-// a full-window item of its own, carrying the list's picks (U5, R15, KTD7). Any two takes
-// can be picked, and Compare opens the two side by side as another full-window item
-// carrying the picks (U9, R17, KTD10). Each comes back with the picks to restore (R16),
-// the reply with its take to light and focus, the compare with Compare focused. Picks are
-// resolved against the run on every render, since a focus reload can take a take away.
+// One handoff's replies (U2, R6-R11): a row per agent that ran it, Met, Not met and Held
+// alike, its latest take first with its older takes below. A held take is a reply saved
+// without a verdict, marked Held (hold-and-compare R4). Opening a take goes to its reply
+// view, a full-window item of its own, carrying the list's picks (U5, R15, KTD7). Any number
+// of takes can be picked, and Compare opens them under a strip, two side by side, as another
+// full-window item carrying the picks in the order they were picked (R8, KTD10). Each comes
+// back with the picks to restore (R16), the reply with its take to light and focus, the
+// compare with Compare focused. Picks are resolved against the run on every render, since
+// a focus reload can take a take away.
 
 import { useEffect, useRef, useState } from "react";
 import { Machine } from "../cast/Machine";
 import { machineKeys } from "../cast/mappings";
 import { contextLine } from "../domain/context";
-import type { AgentReplies, HandoffRun } from "../domain/handoffResults";
+import type { AgentReplies, HandoffRun, Take } from "../domain/handoffResults";
 import type { Matrix } from "../domain/matrix";
-import type { AgentProfile, Assessment, FolderState } from "../domain/types";
-import { contextText, formatDate } from "./format";
+import type { AgentProfile, FolderState } from "../domain/types";
+import { contextText, takeWhen } from "./format";
 import { useNav } from "./nav";
 import type { ReplyListState, TakeRef } from "./routes";
 import { Verdict } from "./shared";
@@ -21,7 +23,7 @@ import { Verdict } from "./shared";
 /** A take's identity: file stems can repeat across agents, so the agent comes with it. */
 type TakeId = string;
 const idOf = (take: TakeRef): TakeId => `${take.profileSlug}/${take.fileStem}`;
-const refOf = (profile: AgentProfile, a: Assessment): TakeRef => ({ profileSlug: profile.slug, fileStem: a.fileStem });
+const refOf = (profile: AgentProfile, t: Take): TakeRef => ({ profileSlug: profile.slug, fileStem: t.fileStem });
 
 /** The opening lines of a reply, for its row. */
 const PREVIEW_LINES = 3;
@@ -50,7 +52,7 @@ export function ReplyList({
 
   // The lit row comes into view once, when the list first shows it, not on every render.
   // Back from a reply, that take's button gets the focus (R16); back from the compare,
-  // Compare does, while both its takes are still here to compare (R17).
+  // Compare does, while at least two of its takes are still here to compare (R17).
   useEffect(() => {
     litRow.current?.scrollIntoView?.({ block: "center" });
     litHead.current?.focus();
@@ -59,40 +61,42 @@ export function ReplyList({
 
   // A folder reload can drop a picked take (its file or agent gone), so picks count only
   // while their take is still in the run.
-  const takes = new Map<TakeId, { profile: AgentProfile; result: Assessment }>();
+  const takes = new Map<TakeId, { profile: AgentProfile; take: Take }>();
   for (const { profile, latest, older } of run.agents) {
-    for (const a of [latest, ...older]) takes.set(idOf(refOf(profile, a)), { profile, result: a });
+    for (const t of [latest, ...older]) takes.set(idOf(refOf(profile, t)), { profile, take: t });
   }
   const live = picked.filter((id) => takes.has(id));
+  const all = [...takes.values()].map((t) => t.take);
 
-  // A third pick replaces the oldest one (KTD3).
-  const togglePick = (id: TakeId) => setPicked((was) => (was.includes(id) ? was.filter((p) => p !== id) : [...was, id].slice(-2)));
+  // Picks keep the order they were made in; the compare's strip follows it (KTD10).
+  const togglePick = (id: TakeId) => setPicked((was) => (was.includes(id) ? was.filter((p) => p !== id) : [...was, id]));
 
   // The picks go with an opened take or the compare, so its way back can keep them (R16).
   const pickedRefs = live.flatMap((id) => {
     const t = takes.get(id);
-    return t ? [refOf(t.profile, t.result)] : [];
+    return t ? [refOf(t.profile, t.take)] : [];
   });
   const kept = pickedRefs.length > 0 ? { picks: pickedRefs } : {};
   const openTake = (ref: TakeRef) => navigate({ view: "item", item: "reply", credentialKey: key, take: ref, ...kept });
-  // Compare is enabled only with two picks, so both takes are there.
-  const compare = () => navigate({ view: "item", item: "compare", credentialKey: key, takes: [pickedRefs[0], pickedRefs[1]], ...kept });
+  // Compare is enabled only with two or more picks, all of them still here.
+  const compare = () => navigate({ view: "item", item: "compare", credentialKey: key, takes: pickedRefs, ...kept });
 
-  const take = (entry: AgentReplies, a: Assessment, latest: boolean) => {
-    const ref = refOf(entry.profile, a);
+  const take = (entry: AgentReplies, t: Take, latest: boolean) => {
+    const ref = refOf(entry.profile, t);
     const id = idOf(ref);
-    const isLitTake = entry.profile.slug === lit && a.fileStem === litTake;
+    const isLitTake = entry.profile.slug === lit && t.fileStem === litTake;
     return (
-      <Take
+      <TakeRow
         key={id}
         profile={entry.profile}
-        result={a}
+        take={t}
+        when={takeWhen(t, all)}
         latest={latest}
         picked={picked.includes(id)}
         onOpen={() => openTake(ref)}
         onPick={() => togglePick(id)}
         headRef={isLitTake ? litHead : undefined}
-        context={contextText(contextLine(state.assessments, a))}
+        context={contextText(contextLine(state.assessments, t))}
         machine={latest ? <Machine mini setup={entry.profile} keys={machineKeys(matrix, entry.profile.slug)} width={56} /> : null}
       />
     );
@@ -117,9 +121,14 @@ export function ReplyList({
               ref={isLit ? litRow : undefined}
             >
               {take(entry, entry.latest, true)}
-              {entry.older.length > 0 && <ol className="reply-older">{entry.older.map((a) => <li key={a.fileStem}>{take(entry, a, false)}</li>)}</ol>}
+              {entry.older.length > 0 && <ol className="reply-older">{entry.older.map((t) => <li key={t.fileStem}>{take(entry, t, false)}</li>)}</ol>}
               <p className="helper">
-                <button type="button" className="link" onClick={() => navigate({ view: "deck", deck: "test", profileSlug: entry.profile.slug, credentialKey: key })}>
+                {/* Again on the same handoff, so one agent can be re-run in a bake-off (hold-and-compare AE6). */}
+                <button
+                  type="button"
+                  className="link"
+                  onClick={() => navigate({ view: "deck", deck: "test", profileSlug: entry.profile.slug, credentialKey: key, handoffId: run.id })}
+                >
                   Test again
                 </button>
               </p>
@@ -131,9 +140,10 @@ export function ReplyList({
   );
 }
 
-function Take({
+function TakeRow({
   profile,
-  result: a,
+  take: t,
+  when,
   latest,
   picked,
   onOpen,
@@ -143,7 +153,9 @@ function Take({
   machine,
 }: {
   profile: AgentProfile;
-  result: Assessment;
+  take: Take;
+  /** Its date, with the time when another of the agent's takes shares the date. */
+  when: string;
   /** The agent's latest take leads its row; an older one is a compact line below it. */
   latest: boolean;
   picked: boolean;
@@ -153,17 +165,16 @@ function Take({
   context: string;
   machine: React.ReactNode;
 }) {
-  const date = formatDate(a.recordedAt);
   return (
     <div className={`take${latest ? "" : " take-older"}`}>
-      <input type="checkbox" className="take-pick" checked={picked} onChange={onPick} aria-label={`Pick ${profile.name}, ${date}`} />
+      <input type="checkbox" className="take-pick" checked={picked} onChange={onPick} aria-label={`Pick ${profile.name}, ${when}`} />
       <button type="button" className="take-head" ref={headRef} onClick={onOpen}>
         {machine}
         {latest && <span className="take-name">{profile.name}</span>}
         <span className="take-meta">
-          <Verdict result={a} /> · {date} · {context}
+          <Verdict take={t} /> · {when} · {context}
         </span>
-        {latest && <span className="take-preview">{preview(a.handBack)}</span>}
+        {latest && <span className="take-preview">{preview(t.handBack)}</span>}
       </button>
     </div>
   );

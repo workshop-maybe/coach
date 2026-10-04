@@ -10,8 +10,14 @@
 // stored, then Jev's saved reading and the handoff text that ran, each collapsed. Close and
 // Escape go back by the rule in replyRoute.ts, worked out when the view closes: the page
 // that holds the take, its row lit and focused, the list's picks kept (R16).
+//
+// A held reply opens the same way, marked Held, with Met and Not yet under it; a click
+// records the result at once, and the same take reference then finds that result
+// (hold-and-compare R6, KTD3). Its images are read from the agent's results folder for the
+// badge, where the result it becomes sits.
 
-import { useState } from "react";
+import { useId, useState } from "react";
+import { isHeld, takeTime } from "../domain/handoffResults";
 import { BUILT_IN_HANDOFF } from "../domain/handoffs";
 import { credentialKey } from "../domain/types";
 import { formatDate, handoffText } from "./format";
@@ -23,6 +29,7 @@ import { backFromReply, takeOf } from "./replyRoute";
 import { RichView } from "./RichView";
 import type { TakeRef } from "./routes";
 import { Missing, StoredSwitch, TakeBar, useEscape } from "./shared";
+import { TakeActions, useTakeWrites } from "./takeActions";
 import { useFolder } from "./useFolderState";
 import { useMatrix } from "./useMatrix";
 
@@ -32,6 +39,10 @@ export function ReplyView({ credentialKey: key, take, picks }: { credentialKey: 
   const matrix = useMatrix(state);
   const [asStored, setAsStored] = useState(false);
 
+  const headingId = useId();
+  // A judgment saved: its buttons are gone, so the take's heading takes the focus (KTD11).
+  const writes = useTakeWrites(() => document.getElementById(headingId)?.focus());
+
   const credential = state?.credentials.find((c) => credentialKey(c) === key);
   const found = state && credential ? takeOf(state, key, take) : null;
   usePane(found !== null);
@@ -40,27 +51,35 @@ export function ReplyView({ credentialKey: key, take, picks }: { credentialKey: 
   const close = () => {
     if (state) navigate(credential ? backFromReply(matrix, state, key, take, picks) : { view: "home" });
   };
-  useEscape(close);
+  useEscape(() => {
+    if (!writes.savingNow.current) close();
+  });
 
   if (!state) return null;
   if (!credential) return <Missing onHome={close} />;
   if (!found) return <Missing onHome={close} label="Back to the badge" />;
 
   const { profile, take: a } = found;
-  const date = formatDate(a.recordedAt);
-  const note = a.note.trim();
+  const date = formatDate(takeTime(a));
+  const note = isHeld(a) ? "" : a.note.trim();
   return (
     <section className="pane reply-view" aria-label={`${profile.name}, ${date}`}>
       <button type="button" className="deck-close ghost" aria-label="Close" onClick={close}>
         ×
       </button>
       <article className="reply-record">
-        <TakeBar name={profile.name} result={a} focus>
+        <TakeBar name={profile.name} take={a} id={headingId} focus>
           <StoredSwitch asStored={asStored} onToggle={() => setAsStored((s) => !s)} />
           {note !== "" && <p className="reply-note">{note}</p>}
         </TakeBar>
         <RichView aria-label="Reply" value={a.handBack} stored={asStored} images={resultImages(storage, a)} />
+        <TakeActions take={a} saving={writes.saving} describedBy={headingId} onJudge={(r) => void writes.judge(a, r)} />
       </article>
+      {writes.error && (
+        <p className="deck-error" role="alert">
+          {writes.error}
+        </p>
+      )}
       {a.jev && <SavedReading reading={a.jev} />}
       <details className="reply-ran">
         <summary>{handoffText(state, key, a.handoff?.id)}</summary>

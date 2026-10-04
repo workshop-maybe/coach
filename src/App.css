@@ -2389,6 +2389,32 @@ button:focus-visible {
   color: var(--good);
 }
 
+/* A held take has no verdict yet: it reads in ink, never green (hold-and-compare KTD13). */
+.verdict-held {
+  color: var(--ink);
+}
+
+/* A take's actions at the foot of its record, outside the reply's scroll, so a long reply
+   never scrolls them away (hold-and-compare KTD11): Met and Not yet on a held reply, the
+   quiet Make go-to on a Met one, or Go-to in data blue as on the badge page's holders. */
+.reply-record > .take-actions {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  margin: 0;
+  padding: var(--space-sm) var(--space-base);
+  border-top: 1px solid var(--cell);
+}
+
+.take-goto {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: var(--value-tracking);
+  color: var(--data);
+}
+
 /* One take, opened (U5, R15): a pane. The corner control takes its own row at the right,
    then the take as a record like the judge card's texts: a mono header bar with the
    agent, setup, verdict and date, the stored-text switch at its end and the note below,
