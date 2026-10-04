@@ -167,12 +167,12 @@ export async function cleanUpLineBreaks(
 const TERMINAL_PUNCTUATION = /[.!?:;…]["'”’»)\]}]*$/;
 
 /** The probability at or above which the break after this line joins. */
-function cutOffAfter(line: string): number {
+export function cutOffAfter(line: string): number {
   return TERMINAL_PUNCTUATION.test(line.trimEnd()) ? JOIN_AFTER_STOP : JOIN_AFTER_OPEN;
 }
 
 /** The id of the line at this zero-based index: "L" and its number, padded to the line count's digits and at least three. */
-function lineId(index: number, count: number): string {
+export function lineId(index: number, count: number): string {
   return `L${String(index + 1).padStart(Math.max(3, String(count).length), "0")}`;
 }
 

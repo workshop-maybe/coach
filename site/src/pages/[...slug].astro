@@ -4,7 +4,9 @@
 // page's h1, so a page's MDX starts below it.
 
 import { getCollection, render } from "astro:content";
+import Example from "../components/Example.astro";
 import Shot from "../components/Shot.astro";
+import Source from "../components/Source.astro";
 import UI from "../components/UI.astro";
 import Guide from "../layouts/Guide.astro";
 import { pageHref } from "../parts";
@@ -17,8 +19,9 @@ export async function getStaticPaths() {
 const { entry } = Astro.props;
 const { Content } = await render(entry);
 
-// What every page may use without importing it: an app label and a screenshot (U5).
-const components = { UI, Shot };
+// What every page may use without importing it: an app label and a screenshot (U5), and
+// the deep dive's live code excerpts and generated examples.
+const components = { UI, Shot, Source, Example };
 ---
 
 <Guide title={entry.data.title} description={entry.data.description} current={pageHref(entry.id)}>

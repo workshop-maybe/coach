@@ -1,0 +1,25 @@
+{
+  "lines": 300,
+  "candidates": 299,
+  "batches": [
+    {
+      "questions": 256,
+      "first": "L002",
+      "last": "L257",
+      "state_tokens": 3198,
+      "question_tokens": 22528
+    },
+    {
+      "questions": 43,
+      "first": "L258",
+      "last": "L300",
+      "state_tokens": 3198,
+      "question_tokens": 3784
+    }
+  ],
+  "limits": {
+    "questions": 256,
+    "state_plus_longest": 32000,
+    "state_plus_all": 64000
+  }
+}

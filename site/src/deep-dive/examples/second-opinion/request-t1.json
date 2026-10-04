@@ -1,0 +1,13 @@
+{
+  "t1": {
+    "type": "noul",
+    "instructions": {
+      "target": "I can check whether an answer key is right instead of trusting it.",
+      "question": "Does `reply` show the work `target` describes, given `task`?"
+    },
+    "criteria": {
+      "true": "the reply gives specific, checkable evidence of the work this target describes: it names the files, commands or output, or shows the content",
+      "false": "the reply only asserts this work in general terms, or does not show it"
+    }
+  }
+}

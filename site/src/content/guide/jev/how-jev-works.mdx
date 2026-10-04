@@ -1,0 +1,139 @@
+---
+title: How Jev works
+part: jev
+order: 10
+description: What Jev is, where the app calls it, how your key is kept, what is sent and when, Jev's size limits, and every error you can see.
+---
+
+{/* Jev under the hood, first page (docs/plans/2026-10-04-1503-docs-jev-deep-dive-plan.md, R3): the plumbing every Jev feature shares. Code blocks are <Source> excerpts read from the live source at build time; numbers in the prose are tied to code constants by site/tests/deepDive.test.ts. Labels are checked against src/ui/TestDeck.tsx and src/ui/JevDeck.tsx. */}
+
+This part of the guide is for you if you use Jev Mode and want to know exactly what it does. Each page follows the code: what the app sends to Jev, what comes back, and what the app does with it. The code blocks are read from the app's source each time the guide is built, so they match the version this guide describes.
+
+Start here for what every Jev feature shares. Then read about each feature:
+
+- [The second opinion, end to end](/jev/second-opinion/), and its [case study](/jev/second-opinion-case-study/).
+- [The paste cleanup, end to end](/jev/paste-cleanup/), and its [case study](/jev/paste-cleanup-case-study/).
+
+## What Jev is
+
+Jev is TypeSafe's model. TypeSafe calls it a [System One model](https://docs.typesafe.ai/concepts/system-one): it reads text and returns typed answers with probabilities, rather than writing text of its own. It does not explain its answers or write code.
+
+The app asks Jev only one kind of question, a [Noul](https://docs.typesafe.ai/primitives/noul): a yes-or-no question whose answer is the probability that the answer is yes, from 0 to 1. Each request carries a **state**, the text Jev reads, and a set of **questions**, each with its own instructions and an optional description of what a yes and a no mean. TypeSafe's [Models page](https://docs.typesafe.ai/models) says Jev reads the state once and evaluates every question in the request against it in parallel.
+
+The app pins one version of Jev, `jev-1.13.0`, rather than an alias that moves when TypeSafe ships a new release. TypeSafe's Models page advises pinning a version when you have tuned thresholds against it, which is what the app does with your verdicts (see [How a probability becomes a call](/jev/second-opinion/#how-a-probability-becomes-a-call)).
+
+<Source file="src-tauri/src/jev.rs" symbol="ENDPOINT" to="MODEL" />
+
+## Where the call is made
+
+Only the app's Rust side talks to TypeSafe. The window you work in never makes a network request: it hands a request to one native command, `jev_ask`, and gets probabilities back.
+
+<Source file="src-tauri/src/lib.rs" symbol="jev_ask" />
+
+The command checks three things, in this order, before it reads your key:
+
+1. Jev Mode is on.
+2. The request is one of the two shapes the app sends, a second opinion or a line-break cleanup, with no field it doesn't expect.
+3. The request fits Jev's size limits.
+
+Only then does it read the key and send the request. A request that fails a check never reaches your keychain, so it can't raise a keychain prompt.
+
+<Source file="src-tauri/src/jev.rs" symbol="prepare" />
+
+The request goes to one fixed address over HTTPS only. The client follows no redirects, keeps no cookies, and gives up after 20 seconds. The key goes in a bearer header marked sensitive, so it never prints in a log.
+
+<Source file="src-tauri/src/jev.rs" symbol="client" />
+
+<Source file="src-tauri/src/jev.rs" symbol="build_request" />
+
+The window can write a question's wording, but it can't choose the model or add anything to the body. The body TypeSafe receives is exactly the state, the pinned model and the questions:
+
+<Source file="src-tauri/src/jev.rs" symbol="body" />
+
+## How your key is kept
+
+When you paste your key into <UI>Your TypeSafe key</UI> and click <UI>Turn on Jev Mode</UI>, the app trims it and checks that it is not empty, is at most 512 characters, and holds only printable ASCII. Entering a key makes no network call, so a key TypeSafe refuses shows up on your first ask.
+
+<Source file="src-tauri/src/jev.rs" symbol="parse_key" />
+
+The key goes into your system's keychain, as one entry under the service `io.andamio.desktop` and the account `typesafe-api-key`. The app's settings file keeps only whether Jev Mode is on, where the key is held, and its last four characters for the card to show. A key shorter than 12 characters gets no hint at all.
+
+In the Rust code the key lives in a wrapper that prints as a placeholder and wipes its memory when it is dropped:
+
+<Source file="src-tauri/src/jev.rs" symbol="ApiKey" />
+
+Reading Jev Mode's status never touches the keychain. Only an ask, or changing the key, does. On a Linux setup with no Secret Service, the app holds the key in memory for this run only and the card says so.
+
+## When anything is sent
+
+Nothing is sent until you click one of three things:
+
+- <UI>Ask Jev</UI> or <UI>Check with Jev</UI> on <UI>Did it meet it</UI> sends one second opinion.
+- <UI>Clean up with Jev</UI> under the reply box sends one cleanup, which may take more than one request for a long paste.
+
+Turning Jev Mode on, opening a badge, judging without asking, or pasting a reply sends nothing. A second opinion is never retried on its own. A cleanup retries a request only when TypeSafe says it is busy, as [The paste cleanup, end to end](/jev/paste-cleanup/#batches-and-retries) explains.
+
+## What is sent, and what isn't
+
+A second opinion sends:
+
+- the badge's task, its rubric in full, the rubric split into its points and its other lines, and its learning targets;
+- the reply you're judging, as the Markdown in the reply box;
+- the openings of up to a few earlier replies on the same badge, with your notes on them, inside the questions as examples.
+
+A cleanup sends only the text you pasted, after the app's own fixes, with each line tagged by its number.
+
+Neither sends your agents' names or setups, other badges, your folder's location, or any result you didn't judge on this badge. A picture or a video never goes as an image: the reply goes as its Markdown text, so a picture in it goes only as its file name, and earlier replies' openings drop picture and video Markdown altogether. Rust holds the second opinion's state to exactly these fields and refuses any other:
+
+<Source file="src-tauri/src/jev.rs" symbol="OpinionState" />
+
+What TypeSafe does with what it receives is set by [its terms](https://docs.typesafe.ai/legal). Its Models page says Jev is not trained on customer requests or responses.
+
+## Jev's size limits
+
+TypeSafe's [Models page](https://docs.typesafe.ai/models) gives `jev-1.13.0` two limits per request: 64k tokens for the state and every question together, and 32k tokens for the state plus the longest single question. The app also caps a request at 256 questions.
+
+The app estimates tokens without a tokenizer: the length of the value as compact JSON, divided by 4 and rounded up, counted once for the state and once for each question. A question's id doesn't count, since TypeSafe doesn't send ids to the model.
+
+<Source file="src/domain/jevBudget.ts" symbol="jevTokens" to="fitsTokens" />
+
+The window checks every request before it asks, and Rust checks it again with the same rule. JavaScript counts a string's length in UTF-16 units, which is never fewer than the characters Rust counts, so the window's check is never looser than Rust's. A request the window lets through is never refused as too long.
+
+<Source file="src-tauri/src/jev.rs" symbol="check_budget" />
+
+A second opinion that is too long even with no examples shows <UI>This reply is too long for Jev</UI>, and you judge it as usual. A paste too long for even one cleanup question shows the same line under the reply box in place of <UI>Clean up with Jev</UI>.
+
+## What comes back
+
+TypeSafe answers with a probability for each question and names the model that answered. The app keeps only those. An answer outside 0 to 1, a missing answer, or an answer for a question the app didn't ask fails the whole ask as an error, rather than being clamped or guessed. An answer larger than 256 KiB fails the same way.
+
+<Source file="src-tauri/src/jev.rs" symbol="answers_from" />
+
+The app records which model answered, because a reading's calls depend on it (see [How a probability becomes a call](/jev/second-opinion/#how-a-probability-becomes-a-call)). A model name that is missing or not a short id reads as the pinned model and never fails the ask.
+
+<Source file="src-tauri/src/jev.rs" symbol="answering_model" />
+
+## Errors you can see
+
+Every failure becomes one kind, with no text from TypeSafe, the network library or your key. Rust maps TypeSafe's answer to a kind:
+
+<Source file="src-tauri/src/jev.rs" symbol="kind_of" />
+
+TypeSafe's [API reference](https://docs.typesafe.ai/api) lists 401, 422, 429 and 529. The app also reads a 413 as too long, in case one arrives, and any other status, a 422 among them, as an answer it couldn't use, with the status number in brackets.
+
+On the judge card, or under the reply box for a cleanup, each kind gets one line:
+
+- **Key refused**, when TypeSafe answered 401: <UI>TypeSafe refused the key. Change it in \{place\}.</UI>
+- **Key missing**, when no key is held or it was removed from the keychain: <UI>Jev has no key. Add one in \{place\}.</UI>
+- **Off**, when Jev Mode was turned off: <UI>Jev Mode is off. Turn it on in \{place\}.</UI>
+- **Too long**, when the request is over the limits or TypeSafe answered 413: <UI>This reply is too long for Jev.</UI>
+- **Rate limited**, when TypeSafe answered 429: <UI>Jev has had too many asks. Try again in a moment.</UI>
+- **Overloaded**, when TypeSafe answered 529: <UI>Jev is overloaded. Try again shortly.</UI>
+- **Unreachable**, with no connection, or no answer within 20 seconds: <UI>Jev couldn't be reached.</UI>
+- **Keychain**, when your system didn't give up the key: <UI>The keychain didn't give up the key.</UI>
+- **Settings**, when the app's settings couldn't be read: <UI>Jev Mode's settings couldn't be read.</UI>
+- **Other**, for any other status, a redirect, or an answer the app couldn't use: <UI>Jev couldn't answer.</UI>, or <UI>Jev couldn't answer (\{status\}).</UI> with the status number.
+
+The place a key line names is <UI>Jev Mode in the top bar, on home</UI>. The first four can't succeed on a second try, so they take <UI>Ask Jev</UI> away for the rest of that test; you can ask again after the others. Whatever the line says, you can still record your verdict. [When something breaks](/help/when-something-breaks/#jev-mode) says what to do about each.
+
+<Source file="src/ui/TestDeck.tsx" symbol="jevFailure" />

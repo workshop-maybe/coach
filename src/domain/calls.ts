@@ -150,7 +150,7 @@ export function ranksAsOverrule(judged: Judged, pair: CutOffs): boolean {
 
 // ---------------------------------------------------------------------------
 
-interface Candidate {
+export interface Candidate {
   pair: CutOffs;
   score: number;
   cantCalls: number;
@@ -184,7 +184,7 @@ function agreeingCall(verdict: AssessmentResult): Call {
   return verdict === "met" ? "meets" : "misses";
 }
 
-function tally(readings: readonly JudgedReading[], pair: CutOffs): { matches: number; wrong: number; cantCalls: number } {
+export function tally(readings: readonly JudgedReading[], pair: CutOffs): { matches: number; wrong: number; cantCalls: number } {
   let matches = 0;
   let wrong = 0;
   let cantCalls = 0;
@@ -197,7 +197,7 @@ function tally(readings: readonly JudgedReading[], pair: CutOffs): { matches: nu
   return { matches, wrong, cantCalls };
 }
 
-function candidate(readings: readonly JudgedReading[], pair: CutOffs): Candidate {
+export function candidate(readings: readonly JudgedReading[], pair: CutOffs): Candidate {
   const { matches, wrong, cantCalls } = tally(readings, pair);
   return { pair, score: matches - WRONG_CALL_COST * wrong, cantCalls };
 }

@@ -1,0 +1,10 @@
+L001| Release notes for 0.9.
+L002| 
+L003| Sync is now on by default. If you sync through your own
+L004| server, add its address under Settings, then Sync, before
+L005| you update.
+L006| 
+L007| Edits no longer go missing when the server is busy. The app
+L008| waits and tries again instead of dropping the change. Tags
+L009| have their own column, so searching by tag is faster, and
+L010| every note keeps its tags.

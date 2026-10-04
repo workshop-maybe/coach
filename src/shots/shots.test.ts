@@ -112,7 +112,7 @@ describe("the shot manifest", () => {
     for (const id of ids) expect(id).toMatch(KEBAB);
   });
 
-  it("names a guide page in one of the four parts for every shot", () => {
+  it("names a guide page in one of the guide's parts for every shot", () => {
     for (const shot of SHOTS) {
       const [part, ...rest] = shot.page.split("/");
       expect(PART_IDS as readonly string[], shot.id).toContain(part);

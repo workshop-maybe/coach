@@ -1,0 +1,178 @@
+---
+title: The second opinion, end to end
+part: jev
+order: 20
+description: "Every rule behind a second opinion: the request, how earlier replies become examples, the size limits, the reading, calls and cut-offs, the track record, and what a result saves."
+---
+
+{/* Jev under the hood, second page (docs/plans/2026-10-04-1503-docs-jev-deep-dive-plan.md, R4-R10): the second opinion's rules in the order the app applies them. The worked example and most of the code are on the case study page. Numbers in the prose are tied to code constants by site/tests/deepDive.test.ts. Labels are checked against src/ui/TestDeck.tsx and src/ui/JevReading.tsx. */}
+
+A second opinion asks Jev how well a reply meets a badge's bar. You still record the verdict: Jev's reading is advice, saved beside it. This page gives every rule in the order the app applies it. [Case study: a second opinion](/jev/second-opinion-case-study/) follows one ask through the same steps, with the exact request and the code.
+
+In short, when you click <UI>Ask Jev</UI> or <UI>Check with Jev</UI>:
+
+1. The app builds one request: the badge's task, rubric and learning targets and the reply as the state, and one question for each rubric point, each learning target and the whole bar.
+2. It adds openings of your earlier judged replies on the badge to the questions, as examples of your own verdicts.
+3. It drops examples until the request fits Jev's limits.
+4. Jev answers each question with a probability.
+5. The app reads each probability as a call, with cut-offs fitted to your verdicts on the badge.
+6. When you save, the reading is saved with your result.
+
+## The request
+
+The state is an object with six fields. Its field names are the ones the questions name in backticks, which is how TypeSafe's [structured instructions](https://docs.typesafe.ai/api) refer to parts of the state.
+
+| Field | What it holds |
+|---|---|
+| `task` | The badge's task |
+| `rubric` | The rubric, in full |
+| `rubric_points` | The rubric's points, in order |
+| `rubric_notes` | The rubric's other lines, such as "Met when every point holds." |
+| `learning_targets` | The badge's learning targets, trimmed, with blanks and repeats left out |
+| `reply` | The reply you're judging, as the Markdown in the reply box |
+
+A rubric's points are its top-level list items, bulleted or numbered. A nested item or an indented line folds into the item above it, a task box (`[ ]` or `[x]`) is dropped, and a list inside fenced code doesn't count. Every other line is a note. A rubric with no list has no points, so its request has no point questions. A numbered answer key in a rubric is a list too, so each of its answers is a point of its own.
+
+The questions are:
+
+- **One per rubric point**, `p1` to `pN`: does the reply satisfy this point, read with the rubric's notes, given the task? The point and the notes travel in the question's instructions, so a note such as "a rewrite in other words passes" reaches every point.
+- **One per learning target**, `t1` to `tM`: does the reply show the work this target describes, given the task?
+- **One overall**, `overall`: does the reply satisfy all of the rubric, given the task?
+
+Every question carries criteria that say what a yes and a no mean. A yes needs specific, checkable evidence: the reply names the files, commands or output, or shows the content. A no is a reply that only asserts the point in general terms. Without them, a reply that only claims it is done would read high. TypeSafe's [notes on Jev 1.13](https://docs.typesafe.ai/model-jaggedness/jev-1.13) say text that argues for its own classification can move Jev's answers, and that Jev reads a question literally.
+
+## Earlier replies as examples
+
+Each question can carry up to 2 examples on each side of its criteria: replies that met the bar on the yes side, replies that didn't on the no side. They come from your own results on the same badge, from any agent. TypeSafe's [structured Noul criteria](https://docs.typesafe.ai/primitives/advanced) put examples beside the description of each side, which is where the app puts them, so each question sees only its own.
+
+### Which results go first
+
+The app ranks the badge's results, then takes them best first:
+
+1. **A result with a note.** The step that asks <UI>What did Jev miss</UI> appears only when your verdict went against Jev, so a note marks an overrule with a reason. A note you wrote by hand counts the same.
+2. **An overrule.** A result whose verdict went against Jev's overall call: Not met against a meets call, or Met against a misses call. Can't call is never an overrule. A reading counts as overruled under the default cut-offs or under the badge's fitted ones.
+3. **Any other result.**
+
+Within each group, newer results go first. A held reply has no verdict, so it is never an example.
+
+### Which questions a result shows on
+
+- Every result shows on the overall question, on the side of its verdict.
+- A result shows on the point questions only if it was judged against the badge's current task and rubric. A Met result goes on the yes side of every point. A Not met result goes on the no side of each point you tapped as missed. A missed point whose text no longer matches a current point is dropped.
+- No result shows on a learning target's question, since no verdict is recorded per target.
+
+A result whose reply, trimmed, is the same as the reply you're judging is never an example. Neither is one whose opening is empty once cleaned. The next result takes its place.
+
+### What an example holds
+
+An example is two fields kept apart: `reply_opening`, the opening of the earlier reply, and `user_reason`, your note on it. Keeping your words apart from the agent's matters because the reply is text Jev reads, and an agent's text can argue for itself. Your note rides on every overall example and on a point's no side. It never rides on a point's yes side, and Rust refuses a request that puts one there.
+
+The opening is cleaned before it is cut:
+
+- Every line break reads as a newline, and control and format characters other than tab are dropped, zero-width and direction marks among them. You judged the reply as it rendered and never saw them.
+- Picture and video Markdown, and any picture or video data, are removed. A line left blank by that goes.
+- Lines that look like secrets are dropped: a PEM block from its BEGIN line to its END line; a known token prefix followed by a token (such as `sk-`, `ghp_`, `xoxb-`, `AKIA` or `AIza`); an `UPPER_NAME=` assignment with a long value; a run of 32 or more hex characters; a long base64 run holding a digit and both cases; a password-like key given a value (`password`, `passphrase`, `secret`, `api_key`, `access_key`, `private_key`, in any case); and a link carrying a password, such as `https://user:pass@host`. Each line is checked only up to twice the opening's cap, so a long line can't slow the check down. It is a heuristic, not a guarantee.
+
+Then the cleaned text is cut to its first 300 characters, counted as whole code points so an emoji is never split, and cut back to the last line break or sentence end inside them. A reply that fits whole stays whole. Your note is cleaned the same way, its line breaks become spaces, and it is capped at 200 characters.
+
+Examples are worked out from your folder each time you ask, and nothing about them is stored. A result you move to the trash stops being an example at once.
+
+Under <UI>Ask Jev</UI>, a line says how many earlier results the request quotes after any drops: <UI>Also sends \{n\} earlier replies on this badge</UI>, ending <UI>with your notes</UI> when a note goes too.
+
+## Fitting the request to Jev's limits
+
+[How Jev works](/jev/how-jev-works/#jevs-size-limits) gives the limits. Whether a reply is too long for Jev is decided with no examples at all: if the bare request doesn't fit, the card says <UI>This reply is too long for Jev</UI>, whatever examples there are. The reply itself is never cut.
+
+When the examples push a request over, they go one at a time until it fits:
+
+1. Find the lowest-priority example left in any question. On a tie, take the earlier question.
+2. In that question, the side holding more examples gives up its own lowest-priority one. With the sides even, the example from step 1 goes.
+
+Here the generator offers 12 examples, two on each side, beside a reply long enough that only some fit. Each line says whether the budget kept the example:
+
+<details class="guide-fold">
+<summary>The forced-drop example</summary>
+
+<Example file="second-opinion/forced-drops.json" caption="site/src/deep-dive/examples.ts builds this with fitSecondOpinion" />
+
+</details>
+
+<Source file="src/domain/jevBudget.ts" symbol="dropOne" />
+
+## From answers to a reading
+
+Jev answers every question with a probability. If any question's answer is missing or isn't a number from 0 to 1, the whole ask fails, both in Rust and again in the window, and the card shows <UI>Jev couldn't answer.</UI>
+
+A reading is the overall probability, one probability per rubric point and one per learning target, each with the text Jev read. It belongs to one test, one reply and one version of the badge's task and rubric. Editing the reply drops it, and an answer that lands after you edited the reply or left the card is ignored. Asking again with the same reply shows the reading you already have.
+
+When the reading arrives, the app freezes it with the model that answered and the cut-offs in force for that model, so the card, the steps after it and the saved result all read it the same way.
+
+## How a probability becomes a call
+
+Each probability is rounded to the whole percent the card shows, and that percent is read against a pair of cut-offs:
+
+- above the high cut-off: <UI>Meets</UI>;
+- below the low cut-off: <UI>Misses</UI>;
+- from the low cut-off to the high one, both included: <UI>Can't call</UI>.
+
+A badge starts with 30 and 70, the band TypeSafe's [self-consistency cookbook](https://docs.typesafe.ai/cookbooks/consistency_noul_cookbook) uses to route uncertain answers to a person. The cookbook calls the band illustrative, not calibrated, and says to set boundaries from labeled examples. Your verdicts are those labels, so the app fits the cut-offs to them.
+
+### Fitting the cut-offs
+
+The fit is per badge and per Jev model. It reads the badge's results that carry a reading from that model, across every version of the task, and compares each overall reading with your verdict.
+
+- It runs once there are at least 8 such results, with at least 2 Met and 2 Not met. Until then the badge keeps 30 and 70.
+- It tries every pair on a 5-point grid, the low cut-off from 10 to 45 and the high from 55 to 90, plus 30 and 70.
+- Each pair scores its matches, less 2 for each wrong call, so the fit prefers can't call to a wrong call.
+- A pair may leave at most 40% of the readings at can't call. The default pair is always allowed, so the cap stops the band widening without forcing a call where Jev is unsure.
+- On a tie, the pair closest to 30 and 70 wins, measured as the sum of both distances; then the narrower band; then the first in grid order. The band moves only when a reading changes the score.
+
+Rubric points and learning targets read with the same pair as the overall reading, since only the whole bar has your verdict on every result. A changed pair re-reads every saved reading on the badge from its saved probabilities, without asking Jev again. Nothing derived is stored: the pair is worked out from your folder each time a view draws. When the fit has moved the pair, the reading says <UI>Cut-offs fitted to your verdicts</UI>.
+
+<Source file="src/domain/calls.ts" symbol="DEFAULT_CUT_OFFS" to="MIN_READINGS_PER_VERDICT" />
+
+The sample folder's Check an answer key has nine readings from one model. Under 30 and 70 they score 2. The fit moves the pair to 40 and 75, where the 72% Not met is can't call and the 35% Not met is a match, and the score rises to 5:
+
+<details class="guide-fold">
+<summary>The fit, reading by reading</summary>
+
+<Example file="second-opinion/fit.json" caption="The judged sample's readings on Check an answer key, read under both pairs" />
+
+</details>
+
+## The track record
+
+The track record counts how often Jev's overall call matched your verdict on the badge, out of the calls it made, with the times it couldn't call counted apart: <UI>Jev matched your verdict \{k\} of \{c\} times on this badge</UI>, then <UI>, and couldn't call \{u\}</UI> when any were.
+
+- It counts only results with a reading from the same Jev model as the reading in front of you, and uses that model's current pair.
+- It shows once there are 8 such results and at least one call was made, whether or not the fit could run.
+- On the judge card it shows only after you pick <UI>Met</UI> or <UI>Not yet</UI>, so it can't lean on your verdict. A held reply never shows it. A saved result's reading does.
+
+The track record is counted with cut-offs fitted to the same verdicts it counts. With few results, it reads better than Jev will do on the next reply.
+
+## The steps after your verdict
+
+After <UI>Not yet</UI>, when the rubric has points, the test asks <UI>Which points did it miss</UI>. Every point is a toggle, none pressed. With a reading in hand, Jev's call sits beside each point, and nothing is tapped for you. The points you tap are saved only with Not met, only if they are points of the rubric the result is stamped with, and in rubric order. Points are told apart by their text, so two points with the same text are tapped together.
+
+When your verdict goes against Jev's overall call, read with the pair frozen with the reading, one more step asks <UI>What did Jev miss</UI>. Can't call never asks. The line you write becomes the result's note. Its line breaks become spaces, any leading `#` marks are dropped so it can never read as a heading in the result file, and it is capped at 200 characters.
+
+<Source file="src/domain/reasonLine.ts" symbol="reasonLine" />
+
+## What a result saves
+
+When you save, the reading goes into the result's front matter as a `jev` block, beside your verdict:
+
+| Field | What it records |
+|---|---|
+| `model` | The Jev model that answered |
+| `assignment_version` | The version of the task and rubric the reading was taken against |
+| `asked_at` | When you asked |
+| `seen` | `before` if the reading arrived before you picked a verdict, `after` if after |
+| `verdict_when_seen` | Only when seen after: the verdict picked when the reading arrived |
+| `verdict_changed` | Only when seen after: whether the saved verdict differs from it |
+| `overall`, `points`, `targets` | Each probability, with the text of each point and target as Jev read it |
+| `examples_sent` | How many earlier results the request quoted |
+
+The result also keeps `missed_points`, the points you tapped, and your note under its `## Note` heading. Texts are saved with each probability so a reading still makes sense after the rubric changes. A reading taken against another version of the task is left off, and the result still saves. A held reply keeps its reading as seen before, and the result its judging writes copies it.
+
+[Case study: a second opinion](/jev/second-opinion-case-study/#what-the-result-saves) shows a saved result in full.

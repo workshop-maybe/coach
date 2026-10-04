@@ -1,0 +1,5 @@
+Release notes for 0.9.
+
+Sync is now on by default. If you sync through your own server, add its address under Settings, then Sync, before you update.
+
+Edits no longer go missing when the server is busy. The app waits and tries again instead of dropping the change. Tags have their own column, so searching by tag is faster, and every note keeps its tags.
