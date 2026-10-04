@@ -14,7 +14,7 @@ import { COVERAGE, NOT_PICTURED, SAMPLE_IMAGES, SHOTS, routeKind, type Shot } fr
 
 const KEBAB = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
-const DECK_KINDS = ["credential", "agent", "test", "edit-credential", "edit-agent", "handoffs", "edit-handoff", "trash", "jev"];
+const DECK_KINDS = ["credential", "agent", "test", "edit-credential", "edit-agent", "handoffs", "edit-handoff", "trash", "jev", "router", "cost-order"];
 const ITEM_KINDS = ["badge", "agent", "handoff", "reply", "compare"];
 const CREDENTIAL_PARTS = ["name", "targets", "task", "rubric", "look"];
 const AGENT_PARTS = ["name", "repo", "notes", "params"];

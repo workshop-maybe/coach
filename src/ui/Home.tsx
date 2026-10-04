@@ -1,6 +1,7 @@
 // Home, the only room (KTD1). Top to bottom: what needs you, your agents (machines, each
-// lighting the keys it earned), your badges (cartridges, each showing who holds it), then
-// the two doors with dashed outlines of what they make (R9, R12). When all three sections
+// lighting the keys it earned, cheapest first once the user set a cost order), your badges
+// (cartridges, each showing who holds it), then the three doors with dashed outlines: an
+// agent, a credential, and a job to find an agent for (R9, R12, router R1). When all three sections
 // show, a wide window puts what needs you beside your agents so home fits one screen; the
 // pairing is a class on one wrapper, so a need coming or going never remounts a shelf or a
 // door (App.css). An empty folder leads with "Try a first test", which runs one preset on
@@ -77,6 +78,11 @@ export function Home() {
       <button type="button" className="door" onClick={() => navigate({ view: "deck", deck: "credential" })}>
         <Outline kind="cartridge" width={empty ? 110 : 36} />
         <span>Create a credential</span>
+      </button>
+      {/* A job is text you hand to an agent, so its door shows the empty handoff card (router KTD13). */}
+      <button type="button" className="door" onClick={() => navigate({ view: "deck", deck: "router" })}>
+        <Outline kind="handoff" width={empty ? 164 : 54} />
+        <span>Find an agent for a job</span>
       </button>
     </div>
   );

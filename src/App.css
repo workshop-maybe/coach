@@ -1233,13 +1233,13 @@ button:focus-visible {
   color: var(--ink-muted);
 }
 
-/* The two doors follow the shelves, and stay in view at the window's foot while home runs
+/* The three doors follow the shelves, and stay in view at the window's foot while home runs
    past it. On a tall window they sit under the badges rather than far below them. */
 .doors {
   position: sticky;
   bottom: 0;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: var(--space-base);
   padding: var(--space-base) 0;
   background: var(--bg);
@@ -1274,8 +1274,8 @@ button:focus-visible {
   }
 }
 
-/* An empty folder: the two doors are the whole screen, each showing what it makes. They keep
-   the measure the content column had before it widened, so two doors never stretch thin. */
+/* An empty folder: the three doors are the whole screen, each showing what it makes. They keep
+   the measure the content column had before it widened, so the doors never stretch thin. */
 .home-empty {
   justify-content: center;
   max-width: calc(62rem - 2 * var(--space-xl));
@@ -2847,6 +2847,67 @@ button:focus-visible {
 
 .cost-order-keys button {
   min-width: 2.25rem;
+}
+
+/* The router's card (router KTD16): a record card. The agent's setup and every reason are
+   mono rows; the lead reason reads first, in the sans; the holders to take are one choice
+   group, the chosen one pressed. */
+.router-ask {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.router-ask p {
+  margin: 0;
+}
+
+.router-record {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-base);
+  background: var(--surface);
+  border: var(--rule-width) solid var(--rule);
+}
+
+.router-record p {
+  margin: 0;
+}
+
+.router-setup,
+.router-lines,
+.router-note,
+.router-also {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: var(--value-tracking);
+}
+
+.router-setup {
+  color: var(--ink-muted);
+}
+
+.router-lead {
+  font-weight: 600;
+  letter-spacing: var(--heading-tracking);
+}
+
+.router-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.router-lines:empty {
+  display: none;
+}
+
+.router-holders {
+  grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
 }
 
 /* ---------------------------------------------------------------------------

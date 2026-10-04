@@ -32,6 +32,7 @@ import { NavContext } from "./nav";
 import { PaneContext, usePaneClaims } from "./pane";
 import { PlayerCard } from "./PlayerCard";
 import { ReplyView } from "./ReplyView";
+import { RouterDeck } from "./RouterDeck";
 import type { DeckRoute, ItemRoute, Route } from "./routes";
 import { TestDeck } from "./TestDeck";
 import { describeError, useFolder } from "./useFolderState";
@@ -140,7 +141,7 @@ export function AppShell({ onChangeFolder, initialRoute = { view: "home" } }: Ap
 function DeckView({ route }: { route: DeckRoute }) {
   switch (route.deck) {
     case "credential":
-      return <CredentialDeck returnTo={route.returnTo} />;
+      return <CredentialDeck returnTo={route.returnTo} task={route.task} router={route.router} />;
     case "agent":
       return <PlayerCard returnTo={route.returnTo} likeSlug={route.likeSlug} firstTest={route.firstTest} />;
     case "test":
@@ -157,6 +158,8 @@ function DeckView({ route }: { route: DeckRoute }) {
       return <TrashDeck item={route.item} />;
     case "jev":
       return <JevDeck />;
+    case "router":
+      return <RouterDeck resume={route.resume} />;
     case "cost-order":
       return <CostOrderDeck returnTo={route.returnTo} />;
   }
