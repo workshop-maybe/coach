@@ -966,6 +966,63 @@ button:focus-visible {
   background: var(--cell);
 }
 
+/* Home's sections (KTD6). Stacked, they keep home's spacing. When all three show on a wide
+   window, what needs you and the agents share a row and the badges run the full width under
+   them, so a full home fits one screen. The doors sit outside, so they still pin to the
+   window's foot. */
+.home-shelves {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xl);
+}
+
+.home-shelves-paired {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+
+.home-shelves-paired > :last-child {
+  grid-column: 1 / -1;
+}
+
+/* In half the width, a need's detail goes under its title, so a long agent name never
+   squeezes it into a sliver. */
+.home-shelves-paired .need {
+  grid-template-columns: auto minmax(0, 1fr);
+  row-gap: 0;
+}
+
+.home-shelves-paired .need > :not(.need-title, .need-detail) {
+  grid-row: 1 / span 2;
+}
+
+.home-shelves-paired :is(.need-title, .need-detail) {
+  grid-column: 2;
+  text-align: left;
+}
+
+@media (max-width: 56rem) {
+  .home-shelves-paired {
+    display: flex;
+    align-items: stretch;
+  }
+
+  .home-shelves-paired .need {
+    grid-template-columns: auto auto 1fr;
+    row-gap: var(--space-md);
+  }
+
+  .home-shelves-paired .need > :not(.need-title, .need-detail) {
+    grid-row: auto;
+  }
+
+  .home-shelves-paired .need-detail {
+    grid-column: 3;
+    text-align: right;
+  }
+}
+
 /* What needs you: one record card, a row per thing, each one tap. */
 .needs {
   list-style: none;
