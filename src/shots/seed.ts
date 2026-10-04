@@ -237,6 +237,8 @@ const ANSWER_KEY_CODEX_REPLY = `1. Holds. 24 trailing zeros.
 
 /** Jev's probabilities for the answer-key rubric's points, in order. */
 const ANSWER_KEY_POINTS = [0.93, 0.95, 0.9, 0.88, 0.94];
+/** Jev's chance for each of Check an answer key's learning targets: one it calls, one it can't. */
+const ANSWER_KEY_TARGETS = [0.86, 0.62];
 
 /** The skeleton handoff filled from a credential, as the test deck copies it. */
 function skeletonFor(credential: Credential): HandoffTemplate {
@@ -334,7 +336,16 @@ export async function sampleFolder(variant: SeedVariant): Promise<SampleFolder> 
     verdictChanged: false,
     overall: 0.91,
     points: points.map((text, i) => ({ text, probability: ANSWER_KEY_POINTS[i % ANSWER_KEY_POINTS.length] })),
+    targets: answerKey.learningTargets.map((text, i) => ({ text, probability: ANSWER_KEY_TARGETS[i % ANSWER_KEY_TARGETS.length] })),
+    examplesSent: 0,
   };
+  // Codex's Not yet on Say how sure you are names the two points its note is about.
+  const howSurePoints = rubricParts(howSure.rubric).points;
+  const howSureMissed = ["Questions 2 and 6", "No wrong answer"].map((start) => {
+    const point = howSurePoints.find((p) => p.startsWith(start));
+    if (!point) throw new Error(`Say how sure you are's rubric needs a point starting "${start}".`);
+    return point;
+  });
 
   const results: Assessment[] = [
     await take(CLAUDE, whatNext, SAMPLE.takes.claudeWhatNext, {
@@ -350,7 +361,7 @@ export async function sampleFolder(variant: SeedVariant): Promise<SampleFolder> 
       copiedAt: "2026-09-25T09:41:00.000Z",
       note: "Gave one answer to questions 2 and 6, each above 50%.",
       handBack: HOW_SURE_NOT_MET_REPLY,
-    }),
+    }).then((a) => ({ ...a, missedPoints: howSureMissed })),
     await take(CLAUDE, howSure, SAMPLE.takes.claudeHowSure, {
       result: "met",
       recordedAt: "2026-09-26T16:45:00.000Z",

@@ -93,10 +93,13 @@ A result is one Markdown file. It starts with a block of fields between `---` li
 - `assignment_version`: which version of the badge's task and rubric it was judged against. When you change either one, its holders are asked to re-test.
 - `setup`: the agent's harness, model and effort at the time.
 - The computer the test started on, the exact handoff text the agent got, and Jev's reading when you asked for one.
+- `missed_points`: on a Not met result, the rubric points you tapped as missed, as their text. Left out when you tapped none.
+
+Jev's reading keeps the chance Jev gave each rubric point, the whole bar and, under `targets`, each learning target. `examples_sent` says how many earlier replies went with the ask, and `model` names the Jev model that answered. The calls themselves aren't saved: the app reads them from the chances each time, with the badge's cut-offs as they are then.
 
 Below the fields, `## Note` holds the result's note and `## Handback` holds the reply as you pasted it.
 
-A test saves the note empty. To add one, open the result file in a text editor and write it under `## Note`. The note then shows at the top of the reply when you open it. The app doesn't change a result file once it's written, so your note stays.
+A test saves the note empty unless you wrote a line when your verdict went against Jev's call. To add one, open the result file in a text editor and write it under `## Note`. The note then shows at the top of the reply when you open it. The app doesn't change a result file once it's written, so your note stays. A second opinion on the same badge can send the note with that reply's opening, as [Jev Mode](/help/jev-mode/) explains.
 
 Results are never overwritten. Each test writes a new file, so the folder keeps every try.
 

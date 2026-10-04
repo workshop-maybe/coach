@@ -86,6 +86,17 @@ describe("the full sample folder", () => {
     expect(state.assessments.filter((a) => a.jev)).toHaveLength(1);
   });
 
+  it("gives the saved reading its learning targets and examples sent, and one Not met result the points it missed", async () => {
+    const { state } = await loadSample("full");
+    const reading = state.assessments.find((a) => a.jev)?.jev;
+    expect(reading?.targets?.map((t) => t.probability)).toEqual([0.86, 0.62]);
+    expect(reading?.examplesSent).toBe(0);
+    const missed = state.assessments.filter((a) => a.missedPoints);
+    expect(missed).toHaveLength(1);
+    expect(missed[0]).toMatchObject({ result: "not_met", profileSlug: SAMPLE.agents.codex });
+    expect(missed[0].missedPoints?.map((p) => p.slice(0, 16))).toEqual(["Questions 2 and ", "No wrong answer "]);
+  });
+
   it("matches every result's assignment version to its credential, so nothing reads task changed", async () => {
     const { state } = await loadSample("full");
     for (const a of state.assessments) {

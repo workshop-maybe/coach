@@ -26,13 +26,19 @@ A badge with no rubric shows only the reply. Give it one before you rely on its 
 ## Record your verdict
 
 - Click <UI>Met</UI> when the reply meets the rubric as written. The app shows <UI>\{agent\} holds it</UI> and waits. Click <UI>Make \{agent\} the go-to</UI> to choose this agent for the badge, or <UI>Home</UI> to leave it. [Choose a go-to](/how-to/choose-a-go-to/) explains the choice.
-- Click <UI>Not yet</UI> when it doesn't. The card says <UI>\{agent\} does not hold it</UI>. Click <UI>Done</UI> to go home, or <UI>Try another agent</UI> to give the same badge to another of your agents.
+- Click <UI>Not yet</UI> when it doesn't. The test then asks <UI>Which points did it miss</UI> and lists the rubric's points. Tap the ones the reply missed, or none, and click <UI>Save</UI>. The card says <UI>\{agent\} does not hold it</UI>. Click <UI>Done</UI> to go home, or <UI>Try another agent</UI> to give the same badge to another of your agents.
 - Click <UI>Hold to compare</UI> to judge it later, beside other agents' replies to the same handoff. The app saves the reply with no verdict and shows <UI>Reply held</UI>. <UI>Test another agent</UI> runs the same handoff on another agent. [Run a bake-off](/how-to/run-a-bake-off/) takes it from there.
 
-On <UI>Met</UI> or <UI>Not yet</UI>, the app saves a result in your folder: your verdict, the reply as it stands in the reply box, and the handoff you copied. The badge's page lists the reply under <UI>Replies</UI>, and on <UI>Met</UI> the agent lights a key for the badge on home.
+<Shot id="missed-points" alt="Which points did it miss, after Not yet: the Write a release note rubric's points as buttons, none pressed, and Save" />
+
+The points you tap are kept with the result. When you ask Jev about a later reply on the same badge, a reply that missed a point shows Jev what missing it looks like. Tapping is optional: skipping it records Not yet as before.
+
+On <UI>Met</UI> or <UI>Not yet</UI>, the app saves a result in your folder: your verdict, the reply as it stands in the reply box, the handoff you copied, and any points you tapped. The badge's page lists the reply under <UI>Replies</UI>, and on <UI>Met</UI> the agent lights a key for the badge on home.
 
 A result is never overwritten. To judge an agent again, test it again. Its newest result is the one that counts, and the older ones stay on the badge's page. [Compare takes](/how-to/compare-takes/) shows how to read them.
 
 ## A second opinion
 
-With [Jev Mode](/help/jev-mode/) on, the card can also offer <UI>Ask Jev</UI>, and <UI>Met</UI>, <UI>Not yet</UI> and <UI>Hold to compare</UI> become choices you confirm with <UI>Save</UI>. Jev Mode is off by default, and you can judge every reply without it. [Judging a result](/ideas/judging/) explains why the call is always yours.
+With [Jev Mode](/help/jev-mode/) on, the card can also offer <UI>Ask Jev</UI>, and <UI>Met</UI>, <UI>Not yet</UI> and <UI>Hold to compare</UI> become choices you confirm with <UI>Save</UI>, or <UI>Next</UI> when a step follows. Jev Mode is off by default, and you can judge every reply without it. [Judging a result](/ideas/judging/) explains why the call is always yours.
+
+When you asked Jev, the points step shows Jev's call beside each point, with none of them tapped for you. When your verdict goes against Jev's call on the whole bar, one more step asks <UI>What did Jev miss</UI>. Write a line, such as "skips the rollback", or leave it empty, and click <UI>Save</UI>. The line becomes the result's note, and Jev sees it beside that reply the next time you ask about this badge.

@@ -412,6 +412,22 @@ export const SHOTS: readonly Shot[] = [
     expect: { selector: ".compare-panes" },
   },
   {
+    // After Not yet, the test asks which of the rubric's points the reply missed, none pressed.
+    id: "missed-points",
+    page: "how-to/judge-a-reply",
+    route: RELEASE_TEST,
+    seed: "full",
+    jev: "off",
+    expect: { text: "Which points did it miss" },
+    steps: [
+      ...RELEASE_TO_REPLY,
+      { click: { button: "Next" } },
+      { waitFor: { text: "Did it meet it" } },
+      { click: { button: "Not yet" } },
+      { waitFor: { text: "Which points did it miss" } },
+    ],
+  },
+  {
     // Claude Code takes Write a release note and its reply is held: the screen after holding.
     id: "held",
     page: "how-to/run-a-bake-off",
@@ -555,7 +571,7 @@ export const COVERAGE: Record<RouteKind, readonly string[] | typeof NOT_PICTURED
   home: ["home-empty", "home", "home-needs"],
   "deck:credential": ["credential-start", "credential-target"],
   "deck:agent": ["first-test-agent", "first-test-hand", "first-test-judge", "first-test-home", "agent-new"],
-  "deck:test": ["test-hand", "test-reply", "judge", "go-to-offer", "held", "jev-ask", "jev-cleanup"],
+  "deck:test": ["test-hand", "test-reply", "judge", "go-to-offer", "missed-points", "held", "jev-ask", "jev-cleanup"],
   "deck:edit-credential": ["edit-retest", "paste-image"],
   "deck:edit-agent": ["agent-params"],
   "deck:handoffs": ["handoffs-box"],

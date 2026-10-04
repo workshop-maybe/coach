@@ -23,10 +23,10 @@ Turning it on sends nothing. The app keeps the key in your system's keychain and
 
 Nothing is sent until you ask.
 
-- **A second opinion** sends the reply, the badge's task and its rubric.
+- **A second opinion** sends the reply, the badge's task, rubric and learning targets, and the openings of a few earlier replies on this badge with your notes on them.
 - **A cleanup** sends only the text you pasted.
 
-Nothing else from your folder goes with either one. TypeSafe keeps what it receives under [its terms](https://docs.typesafe.ai/legal).
+The earlier replies come from any of your agents, and only from the badge you're judging. Each is cut to its first few lines, without pictures, and lines that look like keys are left out. Nothing else from your folder goes with either one. TypeSafe keeps what it receives under [its terms](https://docs.typesafe.ai/legal).
 
 ## A second opinion
 
@@ -37,11 +37,19 @@ When Jev Mode is on and the badge has a rubric, <UI>Did it meet it</UI> changes 
 
 <Shot id="jev-ask" alt="Did it meet it with Jev Mode on: the badge's rubric with Ask Jev under it, the reply beside it, the Met, Not yet and Hold to compare buttons, and Save, greyed out until you pick" />
 
-Jev's reading shows below the rubric: a chance that the reply meets each rubric point, and one <UI>Overall</UI>. A point Jev can't call either way says <UI>Can't call: sharpen this point</UI>. You still make the call, and the reading is saved with your result. If you hold the reply to compare instead, the reading stays with it and goes into the result when you judge it.
+When the badge has earlier replies, a line under <UI>Ask Jev</UI> says how many go with this one: <UI>Also sends \{n\} earlier replies on this badge</UI>, ending <UI>with your notes</UI> when any of your notes go too. Jev sees them as examples of your own verdicts: a reply you judged Met, and a reply that missed a point you tapped. Replies where you went against Jev's call, and your notes on why, go first.
 
-To see it again, open the reply from the badge's <UI>Replies</UI>, as [Compare takes](/how-to/compare-takes/) shows. The reading is folded under the reply, with its overall chance on the fold. Click the fold to open it.
+Jev's reading shows below the rubric as calls. Each rubric point, the <UI>Overall</UI> bar and each of the badge's learning targets reads <UI>Meets</UI>, <UI>Misses</UI> or <UI>Can't call</UI>, with Jev's chance beside it in small type. A point Jev can't call either way says <UI>Can't call: sharpen this point</UI>. You still make the call, and the reading is saved with your result. If you hold the reply to compare instead, the reading stays with it and goes into the result when you judge it.
 
-<Shot id="jev-reading" alt="Codex's reply on Check an answer key, with Jev's reading open below it: each rubric point as Jev read it with a chance from 88% to 95%, and 91% overall" />
+### How a call is read
+
+A new badge reads anything above 70% as meets, anything below 30% as misses, and everything from 30% to 70% as can't call. Once a badge has eight results judged with Jev's reading, at least two of them Met and two Not met, the app fits those cut-offs to your verdicts there. When that moves them, the reading says <UI>Cut-offs fitted to your verdicts</UI>. Rubric points and learning targets use the same cut-offs as the whole bar, since only the whole bar has your verdict on every result. Moving the cut-offs re-reads past readings without asking Jev again.
+
+Once the badge has eight judged readings, and after you pick <UI>Met</UI> or <UI>Not yet</UI>, the reading also shows how often Jev's call on this badge has matched yours, such as <UI>Jev matched your verdict \{k\} of \{c\} times on this badge</UI>. It waits for your pick so it can't lean on your verdict.
+
+To see a reading again, open the reply from the badge's <UI>Replies</UI>, as [Compare takes](/how-to/compare-takes/) shows. The reading is folded under the reply, with its overall call on the fold. Click the fold to open it.
+
+<Shot id="jev-reading" alt="Codex's reply on Check an answer key, with Jev's reading open below it: each rubric point called Meets with its chance beside it, Meets overall at 91%, and the two learning targets, one Meets and one Can't call" />
 
 A reply too long for Jev shows <UI>This reply is too long for Jev</UI>, and you judge it as usual.
 
