@@ -68,6 +68,7 @@ function About() {
       <p>Jev Mode asks TypeSafe's Jev model, with your own key. Nothing is sent until you ask.</p>
       <ul>
         <li>A second opinion sends the reply, the badge's task, rubric and learning targets, and the openings of a few earlier replies on this badge with your notes on them.</li>
+        <li>A comparison sends two replies at a time, with the badge's task, rubric and learning targets.</li>
         <li>A cleanup sends only the text you pasted.</li>
       </ul>
       <p>
