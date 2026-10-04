@@ -215,25 +215,6 @@ button:focus-visible {
   background: none;
 }
 
-.lockup {
-  display: block;
-  height: 22px;
-  width: auto;
-  overflow: visible;
-}
-
-.lockup-ink {
-  stroke: var(--ink);
-}
-
-.lockup-brace {
-  stroke: var(--sys-orange);
-}
-
-.lockup-dot {
-  fill: var(--ink);
-}
-
 .topbar {
   display: flex;
   align-items: center;
@@ -795,31 +776,6 @@ button:focus-visible {
 .rich-bar {
   gap: 2px;
   padding: 4px 6px;
-}
-
-.tool-key {
-  display: block;
-  overflow: visible;
-}
-
-.tool-key-edge,
-.tool-key-icon {
-  fill: none;
-  stroke: var(--ink);
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.tool-key-edge {
-  stroke-width: 1.4;
-}
-
-.tool-key-fill {
-  fill: var(--ink);
-}
-
-.tool-key-on .tool-key-icon {
-  stroke: var(--on-ink);
 }
 
 .rich-menu button:hover:not([aria-pressed="true"]),
@@ -2452,91 +2408,6 @@ button:focus-visible {
 
 .edit-holders .cast {
   flex: none;
-}
-
-/* The cast (src/cast): agents are machines, credentials are cartridges, drawn in a
-   hand-inked line. Strokes are currentColor; the only fills are paper-white insides
-   and lit keys, whose badge colors are SVG attributes. */
-.ink-defs {
-  position: absolute;
-  width: 0;
-  height: 0;
-  overflow: hidden;
-}
-
-.cast {
-  display: block;
-  color: var(--ink);
-  overflow: visible;
-}
-
-.cast-paper {
-  fill: var(--surface);
-}
-
-.cast-glass {
-  fill: var(--paper);
-}
-
-.cast-screen-text {
-  font-family: var(--font-mono);
-  letter-spacing: 0;
-}
-
-/* The handoff box's letters, and the letter on a handoff card's header bar. */
-.cast-handoff-label,
-.cast-card-label {
-  font-family: var(--font-mono);
-  letter-spacing: 0;
-  fill: currentColor;
-}
-
-.cast-handoff-label-lit,
-.cast-card-label {
-  fill: var(--surface);
-}
-
-/* The lit key's light: the handoff the view is about. */
-.cast-handoff-led {
-  fill: var(--data);
-}
-
-.cast-outline {
-  color: var(--ink-faint);
-}
-
-.cast-encoder-live {
-  cursor: pointer;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .cast-dot {
-    animation: cast-dot-out 960ms ease-in-out infinite both;
-  }
-
-  .cast-cursor {
-    animation: cast-blink 1060ms steps(1, end) infinite;
-  }
-}
-
-@keyframes cast-dot-out {
-  0% {
-    opacity: 0.15;
-    transform: translateX(-3px);
-  }
-  50% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0.15;
-    transform: translateX(3px);
-  }
-}
-
-@keyframes cast-blink {
-  50% {
-    opacity: 0;
-  }
 }
 
 /* ---------------------------------------------------------------------------
