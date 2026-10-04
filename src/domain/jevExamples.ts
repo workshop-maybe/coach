@@ -183,19 +183,26 @@ const ASSIGNMENT = /\b[A-Z][A-Z0-9_]+[ \t]*=[ \t]*["']?[^\s"']{16,}/;
 const HEX_RUN = /[0-9A-Fa-f]{32,}/;
 /**
  * A password-like key given a value, in any case: `password = hunter2`, `db_password: x`,
- * `"api_key": "…"`. With `=` any value counts. With `:` only a quoted value, or one word
- * that ends the line (a comment after it aside), so "Password: at least 12 characters"
- * stays. Bare `pass` and `pwd` are left out: "passed: 42" and `pwd` output are common.
+ * `"passphrase": "correct horse battery staple"`. With `=` any value counts. With `:` only a
+ * quoted value, spaces and all, or one word that ends the line (a comment after it aside),
+ * so "Password: at least 12 characters" stays. Bare `pass` and `pwd` are left out: "passed:
+ * 42" and `pwd` output are common. The key name may sit anywhere in a longer key
+ * (`db_password`), so the pattern starts at the name itself, and the rest of the key is
+ * capped: an open-ended run before or after the name would be rescanned for every name in
+ * a long line. No two runs of spaces sit side by side, for the same reason.
  */
 const NAMED_SECRET = new RegExp(
-  String.raw`\b[\w.-]*(?:passw(?:or)?d|passphrase|secret|api[_-]?key|access[_-]?key|private[_-]?key)[\w.-]*["']?[ \t]*` +
-    String.raw`(?:=(?!=)[ \t]*["']?[^\s"']|:[ \t]*(?:"[^"\s]+"|'[^'\s]+'|[^\s"']+[ \t]*[,;]?(?:[ \t]+(?:#|\/\/).*)?$))`,
+  String.raw`(?:passw(?:or)?d|passphrase|secret|api[_-]?key|access[_-]?key|private[_-]?key)[\w.-]{0,40}["']?[ \t]*` +
+    String.raw`(?:=(?!=)[ \t]*["']?[^\s"']|:[ \t]*(?:"[^"]+"|'[^']+'|[^\s"']+[,;]?(?:[ \t]+(?:#|\/\/).*)?[ \t]*$))`,
   "i",
 );
 /** Markdown emphasis and code marks, which can sit between a key and its value: `**Password:** x`. */
 const MARKS = /[*`]/g;
-/** A link that carries a password, with or without a user: `https://me:pass@host`, `redis://:pass@host`. */
-const URL_CREDENTIAL = /\b[a-z][a-z0-9+.-]*:\/\/[^\s/?#@:]*:[^\s/?#@]+@/i;
+/**
+ * A link that carries a password, with or without a user: `https://me:pass@host`,
+ * `redis://:pass@host`. It starts at the `://`, whatever the scheme, so a long line is read once.
+ */
+const URL_CREDENTIAL = /:\/\/[^\s/?#@:]*:[^\s/?#@]+@/;
 /**
  * A run of base64 or base64url characters. It reads as a key only with a digit and both
  * cases, so a long file path or URL, which uses the same characters, is kept.

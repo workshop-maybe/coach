@@ -350,6 +350,10 @@ describe("an excerpt", () => {
       "**Password:** hunter2",
       "- **Password**: `hunter2`",
       "db_password: hunter2 # dev only",
+      '  "passphrase": "correct horse battery staple",',
+      'password: "hunter two"',
+      "password: 'my dog spot'",
+      "db_password: hunter2,",
       "export PGPASSWORD=hunter2",
       "client_secret = 'abc123'",
       "Tests pass.",
@@ -380,6 +384,21 @@ describe("an excerpt", () => {
     ];
     // One at a time, since an excerpt stops at 300 characters.
     for (const line of lines) expect(excerptOf(line)).toBe(line);
+  });
+
+  it("reads a very long line in one pass, however it is made", () => {
+    const lines = [
+      `${"a.".repeat(50_000)}x`,
+      "b://".repeat(20_000),
+      "password".repeat(25_000),
+      `password: x${" ".repeat(100_000)}y`,
+    ];
+    // One at a time, since an excerpt stops reading once it has enough.
+    for (const line of lines) {
+      const start = performance.now();
+      excerptOf(line);
+      expect(performance.now() - start, line.slice(0, 20)).toBeLessThan(1000);
+    }
   });
 
   it("is empty for a reply that is only secret lines", () => {
