@@ -341,6 +341,47 @@ describe("an excerpt", () => {
     expect(excerptOf(reply)).toBe("Opened the PR.\nTests pass.");
   });
 
+  it("drops a password given a value in any case, however the line is marked up", () => {
+    const reply = [
+      "Set up the database.",
+      "password = hunter2",
+      "db_password: s3cret-value",
+      '  "password": "hunter2",',
+      "**Password:** hunter2",
+      "- **Password**: `hunter2`",
+      "db_password: hunter2 # dev only",
+      "export PGPASSWORD=hunter2",
+      "client_secret = 'abc123'",
+      "Tests pass.",
+    ].join("\n");
+    expect(excerptOf(reply)).toBe("Set up the database.\nTests pass.");
+  });
+
+  it("drops a link that carries a password, with or without a user", () => {
+    const reply = [
+      "Pushed the fix.",
+      "Cloned https://deploy:hunter2@git.example.com/app.git first.",
+      "Connected with postgres://admin:pa55@localhost:5432/app.",
+      "Cache at redis://:pa55@localhost:6379/0",
+      "Done.",
+    ].join("\n");
+    expect(excerptOf(reply)).toBe("Pushed the fix.\nDone.");
+  });
+
+  it("keeps prose that mentions a password, and links with no password in them", () => {
+    const lines = [
+      "Reset the password in the settings screen.",
+      "The password field now trims spaces, and a wrong password says so.",
+      "Password: at least 12 characters, checked as you type.",
+      "**Password:** at least 12 characters",
+      "Compared password == confirm before saving.",
+      "Docs at https://example.com/docs and the app at http://localhost:5173/.",
+      "Pushed to git@github.com:you/app.git and https://user@example.com/app.",
+    ];
+    // One at a time, since an excerpt stops at 300 characters.
+    for (const line of lines) expect(excerptOf(line)).toBe(line);
+  });
+
   it("is empty for a reply that is only secret lines", () => {
     expect(excerptOf(`sk-${"x".repeat(40)}\n-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC`)).toBe("");
   });
@@ -364,6 +405,7 @@ describe("a reason", () => {
 
   it("is cleaned as an excerpt is", () => {
     expect(reasonOf(`Misses\u200b the point.\nAPI_TOKEN=${"q".repeat(30)}\n![shot](a.png)`)).toBe("Misses the point.");
+    expect(reasonOf("Logs in with the wrong account.\npassword = hunter2")).toBe("Logs in with the wrong account.");
   });
 
   it("is empty for a blank note", () => {
