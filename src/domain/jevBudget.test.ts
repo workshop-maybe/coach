@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { fitSecondOpinion, fitsJev, fitsTokens, jevTokens } from "./jevBudget";
-import { JEV_LIMITS, type JevExample, type JevExampleEntry, type JevExampleMap, type LineBreaksRequest, type SecondOpinionRequest } from "./jevRequest";
+import {
+  JEV_LIMITS,
+  type HeadToHeadRequest,
+  type JevExample,
+  type JevExampleEntry,
+  type JevExampleMap,
+  type LineBreaksRequest,
+  type SecondOpinionRequest,
+} from "./jevRequest";
 import { secondOpinionRequest, type SecondOpinionInput } from "./secondOpinion";
 
 // The cases mirror the native side's budget test in src-tauri/src/jev.rs, so the two
@@ -112,6 +120,37 @@ describe("fitsJev: a second opinion's examples", () => {
     expect(fitsJev(withExamples(126_535))).toBe(true);
     expect(fitsJev(withExamples(126_536))).toBe(false);
     expect(fitsJev(withExamples(126_536, false))).toBe(true);
+  });
+});
+
+// The native side's budget test for a head-to-head uses this same request
+// (`pair_for_budget` in src-tauri/src/jev.rs), so the two checks refuse it at the same
+// reply length.
+function pairForBudget(replyLength: number): HeadToHeadRequest {
+  const question = { type: "noul" as const, instructions: { point: "Point 1", question: "q" }, criteria: { true: "w", false: "w" } };
+  return {
+    kind: "headToHead",
+    state: {
+      task: "Write the README",
+      rubric_points: ["Point 1"],
+      rubric_notes: "",
+      rubric: "- Point 1",
+      learning_targets: ["Target 1"],
+      reply_1: "y".repeat(replyLength),
+      reply_2: "z".repeat(replyLength),
+    },
+    questions: { a1: question, b1: question },
+  };
+}
+
+describe("fitsJev: a head-to-head's two replies", () => {
+  it("counts both replies in the state, refusing at the same reply length as the native check", () => {
+    // Each question is 101 characters of JSON, 26 tokens; the state is 152 characters plus
+    // both replies. Each reply alone is about half the 32k, so only the two together pass it.
+    expect(jevTokens(pairForBudget(0).questions.a1)).toBe(26);
+    expect(jevTokens(pairForBudget(0).state)).toBe(38);
+    expect(fitsJev(pairForBudget(63_872))).toBe(true);
+    expect(fitsJev(pairForBudget(63_873))).toBe(false);
   });
 });
 

@@ -1,8 +1,9 @@
-// The two requests the native `jev_ask` command accepts, and what it answers (KTD1, KTD7,
-// KTD17; growing context KTD2, KTD3). These mirror the contract at the top of
-// src-tauri/src/jev.rs; Rust refuses any other field, question type or key. State and
-// instruction keys are TypeSafe's wire names, so backticked references in question text
-// (`reply`, `point`, `rubric_notes`, `target`, `task`) resolve against them.
+// The three requests the native `jev_ask` command accepts, a second opinion, a head-to-head
+// and a line-break cleanup, and what it answers (KTD1, KTD7, KTD17; growing context KTD2,
+// KTD3; jev-in-compare KTD5). These mirror the contract at the top of src-tauri/src/jev.rs;
+// Rust refuses any other field, question type or key. State and instruction keys are
+// TypeSafe's wire names, so backticked references in question text (`reply`, `reply_1`,
+// `reply_2`, `point`, `rubric_notes`, `target`, `task`) resolve against them.
 
 /** The Jev model the native side pins (MODEL in src-tauri/src/jev.rs), and what an answer that names no model reads as. */
 export const JEV_MODEL = "jev-1.13.0";
@@ -80,7 +81,29 @@ export interface LineBreaksRequest {
   questions: Record<string, { type: "noul"; instructions: string; criteria?: JevCriteria }>;
 }
 
-export type JevRequest = SecondOpinionRequest | LineBreaksRequest;
+/**
+ * A head-to-head: two replies to one handoff, in the compare's order, asked for each rubric
+ * point whether `reply_1` covers it better than `reply_2` ("a1" … "aN") and the reverse
+ * ("b1" … "bN"). Rust holds each question's `point` to `rubric_points[i-1]`, and its
+ * criteria to plain strings: no examples, no target.
+ */
+export interface HeadToHeadRequest {
+  kind: "headToHead";
+  state: {
+    task: string;
+    /** At least one: a rubric with no points has no head-to-head. */
+    rubric_points: string[];
+    rubric_notes: string;
+    rubric: string;
+    /** Trimmed, without blanks or repeats, as a second opinion sends them. Empty when the badge has none. */
+    learning_targets: string[];
+    reply_1: string;
+    reply_2: string;
+  };
+  questions: Record<string, { type: "noul"; instructions: { point: string; rubric_notes?: string; question: string }; criteria?: JevCriteria }>;
+}
+
+export type JevRequest = SecondOpinionRequest | HeadToHeadRequest | LineBreaksRequest;
 
 /** Examples by question id and criteria side, each side's in the order they go. */
 export type JevExampleMap = Readonly<Record<string, Partial<Record<CriteriaSide, readonly JevExample[]>>>>;

@@ -203,7 +203,7 @@ const THEMATIC_BREAK = /^([-*_])(?:[ \t]*\1){2,}$/;
 const TASK_BOX = /^\[[ xX]\](?:[ \t]+|$)/;
 
 /** The targets as sent: each trimmed, blanks and repeats dropped, in order (KTD12). */
-function targetsToSend(targets: readonly string[]): string[] {
+export function targetsToSend(targets: readonly string[]): string[] {
   return [...new Set(targets.map((t) => t.trim()).filter((t) => t !== ""))];
 }
 
