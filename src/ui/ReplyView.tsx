@@ -15,6 +15,7 @@ import { useState } from "react";
 import { BUILT_IN_HANDOFF } from "../domain/handoffs";
 import { credentialKey } from "../domain/types";
 import { formatDate, handoffText } from "./format";
+import { resultImages } from "./imageSource";
 import { SavedReading } from "./JevReading";
 import { useNav } from "./nav";
 import { usePane } from "./pane";
@@ -26,7 +27,7 @@ import { useFolder } from "./useFolderState";
 import { useMatrix } from "./useMatrix";
 
 export function ReplyView({ credentialKey: key, take, picks }: { credentialKey: string; take: TakeRef; picks?: TakeRef[] }) {
-  const { state } = useFolder();
+  const { state, storage } = useFolder();
   const { navigate } = useNav();
   const matrix = useMatrix(state);
   const [asStored, setAsStored] = useState(false);
@@ -58,7 +59,7 @@ export function ReplyView({ credentialKey: key, take, picks }: { credentialKey: 
           <StoredSwitch asStored={asStored} onToggle={() => setAsStored((s) => !s)} />
           {note !== "" && <p className="reply-note">{note}</p>}
         </TakeBar>
-        <RichView aria-label="Reply" value={a.handBack} stored={asStored} />
+        <RichView aria-label="Reply" value={a.handBack} stored={asStored} images={resultImages(storage, a)} />
       </article>
       {a.jev && <SavedReading reading={a.jev} />}
       <details className="reply-ran">

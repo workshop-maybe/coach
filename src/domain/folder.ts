@@ -43,16 +43,26 @@ export function collectionPath(slug: Slug): string {
   return `${COLLECTIONS_DIR}/${slug}/collection.json`;
 }
 
+/** The folder every credential in a collection saves to, and their pasted images with them. */
+export function credentialsDir(collectionSlug: Slug): string {
+  return `${COLLECTIONS_DIR}/${collectionSlug}/credentials`;
+}
+
 export function credentialPath(collectionSlug: Slug, slug: Slug): string {
-  return `${COLLECTIONS_DIR}/${collectionSlug}/credentials/${slug}.md`;
+  return `${credentialsDir(collectionSlug)}/${slug}.md`;
 }
 
 export function profilePath(slug: Slug): string {
   return `${AGENTS_DIR}/${slug}.json`;
 }
 
+/** The folder one agent's results on one badge save to, and their pasted images with them. */
+export function assessmentDir(profileSlug: Slug, collectionSlug: Slug, credentialSlug: Slug): string {
+  return `${ASSESSMENTS_DIR}/${profileSlug}/${collectionSlug}/${credentialSlug}`;
+}
+
 export function assessmentPath(profileSlug: Slug, collectionSlug: Slug, credentialSlug: Slug, fileStem: string): string {
-  return `${ASSESSMENTS_DIR}/${profileSlug}/${collectionSlug}/${credentialSlug}/${fileStem}.md`;
+  return `${assessmentDir(profileSlug, collectionSlug, credentialSlug)}/${fileStem}.md`;
 }
 
 /** Every handoff file for one badge, parsed or not. */

@@ -10,7 +10,7 @@ import type { Route } from "../ui/routes";
 import { PART_IDS } from "../../site/src/parts";
 import { startShot } from "./harness";
 import { sampleFolder, sampleStorage } from "./seed";
-import { COVERAGE, NOT_PICTURED, SHOTS, routeKind, type Shot } from "./shots";
+import { COVERAGE, NOT_PICTURED, SAMPLE_IMAGES, SHOTS, routeKind, type Shot } from "./shots";
 
 const KEBAB = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -139,6 +139,7 @@ describe("the shot manifest", () => {
       for (const step of shot.steps ?? []) {
         const target =
           "click" in step ? step.click : "fill" in step ? step.fill : "waitFor" in step ? step.waitFor : "scroll" in step ? step.scroll : (step.into ?? { selector: ".rich-input" });
+        if ("pasteImage" in step) expect(SAMPLE_IMAGES, `${shot.id}: ${step.pasteImage}`).toContain(step.pasteImage);
         expect(Object.values(target).every((v) => typeof v === "string" && v !== ""), `${shot.id}: ${JSON.stringify(step)}`).toBe(true);
       }
     }

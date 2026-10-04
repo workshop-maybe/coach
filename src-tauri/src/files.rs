@@ -1,5 +1,5 @@
 //! Confined file I/O over the folders the user picked: text files, plus
-//! JPEG/PNG badge art copied in and read back as data URIs.
+//! JPEG/PNG images (badge art, pasted images) written in and read back as data URIs.
 //!
 //! Everything here is plain Rust with no Tauri types, so the confinement rules
 //! are unit-tested without a runtime. The Tauri commands in `lib.rs` are thin
@@ -73,21 +73,15 @@ pub fn register_remembered(roots: &mut Roots, remembered: Option<&str>) -> Optio
     roots.set(RootKind::Data, Path::new(folder)).ok()
 }
 
-/// Resolves `rel` inside the canonical `root`, or explains why it cannot.
-///
-/// Rejects absolute paths, `..` that climbs above the root, and symlinks
-/// (including dangling ones) that lead outside the root. The returned path
-/// has every existing component resolved, so later I/O cannot be redirected
-/// by a symlink that was checked here.
-pub fn resolve_in_root(root: &Path, rel: &str) -> Result<PathBuf, String> {
+/// Lexical normalization of a root-relative path: drops `.`, applies `..`, and
+/// refuses an absolute path or one that climbs above the root. Reads no disk.
+fn normalize_rel(rel: &str) -> Result<Vec<&std::ffi::OsStr>, String> {
     use std::path::Component;
 
     let rel_path = Path::new(rel);
     if rel_path.is_absolute() || rel_path.has_root() {
         return Err(format!("Path \"{rel}\" must be relative to the folder."));
     }
-
-    // Lexical normalization: drop `.`, apply `..`, refuse to climb above the root.
     let mut parts: Vec<&std::ffi::OsStr> = Vec::new();
     for comp in rel_path.components() {
         match comp {
@@ -103,6 +97,17 @@ pub fn resolve_in_root(root: &Path, rel: &str) -> Result<PathBuf, String> {
             }
         }
     }
+    Ok(parts)
+}
+
+/// Resolves `rel` inside the canonical `root`, or explains why it cannot.
+///
+/// Rejects absolute paths, `..` that climbs above the root, and symlinks
+/// (including dangling ones) that lead outside the root. The returned path
+/// has every existing component resolved, so later I/O cannot be redirected
+/// by a symlink that was checked here.
+pub fn resolve_in_root(root: &Path, rel: &str) -> Result<PathBuf, String> {
+    let parts = normalize_rel(rel)?;
 
     // Find the nearest existing ancestor and resolve it through symlinks.
     let mut existing = parts.len();
@@ -257,12 +262,43 @@ pub fn list_files_in(root: &Path, dir: &str) -> Result<Vec<String>, String> {
 /// Largest plate-art image accepted, in bytes (3 MiB, inclusive).
 pub const MAX_IMAGE_BYTES: usize = 3 * 1024 * 1024;
 
+/// Largest pasted image accepted, in bytes (10 MiB, inclusive). It is also the
+/// largest image the app writes, so it caps every image read.
+pub const MAX_PASTED_IMAGE_BYTES: usize = 10 * 1024 * 1024;
+
 const PNG_SIGNATURE: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
 const JPEG_MAGIC: [u8; 3] = [0xFF, 0xD8, 0xFF];
 
-/// Checks that `bytes` is a JPEG or PNG no larger than 3 MiB, by magic bytes
-/// rather than by file name. Returns the extension to store it under.
-pub fn validate_image(bytes: &[u8]) -> Result<&'static str, String> {
+/// What an image is for, which sets its size cap and how a refusal reads.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImageLimit {
+    /// Plate art: 3 MiB.
+    BadgeArt,
+    /// A pasted image, or one the app copies or reads: 10 MiB.
+    Pasted,
+}
+
+impl ImageLimit {
+    pub const fn max_bytes(self) -> usize {
+        match self {
+            ImageLimit::BadgeArt => MAX_IMAGE_BYTES,
+            ImageLimit::Pasted => MAX_PASTED_IMAGE_BYTES,
+        }
+    }
+
+    fn too_large(self, len: usize) -> String {
+        match self {
+            ImageLimit::BadgeArt => {
+                format!("That image is {len} bytes. Badge art must be 3 MiB ({MAX_IMAGE_BYTES} bytes) or smaller.")
+            }
+            ImageLimit::Pasted => "That image is larger than 10 MB.".into(),
+        }
+    }
+}
+
+/// Checks that `bytes` is a JPEG or PNG within `limit`, by magic bytes rather
+/// than by file name. Returns the extension to store it under.
+pub fn validate_image(bytes: &[u8], limit: ImageLimit) -> Result<&'static str, String> {
     let ext = if bytes.starts_with(&JPEG_MAGIC) {
         "jpg"
     } else if bytes.starts_with(&PNG_SIGNATURE) {
@@ -270,13 +306,16 @@ pub fn validate_image(bytes: &[u8]) -> Result<&'static str, String> {
     } else {
         return Err("That file is not a JPEG or PNG image.".into());
     };
-    if bytes.len() > MAX_IMAGE_BYTES {
-        return Err(format!(
-            "That image is {} bytes. Badge art must be 3 MiB ({MAX_IMAGE_BYTES} bytes) or smaller.",
-            bytes.len()
-        ));
+    if bytes.len() > limit.max_bytes() {
+        return Err(limit.too_large(bytes.len()));
     }
     Ok(ext)
+}
+
+/// The first 4 bytes of the SHA-256 of `bytes`, as 8 lowercase hex digits.
+fn hash8(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(bytes)[..4].iter().map(|b| format!("{b:02x}")).collect()
 }
 
 /// A slug must be one safe path segment. Hand-made folders can have any name, so
@@ -298,16 +337,13 @@ fn check_slug(what: &str, slug: &str) -> Result<(), String> {
 /// `collections/<slug>/badge/<credential>-<8 hex>.<ext>` for an override.
 /// The hex is the first 4 bytes of the image's SHA-256.
 pub fn art_dest_name(collection_slug: &str, credential_slug: Option<&str>, bytes: &[u8]) -> Result<String, String> {
-    use sha2::{Digest, Sha256};
-
     check_slug("collection", collection_slug)?;
     if let Some(cred) = credential_slug {
         check_slug("credential", cred)?;
     }
-    let ext = validate_image(bytes)?;
-    let hash: String = Sha256::digest(bytes)[..4].iter().map(|b| format!("{b:02x}")).collect();
+    let ext = validate_image(bytes, ImageLimit::BadgeArt)?;
     let stem = credential_slug.unwrap_or("art");
-    Ok(format!("collections/{collection_slug}/badge/{stem}-{hash}.{ext}"))
+    Ok(format!("collections/{collection_slug}/badge/{stem}-{}.{ext}", hash8(bytes)))
 }
 
 /// Writes `bytes` to `rel` inside `root` atomically, creating parent folders.
@@ -316,16 +352,67 @@ pub fn copy_bytes_into_root(root: &Path, rel: &str, bytes: &[u8]) -> Result<(), 
     write_bytes_in(root, rel, bytes)
 }
 
+/// Saves a pasted or exported image in `dir` under its content-addressed name,
+/// `image-<8 hex>.<ext>`, and returns its root-relative path with forward
+/// slashes. An empty `dir` or `.` means the root itself. The same bytes saved
+/// again write nothing and return the same path. Anything else already at that
+/// name is refused: a different file, a link, a folder, or a path that cannot
+/// be checked.
+pub fn save_image_in(root: &Path, dir: &str, bytes: &[u8]) -> Result<String, String> {
+    let ext = validate_image(bytes, ImageLimit::Pasted)?;
+    let name = format!("image-{}.{ext}", hash8(bytes));
+    // `dir` is never trimmed, so "/" stays absolute and is refused.
+    let joined = if dir.is_empty() { name.clone() } else { format!("{dir}/{name}") };
+    let parts = normalize_rel(&joined)?;
+    let rel = parts.iter().map(|p| p.to_string_lossy()).collect::<Vec<_>>().join("/");
+    let target = resolve_in_root(root, &rel)?;
+
+    // Resolving follows a link at the name to its target, so check the name as given.
+    let named = parts.iter().fold(root.to_path_buf(), |p, c| p.join(c));
+    match std::fs::symlink_metadata(&named) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            write_bytes_in(root, &rel, bytes)?;
+            Ok(rel)
+        }
+        Err(e) => Err(format!("Cannot save the image as \"{rel}\": {e}")),
+        Ok(m) if m.file_type().is_symlink() || !m.is_file() => {
+            Err(format!("Something other than a plain file is already named {name}."))
+        }
+        Ok(m) => {
+            let same = m.len() == bytes.len() as u64
+                && std::fs::read(&target).map_err(|e| format!("Cannot read \"{rel}\": {e}"))? == bytes;
+            if same {
+                Ok(rel)
+            } else {
+                Err(format!("A different file is already named {name}."))
+            }
+        }
+    }
+}
+
+/// Decodes a percent-encoded folder header once, as strict UTF-8. Refuses one
+/// that does not decode or that holds a control character, NUL included.
+pub fn decode_dir_header(raw: &str) -> Result<String, String> {
+    let dir = percent_encoding::percent_decode_str(raw)
+        .decode_utf8()
+        .map_err(|_| "The folder name is not valid UTF-8.".to_string())?;
+    if dir.chars().any(char::is_control) {
+        return Err("The folder name holds a control character.".into());
+    }
+    Ok(dir.into_owned())
+}
+
 /// Reads a JPEG or PNG inside `root` as a base64 data URI. `None` when it
-/// does not exist. Anything that is not a valid image is an error.
+/// does not exist. Anything that is not a valid image is an error. Every image
+/// is read up to the largest the app writes, badge art included.
 pub fn read_data_uri_in(root: &Path, rel: &str) -> Result<Option<String>, String> {
     use base64::Engine;
 
     let path = resolve_in_root(root, rel)?;
     // Refuse an oversized file before reading it all (validate_image checks again).
     match std::fs::metadata(&path) {
-        Ok(m) if m.len() > MAX_IMAGE_BYTES as u64 => {
-            return Err(format!("\"{rel}\": the image is larger than 3 MiB"));
+        Ok(m) if m.len() > MAX_PASTED_IMAGE_BYTES as u64 => {
+            return Err(format!("\"{rel}\": the image is larger than 10 MB"));
         }
         _ => {}
     }
@@ -334,7 +421,7 @@ pub fn read_data_uri_in(root: &Path, rel: &str) -> Result<Option<String>, String
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(e) => return Err(format!("Cannot read \"{rel}\": {e}")),
     };
-    let mime = match validate_image(&bytes).map_err(|e| format!("\"{rel}\": {e}"))? {
+    let mime = match validate_image(&bytes, ImageLimit::Pasted).map_err(|e| format!("\"{rel}\": {e}"))? {
         "jpg" => "image/jpeg",
         _ => "image/png",
     };
@@ -624,25 +711,44 @@ mod tests {
 
     #[test]
     fn validate_image_accepts_jpeg_and_png_by_magic_bytes() {
-        assert_eq!(validate_image(&jpeg(100)).unwrap(), "jpg");
-        assert_eq!(validate_image(&png(100)).unwrap(), "png");
+        assert_eq!(validate_image(&jpeg(100), ImageLimit::BadgeArt).unwrap(), "jpg");
+        assert_eq!(validate_image(&png(100), ImageLimit::BadgeArt).unwrap(), "png");
     }
 
     #[test]
     fn validate_image_rejects_a_renamed_text_file_and_empty_input() {
-        let err = validate_image(b"just some text, saved as art.png").unwrap_err();
+        let err = validate_image(b"just some text, saved as art.png", ImageLimit::BadgeArt).unwrap_err();
         assert!(err.contains("JPEG or PNG"), "got: {err}");
-        assert!(validate_image(b"").is_err());
+        assert!(validate_image(b"", ImageLimit::BadgeArt).is_err());
         // A truncated PNG signature is not a PNG.
-        assert!(validate_image(&PNG_SIG[..4]).is_err());
+        assert!(validate_image(&PNG_SIG[..4], ImageLimit::BadgeArt).is_err());
     }
 
     #[test]
-    fn validate_image_size_limit_is_one_mib_inclusive() {
-        assert_eq!(validate_image(&png(MAX_IMAGE_BYTES)).unwrap(), "png");
-        let err = validate_image(&png(MAX_IMAGE_BYTES + 1)).unwrap_err();
+    fn validate_image_badge_art_limit_is_three_mib_inclusive() {
+        assert_eq!(validate_image(&png(MAX_IMAGE_BYTES), ImageLimit::BadgeArt).unwrap(), "png");
+        let err = validate_image(&png(MAX_IMAGE_BYTES + 1), ImageLimit::BadgeArt).unwrap_err();
         assert!(err.contains("3 MiB"), "got: {err}");
-        assert!(validate_image(&jpeg(MAX_IMAGE_BYTES + 1)).is_err());
+        assert!(validate_image(&jpeg(MAX_IMAGE_BYTES + 1), ImageLimit::BadgeArt).is_err());
+    }
+
+    #[test]
+    fn badge_art_keeps_its_three_mib_cap_and_its_own_wording() {
+        let len = MAX_IMAGE_BYTES + 1;
+        let err = validate_image(&png(len), ImageLimit::BadgeArt).unwrap_err();
+        assert_eq!(
+            err,
+            format!("That image is {len} bytes. Badge art must be 3 MiB ({MAX_IMAGE_BYTES} bytes) or smaller.")
+        );
+        assert_eq!(art_dest_name("c", None, &png(len)).unwrap_err(), err);
+        // A pasted image that size is fine, and a pasted refusal never says "Badge art".
+        assert_eq!(validate_image(&png(len), ImageLimit::Pasted).unwrap(), "png");
+        let err = validate_image(&png(MAX_PASTED_IMAGE_BYTES + 1), ImageLimit::Pasted).unwrap_err();
+        assert_eq!(err, "That image is larger than 10 MB.");
+        assert_eq!(
+            validate_image(b"text", ImageLimit::Pasted).unwrap_err(),
+            "That file is not a JPEG or PNG image."
+        );
     }
 
     #[test]
@@ -786,11 +892,30 @@ mod tests {
     #[test]
     fn read_data_uri_in_refuses_an_oversized_file_before_reading_it() {
         let (_d, root) = root();
-        fs::write(root.join("big.png"), png(MAX_IMAGE_BYTES + 1)).unwrap();
-        let err = read_data_uri_in(&root, "big.png").unwrap_err();
-        assert!(err.contains("larger than 3 MiB"), "got: {err}");
-        fs::write(root.join("ok.png"), png(MAX_IMAGE_BYTES)).unwrap();
+        // Hand-placed badge art over its own 3 MiB cap now loads (KTD4).
+        fs::write(root.join("five.png"), png(5 * 1024 * 1024)).unwrap();
+        let uri = read_data_uri_in(&root, "five.png").unwrap().unwrap();
+        assert!(uri.starts_with("data:image/png;base64,"), "got: {}", &uri[..40]);
+        fs::write(root.join("ok.png"), png(MAX_PASTED_IMAGE_BYTES)).unwrap();
         assert!(read_data_uri_in(&root, "ok.png").unwrap().is_some());
+
+        // A sparse PNG one byte over 10 MiB.
+        let big = root.join("big.png");
+        fs::write(&big, PNG_SIG).unwrap();
+        fs::File::options()
+            .write(true)
+            .open(&big)
+            .unwrap()
+            .set_len(MAX_PASTED_IMAGE_BYTES as u64 + 1)
+            .unwrap();
+        #[cfg(unix)]
+        {
+            // Unreadable, so only a refusal made from its size alone can name the size.
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&big, fs::Permissions::from_mode(0o000)).unwrap();
+        }
+        let err = read_data_uri_in(&root, "big.png").unwrap_err();
+        assert_eq!(err, "\"big.png\": the image is larger than 10 MB");
     }
 
     #[test]
@@ -824,5 +949,234 @@ mod tests {
         fs::write(outside.path().join("o.png"), png(20)).unwrap();
         symlink(outside.path().join("o.png"), root.join("link.png")).unwrap();
         assert!(read_data_uri_in(&root, "link.png").is_err());
+    }
+
+    // --- Pasted and exported images (save_image) ---
+
+    const DIR: &str = "collections/c/credentials";
+
+    /// Computed here, not with the module's helper, so names are checked independently.
+    fn hash8(bytes: &[u8]) -> String {
+        use sha2::{Digest, Sha256};
+        Sha256::digest(bytes)[..4].iter().map(|b| format!("{b:02x}")).collect()
+    }
+
+    /// A data root inside an outer temp folder, to check nothing lands beside it.
+    fn nested_root() -> (TempDir, PathBuf) {
+        let outer = tempfile::tempdir().unwrap();
+        let inner = outer.path().join("root");
+        fs::create_dir(&inner).unwrap();
+        let root = Roots::default().set(RootKind::Data, &inner).unwrap();
+        (outer, root)
+    }
+
+    fn outer_holds_only_the_root(outer: &TempDir) {
+        let names: Vec<_> = fs::read_dir(outer.path()).unwrap().map(|e| e.unwrap().file_name()).collect();
+        assert_eq!(names, vec![std::ffi::OsString::from("root")]);
+    }
+
+    #[test]
+    fn save_image_names_png_and_jpeg_by_their_sha256_prefix() {
+        let (_d, root) = root();
+        let p = png(300);
+        let j = jpeg(300);
+        let prel = save_image_in(&root, DIR, &p).unwrap();
+        let jrel = save_image_in(&root, DIR, &j).unwrap();
+        assert_eq!(prel, format!("{DIR}/image-{}.png", hash8(&p)));
+        assert_eq!(jrel, format!("{DIR}/image-{}.jpg", hash8(&j)));
+        assert_eq!(fs::read(root.join(&prel)).unwrap(), p);
+        assert_eq!(fs::read(root.join(&jrel)).unwrap(), j);
+        // No temp files are left behind.
+        let mut expect = vec![prel, jrel];
+        expect.sort();
+        assert_eq!(list_files_in(&root, "").unwrap(), expect);
+    }
+
+    #[test]
+    fn save_image_twice_returns_the_same_path_and_does_not_rewrite() {
+        let (_d, root) = root();
+        let bytes = png(500);
+        let first = save_image_in(&root, DIR, &bytes).unwrap();
+        let before = fs::symlink_metadata(root.join(&first)).unwrap();
+        let second = save_image_in(&root, DIR, &bytes).unwrap();
+        assert_eq!(second, first);
+        let after = fs::symlink_metadata(root.join(&first)).unwrap();
+        assert_eq!(after.modified().unwrap(), before.modified().unwrap());
+        #[cfg(unix)]
+        {
+            // A write renames a new file over the old one, so a rewrite changes the inode.
+            use std::os::unix::fs::MetadataExt;
+            assert_eq!(after.ino(), before.ino());
+        }
+        assert_eq!(list_files_in(&root, "").unwrap(), vec![first]);
+    }
+
+    #[test]
+    fn save_image_refuses_a_different_file_at_its_name_and_leaves_it() {
+        let (_d, root) = root();
+        let bytes = png(64);
+        let name = format!("image-{}.png", hash8(&bytes));
+        let at_name = root.join(DIR).join(&name);
+        fs::create_dir_all(root.join(DIR)).unwrap();
+
+        // Same length, different bytes: only the byte comparison can tell them apart.
+        let mut same_len = bytes.clone();
+        *same_len.last_mut().unwrap() = 1;
+        fs::write(&at_name, &same_len).unwrap();
+        let err = save_image_in(&root, DIR, &bytes).unwrap_err();
+        assert_eq!(err, format!("A different file is already named {name}."));
+        assert_eq!(fs::read(&at_name).unwrap(), same_len);
+
+        // A different length.
+        fs::write(&at_name, b"short").unwrap();
+        let err = save_image_in(&root, DIR, &bytes).unwrap_err();
+        assert_eq!(err, format!("A different file is already named {name}."));
+        assert_eq!(fs::read(&at_name).unwrap(), b"short");
+        assert_eq!(list_files_in(&root, "").unwrap(), vec![format!("{DIR}/{name}")]);
+    }
+
+    #[test]
+    fn save_image_refuses_non_images_and_takes_up_to_ten_mib() {
+        let (_d, root) = root();
+        let not_image = "That file is not a JPEG or PNG image.";
+        assert_eq!(save_image_in(&root, DIR, b"just some text, saved as shot.png").unwrap_err(), not_image);
+        assert_eq!(save_image_in(&root, DIR, b"").unwrap_err(), not_image);
+        let too_big = "That image is larger than 10 MB.";
+        assert_eq!(save_image_in(&root, DIR, &png(MAX_PASTED_IMAGE_BYTES + 1)).unwrap_err(), too_big);
+        assert_eq!(save_image_in(&root, DIR, &jpeg(MAX_PASTED_IMAGE_BYTES + 1)).unwrap_err(), too_big);
+        // A refused image creates no folder.
+        assert!(!root.join("collections").exists());
+
+        assert_eq!(MAX_PASTED_IMAGE_BYTES, 10 * 1024 * 1024);
+        let rel = save_image_in(&root, DIR, &png(MAX_PASTED_IMAGE_BYTES)).unwrap();
+        assert_eq!(fs::metadata(root.join(rel)).unwrap().len(), MAX_PASTED_IMAGE_BYTES as u64);
+    }
+
+    #[test]
+    fn save_image_refuses_folders_that_leave_the_root() {
+        let (outer, root) = nested_root();
+        let bytes = png(10);
+        for dir in ["..", "../out", "a/../..", "collections/../../out", "/"] {
+            assert!(save_image_in(&root, dir, &bytes).is_err(), "dir {dir:?}");
+        }
+        let abs = outer.path().join("abs");
+        assert!(save_image_in(&root, abs.to_str().unwrap(), &bytes).is_err());
+        let abs_inside = root.join("inside");
+        assert!(save_image_in(&root, abs_inside.to_str().unwrap(), &bytes).is_err());
+        outer_holds_only_the_root(&outer);
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 0);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn save_image_refuses_a_folder_reached_through_a_link_that_leaves_the_root() {
+        use std::os::unix::fs::symlink;
+        let (_d, root) = root();
+        let outside = tempfile::tempdir().unwrap();
+        symlink(outside.path(), root.join("link")).unwrap();
+        let bytes = png(10);
+        assert!(save_image_in(&root, "link", &bytes).is_err());
+        assert!(save_image_in(&root, "link/deeper", &bytes).is_err());
+        assert_eq!(fs::read_dir(outside.path()).unwrap().count(), 0);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn save_image_through_a_link_inside_the_root_returns_the_path_as_named() {
+        use std::os::unix::fs::symlink;
+        let (_d, root) = root();
+        fs::create_dir(root.join("real")).unwrap();
+        symlink(root.join("real"), root.join("alias")).unwrap();
+        let bytes = png(10);
+        let name = format!("image-{}.png", hash8(&bytes));
+        assert_eq!(save_image_in(&root, "alias", &bytes).unwrap(), format!("alias/{name}"));
+        assert_eq!(fs::read(root.join("real").join(&name)).unwrap(), bytes);
+    }
+
+    #[test]
+    fn save_image_creates_its_folder_and_saves_at_the_root_for_an_empty_folder() {
+        let (_d, root) = root();
+        let bytes = png(10);
+        let name = format!("image-{}.png", hash8(&bytes));
+        assert!(!root.join("new").exists());
+        assert_eq!(save_image_in(&root, "new/deeper", &bytes).unwrap(), format!("new/deeper/{name}"));
+        assert_eq!(fs::read(root.join("new/deeper").join(&name)).unwrap(), bytes);
+
+        assert_eq!(save_image_in(&root, "", &bytes).unwrap(), name);
+        assert_eq!(fs::read(root.join(&name)).unwrap(), bytes);
+        assert_eq!(save_image_in(&root, ".", &bytes).unwrap(), name);
+
+        // The returned path is normalized, with forward slashes.
+        assert_eq!(save_image_in(&root, "a/../b/./c", &bytes).unwrap(), format!("b/c/{name}"));
+        assert_eq!(save_image_in(&root, "d/", &bytes).unwrap(), format!("d/{name}"));
+        assert!(!root.join("a").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn save_image_refuses_a_link_at_its_name_and_leaves_the_link_target() {
+        use std::os::unix::fs::symlink;
+        let (_d, root) = root();
+        let bytes = png(64);
+        let name = format!("image-{}.png", hash8(&bytes));
+        write_text_in(&root, &format!("{DIR}/foo.md"), "foo").unwrap();
+        let foo = root.join(DIR).join("foo.md");
+        let link = root.join(DIR).join(&name);
+        symlink(&foo, &link).unwrap();
+        assert!(save_image_in(&root, DIR, &bytes).is_err());
+        assert_eq!(fs::read_to_string(&foo).unwrap(), "foo");
+        assert!(fs::symlink_metadata(&link).unwrap().file_type().is_symlink());
+
+        // A link to a file holding the very same bytes is refused too.
+        let other = "collections/c/other";
+        copy_bytes_into_root(&root, &format!("{other}/same.png"), &bytes).unwrap();
+        symlink("same.png", root.join(other).join(&name)).unwrap();
+        assert!(save_image_in(&root, other, &bytes).is_err());
+        assert!(fs::symlink_metadata(root.join(other).join(&name)).unwrap().file_type().is_symlink());
+    }
+
+    #[test]
+    fn save_image_refuses_a_folder_at_its_name_or_a_file_in_its_path() {
+        let (_d, root) = root();
+        let bytes = png(64);
+        let name = format!("image-{}.png", hash8(&bytes));
+        fs::create_dir_all(root.join(DIR).join(&name)).unwrap();
+        assert!(save_image_in(&root, DIR, &bytes).is_err());
+        assert!(root.join(DIR).join(&name).is_dir());
+        assert_eq!(fs::read_dir(root.join(DIR).join(&name)).unwrap().count(), 0);
+
+        write_text_in(&root, "notes.md", "n").unwrap();
+        assert!(save_image_in(&root, "notes.md", &bytes).is_err());
+        assert_eq!(fs::read_to_string(root.join("notes.md")).unwrap(), "n");
+    }
+
+    #[test]
+    fn decode_dir_header_decodes_percent_encoding_once() {
+        assert_eq!(
+            decode_dir_header("collections%2Fmy%20c%2Fcredentials").unwrap(),
+            "collections/my c/credentials"
+        );
+        assert_eq!(decode_dir_header("collections/R%C3%A9vision%20%E6%97%A5%E6%9C%AC").unwrap(), "collections/Révision 日本");
+        assert_eq!(decode_dir_header("plain/folder").unwrap(), "plain/folder");
+        assert_eq!(decode_dir_header("").unwrap(), "");
+        // Once: an encoded percent sign stays a percent sign.
+        assert_eq!(decode_dir_header("%2541").unwrap(), "%41");
+    }
+
+    #[test]
+    fn decode_dir_header_refuses_control_characters_and_invalid_utf8() {
+        for raw in ["%00", "a%00b", "%0A", "%0D", "%09", "a\tb", "%7F", "%C2%85", "%FF", "%C3", "%C3%28", "a%E6%97"] {
+            assert!(decode_dir_header(raw).is_err(), "{raw:?}");
+        }
+    }
+
+    #[test]
+    fn a_decoded_folder_that_climbs_out_is_refused_by_the_save() {
+        let (outer, root) = nested_root();
+        let dir = decode_dir_header("a%2F..%2F..").unwrap();
+        assert_eq!(dir, "a/../..");
+        assert!(save_image_in(&root, &dir, &png(10)).is_err());
+        outer_holds_only_the_root(&outer);
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 0);
     }
 }

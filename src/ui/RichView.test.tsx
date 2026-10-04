@@ -2,12 +2,13 @@
 // The read-only reply view (U3): a stored reply shown as Markdown in the editor's type,
 // safely (R11, R13, KTD5), or as its stored string exactly (R12, KTD6).
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 const opener = vi.hoisted(() => ({ openUrl: vi.fn((_url: string) => Promise.resolve()) }));
 vi.mock("@tauri-apps/plugin-opener", () => opener);
 
 import { RichView, externalHref } from "./RichView";
+import type { RichImageSource } from "./richImage";
 
 afterEach(cleanup);
 beforeEach(() => opener.openUrl.mockClear());
@@ -61,8 +62,10 @@ describe("RichView, rendered", () => {
 
   it("renders no script, image, frame or inline handler from a reply's raw HTML", () => {
     const el = view(HOSTILE);
-    expect(el.querySelector("script, img, iframe, object, embed, style, link")).toBeNull();
-    expect(el.querySelector("[onerror], [onclick], [onmouseover]")).toBeNull();
+    // ProseMirror's own separator beside an inline node is an image with no source; nothing else may be.
+    expect(el.querySelector("script, img:not(.ProseMirror-separator), iframe, object, embed, style, link")).toBeNull();
+    expect(el.querySelector("[src], [onerror], [onclick], [onmouseover]")).toBeNull();
+    expect(el.querySelector(".rich-image-missing")?.textContent).toBe("https://example.com/p.png");
     expect((window as { __ran?: boolean }).__ran).toBeUndefined();
     expect(el.textContent).toContain("Before");
     expect(el.textContent).toContain("After");
@@ -98,6 +101,123 @@ describe("RichView, rendered", () => {
     rerender(<RichView aria-label="Reply" value="- Two" />);
     expect(region().querySelector("ul li")?.textContent).toBe("Two");
     expect(region().querySelector("h1")).toBeNull();
+  });
+});
+
+const SHOT = "data:image/png;base64,iVBORw0KGgo=";
+
+/** A source that answers every name with `uri`, and records what it was asked for. */
+function source(uri: string | null | ((name: string) => Promise<string | null>)) {
+  const asked: string[] = [];
+  const images: RichImageSource = {
+    load: (name) => {
+      asked.push(name);
+      return typeof uri === "function" ? uri(name) : Promise.resolve(uri);
+    },
+  };
+  return { images, asked };
+}
+
+function viewWith(value: string, images?: RichImageSource, stored = false) {
+  render(<RichView aria-label="Reply" value={value} stored={stored} images={images} />);
+  return region();
+}
+
+describe("RichView, images (KTD2)", () => {
+  it("shows a bare-name image as the data URI its source returns, and nothing else", async () => {
+    const { images, asked } = source(SHOT);
+    const el = viewWith("Here:\n\n![](image-1a2b3c4d.png)", images);
+    // ProseMirror adds src-less separator images beside inline nodes; only the node's own image has a src.
+    await waitFor(() => expect(el.querySelector("img[src]")).not.toBeNull());
+    const imgs = el.querySelectorAll("img[src]");
+    expect(imgs).toHaveLength(1);
+    expect(imgs[0].getAttribute("src")).toBe(SHOT);
+    expect(imgs[0].getAttribute("alt")).toBe("image-1a2b3c4d.png");
+    expect(imgs[0].getAttribute("draggable")).toBe("false");
+    expect(new Set(asked)).toEqual(new Set(["image-1a2b3c4d.png"]));
+    expect(el.querySelector('[aria-busy="true"]')).toBeNull();
+  });
+
+  it.each(["https://example.com/p.png", "sub/x.png", "../x.png", "/abs.png", "data:image/png;base64,AAAA", "x.gif"])(
+    "shows %s as an inert placeholder and never asks for it",
+    async (src) => {
+      const { images, asked } = source(SHOT);
+      const el = viewWith(`![](<${src}>)`, images);
+      await Promise.resolve();
+      expect(el.querySelector("img[src]")).toBeNull();
+      expect(el.querySelector(".rich-image-missing")?.textContent).toBe(src);
+      expect(asked).toEqual([]);
+    },
+  );
+
+  it("shows a placeholder, not busy, when the file is missing or the read fails", async () => {
+    for (const answer of [null, () => Promise.reject(new Error("gone"))] as const) {
+      const { images } = source(answer as never);
+      const el = viewWith("![](image-1a2b3c4d.png)", images);
+      await waitFor(() => expect(el.querySelector(".rich-image-missing")?.textContent).toBe("image-1a2b3c4d.png"));
+      expect(el.querySelector("img[src]")).toBeNull();
+      expect(el.querySelector('[aria-busy="true"]')).toBeNull();
+      cleanup();
+    }
+  });
+
+  it("shows a placeholder when the source answers with anything but a PNG or JPEG data URI", async () => {
+    const { images } = source("data:image/svg+xml;base64,PHN2Zz4=");
+    const el = viewWith("![](image-1a2b3c4d.png)", images);
+    await waitFor(() => expect(el.querySelector(".rich-image-missing")).not.toBeNull());
+    expect(el.querySelector("img[src]")).toBeNull();
+  });
+
+  it("is busy while the first read is in flight", async () => {
+    let answer: (uri: string) => void = () => undefined;
+    const { images } = source(() => new Promise<string>((r) => (answer = r)));
+    const el = viewWith("![](image-1a2b3c4d.png)", images);
+    expect(el.querySelector('[aria-busy="true"]')).not.toBeNull();
+    answer(SHOT);
+    await waitFor(() => expect(el.querySelector("img[src]")).not.toBeNull());
+    expect(el.querySelector('[aria-busy="true"]')).toBeNull();
+  });
+
+  it("shows a placeholder with no image source", () => {
+    const el = viewWith("![](image-1a2b3c4d.png)");
+    expect(el.querySelector("img[src]")).toBeNull();
+    expect(el.querySelector(".rich-image-missing")?.textContent).toBe("image-1a2b3c4d.png");
+  });
+
+  it("builds nothing from markup in an image's alt, title or src", async () => {
+    const { images } = source(SHOT);
+    const md = [
+      '![<b>x</b> <img src=x onerror=alert(1)>](a.png "t\\"<i>")',
+      "![](x<img/src=x/onerror=alert(1)>.gif)",
+      "![](<a\\<b\\>.png>)",
+      '<img data-md-src="https://example.com/p.png" src="https://example.com/q.png" onerror="window.__ran = true">',
+    ].join("\n\n");
+    const el = viewWith(md, images);
+    await waitFor(() => expect(el.querySelectorAll("img[src]")).toHaveLength(1));
+    const img = el.querySelector("img[src]")!;
+    expect(img.getAttribute("src")).toBe(SHOT);
+    expect(img.getAttribute("alt")).toBe("<b>x</b> <img src=x onerror=alert(1)>");
+    expect(el.querySelector("b, i, [onerror], [onclick], [onload]")).toBeNull();
+    for (const node of el.querySelectorAll("[src]")) expect(node.getAttribute("src")).toBe(SHOT);
+    const missing = [...el.querySelectorAll(".rich-image-missing")].map((x) => x.textContent);
+    expect(missing).toEqual(expect.arrayContaining(["a<b>.png", "https://example.com/p.png"]));
+    expect((window as { __ran?: boolean }).__ran).toBeUndefined();
+  });
+
+  it("keeps the webview's menu and drag off an image", async () => {
+    const { images } = source(SHOT);
+    const el = viewWith("![](image-1a2b3c4d.png)", images);
+    await waitFor(() => expect(el.querySelector("img[src]")).not.toBeNull());
+    const img = el.querySelector("img[src]")!;
+    expect(fireEvent.contextMenu(img)).toBe(false);
+    expect(fireEvent.dragStart(img)).toBe(false);
+  });
+
+  it("shows the stored Markdown as it is", () => {
+    const { images } = source(SHOT);
+    const el = viewWith("![](image-1a2b3c4d.png)", images, true);
+    expect(el.querySelector("pre")?.textContent).toBe("![](image-1a2b3c4d.png)");
+    expect(el.querySelector("img[src]")).toBeNull();
   });
 });
 

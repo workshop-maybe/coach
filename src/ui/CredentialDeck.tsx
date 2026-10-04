@@ -9,7 +9,7 @@
 // so Escape steps back a card but never leaves the deck (R19, R20, KTD8).
 
 import { useRef, useState } from "react";
-import { credentialPath, loadFolder } from "../domain/folder";
+import { credentialPath, credentialsDir, loadFolder } from "../domain/folder";
 import { DEFAULT_COLLECTION_NAME, createCollection, createCredential, createPresetCredential, updateCredential } from "../domain/operations";
 import { PRESETS, findPreset, presetCredential } from "../domain/presets";
 import { suggestAssignmentsPrompt } from "../domain/prompts";
@@ -25,6 +25,7 @@ import { useRichDraft } from "./richDraft";
 import { CopyHelper, TargetHint, focusOnMount } from "./shared";
 import { RichText } from "./RichText";
 import { useFolder } from "./useFolderState";
+import { useRichImages } from "./useRichImages";
 
 /** The "Where to start" answer: your own, or a preset's id. */
 const OWN = "own";
@@ -45,6 +46,8 @@ export function CredentialDeck({ returnTo }: { returnTo?: TestPick }) {
 
   // A preset lands where your own would: the first collection, or a new My credentials.
   const landing: Collection = state?.collections[0] ?? { slug: "my-credentials", name: DEFAULT_COLLECTION_NAME, description: "", order: [], codes: {} };
+  // A pasted image goes where the credential will: the same rule make() follows.
+  const taskImages = useRichImages(credentialsDir(landing.slug), task);
   const preset = start === null ? undefined : findPreset(start);
   const picked = preset ? presetCredential(preset, landing.slug) : null;
 
@@ -212,12 +215,12 @@ export function CredentialDeck({ returnTo }: { returnTo?: TestPick }) {
           id: "task",
           title: "The task",
           forward: "Make the badge",
-          valid: task.trim() !== "",
+          valid: task.trim() !== "" && !taskImages.busy,
           pane: true,
           focusBody: true,
           body: (
             <>
-              <RichText aria-label="Task" value={task} onChange={taskDraft.setValue} onNormalized={taskDraft.onNormalized} placeholder="What the agent is asked to do" />
+              <RichText aria-label="Task" value={task} onChange={taskDraft.setValue} onNormalized={taskDraft.onNormalized} placeholder="What the agent is asked to do" images={taskImages.images} />
               <CopyHelper label="Suggest a task" text={() => suggestAssignmentsPrompt(draft)} />
             </>
           ),

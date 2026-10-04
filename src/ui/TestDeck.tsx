@@ -43,6 +43,7 @@ import { SKELETON_ID, defaultHandoff, fillHandoff, handoffsFor, skeletonOf, winn
 import { assignmentVersion } from "../domain/hash";
 import { sameSetup } from "../domain/matrix";
 import { fitsJev } from "../domain/jevBudget";
+import { assessmentDir, credentialsDir } from "../domain/folder";
 import { cleanUpLineBreaks, lineBreakBatches } from "../domain/lineBreaks";
 import { fileStemFor } from "../domain/folder";
 import { goToOf, resultOf } from "../domain/goTo";
@@ -67,6 +68,7 @@ import { handoffKeys, machineKeys, openingChoice, replyScreen, trigPages, type H
 import { Deck, type Beat } from "./Deck";
 import { backToTest } from "./HandoffDecks";
 import { handoffLabel } from "./format";
+import { imageSource } from "./imageSource";
 import { useJev } from "./jevContext";
 import { JevReadingPanel } from "./JevReading";
 import { useNav } from "./nav";
@@ -78,6 +80,7 @@ import type { TestPick } from "./routes";
 import { Missing, StoredSwitch, focusOnMount, useEscape } from "./shared";
 import { describeError, useFolder } from "./useFolderState";
 import { useMatrix } from "./useMatrix";
+import { useRichImages } from "./useRichImages";
 
 /** How long the dots run across the screen after Copy before the cursor waits. */
 export const SENDING_MS = 700;
@@ -193,6 +196,10 @@ export function TestDeck(props: TestDeckProps) {
   const credential = state?.credentials.find((c) => credentialKey(c) === key);
   const collectionOf = (c: Credential) => state?.collections.find((x) => x.slug === c.collectionSlug);
   const waiting = pending.find((p) => p.profileSlug === profileSlug && p.credentialKey === key);
+  // A pasted image goes in the folder the result will be recorded in. Picking another agent
+  // or badge moves the folder, and the images the reply still names go along (R10).
+  const replyImages = useRichImages(profile && credential ? assessmentDir(profile.slug, credential.collectionSlug, credential.slug) : null, reply);
+  const rubricImages = credential ? imageSource(storage, credentialsDir(credential.collectionSlug)) : undefined;
 
   // The second opinion this reply would ask for, and whether it fits Jev's budget (KTD19).
   const request = useMemo(
@@ -824,7 +831,7 @@ export function TestDeck(props: TestDeckProps) {
     forward: stale ? undefined : "Next",
     // A waiting test is checked for a changed task before its reply can be recorded, and
     // a cleanup in flight is waited for.
-    valid: reply.trim() !== "" && !(waiting && version === null) && !cleaning,
+    valid: reply.trim() !== "" && !(waiting && version === null) && !cleaning && !replyImages.busy,
     // The reply box takes the window and the first focus; a stale test asks for Copy again on a page.
     pane: !stale,
     focusBody: !stale,
@@ -847,7 +854,7 @@ export function TestDeck(props: TestDeckProps) {
     ) : (
       <>
         <div className="test-strip">{replyStage}</div>
-        <RichText ref={replyBox} aria-label="Reply" value={reply} onChange={editReply} placeholder="Paste the reply" cleanPaste onPaste={onPaste} />
+        <RichText ref={replyBox} aria-label="Reply" value={reply} onChange={editReply} placeholder="Paste the reply" cleanPaste onPaste={onPaste} images={replyImages.images} />
         <OnLeave run={dropCleanup} />
         {cleanupPart}
         {waiting && <PullLink onPull={pull} />}
@@ -900,7 +907,7 @@ export function TestDeck(props: TestDeckProps) {
               <span className="meet-text-head" aria-hidden="true">
                 Rubric
               </span>
-              <RichView aria-label="Rubric" value={rubric} stored={asStored} />
+              <RichView aria-label="Rubric" value={rubric} stored={asStored} images={rubricImages} />
               {jevPart}
             </div>
           )}
@@ -908,7 +915,7 @@ export function TestDeck(props: TestDeckProps) {
             <span className="meet-text-head" aria-hidden="true">
               Reply
             </span>
-            <RichView aria-label="Reply" value={reply} stored={asStored} />
+            <RichView aria-label="Reply" value={reply} stored={asStored} images={replyImages.images} />
           </div>
         </div>
         <div className="meet-choices">

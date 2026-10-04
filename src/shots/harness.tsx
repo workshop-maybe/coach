@@ -25,7 +25,11 @@ import { pendingStorageKey } from "../ui/pendingTests";
 import { FolderProvider } from "../ui/useFolderState";
 import { WindowFrameContext } from "../ui/windowFrame";
 import { SAMPLE_FOLDER, sampleFolder, sampleJev, sampleStorage } from "./seed";
-import { SHOTS, type Shot, type Step, type Target } from "./shots";
+import { SHOTS, type SampleImage, type Shot, type Step, type Target } from "./shots";
+import pastedSample from "./pasted-sample.png";
+
+/** Each sample picture's address, served by Vite. */
+const SAMPLE_IMAGE_URLS: Record<SampleImage, string> = { "pasted-sample": pastedSample };
 
 export interface ShotOptions {
   /** How long a step waits for its target, in ms. */
@@ -173,6 +177,16 @@ async function runStep(step: Step, n: number, timeout: number): Promise<void> {
     el.focus();
     const data = new DataTransfer();
     data.setData("text/plain", step.paste);
+    el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+  } else if ("pasteImage" in step) {
+    const into = step.into ?? { selector: ".rich-input" };
+    const el = await waitFor(() => find(into), `${label} found no ${describeTarget(into)} to paste into`, timeout);
+    // At the end of the box, where a person would add a picture to what is written.
+    (el as HTMLElement & { editor?: { commands: { focus(at: string): void } } }).editor?.commands.focus("end");
+    el.focus();
+    const blob = await (await fetch(SAMPLE_IMAGE_URLS[step.pasteImage])).blob();
+    const data = new DataTransfer();
+    data.items.add(new File([blob], "Screenshot.png", { type: "image/png" }));
     el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
   } else if ("scroll" in step) {
     const el = await waitFor(() => find(step.scroll), `${label} found no ${describeTarget(step.scroll)} to scroll to`, timeout);
