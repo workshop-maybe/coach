@@ -584,6 +584,18 @@ describe("pasting an image (KTD5, KTD8)", () => {
     typeInto(ed, " three");
     await land("a.png");
     expect(onChange).toHaveBeenLastCalledWith("One![](a.png) two three");
+    // The cursor stays where the person was typing, at the end, not back beside the image.
+    expect(ed.state.selection.from).toBe(ed.state.doc.content.size - 1);
+  });
+
+  it("leaves the cursor right after the image when nothing moved it while it saved", async () => {
+    const { ed, land } = setupImages("One two");
+    act(() => {
+      ed.view.dispatch(ed.state.tr.setSelection(TextSelection.create(ed.state.doc, 4)));
+    });
+    firePaste(box(), {}, [pngFile()]);
+    await land("a.png");
+    expect(ed.state.selection.from).toBe(5);
   });
 
   it("drops the insert when the box is set from outside while it saves", async () => {

@@ -104,11 +104,14 @@ function replacesWholeBox(state: EditorState): boolean {
 type PendingPaste = Omit<PastePayload, "markdown" | "candidates">;
 
 /**
- * Puts an image for each name over `from`–`to` and the cursor after them. In a code block,
- * where an image can't sit, they go in a new paragraph after the block.
+ * Puts an image for each name over `from`–`to`. In a code block, where an image can't sit,
+ * they go in a new paragraph after the block. The cursor moves after them only if it is
+ * still where the paste left it; a person who typed or clicked elsewhere meanwhile keeps
+ * their place.
  */
 function insertImages(view: EditorView, from: number, to: number, names: string[]): void {
   const { state } = view;
+  const untouched = state.selection.from === from && state.selection.to === to;
   const nodes = names.map((src) => state.schema.nodes.image.create({ src }));
   const $from = state.doc.resolve(from);
   let tr: Transaction;
@@ -121,7 +124,7 @@ function insertImages(view: EditorView, from: number, to: number, names: string[
     tr = state.tr.replaceWith(from, to, nodes);
     end = tr.mapping.map(to);
   }
-  view.dispatch(tr.setSelection(TextSelection.near(tr.doc.resolve(end))).scrollIntoView());
+  view.dispatch(untouched ? tr.setSelection(TextSelection.near(tr.doc.resolve(end))).scrollIntoView() : tr);
 }
 
 export function RichText({ value, onChange, onNormalized, placeholder, autoFocus, cleanPaste = false, onPaste, ref, images, "aria-label": label }: RichTextProps) {
