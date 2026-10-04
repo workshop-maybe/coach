@@ -5,9 +5,9 @@ order: 10
 description: Turn on Jev Mode with your own TypeSafe key, what each use sends, and how to change the key or turn it off.
 ---
 
-{/* Jev Mode (U5, U6, U8, R7, R11, AE4): what it is, turning it on, what each use sends in the Jev Mode card's own words, the judge card and the reply box with Jev Mode on, a reading with its calls, the track record and fitted cut-offs, a saved reading, the key, and turning it off. Labels are checked against src/ui/JevDeck.tsx, src/ui/TestDeck.tsx and src/ui/JevReading.tsx (KTD8). */}
+{/* Jev Mode (U5, U6, U8, R7, R11, AE4): what it is, turning it on, what each use sends in the Jev Mode card's own words, the judge card and the reply box with Jev Mode on, what a routing ask sends, a reading with its calls, the track record and fitted cut-offs, a saved reading, the key, and turning it off. Labels are checked against src/ui/JevDeck.tsx, src/ui/TestDeck.tsx and src/ui/JevReading.tsx (KTD8). */}
 
-Jev Mode connects the app to Jev, TypeSafe's model, with your own TypeSafe key. It is off by default, and it is the app's only network connection. Jev acts only when you ask, in two places: a second opinion on a reply, and a cleanup of a reply pasted from a terminal.
+Jev Mode connects the app to Jev, TypeSafe's model, with your own TypeSafe key. It is off by default, and it is the app's only network connection. Jev acts only when you ask, in three places: a second opinion on a reply, a cleanup of a reply pasted from a terminal, and a routing ask that finds which badge a new job is like.
 
 ## Turn it on
 
@@ -25,8 +25,13 @@ Nothing is sent until you ask.
 
 - **A second opinion** sends the reply, the badge's task, rubric and learning targets, and the openings of a few earlier replies on this badge with your notes on them.
 - **A cleanup** sends only the text you pasted.
+- **A routing ask** sends the job, and the names, tasks and learning targets of your badges.
 
-The earlier replies come from any of your agents, and only from the badge you're judging. Each is cut to its first few lines, without pictures or videos, and lines that look like keys or passwords are left out. Nothing else from your folder goes with either one. TypeSafe keeps what it receives under [its terms](https://docs.typesafe.ai/legal).
+The earlier replies a second opinion sends come from any of your agents, and only from the badge you're judging. Each is cut to its first few lines, without pictures or videos, and lines that look like keys or passwords are left out. Nothing else from your folder goes with a second opinion or a cleanup.
+
+A routing ask sends the job without its pictures or videos, but otherwise as you pasted it, so keys or customer details in it go too. Take them out first, or pick the badge yourself, which sends nothing. It sends no rubric, and nothing about your agents or your results. [Find an agent for a job](/how-to/find-an-agent-for-a-job/) shows the card that says what goes.
+
+TypeSafe keeps what it receives under [its terms](https://docs.typesafe.ai/legal).
 
 ## A second opinion
 

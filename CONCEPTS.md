@@ -67,3 +67,21 @@ How often Jev's overall call on a badge matched the user's verdicts, counted ove
 ### Overrule
 
 A result whose verdict went against Jev's overall call: Not met against a meets call, or Met against a misses call. Can't call never counts. Overrules lead the examples a second opinion sends.
+
+### Routing ask
+
+Jev's answer, only when the user asks, to which badge a new job is like and how hard the job is: one yes-or-no question per badge, sent with the badge's name, task and learning targets and never its rubric, and one rating of the job as routine, needing judgment, or unusual or high-stakes.
+
+## Finding an agent
+
+### Holds cleanly
+
+An agent holds a badge cleanly when its latest result there is Met with no "task changed" or "setup changed" flag. Home counts a flagged Met as holding; the router counts only a clean one.
+
+### Cost order
+
+The order the user sets over their agents, cheapest first, from Home's agent list. The router picks the cheapest agent that holds a badge cleanly by it, and steps up through it for a job rated unusual or high-stakes. An agent it doesn't name counts as most expensive until the user places it.
+
+### Routing record
+
+What the app keeps each time the user takes an agent for a job: the job's first line, the badge, the agent taken and its setup, the agent the card picked and why, and how the badge was found. One file per decision, written once, so a past choice can later count as a decision reused.
