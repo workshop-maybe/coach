@@ -5,8 +5,9 @@
 // name beside the reply's file, so nothing loads from the network or outside the data folder
 // either (KTD2 of the paste-images plan, which supersedes in part this view's "no image
 // node"). Its video node holds to the same rule: it plays only a URL the caller's source
-// returns for a bare local video name, never autoplays, and loads nothing of a reply's video
-// before play (KTD2 of the video plan). Stored, it is the exact string the file holds, in the
+// returns for a bare local video name, never autoplays, and decodes nothing of a reply's
+// video before play (KTD2 of the video plan). On Linux the source still reads the whole file
+// into a Blob when the view mounts, since WebKitGTK plays only blob URLs (KTD4). Stored, it is the exact string the file holds, in the
 // record mono (R12, KTD6). The caller owns the switch between the two.
 //
 // Links leave for the system browser. A click, a middle-click, the context menu and a drag

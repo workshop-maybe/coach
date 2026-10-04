@@ -131,6 +131,16 @@ describe("imageSource, videos (KTD4)", () => {
     expect(reply?.url).toBe("blob:memory/assessments/opus/eng/review/clip.webm");
   });
 
+  it("asks for a reply's video URL as soon as a view holds it, whatever its preload (KTD4)", async () => {
+    // preload "none" stops the player decoding before play; it does not delay the URL. On
+    // Linux that URL is a Blob of the whole file, read when the reply shows.
+    const storage = new MemoryStorage();
+    storage.seedVideo("assessments/opus/eng/review/clip.webm", webmBytes());
+    const reply = await resultImages(storage, { profileSlug: "opus", collectionSlug: "eng", credentialSlug: "review" }).video!("clip.webm");
+    expect(reply?.preload).toBe("none");
+    expect(storage.videoUrls).toEqual([{ path: "assessments/opus/eng/review/clip.webm", releases: 0 }]);
+  });
+
   it("keeps the URLs it holds through a reload of the folder", async () => {
     const storage = seeded();
     const source = imageSource(storage, DIR);
