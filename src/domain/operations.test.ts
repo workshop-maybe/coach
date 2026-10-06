@@ -1787,6 +1787,38 @@ describe("adding a built-in collection (KTD2)", () => {
     expect(again.state.credentials.map((c) => c.slug)).toEqual([firstBadge]);
   });
 
+  /** A copy whose add failed on its second badge: collection.json and the first badge are on disk. */
+  async function partialCopy() {
+    const storage = new MemoryStorage();
+    const real = storage.writeText.bind(storage);
+    const spy = vi.spyOn(storage, "writeText").mockImplementation(async (root, path, text) => {
+      if (path === credentialPath("nostr-relays", secondBadge)) throw new Error("disk full");
+      return real(root, path, text);
+    });
+    await expect(addBuiltinCollection(storage, await loadFolder(storage), "nostr-relays")).rejects.toThrow("disk full");
+    spy.mockRestore();
+    return { storage, state: await loadFolder(storage) };
+  }
+
+  it("a badge made in an unfinished copy keeps the copy unfinished, and adding again writes the missing badge", async () => {
+    const { storage, state } = await partialCopy();
+    const made = await createCredential(storage, state, "nostr-relays", "My own relay");
+    expect(builtinStatus(made.state, nostr)).toEqual({ kind: "incomplete", slug: "nostr-relays", missing: [secondBadge] });
+    const done = await addBuiltinCollection(storage, made.state, "nostr-relays");
+    expect(storage.file(credentialPath("nostr-relays", secondBadge))).toBe(nostr.credentials[secondBadge]);
+    expect(done.state.credentials.map((c) => c.slug)).toEqual([...nostr.collection.order, "my-own-relay"]);
+    expect(builtinStatus(done.state, nostr)).toEqual({ kind: "added", slug: "nostr-relays" });
+  });
+
+  it("trashing the written badge of an unfinished copy keeps it unfinished, and adding again writes only the missing badge", async () => {
+    const { storage, state } = await partialCopy();
+    const trashed = await trashCredential(storage, state, "nostr-relays", firstBadge);
+    expect(builtinStatus(trashed, nostr)).toEqual({ kind: "incomplete", slug: "nostr-relays", missing: [secondBadge] });
+    const done = await addBuiltinCollection(storage, trashed, "nostr-relays");
+    expect(done.state.credentials.map((c) => c.slug)).toEqual([secondBadge]);
+    expect(builtinStatus(done.state, nostr)).toEqual({ kind: "added", slug: "nostr-relays" });
+  });
+
   it("finishing a copy checks its bases first, so a badge written meanwhile writes nothing", async () => {
     const storage = new MemoryStorage();
     const added = await addBuiltinCollection(storage, await loadFolder(storage), "nostr-relays");
@@ -1929,6 +1961,17 @@ describe("renaming and trashing a collection (collections plan U6, KTD7)", () =>
     storage.seed({ [collectionPath("my-credentials")]: `${storage.file(collectionPath("my-credentials"))}\n` });
     await expect(trashCollection(storage, state, "my-credentials", now)).rejects.toBeInstanceOf(ChangedOnDiskError);
     expect((await under(storage, "trash"))).toEqual([]);
+  });
+
+  it("a collection.json that cannot be parsed still moves to the trash with its badges", async () => {
+    const { storage } = await full();
+    storage.seed({ [collectionPath("my-credentials")]: "{not json" });
+    const state = await loadFolder(storage);
+    expect(state.errors.map((e) => e.path)).toContain(collectionPath("my-credentials"));
+    const next = await trashCollection(storage, state, "my-credentials", now);
+    expect((await goesWith(storage))).toEqual([]);
+    expect(storage.file(`trash/${stamp}/${collectionPath("my-credentials")}`)).toBe("{not json");
+    expect(next.collections.map((c) => c.slug)).toEqual(["other"]);
   });
 
   it("trashing an added built-in's copy makes the built-in addable again", async () => {

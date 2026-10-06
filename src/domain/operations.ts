@@ -170,6 +170,17 @@ export function collectionAsOnDisk(text: string | null | undefined, fallback: Co
   }
 }
 
+/**
+ * The collection to save: as loaded, with the slugs its file lists but loadFolder pruned (a badge
+ * file never written or unreadable) kept in their place. A save from the pruned order would drop
+ * them, and an unfinished built-in copy would read as added (R10). Codes are the loaded ones,
+ * which keep the file's codes and add any assigned in memory.
+ */
+export function withListedOrder(state: FolderState, stored: Collection): Collection {
+  const listed = collectionAsOnDisk(state.raw[collectionPath(stored.slug)], stored).order;
+  return { ...stored, order: [...new Set([...listed, ...stored.order])] };
+}
+
 export function builtinStatus(state: FolderState, builtin: BuiltIn): BuiltinStatus {
   const copy = state.collections.find((c) => c.from === builtin.slug);
   if (!copy) return { kind: "not-added" };
@@ -242,7 +253,8 @@ export async function reorderCredentials(
   if (current.length !== next.length || current.some((s, i) => s !== next[i])) {
     throw new Error("A reorder must list every credential in the collection exactly once.");
   }
-  await saveCollection(storage, { ...stored, order: [...orderedSlugs] }, baseText);
+  const unloaded = withListedOrder(state, stored).order.filter((s) => !stored.order.includes(s));
+  await saveCollection(storage, { ...stored, order: [...orderedSlugs, ...unloaded] }, baseText);
   return loadFolder(storage);
 }
 
@@ -258,7 +270,7 @@ export async function updateCollectionBadge(
   badge: BadgeSettings | undefined,
   baseText: string | null,
 ): Promise<FolderState> {
-  const stored = findCollection(state, collectionSlug);
+  const stored = withListedOrder(state, findCollection(state, collectionSlug));
   // Dropping badgeRaw means a malformed stored value is replaced or cleared too.
   const { badge: _badge, badgeRaw: _raw, ...rest } = stored;
   const next: Collection = badge === undefined ? rest : { ...rest, badge };
@@ -275,7 +287,7 @@ export async function setCredentialBadgeOverride(
   override: BadgeSettings | null,
   baseText: string | null,
 ): Promise<FolderState> {
-  const stored = findCollection(state, collectionSlug);
+  const stored = withListedOrder(state, findCollection(state, collectionSlug));
   if (override !== null) findCredential(state, collectionSlug, credentialSlug);
 
   const next = withoutOverride(stored, credentialSlug);
@@ -326,7 +338,7 @@ export async function createCredential(
   name: string,
   content?: CredentialContent,
 ): Promise<{ state: FolderState; key: string }> {
-  const collection = findCollection(state, collectionSlug);
+  const collection = withListedOrder(state, findCollection(state, collectionSlug));
   const taken = [
     ...state.credentials.filter((c) => c.collectionSlug === collectionSlug).map((c) => c.slug),
     ...Object.keys(collection.codes),
@@ -878,7 +890,7 @@ export async function trashCredential(
   credentialSlug: Slug,
   now = new Date(),
 ): Promise<FolderState> {
-  const stored = findCollection(state, collectionSlug);
+  const stored = withListedOrder(state, findCollection(state, collectionSlug));
   findCredential(state, collectionSlug, credentialSlug);
   const path = collectionPath(collectionSlug);
   const base = state.raw[path] ?? null;
@@ -909,7 +921,10 @@ export async function trashCollection(storage: Storage, state: FolderState, coll
   findCollection(state, collectionSlug);
   const colPath = collectionPath(collectionSlug);
   const credentials = state.credentials.filter((c) => c.collectionSlug === collectionSlug).map((c) => credentialPath(collectionSlug, c.slug));
-  await assertUnchanged(storage, [[colPath, state.raw[colPath] ?? null], ...credentials.map((p): [string, string | null] => [p, state.raw[p] ?? null])]);
+  // An unparsable collection.json has no raw text, so its base is the file as it is now:
+  // moving it to the trash loses nothing.
+  const colBase = state.errors.some((e) => e.path === colPath) ? await storage.readText("data", colPath) : (state.raw[colPath] ?? null);
+  await assertUnchanged(storage, [[colPath, colBase], ...credentials.map((p): [string, string | null] => [p, state.raw[p] ?? null])]);
 
   const own = await storage.listFiles("data", folderOf(colPath));
   const results = (await storage.listFiles("data", ASSESSMENTS_DIR)).filter((p) => {

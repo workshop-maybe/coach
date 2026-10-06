@@ -198,6 +198,16 @@ describe("Move to trash", () => {
       expect(builtinStatus(await loadFolder(storage), nostr)).toEqual({ kind: "not-added" });
     });
 
+    it("a collection whose collection.json cannot be parsed moves to the trash", async () => {
+      const storage = storageWith({ credentials: [review] });
+      storage.seed({ [collectionPath("eng")]: "{not json" });
+      renderApp(storage, { view: "deck", deck: "trash", item: { kind: "collection", collectionSlug: "eng" } });
+      await userEvent.click(await screen.findByRole("button", { name: "Move to trash" }));
+      expect(await screen.findByRole("heading", { name: "Home", level: 1 })).toBeTruthy();
+      expect((await loadFolder(storage)).collections).toEqual([]);
+      expect(trashed(storage)).toHaveLength(2);
+    });
+
     it("open while the folder reloads without the collection, shows Not in the folder", async () => {
       const storage = storageWith();
       storage.seed(empty);
