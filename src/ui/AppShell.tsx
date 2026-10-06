@@ -141,7 +141,7 @@ export function AppShell({ onChangeFolder, initialRoute = { view: "home" } }: Ap
 function DeckView({ route }: { route: DeckRoute }) {
   switch (route.deck) {
     case "credential":
-      return <CredentialDeck returnTo={route.returnTo} fromJob={route.fromJob} />;
+      return <CredentialDeck returnTo={route.returnTo} fromJob={route.fromJob} collectionSlug={route.collectionSlug} />;
     case "agent":
       return <PlayerCard returnTo={route.returnTo} likeSlug={route.likeSlug} firstTest={route.firstTest} />;
     case "test":

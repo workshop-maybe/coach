@@ -297,28 +297,44 @@ export async function createCredential(
 export const DEFAULT_COLLECTION_NAME = "My credentials";
 
 /**
- * Makes a badge from a preset: in the first collection, or a new My credentials when there
- * is none. The preset is written whole in the credential's first save, so no empty badge
- * file is ever left behind.
+ * Where a new badge lands (KTD4): My credentials, else the folder's one collection of your
+ * own, else none, and the caller makes My credentials. Never the first by name, which
+ * would be a built-in copy such as Cardano Dev Skills.
+ */
+export function landingCollection(state: FolderState): Collection | undefined {
+  const mine = state.collections.find((c) => c.slug === "my-credentials");
+  if (mine) return mine;
+  const own = state.collections.filter((c) => c.from === undefined);
+  return own.length === 1 ? own[0] : undefined;
+}
+
+/** The landing collection's slug, making My credentials first when the rule finds none. */
+export async function ensureLandingCollection(storage: Storage, state: FolderState): Promise<{ state: FolderState; slug: Slug }> {
+  // With no landing collection in hand, read the folder again: a try that failed after making
+  // My credentials left it on disk, and a retry should land there instead of conflicting.
+  const current = landingCollection(state) ? state : await loadFolder(storage);
+  const landing = landingCollection(current);
+  if (landing) return { state: current, slug: landing.slug };
+  const made = await createCollection(storage, current, DEFAULT_COLLECTION_NAME);
+  return { state: made.state, slug: made.slug };
+}
+
+/**
+ * Makes a badge from a preset: in the collection asked for, or where KTD4 lands it. The
+ * preset is written whole in the credential's first save, so no empty badge file is ever
+ * left behind.
  */
 export async function createPresetCredential(
   storage: Storage,
   state: FolderState,
   presetId: string,
+  collectionSlug?: Slug,
 ): Promise<{ state: FolderState; key: string }> {
   const preset = findPreset(presetId);
   if (!preset) throw new Error(`There is no preset "${presetId}".`);
-  // With no collection in hand, read the folder again: a try that failed after making My
-  // credentials left it on disk, and a retry should land there instead of conflicting.
-  let current = state.collections.length > 0 ? state : await loadFolder(storage);
-  let collectionSlug = current.collections[0]?.slug;
-  if (!collectionSlug) {
-    const made = await createCollection(storage, current, DEFAULT_COLLECTION_NAME);
-    current = made.state;
-    collectionSlug = made.slug;
-  }
-  const { name, learningTargets, task, rubric, extraSections } = presetCredential(preset, collectionSlug);
-  return createCredential(storage, current, collectionSlug, name, { learningTargets, task, rubric, extraSections });
+  const target = collectionSlug !== undefined ? { state, slug: collectionSlug } : await ensureLandingCollection(storage, state);
+  const { name, learningTargets, task, rubric, extraSections } = presetCredential(preset, target.slug);
+  return createCredential(storage, target.state, target.slug, name, { learningTargets, task, rubric, extraSections });
 }
 
 export async function updateCredential(

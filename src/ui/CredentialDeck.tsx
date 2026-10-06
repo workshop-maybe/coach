@@ -1,9 +1,10 @@
 // Create a credential (U3, R9-R12, R20): where to start, then three beats of your own or
 // one card for a preset, then its badge. Your own takes its learning targets as lines, one
 // added on each Enter, as the badge's own targets part does. Nothing is written until "Make the badge". The
-// credential goes into the folder's first collection, or a new "My credentials" when
-// there is none (KTD6). Opened from a test that is missing its credential, it hands the
-// new one straight back to that test (AE2).
+// credential lands by the collections plan's KTD4: "My credentials", else the folder's one
+// collection of your own, else a new "My credentials". Opened for a collection, it goes there,
+// and shows Not in the folder once that collection is gone. Opened from a test that is missing
+// its credential, it hands the new one straight back to that test (AE2).
 //
 // The task card is a pane (U6 of the deep-work panes plan, R7, R18): the editor fills the
 // window and takes first focus, and once a task is written the deck holds unsaved work,
@@ -15,11 +16,11 @@
 
 import { useRef, useState } from "react";
 import { credentialPath, credentialsDir, loadFolder } from "../domain/folder";
-import { DEFAULT_COLLECTION_NAME, createCollection, createCredential, createPresetCredential, updateCredential } from "../domain/operations";
+import { DEFAULT_COLLECTION_NAME, createCredential, createPresetCredential, ensureLandingCollection, landingCollection, updateCredential } from "../domain/operations";
 import { PRESETS, findPreset, presetCredential } from "../domain/presets";
 import { suggestAssignmentsPrompt } from "../domain/prompts";
 import { appendToRubric } from "../domain/target-check";
-import { credentialKey, parseCredentialKey, type Collection, type Credential } from "../domain/types";
+import { credentialKey, parseCredentialKey, type Collection, type Credential, type Slug } from "../domain/types";
 import { Cartridge } from "../cast/Cartridge";
 import { Outline } from "../cast/Outline";
 import { Badge } from "./Badge";
@@ -28,7 +29,7 @@ import { useNav } from "./nav";
 import type { FromJob, TestPick } from "./routes";
 import { useRichDraft } from "./richDraft";
 import { Lines } from "./EditDecks";
-import { CopyHelper, focusOnMount } from "./shared";
+import { CopyHelper, Missing, focusOnMount } from "./shared";
 import { RichText } from "./RichText";
 import { useFolder } from "./useFolderState";
 import { useRichImages } from "./useRichImages";
@@ -36,7 +37,7 @@ import { useRichImages } from "./useRichImages";
 /** The "Where to start" answer: your own, or a preset's id. */
 const OWN = "own";
 
-export function CredentialDeck({ returnTo, fromJob }: { returnTo?: TestPick; fromJob?: FromJob }) {
+export function CredentialDeck({ returnTo, fromJob, collectionSlug }: { returnTo?: TestPick; fromJob?: FromJob; collectionSlug?: Slug }) {
   const { storage, state, apply } = useFolder();
   const { navigate } = useNav();
   const fromRouter = fromJob !== undefined;
@@ -54,8 +55,11 @@ export function CredentialDeck({ returnTo, fromJob }: { returnTo?: TestPick; fro
   // Set once the credential file exists, so a retry after a failed second save never makes a second one.
   const created = useRef<string | null>(null);
 
-  // A preset lands where your own would: the first collection, or a new My credentials.
-  const landing: Collection = state?.collections[0] ?? { slug: "my-credentials", name: DEFAULT_COLLECTION_NAME, description: "", order: [], codes: {} };
+  // The collection asked for, looked up again on every render because the folder reloads on
+  // focus. Without one, a preset lands where your own would (KTD4), or in the My credentials
+  // make() will create.
+  const asked = collectionSlug === undefined ? undefined : state?.collections.find((c) => c.slug === collectionSlug);
+  const landing: Collection = asked ?? (state && landingCollection(state)) ?? { slug: "my-credentials", name: DEFAULT_COLLECTION_NAME, description: "", order: [], codes: {} };
   // A pasted image goes where the credential will: the same rule make() follows.
   const taskImages = useRichImages(credentialsDir(landing.slug), task);
   const preset = start === null ? undefined : findPreset(start);
@@ -76,28 +80,28 @@ export function CredentialDeck({ returnTo, fromJob }: { returnTo?: TestPick; fro
     let current = keepMine ? await loadFolder(storage) : state;
     if (preset) {
       // A preset is written whole in one save, so a failed try leaves no badge to retry around.
-      const result = await createPresetCredential(storage, current, preset.id);
+      const result = await createPresetCredential(storage, current, preset.id, collectionSlug);
       apply(result.state);
       return landed(result.key);
     }
     let key = created.current;
     if (key === null) {
-      let collectionSlug = current.collections[0]?.slug;
-      if (!collectionSlug) {
-        const col = await createCollection(storage, current, DEFAULT_COLLECTION_NAME);
-        current = col.state;
-        collectionSlug = col.slug;
+      let target = collectionSlug;
+      if (target === undefined) {
+        const land = await ensureLandingCollection(storage, current);
+        current = land.state;
+        target = land.slug;
       }
-      const result = await createCredential(storage, current, collectionSlug, draft.name);
+      const result = await createCredential(storage, current, target, draft.name);
       current = result.state;
       key = result.key;
       created.current = key;
       apply(current);
     }
-    const { collectionSlug, slug } = parseCredentialKey(key);
+    const { collectionSlug: madeIn, slug } = parseCredentialKey(key);
     const stored = current.credentials.find((c) => credentialKey(c) === key);
     if (!stored) throw new Error("The new credential could not be read back.");
-    const base = current.raw[credentialPath(collectionSlug, slug)] ?? null;
+    const base = current.raw[credentialPath(madeIn, slug)] ?? null;
     const filled: Credential = { ...stored, learningTargets: draft.learningTargets, task: task.trim(), rubric: rubric.trim() };
     const next = await updateCredential(storage, filled, base);
     apply(next);
@@ -132,6 +136,8 @@ export function CredentialDeck({ returnTo, fromJob }: { returnTo?: TestPick; fro
       </section>
     );
   }
+
+  if (collectionSlug !== undefined && state && !asked) return <Missing onHome={() => navigate({ view: "home" })} />;
 
   // The deck stays mounted when the answer here changes, so the beats after it swap in place.
   const where: Beat = {

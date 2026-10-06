@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { loadFolder } from "../domain/folder";
+import { collectionPath, loadFolder, serializeCollection } from "../domain/folder";
 import { findPreset, presetCredential } from "../domain/presets";
+import type { Collection } from "../domain/types";
 import { renderApp, review, snapshot, storageWith } from "./testFolder";
 
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ writeText: vi.fn() }));
@@ -66,7 +67,7 @@ describe("CredentialDeck", () => {
     });
   });
 
-  it("goes into the folder's first collection when one exists", async () => {
+  it("goes into the folder's one collection of your own when it has one", async () => {
     const storage = storageWith({ credentials: [review] });
     renderApp(storage, { view: "deck", deck: "credential" });
     await walk("Write docs", "I can explain a module", "Document the module");
@@ -75,6 +76,61 @@ describe("CredentialDeck", () => {
     const state = await loadFolder(storage);
     expect(state.collections.map((c) => c.slug)).toEqual(["eng"]);
     expect(state.credentials.map((c) => c.name).sort()).toEqual(["Code review", "Write docs"]);
+  });
+
+  describe("where it lands (KTD4)", () => {
+    const col = (slug: string, name: string, from?: string): Collection => ({ slug, name, description: "", order: [], codes: {}, ...(from ? { from } : {}) });
+    /** A folder with a built-in copy that sorts first, beside My credentials. */
+    function withBuiltIn() {
+      const storage = storageWith();
+      storage.seed({
+        [collectionPath("cardano-dev-skills")]: serializeCollection(col("cardano-dev-skills", "Cardano Dev Skills", "cardano-dev-skills")),
+        [collectionPath("course-authoring")]: serializeCollection(col("course-authoring", "Course authoring", "course-authoring")),
+        [collectionPath("my-credentials")]: serializeCollection(col("my-credentials", "My credentials")),
+      });
+      return storage;
+    }
+    const keys = async (storage: ReturnType<typeof storageWith>) => (await loadFolder(storage)).credentials.map((c) => `${c.collectionSlug}/${c.slug}`);
+
+    it("Covers AE2. your own lands in My credentials, not the built-in copy that sorts first", async () => {
+      const storage = withBuiltIn();
+      renderApp(storage, { view: "deck", deck: "credential" });
+      await walk("Write docs", "I can explain a module", "Document the module");
+      await userEvent.click(screen.getByRole("button", { name: "Make the badge" }));
+      await screen.findByRole("button", { name: "Test it on an agent" });
+      expect(await keys(storage)).toEqual(["my-credentials/write-docs"]);
+    });
+
+    it("a preset lands in My credentials too", async () => {
+      const storage = withBuiltIn();
+      renderApp(storage, { view: "deck", deck: "credential" });
+      await userEvent.click(await screen.findByRole("button", { name: "Name what matters next" }));
+      await userEvent.click(await screen.findByRole("button", { name: "Make the badge" }));
+      await screen.findByRole("button", { name: "Test it on an agent" });
+      expect(await keys(storage)).toEqual(["my-credentials/name-what-matters-next"]);
+    });
+
+    it("opened for a collection, makes the badge there", async () => {
+      const storage = withBuiltIn();
+      renderApp(storage, { view: "deck", deck: "credential", collectionSlug: "course-authoring" });
+      await walk("Write docs", "I can explain a module", "Document the module");
+      await userEvent.click(screen.getByRole("button", { name: "Make the badge" }));
+      await screen.findByRole("button", { name: "Test it on an agent" });
+      expect(await keys(storage)).toEqual(["course-authoring/write-docs"]);
+    });
+
+    it("opened for a collection that leaves the folder on a reload, shows Not in the folder", async () => {
+      const storage = withBuiltIn();
+      renderApp(storage, { view: "deck", deck: "credential", collectionSlug: "course-authoring" });
+      await screen.findByRole("heading", { name: "Where to start" });
+      storage.remove(collectionPath("course-authoring"));
+      await act(async () => {
+        window.dispatchEvent(new Event("focus"));
+      });
+      expect(await screen.findByRole("heading", { name: "Not in the folder" })).toBeTruthy();
+      await userEvent.click(screen.getByRole("button", { name: "Home" }));
+      expect(await screen.findByRole("heading", { name: "Home", level: 1 })).toBeTruthy();
+    });
   });
 
   it("a target with a list offers to move it to the rubric, and the credential keeps both", async () => {

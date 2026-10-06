@@ -23,6 +23,7 @@ import {
   serializeHeadToHead,
   serializeHeldReading,
   serializeMark,
+  serializeCollection,
   serializeRejudge,
   SKELETON_PATH,
 } from "./folder";
@@ -64,7 +65,7 @@ import {
   updateProfile,
 } from "./operations";
 import { findPreset, presetCredential } from "./presets";
-import { credentialKey, type AgentProfile, type AssessmentResult, type FolderState, type HeadToHead, type HeldReading, type JevReading, type Rejudge } from "./types";
+import { credentialKey, type AgentProfile, type Collection, type AssessmentResult, type FolderState, type HeadToHead, type HeldReading, type JevReading, type Rejudge } from "./types";
 
 /** Records a result and returns only the folder, as most tests here need. */
 async function recordState(...args: Parameters<typeof recordAssessment>): Promise<FolderState> {
@@ -227,7 +228,7 @@ describe("making a badge from a preset", () => {
     expect(storage.writes.filter((w) => w.path === credentialPath("my-credentials", "name-what-matters-next"))).toHaveLength(1);
   });
 
-  it("lands in the first collection with the next module code", async () => {
+  it("lands in the folder's one collection with the next module code", async () => {
     const { storage, state } = await setup();
     const { state: next, key } = await createPresetCredential(storage, state, preset.id);
     expect(key).toBe("go-basics/name-what-matters-next");
@@ -286,6 +287,71 @@ describe("making a badge from a preset", () => {
     const retry = await createPresetCredential(storage, state, preset.id);
     expect(retry.state.collections.map((c) => c.slug)).toEqual(["my-credentials"]);
     expect(retry.state.credentials).toHaveLength(1);
+  });
+
+  describe("where it lands (KTD4)", () => {
+    /** A folder holding only these collections, each with no badges yet. */
+    function folderOf(...collections: Collection[]): MemoryStorage {
+      return new MemoryStorage(Object.fromEntries(collections.map((c) => [collectionPath(c.slug), serializeCollection(c)])));
+    }
+    const col = (slug: string, name: string, from?: string): Collection => ({ slug, name, description: "", order: [], codes: {}, ...(from ? { from } : {}) });
+    const cardano = col("cardano-dev-skills", "Cardano Dev Skills", "cardano-dev-skills");
+
+    it("Covers AE2. lands in My credentials even though a built-in copy sorts first", async () => {
+      const storage = folderOf(cardano, col("my-credentials", "My credentials"));
+      const state = await loadFolder(storage);
+      expect(state.collections[0].slug).toBe("cardano-dev-skills");
+      const { key } = await createPresetCredential(storage, state, preset.id);
+      expect(key).toBe("my-credentials/name-what-matters-next");
+    });
+
+    it("lands in the only collection of your own, and makes no second one", async () => {
+      const storage = folderOf(col("work", "Work"));
+      const { state, key } = await createPresetCredential(storage, await loadFolder(storage), preset.id);
+      expect(key).toBe("work/name-what-matters-next");
+      expect(state.collections.map((c) => c.slug)).toEqual(["work"]);
+    });
+
+    it("makes My credentials when two collections of your own leave it unclear", async () => {
+      const storage = folderOf(col("client-work", "Client work"), col("archive", "Archive"));
+      const { state, key } = await createPresetCredential(storage, await loadFolder(storage), preset.id);
+      expect(key).toBe("my-credentials/name-what-matters-next");
+      expect(state.collections.map((c) => c.name)).toEqual(["Archive", "Client work", "My credentials"]);
+    });
+
+    it("makes My credentials when the folder holds only a built-in copy", async () => {
+      const storage = folderOf(cardano);
+      const { state, key } = await createPresetCredential(storage, await loadFolder(storage), preset.id);
+      expect(key).toBe("my-credentials/name-what-matters-next");
+      expect(state.collections.find((c) => c.slug === "cardano-dev-skills")!.order).toEqual([]);
+    });
+
+    it("lands in the collection asked for, over the rule", async () => {
+      const storage = folderOf(col("archive", "Archive"), cardano, col("my-credentials", "My credentials"));
+      const { key } = await createPresetCredential(storage, await loadFolder(storage), preset.id, "cardano-dev-skills");
+      expect(key).toBe("cardano-dev-skills/name-what-matters-next");
+    });
+
+    it("a retry after a failed badge write beside a built-in copy lands in the My credentials it already made", async () => {
+      const storage = folderOf(cardano);
+      const state = await loadFolder(storage);
+      const real = storage.writeText.bind(storage);
+      let failed = false;
+      vi.spyOn(storage, "writeText").mockImplementation(async (root, path, text) => {
+        if (!failed && path.endsWith(".md")) {
+          failed = true;
+          throw new Error("disk full");
+        }
+        return real(root, path, text);
+      });
+      await expect(createPresetCredential(storage, state, preset.id)).rejects.toThrow("disk full");
+      expect(storage.file(collectionPath("my-credentials"))).toBeDefined();
+      // The retry starts from the same state, which never saw My credentials.
+      const retry = await createPresetCredential(storage, state, preset.id);
+      expect(retry.key.startsWith("my-credentials/")).toBe(true);
+      expect(retry.state.collections.map((c) => c.slug)).toEqual(["cardano-dev-skills", "my-credentials"]);
+      expect(retry.state.credentials).toHaveLength(1);
+    });
   });
 });
 

@@ -45,8 +45,11 @@ export const NONE_OF_THESE = "none";
 export type HandoffTarget = string;
 
 export type DeckRoute =
-  /** With `fromJob`, a badge made from a job: the job as its task, and Close back to the router's card (router KTD14). */
-  | { view: "deck"; deck: "credential"; returnTo?: TestPick; fromJob?: FromJob }
+  /**
+   * With `fromJob`, a badge made from a job: the job as its task, and Close back to the router's card (router KTD14).
+   * With `collectionSlug`, the badge is made in that collection instead of where KTD4 lands it.
+   */
+  | { view: "deck"; deck: "credential"; returnTo?: TestPick; fromJob?: FromJob; collectionSlug?: Slug }
   /** With `firstTest`, making the agent also makes the first badge and starts its test (R3). */
   | { view: "deck"; deck: "agent"; returnTo?: TestPick; likeSlug?: Slug; firstTest?: true }
   | {
