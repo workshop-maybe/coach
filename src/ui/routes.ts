@@ -120,4 +120,7 @@ export type ItemRoute =
   | { view: "item"; item: "reply"; credentialKey: string; take: TakeRef; picks?: TakeRef[] }
   | { view: "item"; item: "compare"; credentialKey: string; takes: TakeRef[]; picks?: TakeRef[] };
 
-export type Route = { view: "home" } | DeckRoute | ItemRoute;
+/** Home. `litCollection` names a collection just added, whose group lights (collections plan U5). */
+export type HomeRoute = { view: "home"; litCollection?: Slug };
+
+export type Route = HomeRoute | DeckRoute | ItemRoute;

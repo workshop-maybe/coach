@@ -8,7 +8,9 @@
 // an agent made on the spot. An agent holding a handoff shows it plugged in wherever it
 // stands (R15). A badge with a go-to names it under its holders, flagged when it needs a
 // look (R7, R9). The cast is hidden from assistive tech, so names and what each agent earned
-// stay in text.
+// stay in text. With two or more collections, or a lone built-in copy, the badges show as one
+// group per collection under its name, in the same order as the flat list (collections plan
+// R1, KTD5). A collection just added lights its group, re-read from the folder every render.
 
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
@@ -29,10 +31,18 @@ import { useMatrix } from "./useMatrix";
 
 const SHOWN = 3;
 
+interface ShelfCredential {
+  credential: Credential;
+  collection: Collection;
+  key: string;
+}
+
 interface Shelf {
   /** The folder the shelf was read from. */
   state: FolderState;
-  credentials: { credential: Credential; collection: Collection; key: string }[];
+  credentials: ShelfCredential[];
+  /** The badges per collection, in the folder's collection order: `credentials` is these flattened. */
+  groups: { collection: Collection; credentials: ShelfCredential[] }[];
   byKey: Map<string, { credential: Credential; collection: Collection }>;
   profiles: Map<string, AgentProfile>;
   /** Each agent's lit keys, oldest first. */
@@ -43,19 +53,22 @@ interface Shelf {
 
 export function Home() {
   const { state, folder } = useFolder();
-  const { navigate } = useNav();
+  const { navigate, route } = useNav();
   const { pending } = usePendingTests(folder);
   const matrix = useMatrix(state);
   const [all, setAll] = useState(false);
 
   const shelf = useMemo<Shelf | null>(() => {
     if (!matrix || !state) return null;
-    const credentials = matrix.columns.flatMap(({ collection, credentials }) =>
-      credentials.map((credential) => ({ credential, collection, key: credentialKey(credential) })),
-    );
+    const groups = matrix.columns.map(({ collection, credentials }) => ({
+      collection,
+      credentials: credentials.map((credential) => ({ credential, collection, key: credentialKey(credential) })),
+    }));
+    const credentials = groups.flatMap((g) => g.credentials);
     return {
       state,
       credentials,
+      groups,
       byKey: new Map(credentials.map((c) => [c.key, c])),
       profiles: new Map(state.profiles.map((p) => [p.slug, p])),
       keys: new Map(state.profiles.map((p) => [p.slug, machineKeys(matrix, p.slug)])),
@@ -94,8 +107,43 @@ export function Home() {
   const profiles = shelf ? byCost(shelf.state) : [];
   const showNeeds = !!shelf && items.length > 0;
   const showAgents = !!shelf && profiles.length > 0;
-  const showBadges = !!shelf && shelf.credentials.length > 0;
+  const showBadges = !!shelf && shelf.groups.length > 0;
   const paired = showNeeds && showAgents && showBadges;
+  // One collection of the user's own reads as today's single list, with no group heading (R1, R2).
+  const grouped = !!shelf && (shelf.groups.length > 1 || shelf.groups.some((g) => g.collection.from !== undefined));
+  // A slug no longer in the folder simply lights nothing.
+  const lit = route.view === "home" ? route.litCollection : undefined;
+  // With no collection, no badge can show, so Add a collection moves under the doors (R7).
+  const noCollections = !!state && state.collections.length === 0;
+  const addCollection = () => navigate({ view: "deck", deck: "collection" });
+
+  const badgeCard = (c: ShelfCredential) => {
+    const holders = profiles.filter((p) => holds(p.slug, c.key));
+    const goTo = state && matrix ? goToOf(state, c.key) : null;
+    const flags = goTo && matrix ? goToStanding(matrix, goTo).flags : [];
+    return (
+      <li key={c.key}>
+        <button type="button" className={`badge-card${holders.length === 0 ? " badge-card-unheld" : ""}`} onClick={() => navigate({ view: "item", item: "badge", credentialKey: c.key })}>
+          <Cartridge collection={c.collection} credential={c.credential} width={64} />
+          <span className="badge-card-name">{c.credential.name}</span>
+          <span className="holders">
+            {holders.length === 0 ? (
+              <span className="holders-none">No holders yet</span>
+            ) : (
+              holders.map((p) => (
+                <span key={p.slug} className="holder" title={p.name}>
+                  <Machine mini setup={p} keys={shelf?.keys.get(p.slug)} plugged={shelf?.plugs.get(p.slug)} width={36} />
+                  <span className="visually-hidden">{p.name}</span>
+                </span>
+              ))
+            )}
+          </span>
+          {/* One text run, so the hidden holder names stay the only text that is just a name (KTD8). */}
+          {goTo && <span className={`badge-card-goto${flags.length > 0 ? " flagged" : ""}`}>{goToLine(goTo.profile.name, flags)}</span>}
+        </button>
+      </li>
+    );
+  };
 
   return (
     <div className={empty ? "home home-empty" : "home"}>
@@ -155,36 +203,34 @@ export function Home() {
 
           {showBadges && (
             <section className="home-section" aria-labelledby="home-badges">
-              <h2 id="home-badges">Badges</h2>
-              <ul className="shelf">
-                {shelf.credentials.map((c) => {
-                  const holders = profiles.filter((p) => holds(p.slug, c.key));
-                  const goTo = state && matrix ? goToOf(state, c.key) : null;
-                  const flags = goTo && matrix ? goToStanding(matrix, goTo).flags : [];
-                  return (
-                    <li key={c.key}>
-                      <button type="button" className={`badge-card${holders.length === 0 ? " badge-card-unheld" : ""}`} onClick={() => navigate({ view: "item", item: "badge", credentialKey: c.key })}>
-                        <Cartridge collection={c.collection} credential={c.credential} width={64} />
-                        <span className="badge-card-name">{c.credential.name}</span>
-                        <span className="holders">
-                          {holders.length === 0 ? (
-                            <span className="holders-none">No holders yet</span>
-                          ) : (
-                            holders.map((p) => (
-                              <span key={p.slug} className="holder" title={p.name}>
-                                <Machine mini setup={p} keys={shelf.keys.get(p.slug)} plugged={shelf.plugs.get(p.slug)} width={36} />
-                                <span className="visually-hidden">{p.name}</span>
-                              </span>
-                            ))
-                          )}
-                        </span>
-                        {/* One text run, so the hidden holder names stay the only text that is just a name (KTD8). */}
-                        {goTo && <span className={`badge-card-goto${flags.length > 0 ? " flagged" : ""}`}>{goToLine(goTo.profile.name, flags)}</span>}
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
+              <div className="home-section-head">
+                <h2 id="home-badges">Badges</h2>
+                <button type="button" className="link more" onClick={addCollection}>
+                  Add a collection
+                </button>
+              </div>
+              {grouped
+                ? shelf.groups.map(({ collection, credentials }) => {
+                    const headingId = `home-collection-${collection.slug}`;
+                    return (
+                      <div key={collection.slug} role="group" aria-labelledby={headingId} className={collection.slug === lit ? "collection-group lit" : "collection-group"}>
+                        <div className="collection-group-head">
+                          <h3 id={headingId}>{collection.name}</h3>
+                          <button
+                            type="button"
+                            className="link more"
+                            aria-label={`Add a badge to ${collection.name}`}
+                            onClick={() => navigate({ view: "deck", deck: "credential", collectionSlug: collection.slug })}
+                          >
+                            Add a badge here
+                          </button>
+                          {/* U6 adds Rename and Delete here, each naming the collection in its accessible name (R2). */}
+                        </div>
+                        {credentials.length > 0 && <ul className="shelf">{credentials.map(badgeCard)}</ul>}
+                      </div>
+                    );
+                  })
+                : shelf.credentials.length > 0 && <ul className="shelf">{shelf.credentials.map(badgeCard)}</ul>}
             </section>
           )}
         </div>
@@ -199,6 +245,15 @@ export function Home() {
       )}
 
       {doors}
+
+      {/* After the doors, so they never remount when it comes or goes. */}
+      {noCollections && (
+        <p className="home-add-collection">
+          <button type="button" className="link more" onClick={addCollection}>
+            Add a collection
+          </button>
+        </p>
+      )}
     </div>
   );
 }

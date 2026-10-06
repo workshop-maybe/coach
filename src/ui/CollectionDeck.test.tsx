@@ -5,10 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { BUILT_INS } from "../domain/builtins";
+import { serializeCredentialMd } from "../domain/credential-md";
 import { collectionPath, credentialPath, loadFolder, serializeCollection } from "../domain/folder";
 import { addBuiltinCollection, trashCredential } from "../domain/operations";
 import type { MemoryStorage } from "../storage/memory";
-import { renderApp, storageWith } from "./testFolder";
+import { renderApp, review, storageWith } from "./testFolder";
 
 const opener = vi.hoisted(() => ({ openUrl: vi.fn((_url: string) => Promise.resolve()) }));
 vi.mock("@tauri-apps/plugin-opener", () => opener);
@@ -156,5 +157,53 @@ describe("starting an empty one", () => {
     await user.click(make);
     await expectHome();
     expect(JSON.parse(storage.file(collectionPath("client-work"))!)).toMatchObject({ name: "Client work", order: [], codes: {} });
+  });
+});
+
+describe("back on Home", () => {
+  /** The group headings on Home's Badges, each with whether it is lit. */
+  async function groups() {
+    const region = await screen.findByRole("region", { name: "Badges" });
+    return within(region)
+      .getAllByRole("group")
+      .map((g) => ({ name: within(g).getByRole("heading", { level: 3 }).textContent, lit: g.classList.contains("lit") }));
+  }
+
+  it("a new empty collection beside My credentials shows as its own group, lit", async () => {
+    const storage = storageWith();
+    storage.seed({
+      [collectionPath("my-credentials")]: serializeCollection({ slug: "my-credentials", name: "My credentials", description: "", order: ["review"], codes: { review: 1 } }),
+      [credentialPath("my-credentials", "review")]: serializeCredentialMd({ ...review, collectionSlug: "my-credentials" }),
+    });
+    const user = await openDeck(storage);
+    await user.click(choice("Start an empty one"));
+    await user.type(within(deck()).getByLabelText("Name"), "Client work");
+    await user.click(within(deck()).getByRole("button", { name: "Make the collection" }));
+    await expectHome();
+    expect(await groups()).toEqual([
+      { name: "Client work", lit: true },
+      { name: "My credentials", lit: false },
+    ]);
+  });
+
+  it("an added built-in lights its group", async () => {
+    const user = await openDeck(storageWith({ credentials: [review] }));
+    await user.click(choice("Nostr relays"));
+    await user.click(within(deck()).getByRole("button", { name: "Add the collection" }));
+    await expectHome();
+    expect(await groups()).toEqual([
+      { name: "Engineering", lit: false },
+      { name: "Nostr relays", lit: true },
+    ]);
+  });
+
+  it("a lit collection no longer in the folder lights nothing", async () => {
+    const storage = storageWith({ credentials: [review] });
+    await addBuiltinCollection(storage, await loadFolder(storage), "nostr-relays");
+    renderApp(storage, { view: "home", litCollection: "gone" });
+    expect(await groups()).toEqual([
+      { name: "Engineering", lit: false },
+      { name: "Nostr relays", lit: false },
+    ]);
   });
 });

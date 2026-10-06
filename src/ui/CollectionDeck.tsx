@@ -57,20 +57,22 @@ export function CollectionDeck() {
   const picked = BUILT_INS.find((b) => b.slug === start);
   const home = () => navigate({ view: "home" });
 
+  // Home lights the new collection's group.
   async function finish({ keepMine }: { keepMine: boolean }) {
     if (!state) return;
     const current = keepMine ? await loadFolder(storage) : state;
     if (picked) {
       // Adding again resumes a copy that stopped partway, so a retry never makes a second.
-      apply((await addBuiltinCollection(storage, current, picked.slug)).state);
-      return home();
+      const result = await addBuiltinCollection(storage, current, picked.slug);
+      apply(result.state);
+      return navigate({ view: "home", litCollection: result.slug });
     }
     if (made.current === null) {
       const result = await createCollection(storage, current, name);
       made.current = result.slug;
       apply(result.state);
     }
-    home();
+    navigate({ view: "home", litCollection: made.current });
   }
 
   const repo = COLLECTION_REQUESTS_REPO;
