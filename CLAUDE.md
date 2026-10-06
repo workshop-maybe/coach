@@ -5,6 +5,7 @@ A simple, beautiful little desktop app for building credentials and offering the
 ## What the app does
 
 - **Credentials.** A credential has a name and a set of learning targets.
+- **Collections.** Badges group into collections, and each collection exports as one Andamio course. Built-in collections such as Cardano Dev Skills are added as a unit and become the user's own copy.
 - **Acceptance criteria.** Each credential has assignments that a person or an agent can complete and that the user can review. Tasks, rubrics, notes and replies can hold pictures and local videos, kept as files beside the Markdown.
 - **Agent profiles.** Named agent setups the user runs locally: harness, model, effort level, the repo it opens in, and free-form parameters.
 - **Prompts and handoffs.** The app writes prompts the user copies into the agent of their choice. A handoff wraps a badge's assignment for a test ("this is a test, do it and I'll review your results"). It is customizable: a default skeleton plus one or more handoffs per badge. Other prompts: "check my acceptance criteria", "review this assignment", "suggest assignments for these learning targets". A refine prompt gives an agent the full context to help refine an assignment.
@@ -41,7 +42,7 @@ The question the app answers: **which of my agents can actually meet my acceptan
 
 ### Interaction rules
 
-- **Home is the only room.** Home shows what needs you, your agents, your badges and the three doors (Create an agent, Create a credential, Find an agent for a job). Everything else is a deck in progress or one item open (a badge, an agent, one of a badge's handoffs once two or more have run, one reply, or replies compared two side by side under a strip that names them all, which becomes a grid of Jev's calls once any are saved), and each one returns home. A handoff returns to its badge. A reply returns to the badge or handoff that lists it, with its row lit. A compare returns there too, with its replies still picked. No sidebar, no other views.
+- **Home is the only room.** Home shows what needs you, your agents, your badges and the three doors (Create an agent, Create a credential, Find an agent for a job). Everything else is a deck in progress or one item open (a badge, an agent, one of a badge's handoffs once two or more have run, one reply, or replies compared two side by side under a strip that names them all, which becomes a grid of Jev's calls once any are saved), and each one returns home. A handoff returns to its badge. A reply returns to the badge or handoff that lists it, with its row lit. A compare returns there too, with its replies still picked. Home groups badges by collection once there are two or more, or a built-in copy. Adding, renaming and deleting a collection are decks opened from Home. No sidebar, no other views.
 - **Decks, not forms.** Every flow is a list of beats handed to `src/ui/Deck.tsx`. No screen shows a set of labeled fields to fill and submit. Editing an existing badge or agent opens one part at a time as a one-beat deck.
 - **One thing per card.** Each card asks one thing and offers one forward action named for what happens next ("Make the badge", "Copy"). Back is quiet.
 - **No eyebrows.** Nothing sits above a heading as a kicker or label.

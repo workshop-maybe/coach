@@ -38,6 +38,6 @@ Planning. Built with Tauri 2 and React + TypeScript. The prototype targets Mac a
 
 On first run the app asks for a data folder. It keeps everything there as plain files you can read, edit and put under git: collections and credentials as Markdown and JSON, agent profiles as JSON, each recorded result and each reply held to compare as a Markdown file, each go-to choice as JSON, the cost order over your agents and each agent you took for a job as JSON, and pictures and videos as files beside the text that names them.
 
-The app has one home: what needs you, your agents, your badges, and three doors: create an agent, create a credential, or find an agent for a job. Every step after that asks one thing at a time.
+The app has one home: what needs you, your agents, your badges, and three doors: create an agent, create a credential, or find an agent for a job. Every step after that asks one thing at a time. Badges group into collections. A built-in collection, such as Cardano Dev Skills, adds a whole set of badges for one kind of work, and the copy is yours to change.
 
 The user guide is in `site/`. Preview it with `npm run site:build && npm run site:preview`.
