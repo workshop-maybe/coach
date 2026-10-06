@@ -1,0 +1,12 @@
+{
+  "name": "Nostr relays",
+  "description": "An example of a collection for one domain: running a Nostr relay.",
+  "order": [
+    "run-a-nostr-relay",
+    "set-a-relay-s-moderation-policy"
+  ],
+  "codes": {
+    "run-a-nostr-relay": 1,
+    "set-a-relay-s-moderation-policy": 2
+  }
+}

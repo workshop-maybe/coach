@@ -8,6 +8,14 @@ generator/gen.py and generator/colors.py from that project. Changes: the OB3
 metadata blocks and the ASCII title sanitizer were left out, and the plate
 labels were renamed for collections and credentials.
 
+Some built-in badges draw on coach (https://github.com/Andamio-Platform/coach),
+licensed under the MIT License, Copyright (c) 2026 Andamio. "Tighten a learning
+target" and "Run a Nostr relay" are ported from its knowledge files. "Split or
+keep an "and"", "Review a set of learning targets", "Draft targets and an
+assignment for a module", "Pick a lesson type" and "Set a relay's moderation
+policy" are new badges written on its skills and knowledge files
+(src/collections/).
+
 src/badge/fonts.css is copied from credential-badges generator/fonts.css. It
 embeds subsets of these fonts, each licensed under the SIL Open Font License,
 Version 1.1 (https://openfontlicense.org):

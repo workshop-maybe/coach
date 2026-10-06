@@ -1,0 +1,18 @@
+{
+  "name": "Course authoring",
+  "description": "Writing learning targets and the assignments that assess them.",
+  "order": [
+    "tighten-a-learning-target",
+    "split-or-keep-an-and",
+    "review-a-set-of-learning-targets",
+    "draft-targets-and-an-assignment-for-a-module",
+    "pick-a-lesson-type"
+  ],
+  "codes": {
+    "tighten-a-learning-target": 1,
+    "split-or-keep-an-and": 2,
+    "review-a-set-of-learning-targets": 3,
+    "draft-targets-and-an-assignment-for-a-module": 4,
+    "pick-a-lesson-type": 5
+  }
+}
