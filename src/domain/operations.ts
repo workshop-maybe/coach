@@ -892,3 +892,28 @@ export async function trashCredential(
   await moveToTrash(storage, [...results, ...handoffs, ...marks, ...headToHeads, credentialPath(collectionSlug, credentialSlug)], stamp);
   return loadFolder(storage);
 }
+
+/**
+ * Moves a whole collection to the trash (collections plan KTD7): every file under its folder,
+ * pasted media and all, and every agent's results for its badges. The bases of collection.json
+ * and each badge file are checked before anything moves. Results move first and collection.json
+ * last, so a move that fails partway leaves a collection that loads, and trashing it again
+ * moves the rest. With the collection gone, a built-in it was copied from can be added again.
+ */
+export async function trashCollection(storage: Storage, state: FolderState, collectionSlug: Slug, now = new Date()): Promise<FolderState> {
+  findCollection(state, collectionSlug);
+  const colPath = collectionPath(collectionSlug);
+  const credentials = state.credentials.filter((c) => c.collectionSlug === collectionSlug).map((c) => credentialPath(collectionSlug, c.slug));
+  await assertUnchanged(storage, [[colPath, state.raw[colPath] ?? null], ...credentials.map((p): [string, string | null] => [p, state.raw[p] ?? null])]);
+
+  const own = await storage.listFiles("data", colPath.slice(0, colPath.lastIndexOf("/")));
+  const results = (await storage.listFiles("data", ASSESSMENTS_DIR)).filter((p) => {
+    const parts = p.split("/");
+    return parts.length > 3 && parts[2] === collectionSlug;
+  });
+  const badgeFiles = own.filter((p) => credentials.includes(p));
+  const rest = own.filter((p) => p !== colPath && !credentials.includes(p));
+  const last = own.includes(colPath) ? [colPath] : [];
+  await moveToTrash(storage, [...results, ...rest, ...badgeFiles, ...last], fileStemFor(now));
+  return loadFolder(storage);
+}

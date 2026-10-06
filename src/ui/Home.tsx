@@ -224,7 +224,22 @@ export function Home() {
                           >
                             Add a badge here
                           </button>
-                          {/* U6 adds Rename and Delete here, each naming the collection in its accessible name (R2). */}
+                          <button
+                            type="button"
+                            className="link more"
+                            aria-label={`Rename ${collection.name}`}
+                            onClick={() => navigate({ view: "deck", deck: "edit-collection", collectionSlug: collection.slug, part: "name" })}
+                          >
+                            Rename
+                          </button>
+                          <button
+                            type="button"
+                            className="link more"
+                            aria-label={`Delete ${collection.name}`}
+                            onClick={() => navigate({ view: "deck", deck: "trash", item: { kind: "collection", collectionSlug: collection.slug } })}
+                          >
+                            Delete
+                          </button>
                         </div>
                         {credentials.length > 0 && <ul className="shelf">{credentials.map(badgeCard)}</ul>}
                       </div>

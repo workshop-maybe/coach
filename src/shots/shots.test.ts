@@ -14,7 +14,7 @@ import { COVERAGE, NOT_PICTURED, SAMPLE_IMAGES, SHOTS, routeKind, type Shot } fr
 
 const KEBAB = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
-const DECK_KINDS = ["credential", "agent", "test", "edit-credential", "edit-agent", "handoffs", "edit-handoff", "trash", "jev", "router", "cost-order", "collection"];
+const DECK_KINDS = ["credential", "agent", "test", "edit-credential", "edit-agent", "edit-collection", "handoffs", "edit-handoff", "trash", "jev", "router", "cost-order", "collection"];
 const ITEM_KINDS = ["badge", "agent", "handoff", "reply", "compare"];
 const CREDENTIAL_PARTS = ["name", "targets", "task", "rubric", "look"];
 const AGENT_PARTS = ["name", "repo", "notes", "params"];
@@ -53,6 +53,10 @@ function routeProblems(route: Route | "gate", state: FolderState): string[] {
         needAgent();
         if (!AGENT_PARTS.includes(r.part as string)) out.push(`unknown part ${String(r.part)}`);
         break;
+      case "edit-collection":
+        if (!state.collections.some((c) => c.slug === r.collectionSlug)) out.push(`no collection ${String(r.collectionSlug)}`);
+        if (r.part !== "name") out.push(`unknown part ${String(r.part)}`);
+        break;
       case "handoffs":
         needKey();
         break;
@@ -61,11 +65,13 @@ function routeProblems(route: Route | "gate", state: FolderState): string[] {
         if (typeof r.handoff !== "string" || r.handoff === "") out.push("no handoff target");
         break;
       case "trash": {
-        const item = r.item as { kind?: unknown; profileSlug?: unknown; credentialKey?: unknown } | undefined;
+        const item = r.item as { kind?: unknown; profileSlug?: unknown; credentialKey?: unknown; collectionSlug?: unknown } | undefined;
         if (item?.kind === "agent") needAgent(item.profileSlug);
         else if (item?.kind === "badge") {
           if (typeof item.credentialKey !== "string" || !keys.has(item.credentialKey)) out.push(`no badge ${String(item.credentialKey)}`);
-        } else out.push("trash names no agent or badge");
+        } else if (item?.kind === "collection") {
+          if (!state.collections.some((c) => c.slug === item.collectionSlug)) out.push(`no collection ${String(item.collectionSlug)}`);
+        } else out.push("trash names no agent, badge or collection");
         break;
       }
     }

@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, screen } from "@testing-library/react";
+import { act, cleanup, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { collectionPath, loadFolder } from "../domain/folder";
+import { collectionPath, loadFolder, serializeCollection } from "../domain/folder";
+import { BUILT_INS } from "../domain/builtins";
+import { addBuiltinCollection, builtinStatus } from "../domain/operations";
 import { addPending, readPending } from "./pendingTests";
 import { FOLDER, heldReply, opus, renderApp, result, review, storageWith } from "./testFolder";
 
@@ -120,6 +122,92 @@ describe("Move to trash", () => {
 
     it("an agent with nothing keeps the plain line", async () => {
       expect(await line({ credentials: [review], profiles: [opus] }, { kind: "agent", profileSlug: "opus" })).toEqual(["It has no results."]);
+    });
+  });
+
+  describe("a whole collection (collections plan U6)", () => {
+    const codex = { ...opus, slug: "codex", name: "Codex agent", harness: "codex", model: "gpt-5" };
+    const docs = { ...review, slug: "docs", name: "Write docs", task: "Document the module." };
+    const empty = { [collectionPath("client")]: serializeCollection({ slug: "client", name: "Client work", description: "", order: [], codes: {} }) };
+    const plug = (profileSlug: string, credentialKey: string) =>
+      addPending(FOLDER, { profileSlug, credentialKey, copiedAt: "2026-09-30T09:00:00.000Z", assignmentVersion: "v", setup: { harness: opus.harness, model: opus.model, effort: opus.effort } });
+
+    it("Delete names its badges and results, moves all of it to the trash, ends a waiting test on one of its badges, and goes home", async () => {
+      const storage = storageWith({ credentials: [review, docs], profiles: [opus, codex], assessments: [await result(opus, review), await result(codex, docs)], held: [await heldReply(opus, docs)] });
+      storage.seed(empty);
+      plug("codex", "eng/review");
+      renderApp(storage);
+      await userEvent.click(await screen.findByRole("button", { name: "Delete Engineering" }));
+      expect(await screen.findByRole("heading", { name: "Move Engineering to the trash" })).toBeTruthy();
+      expect(screen.getByText("Its 2 badges and 2 results go with it.")).toBeTruthy();
+      expect(screen.getByText("Codex agent's handoff is pulled with no result.")).toBeTruthy();
+      await userEvent.click(screen.getByRole("button", { name: "Move to trash" }));
+      expect(await screen.findByRole("heading", { name: "Home", level: 1 })).toBeTruthy();
+      const state = await loadFolder(storage);
+      expect(state.collections.map((c) => c.slug)).toEqual(["client"]);
+      expect(state.credentials).toEqual([]);
+      expect(state.assessments).toEqual([]);
+      expect(state.held).toEqual([]);
+      expect(trashed(storage)).toHaveLength(6);
+      expect(readPending(FOLDER)).toEqual([]);
+    });
+
+    it("Back goes home and moves nothing", async () => {
+      const storage = storageWith({ credentials: [review] });
+      renderApp(storage, { view: "deck", deck: "trash", item: { kind: "collection", collectionSlug: "eng" } });
+      expect(await screen.findByText("Its badge goes with it.")).toBeTruthy();
+      await userEvent.click(screen.getByRole("button", { name: "Back" }));
+      expect(await screen.findByRole("heading", { name: "Home", level: 1 })).toBeTruthy();
+      expect(trashed(storage)).toEqual([]);
+    });
+
+    it("an empty collection says it has no badges", async () => {
+      const storage = storageWith();
+      storage.seed(empty);
+      renderApp(storage, { view: "deck", deck: "trash", item: { kind: "collection", collectionSlug: "client" } });
+      expect(await screen.findByText("It has no badges.")).toBeTruthy();
+    });
+
+    it("a move that fails partway shows what is left, and moving again finishes", async () => {
+      const storage = storageWith({ credentials: [review, docs], profiles: [opus], assessments: [await result(opus, review)] });
+      const real = storage.moveFile.bind(storage);
+      let calls = 0;
+      const spy = vi.spyOn(storage, "moveFile").mockImplementation(async (root, from, to) => {
+        if (++calls === 3) throw new Error("disk full");
+        return real(root, from, to);
+      });
+      renderApp(storage, { view: "deck", deck: "trash", item: { kind: "collection", collectionSlug: "eng" } });
+      await userEvent.click(await screen.findByRole("button", { name: "Move to trash" }));
+      expect(await screen.findByText(/disk full/)).toBeTruthy();
+      expect((await loadFolder(storage)).collections.map((c) => c.slug)).toEqual(["eng"]);
+      spy.mockRestore();
+      await userEvent.click(screen.getByRole("button", { name: "Move to trash" }));
+      expect(await screen.findByRole("heading", { name: "Home", level: 1 })).toBeTruthy();
+      expect((await loadFolder(storage)).collections).toEqual([]);
+      expect(trashed(storage)).toHaveLength(4);
+    });
+
+    it("deleting an added built-in's copy makes it addable again", async () => {
+      const storage = storageWith();
+      const nostr = BUILT_INS.find((b) => b.slug === "nostr-relays")!;
+      await addBuiltinCollection(storage, await loadFolder(storage), "nostr-relays");
+      renderApp(storage);
+      await userEvent.click(await screen.findByRole("button", { name: "Delete Nostr relays" }));
+      await userEvent.click(await screen.findByRole("button", { name: "Move to trash" }));
+      expect(await screen.findByRole("heading", { name: "Home", level: 1 })).toBeTruthy();
+      expect(builtinStatus(await loadFolder(storage), nostr)).toEqual({ kind: "not-added" });
+    });
+
+    it("open while the folder reloads without the collection, shows Not in the folder", async () => {
+      const storage = storageWith();
+      storage.seed(empty);
+      renderApp(storage, { view: "deck", deck: "trash", item: { kind: "collection", collectionSlug: "client" } });
+      await screen.findByRole("heading", { name: "Move Client work to the trash" });
+      storage.remove(collectionPath("client"));
+      await act(async () => {
+        window.dispatchEvent(new Event("focus"));
+      });
+      expect(await screen.findByRole("heading", { name: "Not in the folder" })).toBeTruthy();
     });
   });
 });

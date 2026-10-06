@@ -17,7 +17,7 @@ import { CollectionDeck } from "./CollectionDeck";
 import { CompareView } from "./CompareView";
 import { CostOrderDeck } from "./CostOrderDeck";
 import { CredentialDeck } from "./CredentialDeck";
-import { EditAgentDeck, EditCredentialDeck } from "./EditDecks";
+import { EditAgentDeck, EditCollectionDeck, EditCredentialDeck } from "./EditDecks";
 import { EditHandoffDeck, HandoffsDeck } from "./HandoffDecks";
 import { HandoffDetail } from "./HandoffDetail";
 import { JevDeck } from "./JevDeck";
@@ -151,6 +151,8 @@ function DeckView({ route }: { route: DeckRoute }) {
       return <EditCredentialDeck credentialKey={route.credentialKey} part={route.part} />;
     case "edit-agent":
       return <EditAgentDeck profileSlug={route.profileSlug} part={route.part} />;
+    case "edit-collection":
+      return <EditCollectionDeck collectionSlug={route.collectionSlug} part={route.part} />;
     case "handoffs":
       return <HandoffsDeck credentialKey={route.credentialKey} returnTo={route.returnTo} />;
     case "edit-handoff":

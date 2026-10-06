@@ -42,6 +42,7 @@ import {
   createPresetCredential,
   createProfile,
   duplicateProfileDraft,
+  ensureLandingCollection,
   holdReply,
   type HoldInput,
   importBadgeArt,
@@ -58,6 +59,7 @@ import {
   setCredentialBadgeOverride,
   takeAgentForJob,
   type RoutingInput,
+  trashCollection,
   trashCredential,
   trashProfile,
   updateCollection,
@@ -1801,5 +1803,140 @@ describe("adding a built-in collection (KTD2)", () => {
     const { state, slug } = await createCollection(storage, await loadFolder(storage), "Client work");
     expect(slug).toBe("client-work");
     expect(state.collections.find((c) => c.slug === "client-work")).toMatchObject({ name: "Client work", order: [], codes: {} });
+  });
+});
+
+describe("renaming and trashing a collection (collections plan U6, KTD7)", () => {
+  const now = new Date("2026-10-06T10:00:00.000Z");
+  const stamp = "20261006T100000Z";
+  const at = (minute: number) => new Date(`2026-10-06T08:${String(minute).padStart(2, "0")}:00Z`);
+
+  /** My credentials with two badges, results from two agents, a handoff, a mark, a held reply and a pasted image, beside another collection. */
+  async function full() {
+    const storage = new MemoryStorage();
+    let state = await loadFolder(storage);
+    state = (await createCollection(storage, state, "My credentials")).state;
+    state = (await createCollection(storage, state, "Other")).state;
+    state = (await createCredential(storage, state, "my-credentials", "Write a CLI")).state;
+    state = (await createCredential(storage, state, "my-credentials", "Read a file")).state;
+    state = (await createCredential(storage, state, "other", "Keep me")).state;
+    state = (await createProfile(storage, state, baseProfile)).state;
+    state = (await createProfile(storage, state, { ...baseProfile, name: "Codex" })).state;
+    const ids = (profileSlug: string, credentialSlug: string) => ({ profileSlug, collectionSlug: "my-credentials", credentialSlug });
+    state = (await recordAssessment(storage, state, { ...ids("claude-opus", "write-a-cli"), result: "met", note: "", handBack: "Done." }, at(1))).state;
+    state = (await recordAssessment(storage, state, { ...ids("codex", "write-a-cli"), result: "not_met", note: "", handBack: "Tried." }, at(2))).state;
+    state = (await recordAssessment(storage, state, { profileSlug: "codex", collectionSlug: "other", credentialSlug: "keep-me", result: "met", note: "", handBack: "Kept." }, at(3))).state;
+    state = (await createHandoff(storage, state, "my-credentials", "write-a-cli", "A {{task}}", at(4))).state;
+    state = await markGoTo(storage, state, { ...ids("claude-opus", "write-a-cli"), fileStem: "20261006T080100Z" }, at(5));
+    state = (await holdReply(storage, state, { ...ids("codex", "read-a-file"), handBack: "Held." }, at(6))).state;
+    storage.seedImage("collections/my-credentials/credentials/pasted.png", "data:image/png;base64,AAAA");
+    state = await loadFolder(storage);
+    return { storage, state };
+  }
+
+  /** Every file under a folder, text, image or video. */
+  const under = (storage: MemoryStorage, dir: string) => storage.listFiles("data", dir);
+  const goesWith = async (storage: MemoryStorage) =>
+    [...(await under(storage, "collections/my-credentials")), ...(await under(storage, "assessments")).filter((p) => p.split("/")[2] === "my-credentials")].sort();
+
+  it("renaming My credentials to Daily work changes its name only, and its badges keep their keys", async () => {
+    const { storage, state } = await full();
+    const before = state.collections.find((c) => c.slug === "my-credentials")!;
+    const next = await updateCollection(storage, state, { ...before, name: "Daily work" }, state.raw[collectionPath("my-credentials")]);
+    const after = next.collections.find((c) => c.slug === "my-credentials")!;
+    expect(after).toEqual({ ...before, name: "Daily work" });
+    expect(next.credentials.filter((c) => c.collectionSlug === "my-credentials").map(credentialKey).sort()).toEqual(["my-credentials/read-a-file", "my-credentials/write-a-cli"]);
+  });
+
+  it("Covers AE4. moves every file of the collection and its results under one stamp, and leaves the rest", async () => {
+    const { storage, state } = await full();
+    const files = (await goesWith(storage));
+    expect(files).toEqual(
+      expect.arrayContaining([
+        collectionPath("my-credentials"),
+        credentialPath("my-credentials", "write-a-cli"),
+        credentialPath("my-credentials", "read-a-file"),
+        "collections/my-credentials/credentials/pasted.png",
+        "assessments/claude-opus/my-credentials/write-a-cli/20261006T080100Z.md",
+        "assessments/codex/my-credentials/write-a-cli/20261006T080200Z.md",
+        heldPath("codex", "my-credentials", "read-a-file", "20261006T080600Z"),
+        markPath("my-credentials", "write-a-cli", "20261006T080500Z"),
+      ]),
+    );
+    expect(files.some((p) => p.startsWith("collections/my-credentials/handoffs/write-a-cli/"))).toBe(true);
+    const texts = Object.fromEntries(files.map((p) => [p, storage.file(p)]));
+
+    const next = await trashCollection(storage, state, "my-credentials", now);
+    expect((await goesWith(storage))).toEqual([]);
+    for (const p of files) {
+      if (p.endsWith(".png")) expect(storage.image(`trash/${stamp}/${p}`)).toBeDefined();
+      else expect(storage.file(`trash/${stamp}/${p}`)).toBe(texts[p]);
+    }
+    // collection.json moves last.
+    expect(storage.writes[storage.writes.length - 1].path).toBe(`trash/${stamp}/${collectionPath("my-credentials")}`);
+    expect(next.collections.map((c) => c.slug)).toEqual(["other"]);
+    expect(next.credentials.map(credentialKey)).toEqual(["other/keep-me"]);
+    expect(next.assessments.map(credentialKey)).toEqual(["other/keep-me"]);
+    expect(next.held).toEqual([]);
+    expect(next.marks).toEqual([]);
+    expect(next.profiles.map((p) => p.slug)).toEqual(["claude-opus", "codex"]);
+  });
+
+  it("Covers AE4. after My credentials is trashed, a new badge lands in a new My credentials", async () => {
+    const storage = new MemoryStorage();
+    let state = (await createCollection(storage, await loadFolder(storage), "My credentials")).state;
+    state = (await createCredential(storage, state, "my-credentials", "Write a CLI")).state;
+    state = (await addBuiltinCollection(storage, state, "nostr-relays")).state;
+    state = await trashCollection(storage, state, "my-credentials", now);
+    const landing = await ensureLandingCollection(storage, state);
+    const made = await createCredential(storage, landing.state, landing.slug, "Fresh");
+    expect(made.key).toBe("my-credentials/fresh");
+    expect(made.state.collections.find((c) => c.slug === "my-credentials")).toMatchObject({ name: "My credentials", order: ["fresh"] });
+    expect(made.state.credentials.map(credentialKey).sort()).toEqual([...BUILT_INS.find((b) => b.slug === "nostr-relays")!.collection.order.map((s) => `nostr-relays/${s}`), "my-credentials/fresh"].sort());
+  });
+
+  it("a move that fails on the third file leaves the collection loadable, and trashing again finishes", async () => {
+    const { storage, state } = await full();
+    const files = (await goesWith(storage));
+    const failing = Object.create(storage) as MemoryStorage;
+    let calls = 0;
+    failing.moveFile = async (root, from, to) => {
+      if (++calls === 3) throw new Error("disk full");
+      return storage.moveFile(root, from, to);
+    };
+    await expect(trashCollection(failing, state, "my-credentials", now)).rejects.toThrow("disk full");
+    const between = await loadFolder(storage);
+    expect(between.collections.map((c) => c.slug)).toEqual(["my-credentials", "other"]);
+    expect(between.errors).toEqual([]);
+
+    const done = await trashCollection(storage, between, "my-credentials", new Date("2026-10-06T10:00:05Z"));
+    expect((await goesWith(storage))).toEqual([]);
+    expect(done.collections.map((c) => c.slug)).toEqual(["other"]);
+    const trashed = (await under(storage, "trash")).map((p) => p.split("/").slice(2).join("/"));
+    expect(trashed.sort()).toEqual(files);
+  });
+
+  it("moves nothing when a badge file changed on disk since it was opened", async () => {
+    const { storage, state } = await full();
+    const path = credentialPath("my-credentials", "read-a-file");
+    storage.seed({ [path]: `${storage.file(path)}\nmore\n` });
+    await expect(trashCollection(storage, state, "my-credentials", now)).rejects.toBeInstanceOf(ChangedOnDiskError);
+    expect((await under(storage, "trash"))).toEqual([]);
+  });
+
+  it("moves nothing when collection.json changed on disk since it was opened", async () => {
+    const { storage, state } = await full();
+    storage.seed({ [collectionPath("my-credentials")]: `${storage.file(collectionPath("my-credentials"))}\n` });
+    await expect(trashCollection(storage, state, "my-credentials", now)).rejects.toBeInstanceOf(ChangedOnDiskError);
+    expect((await under(storage, "trash"))).toEqual([]);
+  });
+
+  it("trashing an added built-in's copy makes the built-in addable again", async () => {
+    const storage = new MemoryStorage();
+    const nostr = BUILT_INS.find((b) => b.slug === "nostr-relays")!;
+    const added = await addBuiltinCollection(storage, await loadFolder(storage), "nostr-relays");
+    expect(builtinStatus(added.state, nostr).kind).toBe("added");
+    const next = await trashCollection(storage, added.state, added.slug, now);
+    expect(builtinStatus(next, nostr)).toEqual({ kind: "not-added" });
   });
 });

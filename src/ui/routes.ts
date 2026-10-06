@@ -6,6 +6,9 @@ import type { Slug } from "../domain/types";
 /** The parts of a credential that open as one-beat edits (R4). */
 export type CredentialPart = "name" | "targets" | "task" | "rubric" | "look";
 
+/** The parts of a collection that open as one-beat edits: its name only (collections plan R3). */
+export type CollectionPart = "name";
+
 /** The parts of an agent that open as one-beat edits (R4). Its setup is the player card itself. */
 export type AgentPart = "name" | "repo" | "notes" | "params";
 
@@ -66,6 +69,8 @@ export type DeckRoute =
     }
   | { view: "deck"; deck: "edit-credential"; credentialKey: string; part: CredentialPart }
   | { view: "deck"; deck: "edit-agent"; profileSlug: Slug; part: AgentPart }
+  /** Rename a collection, from its group on Home (collections plan KTD6). */
+  | { view: "deck"; deck: "edit-collection"; collectionSlug: Slug; part: CollectionPart }
   /** The handoff box for one badge (R9). With `returnTo`, it was opened from the test and goes back there. */
   | { view: "deck"; deck: "handoffs"; credentialKey: string; returnTo?: TestPick }
   /** One handoff, a new one or the skeleton, as a one-beat edit (R3, R4, R5). */
@@ -80,8 +85,8 @@ export type DeckRoute =
   /** Add a collection: an empty one or a built-in (collections plan R7). */
   | { view: "deck"; deck: "collection" };
 
-/** An agent or a credential on its way to the trash. */
-export type TrashItem = { kind: "agent"; profileSlug: Slug } | { kind: "badge"; credentialKey: string };
+/** An agent, a credential or a whole collection on its way to the trash. */
+export type TrashItem = { kind: "agent"; profileSlug: Slug } | { kind: "badge"; credentialKey: string } | { kind: "collection"; collectionSlug: Slug };
 
 /**
  * One take: an agent's result or held reply on a badge, named by the agent and the file stem,

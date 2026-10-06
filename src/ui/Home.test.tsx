@@ -603,6 +603,7 @@ describe("Home's collections", () => {
     expect(groupsIn(region)).toHaveLength(0);
     expect(within(region).queryAllByRole("heading", { level: 3 })).toHaveLength(0);
     expect(within(region).queryAllByRole("button", { name: /^Add a badge/ })).toHaveLength(0);
+    expect(within(region).queryAllByRole("button", { name: /^(Rename|Delete) / })).toHaveLength(0);
     const add = within(region).getByRole("button", { name: "Add a collection" });
     expect(add.closest(".home-section-head")?.querySelector("h2")?.textContent).toBe("Badges");
     expect([...region.querySelectorAll(".badge-card-name")].map((n) => n.textContent)).toEqual(["Code review", "Write docs"]);
@@ -626,6 +627,29 @@ describe("Home's collections", () => {
     expect(link.textContent).toBe("Add a badge here");
     expect(within(eng).getByRole("button", { name: "Add a badge to Engineering" })).toBeTruthy();
     expect(within(region).getAllByRole("button", { name: "Add a collection" })).toHaveLength(1);
+  });
+
+  it("each group's Rename and Delete name the collection, and open its rename and delete decks", async () => {
+    const storage = storageWith({ credentials: [review] });
+    storage.seed(collectionFile("client", "Client work", [audit]));
+    renderApp(storage);
+    const region = await badges();
+    await waitFor(() => expect(groupsIn(region)).toHaveLength(2));
+    const [client, eng] = groupsIn(region);
+    const rename = within(client).getByRole("button", { name: "Rename Client work" });
+    const del = within(client).getByRole("button", { name: "Delete Client work" });
+    expect(rename.textContent).toBe("Rename");
+    expect(del.textContent).toBe("Delete");
+    expect(within(eng).getByRole("button", { name: "Rename Engineering" })).toBeTruthy();
+    expect(within(eng).getByRole("button", { name: "Delete Engineering" })).toBeTruthy();
+
+    await userEvent.click(rename);
+    expect(await screen.findByRole("heading", { name: "What is it called" })).toBeTruthy();
+    expect((screen.getByRole("textbox", { name: "Name" }) as HTMLInputElement).value).toBe("Client work");
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    await userEvent.click(await screen.findByRole("button", { name: "Delete Client work" }));
+    expect(await screen.findByRole("heading", { name: "Move Client work to the trash" })).toBeTruthy();
   });
 
   it("a lone built-in copy shows as a named group", async () => {
