@@ -23,8 +23,8 @@ import {
   isCredentialResult,
   loadFolder,
   markPath,
-  parseCollection,
   marksDir,
+  parseCollection,
   parseCostOrder,
   profilePath,
   profileResultsDir,
@@ -49,6 +49,7 @@ import {
   type AssessmentIds,
 } from "./folder";
 import { BUILT_INS, type BuiltIn } from "./builtins";
+import { folderOf } from "./images";
 import { checkHandoff, isHandoffLocked, type HandoffProblem } from "./handoffs";
 import { resultOf } from "./goTo";
 import { heldOf, heldReadingOf } from "./handoffResults";
@@ -156,20 +157,24 @@ export async function createCollection(
  */
 export type BuiltinStatus = { kind: "not-added" } | { kind: "incomplete"; slug: Slug; missing: Slug[] } | { kind: "added"; slug: Slug };
 
+/**
+ * The collection as its file says, so a reader keeps the on-disk order and codes: loadFolder
+ * prunes order to the badges it found, and an unfinished built-in copy needs the rest.
+ */
+export function collectionAsOnDisk(text: string | null | undefined, fallback: Collection): Collection {
+  if (text == null) return fallback;
+  try {
+    return parseCollection(text, fallback.slug);
+  } catch {
+    return fallback;
+  }
+}
+
 export function builtinStatus(state: FolderState, builtin: BuiltIn): BuiltinStatus {
   const copy = state.collections.find((c) => c.from === builtin.slug);
   if (!copy) return { kind: "not-added" };
   // loadFolder prunes order to the files it found, so the order on disk is read from raw.
-  const path = collectionPath(copy.slug);
-  let order = copy.order;
-  const raw = state.raw[path];
-  if (raw !== undefined) {
-    try {
-      order = parseCollection(raw, copy.slug).order;
-    } catch {
-      // raw holds only text that parsed, so this is not reached.
-    }
-  }
+  const { order } = collectionAsOnDisk(state.raw[collectionPath(copy.slug)], copy);
   const missing = order.filter((s) => {
     const file = credentialPath(copy.slug, s);
     return builtin.credentials[s] !== undefined && state.raw[file] === undefined && !state.errors.some((e) => e.path === file);
@@ -906,7 +911,7 @@ export async function trashCollection(storage: Storage, state: FolderState, coll
   const credentials = state.credentials.filter((c) => c.collectionSlug === collectionSlug).map((c) => credentialPath(collectionSlug, c.slug));
   await assertUnchanged(storage, [[colPath, state.raw[colPath] ?? null], ...credentials.map((p): [string, string | null] => [p, state.raw[p] ?? null])]);
 
-  const own = await storage.listFiles("data", colPath.slice(0, colPath.lastIndexOf("/")));
+  const own = await storage.listFiles("data", folderOf(colPath));
   const results = (await storage.listFiles("data", ASSESSMENTS_DIR)).filter((p) => {
     const parts = p.split("/");
     return parts.length > 3 && parts[2] === collectionSlug;

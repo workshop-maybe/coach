@@ -14,10 +14,10 @@ import { useState } from "react";
 import type { KeyboardEvent } from "react";
 import { PALETTES } from "../badge/palettes";
 import type { BadgeSettings, BadgeTitle } from "../badge/settings";
-import { collectionPath, credentialPath, credentialsDir, loadFolder, parseCollection, profilePath } from "../domain/folder";
+import { collectionPath, credentialPath, credentialsDir, loadFolder, profilePath } from "../domain/folder";
 import { folderOf } from "../domain/images";
 import { cellKey, type Matrix } from "../domain/matrix";
-import { importBadgeArt, setCredentialBadgeOverride, updateCollection, updateCredential, updateProfile } from "../domain/operations";
+import { collectionAsOnDisk, importBadgeArt, setCredentialBadgeOverride, updateCollection, updateCredential, updateProfile } from "../domain/operations";
 import { checkCriteriaPrompt, refinePrompt, reviewAssignmentPrompt } from "../domain/prompts";
 import { appendToRubric } from "../domain/target-check";
 import {
@@ -459,19 +459,6 @@ export function EditCollectionDeck(props: EditCollectionDeckProps) {
   return <EditCollection {...props} collection={collection} state={state} />;
 }
 
-/**
- * The collection as its file says, so a save keeps the on-disk order and codes: loadFolder
- * prunes order to the badges it found, and an unfinished built-in copy needs the rest.
- */
-function onDisk(text: string | null | undefined, fallback: Collection): Collection {
-  if (text == null) return fallback;
-  try {
-    return parseCollection(text, fallback.slug);
-  } catch {
-    return fallback;
-  }
-}
-
 function EditCollection({ collectionSlug, collection: atOpen, state: stateAtOpen }: EditCollectionDeckProps & { collection: Collection; state: FolderState }) {
   const { storage, state, apply, reload } = useFolder();
   const { navigate } = useNav();
@@ -486,7 +473,7 @@ function EditCollection({ collectionSlug, collection: atOpen, state: stateAtOpen
     if (!current) return;
     // Keep mine lays only the name over the file as it is now, so other changes on disk stay.
     const base = keepMine ? (current.raw[path] ?? null) : opened.base;
-    const from = onDisk(base, keepMine ? (current.collections.find((c) => c.slug === collectionSlug) ?? opened.collection) : opened.collection);
+    const from = collectionAsOnDisk(base, keepMine ? (current.collections.find((c) => c.slug === collectionSlug) ?? opened.collection) : opened.collection);
     apply(await updateCollection(storage, current, { ...from, name: name.trim() }, base));
     navigate({ view: "home", litCollection: collectionSlug });
   }

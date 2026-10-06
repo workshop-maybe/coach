@@ -29,6 +29,9 @@ function badgesOf(builtin: BuiltIn): Credential[] {
     .map((s) => parseCredentialMd(builtin.credentials[s], { slug: s, collectionSlug: builtin.slug }));
 }
 
+/** Each built-in's badges, parsed once: the built-ins never change while the app runs. */
+const BADGES = new Map(BUILT_INS.map((b) => [b.slug, badgesOf(b)]));
+
 /** The request page, for the system browser only: the webview never follows, offers or drags the link. */
 function RequestLink({ repo }: { repo: string }) {
   const url = collectionRequestUrl(repo);
@@ -57,7 +60,7 @@ export function CollectionDeck() {
   const picked = BUILT_INS.find((b) => b.slug === start);
   const home = () => navigate({ view: "home" });
 
-  // Home lights the new collection's group.
+  // Home lights the new collection's group on return.
   async function finish({ keepMine }: { keepMine: boolean }) {
     if (!state) return;
     const current = keepMine ? await loadFolder(storage) : state;
@@ -98,7 +101,7 @@ export function CollectionDeck() {
           </li>
           {BUILT_INS.map((b) => {
             const added = state !== null && builtinStatus(state, b).kind === "added";
-            const cover = badgesOf(b)[0];
+            const cover = BADGES.get(b.slug)?.[0];
             return (
               <li key={b.slug}>
                 <button
@@ -136,7 +139,7 @@ export function CollectionDeck() {
             <>
               {picked.collection.description && <p>{picked.collection.description}</p>}
               <ol className="preset-targets" aria-label="Badges">
-                {badgesOf(picked).map((c) => (
+                {(BADGES.get(picked.slug) ?? []).map((c) => (
                   <li key={c.slug}>{c.name}</li>
                 ))}
               </ol>
