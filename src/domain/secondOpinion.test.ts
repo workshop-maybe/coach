@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { FAKE_ANSWER, FAKE_ON, FakeJev } from "../jev/fakeJev";
+import { BUILT_INS } from "./builtins";
+import { parseCredentialMd } from "./credential-md";
 import { fitsJev } from "./jevBudget";
 import { answeringModel, JEV_LIMITS, JEV_MODEL, type JevExample } from "./jevRequest";
-import { findPreset, presetCredential } from "./presets";
 import {
   OVERALL_CRITERIA,
   OVERALL_ID,
@@ -200,10 +201,10 @@ describe("secondOpinionRequest", () => {
     expect(req.state).toMatchObject({ task: "  Task\n", rubric: "- One  \n", reply: "\n Reply \n" });
   });
 
-  it("carries both of the SLT-rewrite preset's qualifying lines in every point question", () => {
-    const preset = findPreset("tighten-a-learning-target");
-    if (!preset) throw new Error("the SLT-rewrite preset is missing");
-    const credential = presetCredential(preset, "presets");
+  it("carries both of the SLT-rewrite badge's qualifying lines in every point question", () => {
+    const markdown = BUILT_INS.find((b) => b.slug === "course-authoring")?.credentials["tighten-a-learning-target"];
+    if (markdown === undefined) throw new Error("the built-in SLT-rewrite badge is missing");
+    const credential = parseCredentialMd(markdown, { slug: "tighten-a-learning-target", collectionSlug: "course-authoring" });
     const req = secondOpinionRequest({ task: credential.task, rubric: credential.rubric, reply: "My rewrites." });
 
     expect(req.state.rubric_points).toHaveLength(5);
