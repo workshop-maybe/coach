@@ -255,6 +255,8 @@ export function parseCollectionWithWarnings(text: string, slug: Slug): { collect
     order: [...(order as string[])],
     codes: { ...(codes as Record<string, number>) },
   };
+  const from = optionalString(obj, "from");
+  if (from) collection.from = from;
   const warnings: string[] = [];
 
   if (obj.badge !== undefined) {
@@ -299,6 +301,7 @@ export function parseCollection(text: string, slug: Slug): Collection {
 export function serializeCollection(collection: Collection): string {
   const { name, description, order, codes } = collection;
   const out: Json = { name, description, order, codes };
+  if (collection.from !== undefined) out.from = collection.from;
 
   // A malformed value was never replaced by a typed one, so it goes back as it came.
   const badge = collection.badge !== undefined ? collection.badge : collection.badgeRaw;

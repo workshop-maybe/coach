@@ -13,10 +13,11 @@ import { useLayoutEffect, useMemo, useState } from "react";
 import { InkDefs } from "../cast/InkDefs";
 import { AgentDetail } from "./AgentDetail";
 import { BadgeDetail } from "./BadgeDetail";
+import { CollectionDeck } from "./CollectionDeck";
 import { CompareView } from "./CompareView";
 import { CostOrderDeck } from "./CostOrderDeck";
 import { CredentialDeck } from "./CredentialDeck";
-import { EditAgentDeck, EditCredentialDeck } from "./EditDecks";
+import { EditAgentDeck, EditCollectionDeck, EditCredentialDeck } from "./EditDecks";
 import { EditHandoffDeck, HandoffsDeck } from "./HandoffDecks";
 import { HandoffDetail } from "./HandoffDetail";
 import { JevDeck } from "./JevDeck";
@@ -141,7 +142,7 @@ export function AppShell({ onChangeFolder, initialRoute = { view: "home" } }: Ap
 function DeckView({ route }: { route: DeckRoute }) {
   switch (route.deck) {
     case "credential":
-      return <CredentialDeck returnTo={route.returnTo} fromJob={route.fromJob} />;
+      return <CredentialDeck returnTo={route.returnTo} fromJob={route.fromJob} collectionSlug={route.collectionSlug} />;
     case "agent":
       return <PlayerCard returnTo={route.returnTo} likeSlug={route.likeSlug} firstTest={route.firstTest} />;
     case "test":
@@ -150,6 +151,8 @@ function DeckView({ route }: { route: DeckRoute }) {
       return <EditCredentialDeck credentialKey={route.credentialKey} part={route.part} />;
     case "edit-agent":
       return <EditAgentDeck profileSlug={route.profileSlug} part={route.part} />;
+    case "edit-collection":
+      return <EditCollectionDeck collectionSlug={route.collectionSlug} part={route.part} />;
     case "handoffs":
       return <HandoffsDeck credentialKey={route.credentialKey} returnTo={route.returnTo} />;
     case "edit-handoff":
@@ -162,6 +165,8 @@ function DeckView({ route }: { route: DeckRoute }) {
       return <RouterDeck resume={route.resume} />;
     case "cost-order":
       return <CostOrderDeck returnTo={route.returnTo} />;
+    case "collection":
+      return <CollectionDeck />;
   }
 }
 

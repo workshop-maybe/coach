@@ -1,6 +1,6 @@
 // One-beat edits (R4, U6, U7). Opening a part of a badge or an agent runs a deck for that
-// one part: a credential's name, learning targets, task, rubric or look, and an agent's
-// name, repo, notes or parameters. The file text each card opened with is the base of its
+// one part: a credential's name, learning targets, task, rubric or look, an agent's
+// name, repo, notes or parameters, and a collection's name (collections plan U6). The file text each card opened with is the base of its
 // save, so a file changed on disk meanwhile turns into the deck's conflict card (KTD2, KTD3).
 // A task or rubric change on a badge with holders warns first that they will re-test (R18),
 // including detail the targets card moves from a target into the rubric.
@@ -17,7 +17,7 @@ import type { BadgeSettings, BadgeTitle } from "../badge/settings";
 import { collectionPath, credentialPath, credentialsDir, loadFolder, profilePath } from "../domain/folder";
 import { folderOf } from "../domain/images";
 import { cellKey, type Matrix } from "../domain/matrix";
-import { importBadgeArt, setCredentialBadgeOverride, updateCredential, updateProfile } from "../domain/operations";
+import { collectionAsOnDisk, importBadgeArt, setCredentialBadgeOverride, updateCollection, updateCredential, updateProfile } from "../domain/operations";
 import { checkCriteriaPrompt, refinePrompt, reviewAssignmentPrompt } from "../domain/prompts";
 import { appendToRubric } from "../domain/target-check";
 import {
@@ -35,7 +35,7 @@ import { Deck, type Beat } from "./Deck";
 import { useNav } from "./nav";
 import { useRichDraft } from "./richDraft";
 import { RichText } from "./RichText";
-import type { AgentPart, CredentialPart } from "./routes";
+import type { AgentPart, CollectionPart, CredentialPart } from "./routes";
 import { CopyHelper, LineMove, Missing, TargetHint, fileName, paletteName } from "./shared";
 import { describeError, useFolder } from "./useFolderState";
 import { useMatrix } from "./useMatrix";
@@ -440,6 +440,58 @@ function EditCredential({ credentialKey: key, part, credential: atOpen, collecti
   }
 
   return <Deck label={`Edit ${c.name}`} beats={beats} unsaved={unsaved} onClose={badgeHome} onFinish={finish} onUseTheirs={() => void useTheirs()} />;
+}
+
+// ---------------------------------------------------------------------------
+// A collection's name (collections plan U6, R3)
+
+export interface EditCollectionDeckProps {
+  collectionSlug: Slug;
+  part: CollectionPart;
+}
+
+export function EditCollectionDeck(props: EditCollectionDeckProps) {
+  const { state } = useFolder();
+  const { navigate } = useNav();
+  if (!state) return null;
+  const collection = state.collections.find((c) => c.slug === props.collectionSlug);
+  if (!collection) return <Missing onHome={() => navigate({ view: "home" })} />;
+  return <EditCollection {...props} collection={collection} state={state} />;
+}
+
+function EditCollection({ collectionSlug, collection: atOpen, state: stateAtOpen }: EditCollectionDeckProps & { collection: Collection; state: FolderState }) {
+  const { storage, state, apply, reload } = useFolder();
+  const { navigate } = useNav();
+  const path = collectionPath(collectionSlug);
+  const [opened] = useState(() => ({ collection: atOpen, base: stateAtOpen.raw[path] ?? null }));
+  const [name, setName] = useState(opened.collection.name);
+
+  const home = () => navigate({ view: "home" });
+
+  async function finish({ keepMine }: { keepMine: boolean }) {
+    const current = keepMine ? await loadFolder(storage) : state;
+    if (!current) return;
+    // Keep mine lays only the name over the file as it is now, so other changes on disk stay.
+    const base = keepMine ? (current.raw[path] ?? null) : opened.base;
+    const from = collectionAsOnDisk(base, keepMine ? (current.collections.find((c) => c.slug === collectionSlug) ?? opened.collection) : opened.collection);
+    apply(await updateCollection(storage, current, { ...from, name: name.trim() }, base));
+    navigate({ view: "home", litCollection: collectionSlug });
+  }
+
+  async function useTheirs() {
+    await reload();
+    home();
+  }
+
+  const beat: Beat = {
+    id: "name",
+    title: "What is it called",
+    forward: "Rename the collection",
+    valid: name.trim() !== "" && name.trim() !== opened.collection.name,
+    body: <input aria-label="Name" value={name} autoComplete="off" onChange={(e) => setName(e.target.value)} />,
+  };
+
+  return <Deck label={`Rename ${opened.collection.name}`} beats={[beat]} onClose={home} onFinish={finish} onUseTheirs={() => void useTheirs()} />;
 }
 
 // ---------------------------------------------------------------------------

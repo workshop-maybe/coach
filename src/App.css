@@ -1026,6 +1026,63 @@ button:focus-visible {
   background: var(--cell);
 }
 
+/* A section heading with a quiet link beside it, such as Add a collection beside Badges. */
+.home-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs) var(--space-md);
+  margin: 0 0 var(--space-md);
+}
+
+.home-section-head h2 {
+  flex: 1 1 12rem;
+  min-width: 0;
+  margin: 0;
+}
+
+.home-section-head .more,
+.collection-group-head .more {
+  margin-top: 0;
+}
+
+/* One group per collection (collections plan U5): its name, its quiet links, then its shelf.
+   A collection just added is lit as a reply row is: an ink edge, a wash, its name in data blue. */
+.collection-group + .collection-group {
+  margin-top: var(--space-lg);
+}
+
+.collection-group-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-xs) var(--space-md);
+  padding: var(--space-xs) var(--space-sm);
+  border-left: 3px solid transparent;
+}
+
+.collection-group-head h3 {
+  min-width: 0;
+  margin: 0;
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.collection-group.lit .collection-group-head {
+  border-left-color: var(--ink);
+  background: var(--data-wash);
+}
+
+.collection-group.lit h3 {
+  color: var(--data);
+}
+
+/* Add a collection under the doors, while the folder has none. */
+.home-add-collection {
+  margin: 0;
+  text-align: center;
+}
+
 /* Home's sections (KTD6). Stacked, they keep home's spacing. When all three show on a wide
    window, what needs you and the agents share a row and the badges run the full width under
    them, so a full home fits one screen. The doors sit outside, so they still pin to the
@@ -1305,6 +1362,15 @@ button:focus-visible {
 
 .home-empty .first-test + .doors {
   margin: var(--space-lg) 0 auto;
+}
+
+/* Add a collection follows the doors closely, and takes over the space below them. */
+.home-empty .doors:has(+ .home-add-collection) {
+  margin-bottom: 0;
+}
+
+.home-empty .home-add-collection {
+  margin-bottom: auto;
 }
 
 .home-empty .door {
@@ -1620,6 +1686,24 @@ button:focus-visible {
 .handoff-slots code {
   font-family: var(--font-mono);
   font-size: 12px;
+}
+
+/* A built-in collection already in the folder: muted, and marked added. */
+.choice-added {
+  color: var(--ink-muted);
+  cursor: default;
+}
+
+.choice-note {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: var(--value-tracking);
+}
+
+/* The quiet request link at the foot of Add a collection's first card. */
+.collection-request {
+  margin: var(--space-base) 0 0;
+  font-size: 13px;
 }
 
 /* A preset's learning targets, on the card that makes it. */

@@ -1054,6 +1054,52 @@ export const SHOTS: readonly Shot[] = [
     expect: { text: "Cheapest first" },
     clip: { selector: ".deck-card", pad: 16 },
   },
+
+  // Collections (collections plan U7): the add deck's first card and a built-in's card, Home
+  // after adding Nostr relays, and a collection on its way to the trash.
+  {
+    id: "collection-add",
+    page: "how-to/use-collections",
+    route: { view: "deck", deck: "collection" },
+    seed: "full",
+    jev: "off",
+    expect: { text: "Start an empty one" },
+  },
+  {
+    id: "collection-builtin",
+    page: "how-to/use-collections",
+    route: { view: "deck", deck: "collection" },
+    seed: "full",
+    jev: "off",
+    expect: { text: "Add the collection" },
+    steps: [{ click: { button: "Nostr relays" } }, { waitFor: { text: "Add the collection" } }],
+  },
+  {
+    // Added through the deck, so Home shows the two groups with the new one lit, scrolled
+    // to the new group.
+    id: "home-collections",
+    page: "how-to/use-collections",
+    route: { view: "home" },
+    seed: "full",
+    jev: "off",
+    expect: { selector: ".collection-group.lit" },
+    steps: [
+      { click: { button: "Add a collection" } },
+      { click: { button: "Nostr relays" } },
+      { click: { button: "Add the collection" } },
+      { waitFor: { selector: ".collection-group.lit" } },
+      { scroll: { selector: ".collection-group.lit" } },
+    ],
+  },
+  {
+    id: "collection-delete",
+    page: "how-to/use-collections",
+    route: { view: "deck", deck: "trash", item: { kind: "collection", collectionSlug: "my-credentials" } },
+    seed: "full",
+    jev: "off",
+    expect: { text: "Move My credentials to the trash" },
+    clip: { selector: ".deck-card", pad: 16 },
+  },
 ];
 
 /** Marks a route kind no shot pictures yet. */
@@ -1073,18 +1119,21 @@ export function routeKind(route: Route | "gate"): RouteKind {
 /** For each route kind, the shots that picture it, or NOT_PICTURED. Every shot is listed under its own kind. */
 export const COVERAGE: Record<RouteKind, readonly string[] | typeof NOT_PICTURED> = {
   gate: ["first-run"],
-  home: ["home-empty", "home", "home-needs", "router-door"],
+  home: ["home-empty", "home", "home-needs", "router-door", "home-collections"],
   "deck:credential": ["credential-start", "credential-target"],
   "deck:agent": ["first-test-agent", "first-test-hand", "first-test-judge", "first-test-home", "agent-new"],
   "deck:test": ["test-hand", "test-reply", "judge", "go-to-offer", "missed-points", "held", "jev-ask", "jev-cleanup", "jev-sends", "jev-calls", "jev-record", "jev-reason", "case-check", "case-reading", "case-missed", "case-reason", "case-cleaned"],
   "deck:edit-credential": ["edit-retest", "go-to-flagged", "paste-image", "add-video"],
   "deck:edit-agent": ["agent-params"],
+  // Rename is one name field, which the guide describes in words.
+  "deck:edit-collection": NOT_PICTURED,
   "deck:handoffs": ["handoffs-box"],
   "deck:edit-handoff": ["handoff-edit"],
-  "deck:trash": ["trash-badge", "trash-agent"],
+  "deck:trash": ["trash-badge", "trash-agent", "collection-delete"],
   "deck:jev": ["jev-off", "jev-on"],
   "deck:router": ["router-ask", "router-card", "router-also"],
   "deck:cost-order": ["cost-order"],
+  "deck:collection": ["collection-add", "collection-builtin"],
   "item:badge": ["badge-replies", "badge-page", "go-to-badge"],
   "item:agent": ["agent-page"],
   // A handoff opens as its own item only once two or more have results; the sample's has none.

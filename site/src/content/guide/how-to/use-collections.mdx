@@ -1,0 +1,61 @@
+---
+title: Use collections
+part: how-to
+order: 12
+description: Group your badges into collections, add a built-in set of badges, and rename or delete a collection.
+---
+
+{/* How to (collections plan U8, R1-R10, R17): groups on home, adding a built-in or an empty collection, a badge in a collection, rename and delete. Labels are checked against src/ui/Home.tsx, src/ui/CollectionDeck.tsx, src/ui/EditDecks.tsx and src/ui/TrashDeck.tsx (KTD8). */}
+
+A collection is a named group of badges. Every badge sits in one. Your first badges go in *My credentials*. Each collection [exports](/how-to/export/) as one course.
+
+## Groups on home
+
+With one collection of your own, home shows your badges in one list under <UI>Badges</UI>. Once you have two collections, or you add a built-in one, home groups the badges under each collection's name. Each group has three links: <UI>Add a badge here</UI>, <UI>Rename</UI> and <UI>Delete</UI>.
+
+<Shot id="home-collections" alt="Badges on home in two groups: My credentials with its four badges, and Nostr relays, lit, with Run a Nostr relay and Set a relay's moderation policy. Each group has Add a badge here, Rename and Delete beside its name" />
+
+## Add a built-in collection
+
+A built-in collection is a set of badges for one kind of work, written for you. There are three: *Cardano Dev Skills*, *Course authoring* and *Nostr relays*.
+
+1. On home, click <UI>Add a collection</UI> beside <UI>Badges</UI>. With no badges yet, it sits under the doors.
+2. The first card asks <UI>Add a collection</UI>. Click a built-in.
+
+<Shot id="collection-add" alt="Add a collection: Start an empty one, then Cardano Dev Skills, Course authoring and Nostr relays" />
+
+3. Its card says what the collection is for and lists its badges. Click <UI>Add the collection</UI>.
+
+<Shot id="collection-builtin" alt="Nostr relays: An example of a collection for one domain, running a Nostr relay, with its two badges, Run a Nostr relay and Set a relay's moderation policy, and the Add the collection button" />
+
+Home opens with the new group lit. The badges are copied into your folder, so they are yours. Change any of them as you would your own ([Change a badge](/how-to/change-a-badge/)). A later version of the app never changes your copy.
+
+A built-in that is already in your folder reads <UI>Added</UI> and can't be added twice. Delete your copy, and you can add it again.
+
+## Start an empty one
+
+1. Click <UI>Add a collection</UI>, then <UI>Start an empty one</UI>.
+2. Under <UI>What is it called</UI>, type its name.
+3. Click <UI>Make the collection</UI>.
+
+## Add a badge to a collection
+
+Click <UI>Add a badge here</UI> in the collection's group. The badge deck opens as it does for [Build a credential](/how-to/build-a-credential/), and the badge you make lands in that collection.
+
+A badge made from <UI>Create a credential</UI> on home lands in *My credentials*, never in a built-in copy. If your only collection of your own has another name, it lands there. A badge stays in the collection it was made in.
+
+## Rename a collection
+
+1. Click <UI>Rename</UI> in its group.
+2. Under <UI>What is it called</UI>, type the new name.
+3. Click <UI>Rename the collection</UI>.
+
+Only the name changes. Its badges, their results and their handoffs keep working.
+
+## Delete a collection
+
+Click <UI>Delete</UI> in its group. The card asks <UI>Move \{collection\} to the trash</UI> and says what goes with it: its badges and every result on them.
+
+<Shot id="collection-delete" alt="Move My credentials to the trash: Its 4 badges and 4 results go with it, Codex's handoff is pulled with no result, with Back and the Move to trash button" />
+
+Click <UI>Move to trash</UI>. Nothing is deleted. The files move into the `trash` folder inside your folder, as a badge's do ([The trash](/help/your-data/#the-trash)).

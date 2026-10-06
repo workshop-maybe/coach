@@ -14,6 +14,8 @@ export interface Collection {
   order: Slug[];
   /** Stable Andamio module code per credential slug (KTD7). Never reused. */
   codes: Record<Slug, number>;
+  /** The built-in collection this one was added from, by its id. Absent for your own. */
+  from?: string;
   /** Badge settings for every credential in the collection (KTD3). */
   badge?: BadgeSettings;
   /** Per-credential badge overrides, keyed by credential slug (KTD3). */

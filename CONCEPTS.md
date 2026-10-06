@@ -12,6 +12,16 @@ A credential as the app shows it: a name, learning targets, a task and a rubric,
 
 A named setup the user runs outside the app: harness, model, effort, and the repo and parameters it works with. Its setup locks once it has a result, so every result stays tied to the setup that produced it.
 
+### Collection
+
+A named group of badges, shown as a group on Home once there are two or more. It exports as one Andamio course. A badge belongs to exactly one collection.
+
+### Built-in collection
+
+A collection that ships inside the app, such as Cardano Dev Skills. Adding one copies its badges into the user's folder as a collection they own, marked with the built-in it came from.
+
+A copy whose add stopped partway still lists the badges it never wrote, and adding the built-in again finishes it. A badge the user trashed from a copy is never written back. A copy counts as added once every badge it still lists is on disk.
+
 ## Testing an agent
 
 ### Handoff

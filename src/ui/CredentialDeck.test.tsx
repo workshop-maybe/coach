@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { loadFolder } from "../domain/folder";
+import { parseCredentialMd } from "../domain/credential-md";
+import { collectionPath, loadFolder, serializeCollection } from "../domain/folder";
 import { findPreset, presetCredential } from "../domain/presets";
+import type { Collection } from "../domain/types";
 import { renderApp, review, snapshot, storageWith } from "./testFolder";
 
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ writeText: vi.fn() }));
@@ -21,6 +23,47 @@ afterEach(cleanup);
 const FOLDER_ACTIONS = ["Change folder", "Reload", "Export"];
 const barActions = () => FOLDER_ACTIONS.filter((name) => within(screen.getByRole("banner")).queryByRole("button", { name }) !== null);
 const createDeck = () => screen.getByRole("region", { name: "Create a credential" });
+
+/** A badge made from "Rate your own confidence" before it left the presets (R16), as it was saved. */
+const CONFIDENCE_MD = `# Rate your own confidence
+
+## Learning targets
+
+1. I can rate my confidence on a learning target using the Fist to Five scale.
+2. I can name the context I need before I attempt a target I rate low.
+
+## Task
+
+Rate yourself on each learning target below, for work in the repo you are open in. Use this scale:
+
+- 0: I would be fabricating. I have no grounded knowledge here.
+- 1: I can name what is needed but cannot produce it.
+- 2: I can produce something, but significant parts are uncertain.
+- 3: I can produce this but would not reliably catch my own errors.
+- 4: I can produce this and explain why it is correct.
+- 5: I can produce this, explain it, catch errors in it and evaluate someone else's attempt.
+
+For each target, give the number and one line on why. For a 0, 1 or 2, name the specific context you would need to rate higher.
+
+1. I can write a test that fails before a fix and passes after it.
+2. I can explain how this repo is built and released.
+3. I can add a small feature that follows this repo's established patterns.
+
+Then do the work for the target you rated highest, so your rating can be checked.
+
+## Rubric
+
+- Every target has a number from 0 to 5 and a reason tied to something in the repo (a file, a doc, a missing piece), not a general claim about the agent.
+- Every 0, 1 or 2 names specific context, such as a document, a reference or an example. "More information" does not count.
+- The work done earns its rating. A 3 runs or reads correctly. A 4 also explains why it is correct. A 5 also names a likely mistake and how to catch it.
+- A rating the work does not back up fails the test, even when the work is good.
+
+Met when every point holds.
+
+## Source
+
+Ported from coach, docs/framework-fist-to-five-for-agents.md (the agent Fist to Five scale).
+`;
 
 async function walk(name: string, target: string, task: string) {
   await userEvent.click(await screen.findByRole("button", { name: "Build your own" }));
@@ -47,6 +90,19 @@ describe("CredentialDeck", () => {
     expect((screen.getByRole("button", { name: "Make the badge" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it("Where to start offers your own, then the four presets in order", async () => {
+    renderApp(storageWith(), { view: "deck", deck: "credential" });
+    const own = await screen.findByRole("button", { name: "Build your own" });
+    const choices = within(own.closest("ul")!).getAllByRole("button").map((b) => b.textContent);
+    expect(choices).toEqual([
+      "Build your own",
+      "Write Markdown and put it on the clipboard",
+      "Name what matters next",
+      "Say how sure you are",
+      "Check an answer key",
+    ]);
+  });
+
   it("three beats create a credential, and the first one in an empty folder creates My credentials", async () => {
     const storage = storageWith();
     renderApp(storage, { view: "deck", deck: "credential" });
@@ -66,7 +122,7 @@ describe("CredentialDeck", () => {
     });
   });
 
-  it("goes into the folder's first collection when one exists", async () => {
+  it("goes into the folder's one collection of your own when it has one", async () => {
     const storage = storageWith({ credentials: [review] });
     renderApp(storage, { view: "deck", deck: "credential" });
     await walk("Write docs", "I can explain a module", "Document the module");
@@ -75,6 +131,61 @@ describe("CredentialDeck", () => {
     const state = await loadFolder(storage);
     expect(state.collections.map((c) => c.slug)).toEqual(["eng"]);
     expect(state.credentials.map((c) => c.name).sort()).toEqual(["Code review", "Write docs"]);
+  });
+
+  describe("where it lands (KTD4)", () => {
+    const col = (slug: string, name: string, from?: string): Collection => ({ slug, name, description: "", order: [], codes: {}, ...(from ? { from } : {}) });
+    /** A folder with a built-in copy that sorts first, beside My credentials. */
+    function withBuiltIn() {
+      const storage = storageWith();
+      storage.seed({
+        [collectionPath("cardano-dev-skills")]: serializeCollection(col("cardano-dev-skills", "Cardano Dev Skills", "cardano-dev-skills")),
+        [collectionPath("course-authoring")]: serializeCollection(col("course-authoring", "Course authoring", "course-authoring")),
+        [collectionPath("my-credentials")]: serializeCollection(col("my-credentials", "My credentials")),
+      });
+      return storage;
+    }
+    const keys = async (storage: ReturnType<typeof storageWith>) => (await loadFolder(storage)).credentials.map((c) => `${c.collectionSlug}/${c.slug}`);
+
+    it("Covers AE2. your own lands in My credentials, not the built-in copy that sorts first", async () => {
+      const storage = withBuiltIn();
+      renderApp(storage, { view: "deck", deck: "credential" });
+      await walk("Write docs", "I can explain a module", "Document the module");
+      await userEvent.click(screen.getByRole("button", { name: "Make the badge" }));
+      await screen.findByRole("button", { name: "Test it on an agent" });
+      expect(await keys(storage)).toEqual(["my-credentials/write-docs"]);
+    });
+
+    it("a preset lands in My credentials too", async () => {
+      const storage = withBuiltIn();
+      renderApp(storage, { view: "deck", deck: "credential" });
+      await userEvent.click(await screen.findByRole("button", { name: "Name what matters next" }));
+      await userEvent.click(await screen.findByRole("button", { name: "Make the badge" }));
+      await screen.findByRole("button", { name: "Test it on an agent" });
+      expect(await keys(storage)).toEqual(["my-credentials/name-what-matters-next"]);
+    });
+
+    it("opened for a collection, makes the badge there", async () => {
+      const storage = withBuiltIn();
+      renderApp(storage, { view: "deck", deck: "credential", collectionSlug: "course-authoring" });
+      await walk("Write docs", "I can explain a module", "Document the module");
+      await userEvent.click(screen.getByRole("button", { name: "Make the badge" }));
+      await screen.findByRole("button", { name: "Test it on an agent" });
+      expect(await keys(storage)).toEqual(["course-authoring/write-docs"]);
+    });
+
+    it("opened for a collection that leaves the folder on a reload, shows Not in the folder", async () => {
+      const storage = withBuiltIn();
+      renderApp(storage, { view: "deck", deck: "credential", collectionSlug: "course-authoring" });
+      await screen.findByRole("heading", { name: "Where to start" });
+      storage.remove(collectionPath("course-authoring"));
+      await act(async () => {
+        window.dispatchEvent(new Event("focus"));
+      });
+      expect(await screen.findByRole("heading", { name: "Not in the folder" })).toBeTruthy();
+      await userEvent.click(screen.getByRole("button", { name: "Home" }));
+      expect(await screen.findByRole("heading", { name: "Home", level: 1 })).toBeTruthy();
+    });
   });
 
   it("a target with a list offers to move it to the rubric, and the credential keeps both", async () => {
@@ -237,14 +348,14 @@ describe("CredentialDeck", () => {
   it("starting from a preset shows its targets on one card and makes the whole credential", async () => {
     const storage = storageWith();
     renderApp(storage, { view: "deck", deck: "credential" });
-    await userEvent.click(await screen.findByRole("button", { name: "Tighten a learning target" }));
-    expect(await screen.findByRole("heading", { name: "Tighten a learning target" })).toBeTruthy();
+    await userEvent.click(await screen.findByRole("button", { name: "Write Markdown and put it on the clipboard" }));
+    expect(await screen.findByRole("heading", { name: "Write Markdown and put it on the clipboard" })).toBeTruthy();
     expect(within(screen.getByRole("list", { name: "Learning targets" })).getAllByRole("listitem")).toHaveLength(2);
     await userEvent.click(screen.getByRole("button", { name: "Make the badge" }));
 
     expect(await screen.findByRole("button", { name: "Test it on an agent" })).toBeTruthy();
     const state = await loadFolder(storage);
-    const preset = presetCredential(findPreset("tighten-a-learning-target")!, state.collections[0].slug);
+    const preset = presetCredential(findPreset("write-markdown-and-put-it-on-the-clipboard")!, state.collections[0].slug);
     expect(state.collections.map((c) => c.name)).toEqual(["My credentials"]);
     expect(state.credentials).toEqual([preset]);
   });
@@ -252,7 +363,7 @@ describe("CredentialDeck", () => {
   it("Back from a preset returns to where to start, and your own still works", async () => {
     const storage = storageWith({ credentials: [review] });
     renderApp(storage, { view: "deck", deck: "credential" });
-    await userEvent.click(await screen.findByRole("button", { name: "Run a Nostr relay" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Check an answer key" }));
     await userEvent.click(await screen.findByRole("button", { name: "Back" }));
     expect(await screen.findByRole("heading", { name: "Where to start" })).toBeTruthy();
     await walk("Write docs", "I can explain a module", "Document the module");
@@ -311,11 +422,21 @@ describe("CredentialDeck", () => {
     for (let i = 0; i < 2; i++) {
       cleanup();
       renderApp(storage, { view: "deck", deck: "credential" });
-      await userEvent.click(await screen.findByRole("button", { name: "Rate your own confidence" }));
+      await userEvent.click(await screen.findByRole("button", { name: "Say how sure you are" }));
       await userEvent.click(await screen.findByRole("button", { name: "Make the badge" }));
       await screen.findByRole("button", { name: "Test it on an agent" });
     }
     const state = await loadFolder(storage);
-    expect(state.credentials.map((c) => c.slug).sort()).toEqual(["rate-your-own-confidence", "rate-your-own-confidence-2"]);
+    expect(state.credentials.map((c) => c.slug).sort()).toEqual(["say-how-sure-you-are", "say-how-sure-you-are-2"]);
+  });
+
+  it("Covers R16. a badge made from a preset since removed still loads and opens", async () => {
+    const confidence = parseCredentialMd(CONFIDENCE_MD, { slug: "rate-your-own-confidence", collectionSlug: "eng" });
+    const storage = storageWith({ credentials: [confidence] });
+    const state = await loadFolder(storage);
+    expect(state.errors).toEqual([]);
+    expect(state.credentials).toEqual([confidence]);
+    renderApp(storage, { view: "item", item: "badge", credentialKey: "eng/rate-your-own-confidence" });
+    expect(await screen.findByRole("heading", { name: "Rate your own confidence" })).toBeTruthy();
   });
 });

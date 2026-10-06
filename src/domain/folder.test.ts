@@ -161,6 +161,19 @@ describe("collection and profile JSON", () => {
     });
   });
 
+  it("keeps the built-in a collection was added from, byte for byte (KTD3)", () => {
+    const text = `${JSON.stringify({ name: "Nostr relays", description: "Run one", order: ["run-a-relay"], codes: { "run-a-relay": 1 }, from: "nostr-relays" }, null, 2)}\n`;
+    const parsed = parseCollection(text, "nostr-relays");
+    expect(parsed.from).toBe("nostr-relays");
+    expect(serializeCollection(parsed)).toBe(text);
+  });
+
+  it("writes no from key for a collection of your own", () => {
+    const parsed = parseCollection(serializeCollection(collection), "eng");
+    expect(parsed.from).toBeUndefined();
+    expect(Object.keys(JSON.parse(serializeCollection(parsed)))).not.toContain("from");
+  });
+
   it("rejects a syntax error or a wrong type", () => {
     expect(() => parseProfile("{ nope", "p")).toThrow();
     expect(() => parseProfile('{"name": 3}', "p")).toThrow(/name/);

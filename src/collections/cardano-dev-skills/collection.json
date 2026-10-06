@@ -1,0 +1,18 @@
+{
+  "name": "Cardano Dev Skills",
+  "description": "Cardano development tasks. Worth running on two agents that differ only in whether the cardano-dev-skills toolkit is installed.",
+  "order": [
+    "price-a-cardano-transaction",
+    "diagnose-a-failing-transaction",
+    "find-the-hole-in-a-validator",
+    "choose-a-token-standard",
+    "explain-a-cip-to-a-developer"
+  ],
+  "codes": {
+    "price-a-cardano-transaction": 1,
+    "diagnose-a-failing-transaction": 2,
+    "find-the-hole-in-a-validator": 3,
+    "choose-a-token-standard": 4,
+    "explain-a-cip-to-a-developer": 5
+  }
+}

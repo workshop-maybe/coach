@@ -221,6 +221,7 @@ describe("PlayerCard in first-test mode", () => {
     expect(screen.getByRole("button", { name: "Copy" })).toBeTruthy();
     const state = await loadFolder(storage);
     expect(state.profiles.map((p) => p.name)).toEqual(["Claude Code, opus, high"]);
+    expect(state.collections.map((c) => c.name)).toEqual(["My credentials"]);
     expect(state.credentials.map((c) => c.name)).toEqual(["Name what matters next"]);
   });
 

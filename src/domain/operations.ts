@@ -24,6 +24,7 @@ import {
   loadFolder,
   markPath,
   marksDir,
+  parseCollection,
   parseCostOrder,
   profilePath,
   profileResultsDir,
@@ -47,6 +48,8 @@ import {
   trashPath,
   type AssessmentIds,
 } from "./folder";
+import { BUILT_INS, type BuiltIn } from "./builtins";
+import { folderOf } from "./images";
 import { checkHandoff, isHandoffLocked, type HandoffProblem } from "./handoffs";
 import { resultOf } from "./goTo";
 import { heldOf, heldReadingOf } from "./handoffResults";
@@ -147,6 +150,83 @@ export async function createCollection(
   return { state: await loadFolder(storage), slug };
 }
 
+/**
+ * Where a built-in stands in the folder (KTD2, KTD3): not added, added with every badge its
+ * on-disk order lists, or added with some of them still to write. `missing` names those,
+ * in order. A badge the user trashed is gone from the order, so it is never missing.
+ */
+export type BuiltinStatus = { kind: "not-added" } | { kind: "incomplete"; slug: Slug; missing: Slug[] } | { kind: "added"; slug: Slug };
+
+/**
+ * The collection as its file says, so a reader keeps the on-disk order and codes: loadFolder
+ * prunes order to the badges it found, and an unfinished built-in copy needs the rest.
+ */
+export function collectionAsOnDisk(text: string | null | undefined, fallback: Collection): Collection {
+  if (text == null) return fallback;
+  try {
+    return parseCollection(text, fallback.slug);
+  } catch {
+    return fallback;
+  }
+}
+
+/**
+ * The collection to save: as loaded, with the slugs its file lists but loadFolder pruned (a badge
+ * file never written or unreadable) kept in their place. A save from the pruned order would drop
+ * them, and an unfinished built-in copy would read as added (R10). Codes are the loaded ones,
+ * which keep the file's codes and add any assigned in memory.
+ */
+export function withListedOrder(state: FolderState, stored: Collection): Collection {
+  const listed = collectionAsOnDisk(state.raw[collectionPath(stored.slug)], stored).order;
+  return { ...stored, order: [...new Set([...listed, ...stored.order])] };
+}
+
+export function builtinStatus(state: FolderState, builtin: BuiltIn): BuiltinStatus {
+  const copy = state.collections.find((c) => c.from === builtin.slug);
+  if (!copy) return { kind: "not-added" };
+  // loadFolder prunes order to the files it found, so the order on disk is read from raw.
+  const { order } = collectionAsOnDisk(state.raw[collectionPath(copy.slug)], copy);
+  const missing = order.filter((s) => {
+    const file = credentialPath(copy.slug, s);
+    return builtin.credentials[s] !== undefined && state.raw[file] === undefined && !state.errors.some((e) => e.path === file);
+  });
+  return missing.length > 0 ? { kind: "incomplete", slug: copy.slug, missing } : { kind: "added", slug: copy.slug };
+}
+
+/**
+ * Copies a built-in collection into the folder (KTD2): its collection.json first, carrying
+ * `from`, then each badge file not there yet. A copy whose add stopped partway is finished
+ * in place. A copy already complete is left alone. Every base is checked before any write.
+ */
+export async function addBuiltinCollection(storage: Storage, state: FolderState, builtinSlug: Slug): Promise<{ state: FolderState; slug: Slug }> {
+  const builtin = BUILT_INS.find((b) => b.slug === builtinSlug);
+  if (!builtin) throw new Error(`There is no built-in collection "${builtinSlug}".`);
+  let current = state;
+  let status = builtinStatus(current, builtin);
+  // A try that failed after writing collection.json left a copy this state never saw.
+  if (status.kind === "not-added") {
+    current = await loadFolder(storage);
+    status = builtinStatus(current, builtin);
+  }
+  if (status.kind === "added") return { state: current, slug: status.slug };
+
+  if (status.kind === "incomplete") {
+    const colPath = collectionPath(status.slug);
+    const slug = status.slug;
+    await assertUnchanged(storage, [[colPath, current.raw[colPath] ?? null], ...status.missing.map((s): [string, null] => [credentialPath(slug, s), null])]);
+    for (const s of status.missing) await saveText(storage, credentialPath(slug, s), builtin.credentials[s], null);
+    return { state: await loadFolder(storage), slug };
+  }
+
+  const { name, description, order, codes } = builtin.collection;
+  const slug = uniqueSlug(builtin.slug, current.collections.map((c) => c.slug));
+  const files = order.filter((s) => builtin.credentials[s] !== undefined);
+  await assertUnchanged(storage, [[collectionPath(slug), null], ...files.map((s): [string, null] => [credentialPath(slug, s), null])]);
+  await saveCollection(storage, { slug, name, description, order: [...order], codes: { ...codes }, from: builtin.slug }, null);
+  for (const s of files) await saveText(storage, credentialPath(slug, s), builtin.credentials[s], null);
+  return { state: await loadFolder(storage), slug };
+}
+
 /** Saves name, description and order. Module codes are never changed here (KTD7). */
 export async function updateCollection(
   storage: Storage,
@@ -173,7 +253,8 @@ export async function reorderCredentials(
   if (current.length !== next.length || current.some((s, i) => s !== next[i])) {
     throw new Error("A reorder must list every credential in the collection exactly once.");
   }
-  await saveCollection(storage, { ...stored, order: [...orderedSlugs] }, baseText);
+  const unloaded = withListedOrder(state, stored).order.filter((s) => !stored.order.includes(s));
+  await saveCollection(storage, { ...stored, order: [...orderedSlugs, ...unloaded] }, baseText);
   return loadFolder(storage);
 }
 
@@ -189,7 +270,7 @@ export async function updateCollectionBadge(
   badge: BadgeSettings | undefined,
   baseText: string | null,
 ): Promise<FolderState> {
-  const stored = findCollection(state, collectionSlug);
+  const stored = withListedOrder(state, findCollection(state, collectionSlug));
   // Dropping badgeRaw means a malformed stored value is replaced or cleared too.
   const { badge: _badge, badgeRaw: _raw, ...rest } = stored;
   const next: Collection = badge === undefined ? rest : { ...rest, badge };
@@ -206,7 +287,7 @@ export async function setCredentialBadgeOverride(
   override: BadgeSettings | null,
   baseText: string | null,
 ): Promise<FolderState> {
-  const stored = findCollection(state, collectionSlug);
+  const stored = withListedOrder(state, findCollection(state, collectionSlug));
   if (override !== null) findCredential(state, collectionSlug, credentialSlug);
 
   const next = withoutOverride(stored, credentialSlug);
@@ -257,7 +338,7 @@ export async function createCredential(
   name: string,
   content?: CredentialContent,
 ): Promise<{ state: FolderState; key: string }> {
-  const collection = findCollection(state, collectionSlug);
+  const collection = withListedOrder(state, findCollection(state, collectionSlug));
   const taken = [
     ...state.credentials.filter((c) => c.collectionSlug === collectionSlug).map((c) => c.slug),
     ...Object.keys(collection.codes),
@@ -297,28 +378,44 @@ export async function createCredential(
 export const DEFAULT_COLLECTION_NAME = "My credentials";
 
 /**
- * Makes a badge from a preset: in the first collection, or a new My credentials when there
- * is none. The preset is written whole in the credential's first save, so no empty badge
- * file is ever left behind.
+ * Where a new badge lands (KTD4): My credentials, else the folder's one collection of your
+ * own, else none, and the caller makes My credentials. Never the first by name, which
+ * would be a built-in copy such as Cardano Dev Skills.
+ */
+export function landingCollection(state: FolderState): Collection | undefined {
+  const mine = state.collections.find((c) => c.slug === "my-credentials");
+  if (mine) return mine;
+  const own = state.collections.filter((c) => c.from === undefined);
+  return own.length === 1 ? own[0] : undefined;
+}
+
+/** The landing collection's slug, making My credentials first when the rule finds none. */
+export async function ensureLandingCollection(storage: Storage, state: FolderState): Promise<{ state: FolderState; slug: Slug }> {
+  // With no landing collection in hand, read the folder again: a try that failed after making
+  // My credentials left it on disk, and a retry should land there instead of conflicting.
+  const current = landingCollection(state) ? state : await loadFolder(storage);
+  const landing = landingCollection(current);
+  if (landing) return { state: current, slug: landing.slug };
+  const made = await createCollection(storage, current, DEFAULT_COLLECTION_NAME);
+  return { state: made.state, slug: made.slug };
+}
+
+/**
+ * Makes a badge from a preset: in the collection asked for, or where KTD4 lands it. The
+ * preset is written whole in the credential's first save, so no empty badge file is ever
+ * left behind.
  */
 export async function createPresetCredential(
   storage: Storage,
   state: FolderState,
   presetId: string,
+  collectionSlug?: Slug,
 ): Promise<{ state: FolderState; key: string }> {
   const preset = findPreset(presetId);
   if (!preset) throw new Error(`There is no preset "${presetId}".`);
-  // With no collection in hand, read the folder again: a try that failed after making My
-  // credentials left it on disk, and a retry should land there instead of conflicting.
-  let current = state.collections.length > 0 ? state : await loadFolder(storage);
-  let collectionSlug = current.collections[0]?.slug;
-  if (!collectionSlug) {
-    const made = await createCollection(storage, current, DEFAULT_COLLECTION_NAME);
-    current = made.state;
-    collectionSlug = made.slug;
-  }
-  const { name, learningTargets, task, rubric, extraSections } = presetCredential(preset, collectionSlug);
-  return createCredential(storage, current, collectionSlug, name, { learningTargets, task, rubric, extraSections });
+  const target = collectionSlug !== undefined ? { state, slug: collectionSlug } : await ensureLandingCollection(storage, state);
+  const { name, learningTargets, task, rubric, extraSections } = presetCredential(preset, target.slug);
+  return createCredential(storage, target.state, target.slug, name, { learningTargets, task, rubric, extraSections });
 }
 
 export async function updateCredential(
@@ -793,7 +890,7 @@ export async function trashCredential(
   credentialSlug: Slug,
   now = new Date(),
 ): Promise<FolderState> {
-  const stored = findCollection(state, collectionSlug);
+  const stored = withListedOrder(state, findCollection(state, collectionSlug));
   findCredential(state, collectionSlug, credentialSlug);
   const path = collectionPath(collectionSlug);
   const base = state.raw[path] ?? null;
@@ -810,5 +907,33 @@ export async function trashCredential(
   const marks = await storage.listFiles("data", marksDir(collectionSlug, credentialSlug));
   const headToHeads = await storage.listFiles("data", headToHeadDir(collectionSlug, credentialSlug));
   await moveToTrash(storage, [...results, ...handoffs, ...marks, ...headToHeads, credentialPath(collectionSlug, credentialSlug)], stamp);
+  return loadFolder(storage);
+}
+
+/**
+ * Moves a whole collection to the trash (collections plan KTD7): every file under its folder,
+ * pasted media and all, and every agent's results for its badges. The bases of collection.json
+ * and each badge file are checked before anything moves. Results move first and collection.json
+ * last, so a move that fails partway leaves a collection that loads, and trashing it again
+ * moves the rest. With the collection gone, a built-in it was copied from can be added again.
+ */
+export async function trashCollection(storage: Storage, state: FolderState, collectionSlug: Slug, now = new Date()): Promise<FolderState> {
+  findCollection(state, collectionSlug);
+  const colPath = collectionPath(collectionSlug);
+  const credentials = state.credentials.filter((c) => c.collectionSlug === collectionSlug).map((c) => credentialPath(collectionSlug, c.slug));
+  // An unparsable collection.json has no raw text, so its base is the file as it is now:
+  // moving it to the trash loses nothing.
+  const colBase = state.errors.some((e) => e.path === colPath) ? await storage.readText("data", colPath) : (state.raw[colPath] ?? null);
+  await assertUnchanged(storage, [[colPath, colBase], ...credentials.map((p): [string, string | null] => [p, state.raw[p] ?? null])]);
+
+  const own = await storage.listFiles("data", folderOf(colPath));
+  const results = (await storage.listFiles("data", ASSESSMENTS_DIR)).filter((p) => {
+    const parts = p.split("/");
+    return parts.length > 3 && parts[2] === collectionSlug;
+  });
+  const badgeFiles = own.filter((p) => credentials.includes(p));
+  const rest = own.filter((p) => p !== colPath && !credentials.includes(p));
+  const last = own.includes(colPath) ? [colPath] : [];
+  await moveToTrash(storage, [...results, ...rest, ...badgeFiles, ...last], fileStemFor(now));
   return loadFolder(storage);
 }

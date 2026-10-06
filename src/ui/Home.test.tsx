@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AppShell } from "./AppShell";
 import { Home } from "./Home";
 import { NavContext } from "./nav";
 import type { Route } from "./routes";
-import { heldReply } from "./testFolder";
+import { heldReply, renderWithJev, storageWith as folderWith } from "./testFolder";
 import { FolderProvider } from "./useFolderState";
 import { addPending } from "./pendingTests";
 import { MemoryStorage } from "../storage/memory";
@@ -27,11 +27,17 @@ import {
 } from "../domain/folder";
 import { serializeCredentialMd } from "../domain/credential-md";
 import { assignmentVersion } from "../domain/hash";
-import type { AgentProfile, Assessment, Credential, HeldReply, Mark } from "../domain/types";
+import type { AgentProfile, Assessment, Collection, Credential, HeldReply, Mark } from "../domain/types";
+import { addBuiltinCollection } from "../domain/operations";
+import { loadFolder } from "../domain/folder";
+import type { JevAnswers } from "../domain/jevRequest";
+import { FAKE_ON, FakeJev } from "../jev/fakeJev";
 
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ writeText: vi.fn() }));
 const pick = vi.hoisted(() => vi.fn<() => Promise<string | null>>());
 vi.mock("./exportFolder", () => ({ pickExportFolder: pick }));
+// ProseMirror typing does not run in jsdom; the router's job types into a textarea stand-in.
+vi.mock("./RichText", () => import("./richTextStub"));
 
 beforeEach(() => localStorage.clear());
 afterEach(cleanup);
@@ -567,5 +573,176 @@ describe("Home's held replies", () => {
     navigate = renderHome(storageWith({ credentials: [review], profiles: [opus], held: [held[1]] }));
     await userEvent.click((await rows())[0]);
     expect(navigate).toHaveBeenLastCalledWith({ view: "item", item: "reply", credentialKey: "eng/review", take: ref(held[1]) });
+  });
+});
+
+/** A collection file holding `credentials`, in their order. */
+function collectionFile(slug: string, name: string, credentials: Credential[], from?: string): Record<string, string> {
+  const collection: Collection = {
+    slug,
+    name,
+    description: "",
+    order: credentials.map((c) => c.slug),
+    codes: Object.fromEntries(credentials.map((c, i) => [c.slug, i + 1])),
+    ...(from ? { from } : {}),
+  };
+  const files: Record<string, string> = { [collectionPath(slug)]: serializeCollection(collection) };
+  for (const c of credentials) files[credentialPath(slug, c.slug)] = serializeCredentialMd({ ...c, collectionSlug: slug });
+  return files;
+}
+
+const badges = () => screen.findByRole("region", { name: "Badges" });
+const groupsIn = (region: HTMLElement) => within(region).queryAllByRole("group");
+const groupNames = (group: HTMLElement) => [...group.querySelectorAll(".badge-card-name")].map((n) => n.textContent);
+const audit: Credential = { ...review, slug: "audit", name: "Audit a contract", task: "Audit the contract." };
+
+describe("Home's collections", () => {
+  it("Covers AE1. one collection of your own shows one list with no group heading, and only Add a collection beside Badges", async () => {
+    renderApp(storageWith({ credentials: [review, docs] }));
+    const region = await badges();
+    expect(groupsIn(region)).toHaveLength(0);
+    expect(within(region).queryAllByRole("heading", { level: 3 })).toHaveLength(0);
+    expect(within(region).queryAllByRole("button", { name: /^Add a badge/ })).toHaveLength(0);
+    expect(within(region).queryAllByRole("button", { name: /^(Rename|Delete) / })).toHaveLength(0);
+    const add = within(region).getByRole("button", { name: "Add a collection" });
+    expect(add.closest(".home-section-head")?.querySelector("h2")?.textContent).toBe("Badges");
+    expect([...region.querySelectorAll(".badge-card-name")].map((n) => n.textContent)).toEqual(["Code review", "Write docs"]);
+    expect(screen.getAllByRole("button", { name: "Add a collection" })).toHaveLength(1);
+  });
+
+  it("two collections show two groups, each under its name, with badges in matrix order", async () => {
+    const storage = storageWith({ credentials: [review, docs] });
+    storage.seed(collectionFile("client", "Client work", [audit, { ...docs, slug: "brief", name: "Write a brief" }]));
+    renderApp(storage);
+    const region = await badges();
+    await waitFor(() => expect(groupsIn(region)).toHaveLength(2));
+    const [client, eng] = groupsIn(region);
+    // Collections sort by name in the folder, so Client work comes first.
+    expect(within(client).getByRole("heading", { level: 3 }).textContent).toBe("Client work");
+    expect(within(eng).getByRole("heading", { level: 3 }).textContent).toBe("Engineering");
+    expect(groupNames(client)).toEqual(["Audit a contract", "Write a brief"]);
+    expect(groupNames(eng)).toEqual(["Code review", "Write docs"]);
+    // Each group link names its collection; the visible text stays short.
+    const link = within(client).getByRole("button", { name: "Add a badge to Client work" });
+    expect(link.textContent).toBe("Add a badge here");
+    expect(within(eng).getByRole("button", { name: "Add a badge to Engineering" })).toBeTruthy();
+    expect(within(region).getAllByRole("button", { name: "Add a collection" })).toHaveLength(1);
+  });
+
+  it("each group's Rename and Delete name the collection, and open its rename and delete decks", async () => {
+    const storage = storageWith({ credentials: [review] });
+    storage.seed(collectionFile("client", "Client work", [audit]));
+    renderApp(storage);
+    const region = await badges();
+    await waitFor(() => expect(groupsIn(region)).toHaveLength(2));
+    const [client, eng] = groupsIn(region);
+    const rename = within(client).getByRole("button", { name: "Rename Client work" });
+    const del = within(client).getByRole("button", { name: "Delete Client work" });
+    expect(rename.textContent).toBe("Rename");
+    expect(del.textContent).toBe("Delete");
+    expect(within(eng).getByRole("button", { name: "Rename Engineering" })).toBeTruthy();
+    expect(within(eng).getByRole("button", { name: "Delete Engineering" })).toBeTruthy();
+
+    await userEvent.click(rename);
+    expect(await screen.findByRole("heading", { name: "What is it called" })).toBeTruthy();
+    expect((screen.getByRole("textbox", { name: "Name" }) as HTMLInputElement).value).toBe("Client work");
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    await userEvent.click(await screen.findByRole("button", { name: "Delete Client work" }));
+    expect(await screen.findByRole("heading", { name: "Move Client work to the trash" })).toBeTruthy();
+  });
+
+  it("a lone built-in copy shows as a named group", async () => {
+    const storage = storageWith();
+    await addBuiltinCollection(storage, await loadFolder(storage), "nostr-relays");
+    renderApp(storage);
+    const region = await badges();
+    const [group] = groupsIn(region);
+    expect(within(group).getByRole("heading", { level: 3 }).textContent).toBe("Nostr relays");
+    expect(within(group).getByRole("button", { name: "Add a badge to Nostr relays" })).toBeTruthy();
+  });
+
+  it("Add a badge here opens the credential deck for that collection, and the badge lands there", async () => {
+    const storage = storageWith({ credentials: [review] });
+    storage.seed(collectionFile("client", "Client work", [audit]));
+    renderApp(storage);
+    await userEvent.click(await screen.findByRole("button", { name: "Add a badge to Client work" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Name what matters next" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Make the badge" }));
+    await screen.findByRole("button", { name: "Test it on an agent" });
+    const made = (await loadFolder(storage)).credentials.find((c) => c.slug === "name-what-matters-next");
+    expect(made?.collectionSlug).toBe("client");
+  });
+
+  it("My credentials with badges plus an empty Client work shows two groups, Client work with its heading and link and no shelf", async () => {
+    const storage = storageWith();
+    storage.seed({ ...collectionFile("my-credentials", "My credentials", [review, docs]), ...collectionFile("client-work", "Client work", []) });
+    renderApp(storage);
+    const region = await badges();
+    await waitFor(() => expect(groupsIn(region)).toHaveLength(2));
+    const [client, mine] = groupsIn(region);
+    expect(within(client).getByRole("heading", { level: 3 }).textContent).toBe("Client work");
+    expect(within(client).getByRole("button", { name: "Add a badge to Client work" })).toBeTruthy();
+    expect(within(client).queryByRole("list")).toBeNull();
+    expect(groupNames(mine)).toEqual(["Code review", "Write docs"]);
+  });
+
+  it("an empty folder shows Add a collection under the doors, and it opens the deck", async () => {
+    renderApp(storageWith());
+    const add = await screen.findByRole("button", { name: "Add a collection" });
+    const doors = document.querySelector(".doors")!;
+    expect(doors.compareDocumentPosition(add) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(doors.contains(add)).toBe(false);
+    expect(screen.queryByRole("region", { name: "Badges" })).toBeNull();
+    await userEvent.click(add);
+    expect(await screen.findByRole("region", { name: "Add a collection" })).toBeTruthy();
+  });
+
+  it("an empty folder after adding Nostr relays shows a Nostr relays group with its link", async () => {
+    renderApp(storageWith());
+    await userEvent.click(await screen.findByRole("button", { name: "Add a collection" }));
+    await userEvent.click(await screen.findByRole("button", { name: /^Nostr relays/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Add the collection" }));
+    const region = await badges();
+    const [group] = groupsIn(region);
+    expect(within(group).getByRole("heading", { level: 3 }).textContent).toBe("Nostr relays");
+    expect(within(group).getByRole("button", { name: "Add a badge to Nostr relays" })).toBeTruthy();
+    // Under the doors it is gone, and beside Badges it stays.
+    expect(screen.getAllByRole("button", { name: "Add a collection" })).toHaveLength(1);
+    expect(region.contains(screen.getByRole("button", { name: "Add a collection" }))).toBe(true);
+  });
+});
+
+describe("Home's collections and the router", () => {
+  const cred = (slug: string, name: string): Credential => ({ ...review, slug, name, learningTargets: [`I can ${name.toLowerCase()}.`], task: `Do ${name}.` });
+  const migration = cred("migration", "Write a migration");
+  const codex: AgentProfile = { ...opus, slug: "codex", name: "Codex agent", harness: "codex", model: "gpt" };
+  const sonnet: AgentProfile = { ...opus, slug: "sonnet", name: "Sonnet agent", model: "sonnet" };
+
+  it("adding a collection with five badges leaves an earlier match that cited only older badges standing", async () => {
+    const storage = folderWith({
+      credentials: [migration, cred("docs", "Write docs"), cred("deploy", "Ship a deploy")],
+      profiles: [codex, opus, sonnet],
+      assessments: [await met(codex, migration), await met(sonnet, migration)],
+      marks: [{ collectionSlug: "eng", credentialSlug: "migration", id: "20260902T090000Z", profileSlug: "codex", fileStem: "20260901T090000Z" }],
+      costOrder: ["sonnet", "codex", "opus"],
+    });
+    const jev = new FakeJev(FAKE_ON);
+    const answer: JevAnswers = { answers: { m1: 0.9, m2: 0.1, m3: 0.1 }, levels: { difficulty: [1, 0, 0] }, model: "jev-1.13.0" };
+    jev.queue("ask", answer);
+    renderWithJev(storage, jev, { view: "deck", deck: "router" });
+    fireEvent.change(await screen.findByRole("textbox", { name: "Job" }), { target: { value: "Add a reversible migration" } });
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Ask Jev" }));
+    expect(await screen.findByRole("heading", { name: "Codex agent" })).toBeTruthy();
+    // Cardano Dev Skills sorts before Engineering, so its five badges lead Home's order.
+    await addBuiltinCollection(storage, await loadFolder(storage), "cardano-dev-skills");
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    await waitFor(async () => expect((await loadFolder(storage)).credentials).toHaveLength(8));
+    expect(await screen.findByRole("heading", { name: "Codex agent" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "No badge like this job" })).toBeNull();
+    expect(jev.asks).toHaveLength(1);
   });
 });

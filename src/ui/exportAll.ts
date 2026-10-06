@@ -8,6 +8,7 @@ import { renderBadgeFor } from "../badge/resolve";
 import { buildExport, writeExport } from "../domain/export";
 import { collectionPath, credentialsDir, loadFolder, parseCollection, saveCollection } from "../domain/folder";
 import { dataUriToBytes, localImageNames, withAssetsRefs } from "../domain/images";
+import { withListedOrder } from "../domain/operations";
 import type { Credential, FolderState } from "../domain/types";
 import { localVideoNames } from "../domain/videos";
 import type { Storage } from "../storage/storage";
@@ -85,7 +86,7 @@ async function exportCollection(storage: Storage, state: FolderState, slug: stri
   const base = state.raw[path] ?? null;
   const onDisk = base === null ? null : parseCollection(base, slug);
   if (!onDisk || collection.order.some((s) => !(s in onDisk.codes))) {
-    await saveCollection(storage, collection, base);
+    await saveCollection(storage, withListedOrder(state, collection), base);
     current = await loadFolder(storage);
   }
   const saved = current.collections.find((c) => c.slug === slug) ?? collection;
