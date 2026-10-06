@@ -1085,6 +1085,8 @@ export const COVERAGE: Record<RouteKind, readonly string[] | typeof NOT_PICTURED
   "deck:jev": ["jev-off", "jev-on"],
   "deck:router": ["router-ask", "router-card", "router-also"],
   "deck:cost-order": ["cost-order"],
+  // Pictured by the collections plan's screenshots unit.
+  "deck:collection": NOT_PICTURED,
   "item:badge": ["badge-replies", "badge-page", "go-to-badge"],
   "item:agent": ["agent-page"],
   // A handoff opens as its own item only once two or more have results; the sample's has none.

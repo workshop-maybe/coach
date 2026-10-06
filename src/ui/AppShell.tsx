@@ -13,6 +13,7 @@ import { useLayoutEffect, useMemo, useState } from "react";
 import { InkDefs } from "../cast/InkDefs";
 import { AgentDetail } from "./AgentDetail";
 import { BadgeDetail } from "./BadgeDetail";
+import { CollectionDeck } from "./CollectionDeck";
 import { CompareView } from "./CompareView";
 import { CostOrderDeck } from "./CostOrderDeck";
 import { CredentialDeck } from "./CredentialDeck";
@@ -162,6 +163,8 @@ function DeckView({ route }: { route: DeckRoute }) {
       return <RouterDeck resume={route.resume} />;
     case "cost-order":
       return <CostOrderDeck returnTo={route.returnTo} />;
+    case "collection":
+      return <CollectionDeck />;
   }
 }
 

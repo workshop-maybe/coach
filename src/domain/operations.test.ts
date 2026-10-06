@@ -34,6 +34,8 @@ import {
   HandoffLockedError,
   HandoffProblemError,
   SetupLockedError,
+  addBuiltinCollection,
+  builtinStatus,
   createCollection,
   createCredential,
   createHandoff,
@@ -64,6 +66,7 @@ import {
   updateHandoff,
   updateProfile,
 } from "./operations";
+import { BUILT_INS } from "./builtins";
 import { findPreset, presetCredential } from "./presets";
 import { credentialKey, type AgentProfile, type Collection, type AssessmentResult, type FolderState, type HeadToHead, type HeldReading, type JevReading, type Rejudge } from "./types";
 
@@ -1716,5 +1719,87 @@ describe("writing from compare (jev-in-compare U4)", () => {
       expect(next.assessments[0].note).toBe("");
       expect(next.assessments[0]).not.toHaveProperty("missedPoints");
     });
+  });
+});
+
+describe("adding a built-in collection (KTD2)", () => {
+  const nostr = BUILT_INS.find((b) => b.slug === "nostr-relays")!;
+  const [firstBadge, secondBadge] = nostr.collection.order;
+
+  it("writes the collection with from, then each badge file", async () => {
+    const storage = new MemoryStorage();
+    const { state, slug } = await addBuiltinCollection(storage, await loadFolder(storage), "nostr-relays");
+    expect(slug).toBe("nostr-relays");
+    const col = state.collections.find((c) => c.slug === "nostr-relays")!;
+    expect(col).toMatchObject({ name: nostr.collection.name, description: nostr.collection.description, order: nostr.collection.order, codes: nostr.collection.codes, from: "nostr-relays" });
+    expect(JSON.parse(storage.file(collectionPath("nostr-relays"))!).from).toBe("nostr-relays");
+    expect(storage.file(credentialPath("nostr-relays", firstBadge))).toBe(nostr.credentials[firstBadge]);
+    expect(storage.file(credentialPath("nostr-relays", secondBadge))).toBe(nostr.credentials[secondBadge]);
+    expect(state.credentials.filter((c) => c.collectionSlug === "nostr-relays")).toHaveLength(2);
+    expect(builtinStatus(state, nostr)).toEqual({ kind: "added", slug: "nostr-relays" });
+  });
+
+  it("takes the next free slug when a collection of your own has its slug", async () => {
+    const storage = new MemoryStorage();
+    const own = await createCollection(storage, await loadFolder(storage), "Nostr relays");
+    const { state, slug } = await addBuiltinCollection(storage, own.state, "nostr-relays");
+    expect(slug).toBe("nostr-relays-2");
+    expect(state.collections.find((c) => c.slug === "nostr-relays-2")?.from).toBe("nostr-relays");
+    expect(state.collections.find((c) => c.slug === "nostr-relays")?.from).toBeUndefined();
+  });
+
+  it("a failed second badge leaves a loadable copy, and adding again writes only that badge", async () => {
+    const storage = new MemoryStorage();
+    const state = await loadFolder(storage);
+    const real = storage.writeText.bind(storage);
+    let failed = false;
+    const spy = vi.spyOn(storage, "writeText").mockImplementation(async (root, path, text) => {
+      if (!failed && path === credentialPath("nostr-relays", secondBadge)) {
+        failed = true;
+        throw new Error("disk full");
+      }
+      return real(root, path, text);
+    });
+    await expect(addBuiltinCollection(storage, state, "nostr-relays")).rejects.toThrow("disk full");
+    const partial = await loadFolder(storage);
+    expect(partial.credentials.map((c) => c.slug)).toEqual([firstBadge]);
+    expect(builtinStatus(partial, nostr)).toEqual({ kind: "incomplete", slug: "nostr-relays", missing: [secondBadge] });
+
+    spy.mockClear();
+    // The retry starts from the state before the first try, which never saw the copy it made.
+    const retry = await addBuiltinCollection(storage, state, "nostr-relays");
+    expect(retry.slug).toBe("nostr-relays");
+    expect(spy.mock.calls.map(([, path]) => path)).toEqual([credentialPath("nostr-relays", secondBadge)]);
+    expect(retry.state.collections.map((c) => c.slug)).toEqual(["nostr-relays"]);
+    expect(retry.state.credentials.map((c) => c.slug)).toEqual(nostr.collection.order);
+  });
+
+  it("a badge the user trashed from the copy is never written back", async () => {
+    const storage = new MemoryStorage();
+    const added = await addBuiltinCollection(storage, await loadFolder(storage), "nostr-relays");
+    const trashed = await trashCredential(storage, added.state, "nostr-relays", secondBadge);
+    expect(builtinStatus(trashed, nostr)).toEqual({ kind: "added", slug: "nostr-relays" });
+    const writes = storage.writes.length;
+    const again = await addBuiltinCollection(storage, trashed, "nostr-relays");
+    expect(storage.writes.length).toBe(writes);
+    expect(again.state.credentials.map((c) => c.slug)).toEqual([firstBadge]);
+  });
+
+  it("finishing a copy checks its bases first, so a badge written meanwhile writes nothing", async () => {
+    const storage = new MemoryStorage();
+    const added = await addBuiltinCollection(storage, await loadFolder(storage), "nostr-relays");
+    // A view from before the second badge landed: the file is on disk now.
+    const partial = { ...added.state, raw: { ...added.state.raw } };
+    delete partial.raw[credentialPath("nostr-relays", secondBadge)];
+    const writes = storage.writes.length;
+    await expect(addBuiltinCollection(storage, partial, "nostr-relays")).rejects.toBeInstanceOf(ChangedOnDiskError);
+    expect(storage.writes.length).toBe(writes);
+  });
+
+  it("an empty collection by name has an empty order and no codes", async () => {
+    const storage = new MemoryStorage();
+    const { state, slug } = await createCollection(storage, await loadFolder(storage), "Client work");
+    expect(slug).toBe("client-work");
+    expect(state.collections.find((c) => c.slug === "client-work")).toMatchObject({ name: "Client work", order: [], codes: {} });
   });
 });

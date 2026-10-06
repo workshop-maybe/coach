@@ -1622,6 +1622,24 @@ button:focus-visible {
   font-size: 12px;
 }
 
+/* A built-in collection already in the folder: muted, and marked added. */
+.choice-added {
+  color: var(--ink-muted);
+  cursor: default;
+}
+
+.choice-note {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: var(--value-tracking);
+}
+
+/* The quiet request link at the foot of Add a collection's first card. */
+.collection-request {
+  margin: var(--space-base) 0 0;
+  font-size: 13px;
+}
+
 /* A preset's learning targets, on the card that makes it. */
 .preset-targets {
   display: grid;

@@ -76,7 +76,9 @@ export type DeckRoute =
   /** Find an agent for a job (router R1). With `resume`, it opens on its card as it was. */
   | { view: "deck"; deck: "router"; resume?: RouterResume }
   /** The cost order over the agents (router R10, KTD12). With `returnTo`, it goes back to the router's card. */
-  | { view: "deck"; deck: "cost-order"; returnTo?: RouterResume };
+  | { view: "deck"; deck: "cost-order"; returnTo?: RouterResume }
+  /** Add a collection: an empty one or a built-in (collections plan R7). */
+  | { view: "deck"; deck: "collection" };
 
 /** An agent or a credential on its way to the trash. */
 export type TrashItem = { kind: "agent"; profileSlug: Slug } | { kind: "badge"; credentialKey: string };

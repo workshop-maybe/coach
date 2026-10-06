@@ -23,6 +23,7 @@ import {
   isCredentialResult,
   loadFolder,
   markPath,
+  parseCollection,
   marksDir,
   parseCostOrder,
   profilePath,
@@ -47,6 +48,7 @@ import {
   trashPath,
   type AssessmentIds,
 } from "./folder";
+import { BUILT_INS, type BuiltIn } from "./builtins";
 import { checkHandoff, isHandoffLocked, type HandoffProblem } from "./handoffs";
 import { resultOf } from "./goTo";
 import { heldOf, heldReadingOf } from "./handoffResults";
@@ -144,6 +146,68 @@ export async function createCollection(
 ): Promise<{ state: FolderState; slug: Slug }> {
   const slug = uniqueSlug(name, state.collections.map((c) => c.slug));
   await saveCollection(storage, { slug, name: name.trim(), description: "", order: [], codes: {} }, null);
+  return { state: await loadFolder(storage), slug };
+}
+
+/**
+ * Where a built-in stands in the folder (KTD2, KTD3): not added, added with every badge its
+ * on-disk order lists, or added with some of them still to write. `missing` names those,
+ * in order. A badge the user trashed is gone from the order, so it is never missing.
+ */
+export type BuiltinStatus = { kind: "not-added" } | { kind: "incomplete"; slug: Slug; missing: Slug[] } | { kind: "added"; slug: Slug };
+
+export function builtinStatus(state: FolderState, builtin: BuiltIn): BuiltinStatus {
+  const copy = state.collections.find((c) => c.from === builtin.slug);
+  if (!copy) return { kind: "not-added" };
+  // loadFolder prunes order to the files it found, so the order on disk is read from raw.
+  const path = collectionPath(copy.slug);
+  let order = copy.order;
+  const raw = state.raw[path];
+  if (raw !== undefined) {
+    try {
+      order = parseCollection(raw, copy.slug).order;
+    } catch {
+      // raw holds only text that parsed, so this is not reached.
+    }
+  }
+  const missing = order.filter((s) => {
+    const file = credentialPath(copy.slug, s);
+    return builtin.credentials[s] !== undefined && state.raw[file] === undefined && !state.errors.some((e) => e.path === file);
+  });
+  return missing.length > 0 ? { kind: "incomplete", slug: copy.slug, missing } : { kind: "added", slug: copy.slug };
+}
+
+/**
+ * Copies a built-in collection into the folder (KTD2): its collection.json first, carrying
+ * `from`, then each badge file not there yet. A copy whose add stopped partway is finished
+ * in place. A copy already complete is left alone. Every base is checked before any write.
+ */
+export async function addBuiltinCollection(storage: Storage, state: FolderState, builtinSlug: Slug): Promise<{ state: FolderState; slug: Slug }> {
+  const builtin = BUILT_INS.find((b) => b.slug === builtinSlug);
+  if (!builtin) throw new Error(`There is no built-in collection "${builtinSlug}".`);
+  let current = state;
+  let status = builtinStatus(current, builtin);
+  // A try that failed after writing collection.json left a copy this state never saw.
+  if (status.kind === "not-added") {
+    current = await loadFolder(storage);
+    status = builtinStatus(current, builtin);
+  }
+  if (status.kind === "added") return { state: current, slug: status.slug };
+
+  if (status.kind === "incomplete") {
+    const colPath = collectionPath(status.slug);
+    const slug = status.slug;
+    await assertUnchanged(storage, [[colPath, current.raw[colPath] ?? null], ...status.missing.map((s): [string, null] => [credentialPath(slug, s), null])]);
+    for (const s of status.missing) await saveText(storage, credentialPath(slug, s), builtin.credentials[s], null);
+    return { state: await loadFolder(storage), slug };
+  }
+
+  const { name, description, order, codes } = builtin.collection;
+  const slug = uniqueSlug(builtin.slug, current.collections.map((c) => c.slug));
+  const files = order.filter((s) => builtin.credentials[s] !== undefined);
+  await assertUnchanged(storage, [[collectionPath(slug), null], ...files.map((s): [string, null] => [credentialPath(slug, s), null])]);
+  await saveCollection(storage, { slug, name, description, order: [...order], codes: { ...codes }, from: builtin.slug }, null);
+  for (const s of files) await saveText(storage, credentialPath(slug, s), builtin.credentials[s], null);
   return { state: await loadFolder(storage), slug };
 }
 
