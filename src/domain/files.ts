@@ -42,6 +42,21 @@ export function itemExtension(name: string): string | null {
   return /^[A-Za-z0-9]{1,16}$/.test(ext) ? ext.toLowerCase() : null;
 }
 
+/** How a file item shows and reads, by its stored extension: a PDF, Markdown, plain text, or none of them. */
+export function fileFormat(ref: string): "pdf" | "markdown" | "plain" | null {
+  switch (itemExtension(ref)) {
+    case "pdf":
+      return "pdf";
+    case "md":
+    case "markdown":
+      return "markdown";
+    case "txt":
+      return "plain";
+    default:
+      return null;
+  }
+}
+
 /** Whether a data-root path is a file item: a file item name directly inside a `files/` folder. */
 export function isFileItemPath(path: string): boolean {
   const parts = path.split("/");

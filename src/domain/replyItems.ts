@@ -23,7 +23,7 @@ function isText(item: ReplyItem): item is TextItem {
 }
 
 /** Whether the reply is exactly one text item, the shape that writes no `items` key. */
-export function isOneText(items: readonly ReplyItem[]): boolean {
+export function isOneText(items: readonly ReplyItem[]): items is readonly [TextItem] {
   return items.length === 1 && isText(items[0]);
 }
 
@@ -48,7 +48,7 @@ export function hasContent(items: readonly ReplyItem[]): boolean {
 export function normalizeReply(items: readonly ReplyItem[]): ReplyRecord | null {
   const kept = items.filter((item) => !isText(item) || item.text.trim() !== "");
   if (kept.length === 0) return null;
-  if (isOneText(kept)) return { handBack: (kept[0] as TextItem).text };
+  if (isOneText(kept)) return { handBack: kept[0].text };
   return { handBack: textOf(kept), items: [...kept] };
 }
 
@@ -156,7 +156,7 @@ export function previewText(items: readonly ReplyItem[]): string {
  * were before items; any other by every item's fields in order.
  */
 export function replyKey(items: readonly ReplyItem[]): string {
-  if (isOneText(items)) return (items[0] as TextItem).text;
+  if (isOneText(items)) return items[0].text;
   return JSON.stringify(
     items.map((item) => {
       switch (item.kind) {

@@ -1,9 +1,31 @@
 // The small pieces a reply's item views share (U3 of
 // docs/plans/2026-10-07-0620-feat-reply-artifacts-plan.md, R8, KTD6): a file shown by name with
-// Open, and the placeholder for an item whose file is gone.
+// Open, an item's header bar, and the placeholder for an item whose file is gone.
 
 import { useState } from "react";
+import type { ReactNode } from "react";
+import type { ReplyItem } from "../domain/types";
 import type { ItemSource } from "./imageSource";
+
+/** Each kind as its header bar names it. */
+export const KIND_LABEL: Record<ReplyItem["kind"], string> = {
+  text: "Text",
+  image: "Image",
+  video: "Video",
+  file: "File",
+  link: "Link",
+};
+
+/** An item's header bar: its kind and, for a picture, video or file, its name, then anything passed in. */
+export function ItemBar({ item, children }: { item: ReplyItem; children?: ReactNode }) {
+  return (
+    <header className="reply-item-bar">
+      <span className="reply-item-kind">{KIND_LABEL[item.kind]}</span>
+      {item.kind !== "text" && item.kind !== "link" && <span className="reply-item-label">{item.name}</span>}
+      {children}
+    </header>
+  );
+}
 
 /** An item file by name, with Open. Rust opens it in its default app or shows it in its folder (KTD4). */
 export function FileByName({ name, fileRef, source, note }: { name: string; fileRef: string; source: ItemSource; note?: string }) {

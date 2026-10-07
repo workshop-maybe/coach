@@ -21,9 +21,9 @@
 // full commit hash. An earlier reply quoted as an example is still filtered whole, by its
 // excerpt (`excerptOf`).
 
-import { keptLines, IMAGE, IMAGE_DATA, IMAGE_DEFINITION } from "./jevExamples";
+import { keptLines, withoutImages } from "./jevExamples";
 import { assessmentDir } from "./folder";
-import { itemExtension } from "./files";
+import { fileFormat } from "./files";
 import { LINE_BREAK } from "./jevRequest";
 import { scanLines } from "./markdownLines";
 import { readerLine } from "./readerText";
@@ -42,14 +42,11 @@ export type RefTexts = (ref: string) => FileText;
 /** No file texts: every file reads as one Jev cannot see. */
 export const NO_TEXTS: FileTexts = () => null;
 
-/** The extensions of the file items Jev reads, as the reply's stack shows them (ReplyStack's FileBody). */
-const TEXT_EXTENSIONS = new Set(["md", "markdown", "txt"]);
-
-/** Whether a file item's stored ref is a Markdown or plain-text file Jev reads (R13). Decided on the ref, as the stack decides. */
+/** Whether a file item's stored ref is a Markdown or plain-text file Jev reads (R13). Decided on the ref by `fileFormat`, as the stack decides. */
 export function isTextFileRef(ref: string): boolean {
   if (!isItemRef("file", ref)) return false;
-  const ext = itemExtension(ref);
-  return ext !== null && TEXT_EXTENSIONS.has(ext);
+  const format = fileFormat(ref);
+  return format === "markdown" || format === "plain";
 }
 
 /** The refs of a reply's text files, in order, each once. */
@@ -92,10 +89,30 @@ function partOf(item: ReplyItem, texts: RefTexts): string {
     case "file": {
       const text = isTextFileRef(item.ref) ? texts(item.ref) : null;
       if (typeof text !== "string") return `A file Jev cannot see: ${oneLine(item.name)}`;
-      const body = keptLines(text).join("\n").trimEnd();
-      return body === "" ? `File: ${oneLine(item.name)}` : `File: ${oneLine(item.name)}\n${body}`;
+      return filePart(item.name, text);
     }
   }
+}
+
+/** The last few `File:` parts built, by name and text, so a reply being typed doesn't clean unchanged files again. */
+const fileParts = new Map<string, string>();
+const MAX_FILE_PARTS = 8;
+
+/** A readable file's part: a `File:` line naming it, then its kept lines (`keptLines`), if any. */
+function filePart(name: string, text: string): string {
+  // The name's length first, so no name and text pair can make another pair's key.
+  const key = `${name.length}:${name}\u0000${text}`;
+  const cached = fileParts.get(key);
+  if (cached !== undefined) {
+    fileParts.delete(key);
+    fileParts.set(key, cached);
+    return cached;
+  }
+  const body = keptLines(text).join("\n").trimEnd();
+  const part = body === "" ? `File: ${oneLine(name)}` : `File: ${oneLine(name)}\n${body}`;
+  fileParts.set(key, part);
+  if (fileParts.size > MAX_FILE_PARTS) fileParts.delete(fileParts.keys().next().value as string);
+  return part;
 }
 
 /**
@@ -111,9 +128,8 @@ function textPart(markdown: string): string {
       lines.push(line.text);
       continue;
     }
-    if (IMAGE_DEFINITION.test(line.text)) continue;
-    const full = line.text.replace(IMAGE, "").replace(IMAGE_DATA, "");
-    if (full !== line.text && full.trim() === "") continue;
+    const full = withoutImages(line.text);
+    if (full === null) continue;
     lines.push(readerLine(full));
   }
   const text = lines.join("\n");

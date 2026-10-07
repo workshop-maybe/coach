@@ -205,6 +205,17 @@ export const IMAGE_DEFINITION = /^ {0,3}\[(?:\\.|[^[\]\\])+\]:\s*<?data:(?:image
 /** An image or video data URI anywhere: its type and parameters, then its data up to whitespace, a closing bracket or a quote. */
 export const IMAGE_DATA = /data:(?:image|video)\/[\w.+;=-]*,[^\s)\]"'<>]*/gi;
 
+/**
+ * A line without its image Markdown and image data, or null when the line goes: a reference
+ * definition to image data, or a line left blank by removing them.
+ */
+export function withoutImages(line: string): string | null {
+  if (IMAGE_DEFINITION.test(line)) return null;
+  const full = line.replace(IMAGE, "").replace(IMAGE_DATA, "");
+  if (full !== line && full.trim() === "") return null;
+  return full;
+}
+
 // Lines that look like secrets (KTD10). A heuristic, not a guarantee: earlier replies may
 // hold keys an agent printed, and some never left the machine before.
 const PEM_BEGIN = /-----BEGIN [A-Z0-9 ]+-----/;
@@ -299,9 +310,8 @@ function cleanLines(text: string, enough = Infinity, reader = false): string[] {
       inPem = !PEM_END.test(line);
       continue;
     }
-    if (IMAGE_DEFINITION.test(line)) continue;
-    const full = line.replace(IMAGE, "").replace(IMAGE_DATA, "");
-    if (full !== line && full.trim() === "") continue;
+    const full = withoutImages(line);
+    if (full === null) continue;
     const lead = Math.max(0, full.search(/\S/));
     const read = reader && !step.fence && !step.inFence ? readerLine(full.slice(0, lead + MAX_READ_UNITS)) : full;
     const shown = read.slice(0, lead + MAX_LINE_UNITS);
@@ -350,9 +360,8 @@ export function keptLines(text: string): string[] {
       inPem = !PEM_END.test(line);
       continue;
     }
-    if (IMAGE_DEFINITION.test(line)) continue;
-    const full = line.replace(IMAGE, "").replace(IMAGE_DATA, "");
-    if (full !== line && full.trim() === "") continue;
+    const full = withoutImages(line);
+    if (full === null) continue;
     if (looksSecretAlong(full)) continue;
     if (kept.length === 0 && full.trim() === "") continue;
     kept.push(full);

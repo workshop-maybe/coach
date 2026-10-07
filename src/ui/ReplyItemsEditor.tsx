@@ -23,8 +23,8 @@ import type { AddedKind, AddFrom } from "../storage/storage";
 import type { ReplyItem } from "../domain/types";
 import { registerDropBox } from "./dropFiles";
 import type { ItemSource } from "./imageSource";
-import { ItemWaiting } from "./replyItemParts";
-import { ItemBody, KIND_LABEL } from "./ReplyStack";
+import { ItemBar, ItemWaiting, KIND_LABEL } from "./replyItemParts";
+import { ItemBody } from "./ReplyStack";
 import { RichText } from "./RichText";
 import type { PastePayload, RichImages, RichTextHandle } from "./RichText";
 import { externalHref } from "./RichView";
@@ -65,7 +65,6 @@ export interface ReplyItemsEditorProps {
   ref?: Ref<ReplyItemsEditorHandle>;
 }
 
-type FileKey = Extract<AddedKind, "image" | "video" | "file">;
 const KEYS: { kind: ReplyItem["kind"]; label: string }[] = [
   { kind: "text", label: "Text" },
   { kind: "image", label: "Image" },
@@ -110,6 +109,11 @@ export function ReplyItemsEditor({ value, onChange, images, source, addItems, on
     setLinkState(next);
   };
   const [linkError, setLinkError] = useState<string | null>(null);
+  /** Closes the link line and its refusal. */
+  const closeLink = () => {
+    setLink(null);
+    setLinkError(null);
+  };
   // The text item just added, which takes focus as it mounts.
   const [focusNew, setFocusNew] = useState<number | null>(null);
   // Where focus goes once a Remove has rendered: an entry's id, or the first add key.
@@ -148,7 +152,7 @@ export function ReplyItemsEditor({ value, onChange, images, source, addItems, on
     }
   }
 
-  async function pick(kind: FileKey) {
+  async function pick(kind: AddedKind) {
     const added = await add({ kind: "pick", item: kind });
     if (added === 0 && mounted.current) keyRefs.current.get(kind)?.focus();
   }
@@ -175,16 +179,14 @@ export function ReplyItemsEditor({ value, onChange, images, source, addItems, on
     if (linkNow.current === null) return;
     const url = linkNow.current.trim();
     if (url === "") {
-      setLink(null);
-      setLinkError(null);
+      closeLink();
       return;
     }
     if (externalHref(url) === null) {
       setLinkError(LINK_REFUSED);
       return;
     }
-    setLink(null);
-    setLinkError(null);
+    closeLink();
     const entry = replyEntry({ kind: "link", url });
     focusAfter.current = entry.id;
     change([...current.current, entry]);
@@ -197,8 +199,7 @@ export function ReplyItemsEditor({ value, onChange, images, source, addItems, on
     e.stopPropagation();
     if (e.key === "Enter") commitLink();
     else {
-      setLink(null);
-      setLinkError(null);
+      closeLink();
       keyRefs.current.get("link")?.focus();
     }
   }
@@ -242,13 +243,11 @@ export function ReplyItemsEditor({ value, onChange, images, source, addItems, on
           return (
             <section key={id} className="reply-item" data-kind={item.kind} data-entry={id} tabIndex={-1}>
               {!bare && (
-                <header className="reply-item-bar">
-                  <span className="reply-item-kind">{KIND_LABEL[item.kind]}</span>
-                  {item.kind !== "text" && item.kind !== "link" && <span className="reply-item-label">{item.name}</span>}
+                <ItemBar item={item}>
                   <button type="button" className="ghost reply-item-remove" aria-label={removeName(item, place)} onClick={() => remove(id)}>
                     Remove
                   </button>
-                </header>
+                </ItemBar>
               )}
               <div className="reply-item-body">
                 {item.kind === "text" ? (

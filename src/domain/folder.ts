@@ -437,7 +437,7 @@ function testFields(r: TestRecord): Json {
 function replyParts(r: ReplyRecord): { fields: Json; body: string } {
   const items = r.items;
   if (!items) return { fields: {}, body: r.handBack };
-  if (isOneText(items)) return { fields: {}, body: (items[0] as { text: string }).text };
+  if (isOneText(items)) return { fields: {}, body: items[0].text };
   const texts = items.flatMap((item) => (item.kind === "text" ? [item.text] : []));
   const itemBreak = chooseBreak(texts);
   return { fields: { item_break: itemBreak, items: items.map(itemEntry) }, body: joinSlots(texts, itemBreak) };

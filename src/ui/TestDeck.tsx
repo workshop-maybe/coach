@@ -279,6 +279,8 @@ export function TestDeck(props: TestDeckProps) {
   // another agent or badge moves the folder, and the files the reply still names go along (R10).
   const replyDir = profile && credential ? assessmentDir(profile.slug, credential.collectionSlug, credential.slug) : null;
   const replyImages = useRichImages(replyDir, reply, items);
+  // The result folder's files, for the reply's editor and its stack (`imageSource` keeps one per folder).
+  const replySource = replyDir ? imageSource(storage, replyDir) : null;
   const rubricImages = credential ? imageSource(storage, credentialsDir(credential.collectionSlug)) : undefined;
   // The reply as it will save, blank text items dropped, so the judge sees what is recorded and Jev reads it.
   const judged = useMemo((): ReplyItem[] => {
@@ -303,9 +305,9 @@ export function TestDeck(props: TestDeckProps) {
     // What is still loading: the reply's refs, then the examples' data-root paths. Only the count is read.
     const loading: string[] = pendingTexts(judged, replyTexts);
     const read = jevReply(judged, replyTexts);
-    const entries = ranked ? examplesFor(ranked, read, itemTexts, loading) : [];
-    const fitted = fitSecondOpinion({ task: credential.task, rubric: credential.rubric, reply: read, learningTargets: credential.learningTargets }, entries);
-    return { fitted, textsWait: loading.length > 0 };
+    const examples = ranked ? examplesFor(ranked, read, itemTexts, loading) : [];
+    const fit = fitSecondOpinion({ task: credential.task, rubric: credential.rubric, reply: read, learningTargets: credential.learningTargets }, examples);
+    return { fitted: fit, textsWait: loading.length > 0 };
   }, [credential?.task, credential?.rubric, credential?.learningTargets, judged, replyTexts, itemTexts, jev.usable, ranked]); // eslint-disable-line react-hooks/exhaustive-deps
   const fits = fitted !== null;
   // The badge's rubric points, for the missed-points step, parsed once per rubric.
@@ -1078,13 +1080,13 @@ export function TestDeck(props: TestDeckProps) {
     ) : (
       <>
         <div className="test-strip">{replyStage}</div>
-        {replyDir && (
+        {replySource && (
           <ReplyItemsEditor
             ref={replyBox}
             value={entries}
             onChange={editReply}
             images={replyImages.images}
-            source={imageSource(storage, replyDir)}
+            source={replySource}
             addItems={replyImages.addItems}
             onPaste={onPaste}
           />
@@ -1173,7 +1175,7 @@ export function TestDeck(props: TestDeckProps) {
             <span className="meet-text-head" aria-hidden="true">
               Reply
             </span>
-            {replyDir && <ReplyStack items={judged} source={imageSource(storage, replyDir)} stored={asStored} aria-label="Reply" />}
+            {replySource && <ReplyStack items={judged} source={replySource} stored={asStored} aria-label="Reply" />}
           </div>
         </div>
         <div className="meet-choices">

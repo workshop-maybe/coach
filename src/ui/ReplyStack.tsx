@@ -19,7 +19,7 @@ import { useEffect, useState } from "react";
 import type { DragEvent as ReactDragEvent, MouseEvent as ReactMouseEvent } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { isImageDataUri, isLocalImageName } from "../domain/images";
-import { itemExtension } from "../domain/files";
+import { fileFormat } from "../domain/files";
 import { isItemRef, isOneText } from "../domain/replyItems";
 import type { ReplyItem } from "../domain/types";
 import type { ItemSource } from "./imageSource";
@@ -27,7 +27,7 @@ import { PdfItem } from "./PdfItem";
 import { imageMarkdown } from "./richImage";
 import { RichView, externalHref } from "./RichView";
 import { TextFileItem } from "./TextFileItem";
-import { FileByName, ItemMissing, ItemWaiting } from "./replyItemParts";
+import { FileByName, ItemBar, ItemMissing, ItemWaiting } from "./replyItemParts";
 
 export interface ReplyStackProps {
   /** The reply's items, in order. `replyItems(record)` gives them for any saved reply. */
@@ -42,15 +42,6 @@ export interface ReplyStackProps {
   "aria-label": string;
 }
 
-/** Each kind as its header bar names it. */
-export const KIND_LABEL: Record<ReplyItem["kind"], string> = {
-  text: "Text",
-  image: "Image",
-  video: "Video",
-  file: "File",
-  link: "Link",
-};
-
 export function ReplyStack({ items, source, stored = false, pending, "aria-label": label }: ReplyStackProps) {
   const bare = isOneText(items);
   return (
@@ -59,12 +50,7 @@ export function ReplyStack({ items, source, stored = false, pending, "aria-label
         if (item.kind === "text" && item.text.trim() === "" && !bare) return null;
         return (
           <section key={i} className="reply-item" data-kind={item.kind}>
-            {!bare && (
-              <header className="reply-item-bar">
-                <span className="reply-item-kind">{KIND_LABEL[item.kind]}</span>
-                {item.kind !== "text" && item.kind !== "link" && <span className="reply-item-label">{item.name}</span>}
-              </header>
-            )}
+            {!bare && <ItemBar item={item} />}
             <div className="reply-item-body">
               {pending?.has(i) ? <ItemWaiting label="Adding" /> : <ItemBody item={item} source={source} stored={stored} />}
             </div>
@@ -93,14 +79,13 @@ export function ItemBody({ item, source, stored }: { item: ReplyItem; source: It
 
 function FileBody({ name, fileRef, source }: { name: string; fileRef: string; source: ItemSource }) {
   if (!isItemRef("file", fileRef)) return <ItemMissing name={name} />;
-  switch (itemExtension(fileRef)) {
+  const format = fileFormat(fileRef);
+  switch (format) {
     case "pdf":
       return <PdfItem name={name} fileRef={fileRef} source={source} />;
-    case "md":
     case "markdown":
-      return <TextFileItem name={name} fileRef={fileRef} source={source} format="markdown" />;
-    case "txt":
-      return <TextFileItem name={name} fileRef={fileRef} source={source} format="plain" />;
+    case "plain":
+      return <TextFileItem name={name} fileRef={fileRef} source={source} format={format} />;
     default:
       return <FileByName name={name} fileRef={fileRef} source={source} />;
   }
