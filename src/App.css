@@ -102,7 +102,7 @@ button {
    that are their own drawing (window keys, the brand, rich-text tools, the hit areas over
    a machine's keys), cards that are buttons (they wear the cards' frame) and the rows
    that read as records keep no key edge, and keep the plain fade on hover. */
-button:where(:not(.window-key, .brand, .rich-menu button, .rich-bar button, .machine-key, .dial-step, .door, .part, .agent-card, .badge-card, .earned, .need, .handoff-run, .take-head, .link))::after {
+button:where(:not(.window-key, .brand, .rich-menu button, .rich-bar button, .machine-key, .dial-step, .door, .part, .agent-card, .badge-card, .earned, .detail-holder, .need, .handoff-run, .take-head, .link))::after {
   content: "";
   position: absolute;
   inset: calc(-1 * var(--key-reach));
@@ -112,7 +112,9 @@ button:where(:not(.window-key, .brand, .rich-menu button, .rich-bar button, .mac
   mask-border: url("./assets/sketch-key.svg") 8 / var(--key-slice) round;
 }
 
-button:where(.window-key, .brand, .rich-menu button, .rich-bar button, .machine-key, .dial-step, .door, .part, .agent-card, .badge-card, .earned, .need, .handoff-run, .take-head):hover:not(:disabled) {
+/* The same opt-out list as above, less the link (whose underline is its own drawing): these
+   keep the plain fade on hover. Change the two lists together. */
+button:where(.window-key, .brand, .rich-menu button, .rich-bar button, .machine-key, .dial-step, .door, .part, .agent-card, .badge-card, .earned, .detail-holder, .need, .handoff-run, .take-head):hover:not(:disabled) {
   opacity: 0.85;
 }
 
@@ -134,11 +136,12 @@ button[aria-pressed="true"]:hover:not(:disabled) {
 button.primary {
   background: var(--ink);
   color: var(--on-ink);
-  box-shadow: 2px 2px 0 var(--ink);
+  --key-fill: 2px;
+  box-shadow: var(--key-fill) var(--key-fill) 0 var(--ink);
 }
 
 button.primary:hover:not(:disabled) {
-  box-shadow: 3px 3px 0 var(--ink);
+  --key-fill: 3px;
 }
 
 /* The main action leads with the world's square, in paper on ink. */
@@ -236,7 +239,8 @@ textarea {
   border-color: transparent;
 }
 
-.field::after {
+/* The same drawn edge frames a text field, the rich-text box and a dial's whole row. */
+:is(.field, .rich, .dial-row)::after {
   content: "";
   position: absolute;
   inset: -3px;
@@ -275,7 +279,13 @@ button:focus-visible {
 }
 
 button.primary:focus-visible {
-  box-shadow: 2px 2px 0 var(--ink);
+  box-shadow: var(--key-fill) var(--key-fill) 0 var(--ink);
+}
+
+/* Keys with no key edge (cards that are buttons, record rows) keep the ring close, so a
+   shelf that scrolls sideways with little padding does not clip it. */
+button:where(.door, .part, .agent-card, .badge-card, .earned, .detail-holder, .need, .handoff-run, .take-head):focus-visible {
+  outline-offset: 2px;
 }
 
 /* ---------------------------------------------------------------------------
@@ -672,16 +682,6 @@ button.primary:focus-visible {
   background: var(--surface);
 }
 
-/* The rich box is a text field, so it wears a field's drawn edge (.field below). */
-.rich::after {
-  content: "";
-  position: absolute;
-  inset: -3px;
-  pointer-events: none;
-  background: var(--field-edge);
-  -webkit-mask-box-image: url("./assets/sketch-key.svg") 8 / 8px round;
-  mask-border: url("./assets/sketch-key.svg") 8 / 8px round;
-}
 
 /* The box a file dragged over the window would land in (src/ui/dropFiles.ts): an outline in
    data blue, never a fill. */
@@ -1931,16 +1931,7 @@ button.primary:focus-visible {
   display: grid;
   grid-template-columns: 2.5rem 1fr 2.5rem;
   border: var(--rule-width) solid transparent;
-}
-
-.dial-row::after {
-  content: "";
-  position: absolute;
-  inset: -3px;
-  pointer-events: none;
-  background: var(--ink);
-  -webkit-mask-box-image: url("./assets/sketch-key.svg") 8 / 8px round;
-  mask-border: url("./assets/sketch-key.svg") 8 / 8px round;
+  --field-edge: var(--ink);
 }
 
 .dial-step {
@@ -1999,7 +1990,7 @@ button.primary:focus-visible {
 }
 
 .player-locked .dial-row {
-  border-color: var(--cell);
+  --field-edge: var(--cell);
   color: var(--ink-muted);
 }
 
@@ -2071,9 +2062,7 @@ button.primary:focus-visible {
   white-space: pre-wrap;
 }
 
-/* On its pane (U6, R9, R18) the field takes the height above the slots and holds its text
-   to a centered measure of about 70 of its characters, its scrollbar at the pane's edge.
-   Scoped to the textarea, so the handoff text folded on a handoff page is untouched. */
+/* On its pane the field's wrapper (its drawn edge) takes the height the field takes. */
 .deck.pane .handoff-field {
   display: flex;
   flex-direction: column;
@@ -2081,6 +2070,9 @@ button.primary:focus-visible {
   min-height: 8rem;
 }
 
+/* On its pane (U6, R9, R18) the field takes the height above the slots and holds its text
+   to a centered measure of about 70 of its characters, its scrollbar at the pane's edge.
+   Scoped to the textarea, so the handoff text folded on a handoff page is untouched. */
 .deck.pane textarea.handoff-text {
   flex: 1 1 auto;
   min-height: 8rem;
