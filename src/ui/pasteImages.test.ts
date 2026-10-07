@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { htmlHasText, imagePaste } from "./pasteImages";
-import { pngFile } from "../test/paste";
+import { filePaste, htmlHasText, imagePaste } from "./pasteImages";
+import { pngFile, videoFile } from "../test/paste";
 
 /** Clipboard data as a paste event carries it. */
 function clipboard(flavors: Record<string, string>, files: File[] = []): DataTransfer {
@@ -45,5 +45,33 @@ describe("imagePaste (KTD5)", () => {
     const file = pngFile();
     const data = { ...clipboard({}, [file]), files: [], getData: () => "" } as unknown as DataTransfer;
     expect(imagePaste(data)).toEqual([file]);
+  });
+});
+
+describe("filePaste (reply artifacts KTD7)", () => {
+  const pdf = () => new File([new Uint8Array([0x25, 0x50, 0x44, 0x46])], "report.pdf", { type: "application/pdf" });
+
+  it("names every file of a paste that carries one neither a PNG, a JPEG nor a video, with no text", () => {
+    expect(filePaste(clipboard({}, [pdf()]))).toEqual([{ name: "report.pdf", size: 4 }]);
+    expect(filePaste(clipboard({ "text/plain": "report.pdf" }, [pdf(), pngFile("shot.png")]))).toEqual([
+      { name: "report.pdf", size: 4 },
+      { name: "shot.png", size: 12 },
+    ]);
+  });
+
+  it("takes a video beside such a file too, so the whole paste becomes items", () => {
+    expect(filePaste(clipboard({}, [videoFile(), pdf()])).map((f) => f.name)).toEqual(["clip.mov", "report.pdf"]);
+  });
+
+  it("takes a GIF, since only PNG and JPEG stay inline", () => {
+    const gif = new File([new Uint8Array(6)], "anim.gif", { type: "image/gif" });
+    expect(filePaste(clipboard({}, [gif]))).toEqual([{ name: "anim.gif", size: 6 }]);
+  });
+
+  it("leaves a PNG, a video, a paste with real text, and no paste at all to the box", () => {
+    expect(filePaste(clipboard({}, [pngFile()]))).toEqual([]);
+    expect(filePaste(clipboard({}, [videoFile()]))).toEqual([]);
+    expect(filePaste(clipboard({ "text/plain": "Here is my report" }, [pdf()]))).toEqual([]);
+    expect(filePaste(null)).toEqual([]);
   });
 });

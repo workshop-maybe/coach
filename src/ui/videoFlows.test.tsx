@@ -10,9 +10,12 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { loadFolder } from "../domain/folder";
 import type { MemoryStorage } from "../storage/memory";
 import { mkvBytes, mp4Bytes } from "../test/videoBytes";
+import { handleDragDrop } from "./dropFiles";
 import { opus, renderApp, review, storageWith } from "./testFolder";
 
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ writeText: vi.fn() }));
+// A reply's PDF item never loads its pages here (reply artifacts U4).
+vi.mock("./pdfDocument", () => ({ openPdf: vi.fn(() => new Promise(() => undefined)) }));
 // ProseMirror typing does not run in jsdom; these flows add through a textarea stand-in.
 vi.mock("./RichText", () => import("./richTextStub"));
 
@@ -208,5 +211,64 @@ describe("adding a video to a reply", () => {
     await userEvent.click(screen.getByRole("button", { name: "Video" }));
     expect(await screen.findByText("The folder is read-only.")).toBeTruthy();
     expect(box.value).toBe("Here");
+  });
+});
+
+// A reply's file items (reply artifacts U4, KTD3, KTD7): the reply editor adds any file, every
+// other box still refuses one, and a change of agent carries the files along.
+describe("adding a file to a reply, and to every other box", () => {
+  const codex = { ...opus, slug: "codex", name: "Codex agent", harness: "codex", model: "gpt-5" };
+  const fromBadge = { view: "deck", deck: "test", credentialKey: "eng/review" } as const;
+  const PDF = new TextEncoder().encode("%PDF-1.7\n%%EOF\n");
+  const FILE_REF = /^files\/file-[0-9a-f]{8}\.pdf$/;
+
+  beforeEach(() =>
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    ),
+  );
+  afterEach(() => vi.unstubAllGlobals());
+
+  async function toReply(agent = "Opus agent") {
+    await userEvent.click(await screen.findByRole("button", { name: agent }));
+    await userEvent.click(await screen.findByRole("button", { name: "Copy" }));
+    expect(await screen.findByRole("heading", { name: "What came back" })).toBeTruthy();
+  }
+
+  const next = () => screen.getByRole("button", { name: "Next" }) as HTMLButtonElement;
+
+  it("a reply moved to another agent before it is recorded carries its file items to the new folder", async () => {
+    const storage = storageWith({ credentials: [review], profiles: [opus, codex] });
+    renderApp(storage, fromBadge);
+    await toReply();
+    storage.queueAdd([{ name: "report.pdf", bytes: PDF }]);
+    await userEvent.click(screen.getByRole("button", { name: "Add file" }));
+    await screen.findByRole("button", { name: "Remove file report.pdf" });
+    await userEvent.click(screen.getByRole("button", { name: "Back" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Back" }));
+    await toReply("Codex agent");
+    await waitFor(async () => expect(await storage.listFiles("data", "assessments/codex")).toEqual([expect.stringMatching(/^assessments\/codex\/eng\/review\/files\/file-[0-9a-f]{8}\.pdf$/)]));
+    await waitFor(() => expect(next().disabled).toBe(false));
+    await userEvent.click(next());
+    await userEvent.click(await screen.findByRole("button", { name: "Met" }));
+    await screen.findByTestId("landing");
+    const [saved] = (await loadFolder(storage)).assessments;
+    expect(saved).toMatchObject({ profileSlug: "codex", items: [{ kind: "file", name: "report.pdf", ref: expect.stringMatching(FILE_REF) }] });
+  });
+
+  it("a PDF dropped on a rubric box is refused as today", async () => {
+    const storage = storageWith({ credentials: [review] });
+    renderApp(storage, { view: "deck", deck: "edit-credential", credentialKey: "eng/review", part: "rubric" });
+    const box = (await screen.findByRole("textbox", { name: "Rubric" })) as HTMLTextAreaElement;
+    storage.queueAdd([{ name: "report.pdf", bytes: PDF }]);
+    handleDragDrop({ type: "drop", paths: ["/Users/me/report.pdf"], position: { x: 1, y: 1 } });
+    expect(await screen.findByText("report.pdf: Only MP4, MOV, M4V and WebM videos, and PNG and JPEG images, can be added.")).toBeTruthy();
+    expect(storage.adds).toEqual([{ dir: "collections/eng/credentials", from: { kind: "drop", paths: ["/Users/me/report.pdf"] } }]);
+    expect(box.value).toBe(review.rubric);
   });
 });

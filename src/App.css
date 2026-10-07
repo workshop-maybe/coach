@@ -985,6 +985,59 @@ button:focus-visible {
   border: 1px dashed var(--cell);
 }
 
+/* The reply being built on "What came back" (src/ui/ReplyItemsEditor.tsx; KTD7 of the reply
+   artifacts plan). The stack fills the pane and scrolls, and the quiet add keys sit under it.
+   A reply that is one text item fills the stack, as the reply box always has. The editor is
+   the beat's drop box, so it takes the drop outline (.rich-drop). */
+.reply-edit {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.reply-edit .reply-stack-bare > .reply-item,
+.reply-edit .reply-stack-bare .reply-item-body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.reply-item-remove {
+  margin-left: auto;
+  padding: 0 var(--space-xs);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-muted);
+}
+
+.reply-edit-link {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-md) var(--space-base);
+}
+
+.reply-edit-link input {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.reply-edit-keys {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  padding-top: var(--space-xs);
+}
+
+.reply-edit-key {
+  font-weight: 500;
+}
+
 .rich-menu {
   display: flex;
   z-index: 20;
@@ -2938,7 +2991,7 @@ button:focus-visible {
   padding: 2px;
 }
 
-.reply-record:has(> .judge-step) > .rich-view {
+.reply-record:has(> .judge-step) > .reply-stack {
   min-height: 5rem;
 }
 
@@ -3149,22 +3202,25 @@ button:focus-visible {
 
 @media (max-width: 56rem) {
   .compare-panes {
+    flex: none;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: repeat(2, minmax(0, 1fr));
+    grid-template-rows: none;
   }
 
-  /* Stacked, the grid takes less height, and a reply with its verdict step open takes two
-     thirds of what is left, so the step and a few lines of the reply fit together. */
+  /* Stacked, the grid takes less height. */
   .compare-grid {
     max-height: 25vh;
   }
 
-  .compare-panes:has(> :first-child > .judge-step) {
-    grid-template-rows: minmax(0, 2fr) minmax(0, 1fr);
+  /* Stacked, the view is the one scroller: each record and its stack take their content's
+     height, and a PDF or text file keeps its 70vh bound (reply-artifacts KTD6). */
+  .compare-panes > .reply-record {
+    flex: none;
   }
 
-  .compare-panes:has(> :last-child > .judge-step) {
-    grid-template-rows: minmax(0, 1fr) minmax(0, 2fr);
+  .compare-panes > .reply-record > .reply-stack {
+    flex: none;
+    overflow: visible;
   }
 }
 

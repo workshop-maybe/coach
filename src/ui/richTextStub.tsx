@@ -20,6 +20,10 @@
 // real box would take (`videoPaste`) awaits `add({ kind: "paste", files })` and splices the
 // refs in at the selection, ahead of the image paste.
 //
+// As the real box does, with `onFiles` a paste the real box hands a reply's editor
+// (`filePaste`) goes to `onFiles` ahead of every other paste, and with `dropBox` false the
+// stub registers no drop box (reply artifacts KTD7).
+//
 // Use: vi.mock("./RichText", () => import("./richTextStub"));
 
 import { useEffect, useImperativeHandle, useRef } from "react";
@@ -28,9 +32,22 @@ import type { AddFrom } from "../storage/storage";
 import type { RichImages, RichTextProps } from "./RichText";
 import { findJoinCandidates, fixPastedText } from "../domain/pasteText";
 import { registerDropBox } from "./dropFiles";
-import { imagePaste, videoPaste } from "./pasteImages";
+import { filePaste, imagePaste, videoPaste } from "./pasteImages";
 
-export function RichText({ value, onChange, onNormalized, placeholder, autoFocus, cleanPaste = false, onPaste, images, ref, "aria-label": label }: RichTextProps) {
+export function RichText({
+  value,
+  onChange,
+  onNormalized,
+  placeholder,
+  autoFocus,
+  cleanPaste = false,
+  onPaste,
+  images,
+  ref,
+  onFiles,
+  dropBox = true,
+  "aria-label": label,
+}: RichTextProps) {
   useEffect(() => onNormalized?.(value), []); // eslint-disable-line react-hooks/exhaustive-deps
   // The text as it is now, for an image that lands after a save.
   const current = useRef(value);
@@ -64,6 +81,12 @@ export function RichText({ value, onChange, onNormalized, placeholder, autoFocus
   }
 
   function paste(e: ClipboardEvent<HTMLTextAreaElement>) {
+    const others = onFiles ? filePaste(e.clipboardData) : [];
+    if (onFiles && others.length > 0) {
+      e.preventDefault();
+      onFiles(others);
+      return;
+    }
     const videos = images?.add ? videoPaste(e.clipboardData) : [];
     if (images?.add && videos.length > 0) {
       e.preventDefault();
@@ -107,7 +130,7 @@ export function RichText({ value, onChange, onNormalized, placeholder, autoFocus
   }
 
   const add = images?.add;
-  const canAdd = !!add;
+  const canAdd = !!add && dropBox;
   const latestAdd = useRef(add);
   latestAdd.current = add;
   useEffect(() => {

@@ -20,6 +20,11 @@
 // (src/ui/dropFiles.ts) while mounted: a file dropped on it is added where it landed, or at
 // the end of the box when it landed off the text. A paste of a video copied in Finder goes in
 // at the cursor the same way, with no text and no bytes, ahead of the image paste.
+//
+// A reply's text item (KTD7 of the reply artifacts plan) sits inside the reply's editor, which
+// is the beat's one drop box, so it registers none of its own (`dropBox` false). A paste into
+// it of files that are not all PNG, JPEG or video goes to the editor through `onFiles`, ahead
+// of every other paste, and becomes items there; a PNG, JPEG or video still goes inline.
 
 import { useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, Ref } from "react";
@@ -35,7 +40,7 @@ import { findJoinCandidates, fixPastedText, looksTerminalCopied } from "../domai
 import { hasVideoExtension } from "../domain/videos";
 import type { AddFrom } from "../storage/storage";
 import { registerDropBox } from "./dropFiles";
-import { imagePaste, videoPaste } from "./pasteImages";
+import { filePaste, imagePaste, videoPaste } from "./pasteImages";
 import { richExtensions } from "./richExtensions";
 import { refreshImages, type RichImageSource } from "./richImage";
 
@@ -73,6 +78,13 @@ export interface RichTextProps {
   ref?: Ref<RichTextHandle>;
   /** The images beside the box's file. Without it, an image paste is not taken and images show as placeholders. */
   images?: RichImages;
+  /**
+   * Takes a paste of files that are not all PNG, JPEG or video (`filePaste`), by name and
+   * size, in place of the box. Only a reply's text item sets it (reply artifacts KTD7).
+   */
+  onFiles?(files: { name: string; size: number }[]): void;
+  /** Whether the box registers for dropped files while it can add them. A reply's text item does not (KTD7). */
+  dropBox?: boolean;
 }
 
 /** What a paste into the reply box did, reported once its transaction has run. */
@@ -157,9 +169,22 @@ function insertFiles(view: EditorView, from: number, to: number, names: string[]
   view.dispatch(untouched ? tr.setSelection(TextSelection.near(tr.doc.resolve(end))).scrollIntoView() : tr);
 }
 
-export function RichText({ value, onChange, onNormalized, placeholder, autoFocus, cleanPaste = false, onPaste, ref, images, "aria-label": label }: RichTextProps) {
-  const latest = useRef({ onChange, onNormalized, onPaste, cleanPaste, images });
-  latest.current = { onChange, onNormalized, onPaste, cleanPaste, images };
+export function RichText({
+  value,
+  onChange,
+  onNormalized,
+  placeholder,
+  autoFocus,
+  cleanPaste = false,
+  onPaste,
+  ref,
+  images,
+  onFiles,
+  dropBox = true,
+  "aria-label": label,
+}: RichTextProps) {
+  const latest = useRef({ onChange, onNormalized, onPaste, cleanPaste, images, onFiles });
+  latest.current = { onChange, onNormalized, onPaste, cleanPaste, images, onFiles };
   // The Markdown the editor last showed or sent, so a value that comes back unchanged is not re-parsed.
   const shown = useRef(value);
   const pending = useRef<PendingPaste | null>(null);
@@ -287,6 +312,13 @@ export function RichText({ value, onChange, onNormalized, placeholder, autoFocus
         // carries no real text (KTD5 of both plans). A video paste sends only the files'
         // names and sizes; Rust copies them from the paths on the clipboard.
         paste: (view, event) => {
+          const take = latest.current.onFiles;
+          const others = take && view.editable ? filePaste(event.clipboardData) : [];
+          if (take && others.length > 0) {
+            event.preventDefault();
+            take(others);
+            return true;
+          }
           const add = latest.current.images?.add;
           const videos = add && view.editable ? videoPaste(event.clipboardData) : [];
           if (add && videos.length > 0) {
@@ -410,16 +442,17 @@ export function RichText({ value, onChange, onNormalized, placeholder, autoFocus
   }, [editor, images]);
 
   const canAdd = !!images?.add;
-  // While it can add files, the box takes drops. Its class name stays fixed, since the drop
+  const takesDrops = canAdd && dropBox;
+  // While it can add files, the box takes drops, unless it sits in a drop box of its own (KTD7). Its class name stays fixed, since the drop
   // listener puts its outline class on this element directly.
   const root = useRef<HTMLDivElement>(null);
   const latestDrop = useRef(takeDrop);
   latestDrop.current = takeDrop;
   useEffect(() => {
     const element = root.current;
-    if (!canAdd || !element) return;
+    if (!takesDrops || !element) return;
     return registerDropBox({ element, drop: (paths, x, y) => latestDrop.current(paths, x, y) });
-  }, [canAdd]);
+  }, [takesDrops]);
 
   return (
     <div ref={root} className="rich" onContextMenuCapture={stopOnVideo} onDragStartCapture={stopOnVideo}>

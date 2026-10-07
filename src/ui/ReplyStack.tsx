@@ -42,7 +42,8 @@ export interface ReplyStackProps {
   "aria-label": string;
 }
 
-const KIND_LABEL: Record<ReplyItem["kind"], string> = {
+/** Each kind as its header bar names it. */
+export const KIND_LABEL: Record<ReplyItem["kind"], string> = {
   text: "Text",
   image: "Image",
   video: "Video",
@@ -74,7 +75,8 @@ export function ReplyStack({ items, source, stored = false, pending, "aria-label
   );
 }
 
-function ItemBody({ item, source, stored }: { item: ReplyItem; source: ItemSource; stored: boolean }) {
+/** One item's body as the stack shows it. The reply editor shows its items through it too (R11). */
+export function ItemBody({ item, source, stored }: { item: ReplyItem; source: ItemSource; stored: boolean }) {
   switch (item.kind) {
     case "text":
       return <RichView aria-label="Text" value={item.text} stored={stored} images={source} />;
