@@ -28,17 +28,18 @@
 // goes is replaced by the next one in the strip. With fewer than two left it says so.
 //
 // Each open take is a record: a mono bar with the agent, its setup, its state and the date
-// over the reply rendered, which scrolls on its own, then Jev's reading of it folded (a held
-// reply's as chosen for the badge's current version, a result's own, with Jev's track record
-// only on a result), the handoff text it answered folded, then its actions at the foot (the
-// shared take actions). When the takes answered more than one text of their handoff, each
+// over the reply's items as one stack (ReplyStack.tsx), which scrolls on its own, then Jev's
+// reading of it folded (a held reply's as chosen for the badge's current version, a result's
+// own, with Jev's track record only on a result), the handoff text it answered folded, then
+// its actions at the foot (the shared take actions). When the takes answered more than one text of their handoff, each
 // fold numbers its text and a line under the strip or grid says so. A verdict that goes
 // against the reply's own reading opens the verdict step under it in place of its actions
 // (JudgeStep.tsx); any other verdict saves at once. One step at a time: opening one closes
 // the other's, a one-click verdict on the other reply leaves it alone, and the pane holding
 // it stays put, so a chosen take opens on the other side. Escape goes to an open step first.
 // One write at a time (takeActions.tsx). One switch above them shows both as stored. Below
-// the stacking width the records stack, each still scrolling on its own. Close and Escape go
+// the stacking width the records stack and the view scrolls as one, a PDF or text file still
+// in its bounded area (reply-artifacts KTD6). Close and Escape go
 // back by the rule in replyRoute.ts, worked out when the view closes: the page that lists the
 // takes, still picked, Compare focused.
 
@@ -46,6 +47,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { goToOf } from "../domain/goTo";
 import { handoffTextOf, isHeld, readingOfTake, runIdOf, type Take } from "../domain/handoffResults";
 import { SKELETON_ID } from "../domain/handoffs";
+import { replyItems } from "../domain/replyItems";
 import { rubricParts } from "../domain/secondOpinion";
 import { credentialKey, type AgentProfile } from "../domain/types";
 import { CompareGrid, CompareStrip, columnsOf, compareGridOf, type CompareColumn } from "./CompareGrid";
@@ -55,7 +57,7 @@ import { JudgeStep, useVerdictStep } from "./JudgeStep";
 import { useNav } from "./nav";
 import { usePane } from "./pane";
 import { backFromCompare, takeIdOf, takeOf } from "./replyRoute";
-import { RichView } from "./RichView";
+import { ReplyStack } from "./ReplyStack";
 import { SavedReading } from "./JevReading";
 import type { TakeRef } from "./routes";
 import { Missing, StoredSwitch, TakeBar, useEscape } from "./shared";
@@ -247,7 +249,7 @@ export function CompareView({ credentialKey: key, takes, picks }: { credentialKe
           return (
             <article key={e.id} className="reply-record" aria-label={`${profile.name}, ${e.when}`}>
               <TakeBar name={profile.name} take={a} id={headingOf(e.id)} when={e.when} />
-              <RichView aria-label="Reply" value={a.handBack} stored={asStored} images={resultImages(storage, a)} />
+              <ReplyStack aria-label="Reply" items={replyItems(a)} stored={asStored} source={resultImages(storage, a)} />
               {/* While the step is open its cards carry Jev's calls and line, so the folds give the reply their room. */}
               {!step && reading && <SavedReading reading={reading} credentialKey={key} hasVerdict={!isHeld(a)} />}
               {!step && (

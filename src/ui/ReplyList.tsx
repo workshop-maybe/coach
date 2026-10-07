@@ -14,6 +14,7 @@ import { machineKeys } from "../cast/mappings";
 import { contextLine } from "../domain/context";
 import type { AgentReplies, HandoffRun, Take } from "../domain/handoffResults";
 import type { Matrix } from "../domain/matrix";
+import { previewText, replyItems } from "../domain/replyItems";
 import type { AgentProfile, FolderState } from "../domain/types";
 import { contextText, takeWhen } from "./format";
 import { useNav } from "./nav";
@@ -25,7 +26,7 @@ import { Verdict } from "./shared";
 type TakeId = string;
 const refOf = (profile: AgentProfile, t: Take): TakeRef => ({ profileSlug: profile.slug, fileStem: t.fileStem });
 
-/** The opening lines of a reply, for its row. */
+/** The opening lines of a reply, for its row: its first text, or the first other item's name. */
 const PREVIEW_LINES = 3;
 const preview = (text: string) => text.trim().split("\n").slice(0, PREVIEW_LINES).join("\n");
 
@@ -174,7 +175,7 @@ function TakeRow({
         <span className="take-meta">
           <Verdict take={t} /> · {when} · {context}
         </span>
-        {latest && <span className="take-preview">{preview(t.handBack)}</span>}
+        {latest && <span className="take-preview">{preview(previewText(replyItems(t)))}</span>}
       </button>
     </div>
   );

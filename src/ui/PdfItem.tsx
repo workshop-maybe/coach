@@ -18,6 +18,11 @@ const MAX_CANVAS_WIDTH = 4096;
 /** How far beyond the area's edges a page counts as near and draws. */
 const NEAR_MARGIN = "100% 0px";
 
+// pdf.js loads once and every PDF on screen shares the load, so two panes opening at once
+// never start two imports.
+let pdfModule: Promise<typeof import("./pdfDocument")> | null = null;
+const loadPdf = () => (pdfModule ??= import("./pdfDocument"));
+
 type State =
   | { status: "loading" }
   | { status: "missing" }
@@ -47,7 +52,7 @@ export function PdfItem({ name, fileRef, source }: PdfItemProps) {
       if (!live) return url?.release();
       if (!url) return setState({ status: "missing" });
       try {
-        const { openPdf } = await import("./pdfDocument");
+        const { openPdf } = await loadPdf();
         doc = await openPdf(url.url).finally(() => url.release());
         if (!live) return doc.destroy();
         const first = await doc.getPage(1);
