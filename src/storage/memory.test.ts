@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { IMAGE_TOO_LARGE } from "../domain/images";
 import { FILE_NOT_APPROVED, ONLY_VIDEOS_AND_IMAGES, VIDEO_MAX_BYTES, VIDEO_TOO_LARGE, alreadyNamed } from "../domain/videos";
+import {
+  FILE_MAX_BYTES,
+  FILE_TOO_LARGE,
+  ITEM_MISSING,
+  ITEM_TEXT_MAX_BYTES,
+  ITEM_TEXT_TOO_LARGE,
+  NOT_AN_ITEM,
+  NOT_IN_FOLDER,
+  NOT_TEXT,
+  isFileItemName,
+} from "../domain/files";
 import { mkvBytes, movBytes, mp4Bytes, webmBytes } from "../test/videoBytes";
 import { MemoryStorage } from "./memory";
 
@@ -136,7 +147,7 @@ describe("MemoryStorage videos (KTD5, KTD6)", () => {
     const s = new MemoryStorage();
     s.queueAdd([{ name: "Clip 1.MOV", bytes: movBytes("a") }]);
     const [added] = await s.addFiles(DIR, { kind: "pick" });
-    expect(added).toEqual({ name: "Clip 1.MOV", path: expect.stringMatching(/^collections\/c\/credentials\/video-[0-9a-f]{8}\.mov$/), error: null });
+    expect(added).toEqual({ name: "Clip 1.MOV", path: expect.stringMatching(/^collections\/c\/credentials\/video-[0-9a-f]{8}\.mov$/), kind: "video", error: null });
     expect(s.video(added.path!)).toEqual(movBytes("a"));
     expect(await s.listFiles("data", "collections/c")).toEqual([added.path]);
     expect(s.writes).toEqual([{ root: "data", path: added.path }]);
@@ -162,10 +173,10 @@ describe("MemoryStorage videos (KTD5, KTD6)", () => {
     const results = await s.addFiles(DIR, from);
     expect(results.map((r) => r.name)).toEqual(["a.mp4", "b.mkv", "shot.png", "far.mov"]);
     expect(results[0].path).toMatch(/^collections\/c\/credentials\/video-[0-9a-f]{8}\.mp4$/);
-    expect(results[1]).toEqual({ name: "b.mkv", path: null, error: ONLY_VIDEOS_AND_IMAGES });
+    expect(results[1]).toEqual({ name: "b.mkv", path: null, kind: null, error: ONLY_VIDEOS_AND_IMAGES });
     expect(results[2].path).toMatch(/^collections\/c\/credentials\/image-[0-9a-f]{8}\.png$/);
     expect(await s.readDataUri("data", results[2].path!)).toMatch(/^data:image\/png;base64,/);
-    expect(results[3]).toEqual({ name: "far.mov", path: null, error: FILE_NOT_APPROVED });
+    expect(results[3]).toEqual({ name: "far.mov", path: null, kind: null, error: FILE_NOT_APPROVED });
     expect(s.adds).toEqual([{ dir: DIR, from }]);
   });
 
@@ -192,7 +203,7 @@ describe("MemoryStorage videos (KTD5, KTD6)", () => {
     s.queueAdd([{ name: "a.webm", bytes: webmBytes("x") }]);
     const [again] = await s.addFiles(DIR, { kind: "pick" });
     const name = first.path!.slice(DIR.length + 1);
-    expect(again).toEqual({ name: "a.webm", path: null, error: alreadyNamed(name) });
+    expect(again).toEqual({ name: "a.webm", path: null, kind: null, error: alreadyNamed(name) });
     expect(s.video(first.path!)).toEqual(webmBytes("other"));
   });
 
@@ -349,5 +360,164 @@ describe("MemoryStorage videos (KTD5, KTD6)", () => {
     expect(s.video("agents/clip.mp4")).toBeUndefined();
     s.remove("trash/clip.mp4");
     expect(await s.listFiles("data", "")).toEqual(["agents/a.json"]);
+  });
+});
+
+describe("MemoryStorage reply item files (reply artifacts U2)", () => {
+  const DIR = "assessments/a/c/k";
+  const text = (t: string) => new TextEncoder().encode(t);
+  const PDF = text("%PDF-1.7\n%%EOF\n");
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+
+  it("copies any file into files/ under its hash with its extension lowercased, keeping the original name", async () => {
+    const s = new MemoryStorage();
+    s.queueAdd([
+      { name: "Report Final.PDF", bytes: PDF },
+      { name: "notes.md", bytes: text("# Notes") },
+      { name: "bundle.zip", bytes: text("PK\u0003\u0004") },
+      { name: "Makefile", bytes: text("all:") },
+      { name: ".bashrc", bytes: text("export A=1") },
+    ]);
+    const results = await s.addFiles(DIR, { kind: "pick", item: "file" }, "any");
+    expect(results.map((r) => [r.name, r.kind, r.error])).toEqual([
+      ["Report Final.PDF", "file", null],
+      ["notes.md", "file", null],
+      ["bundle.zip", "file", null],
+      ["Makefile", "file", null],
+      [".bashrc", "file", null],
+    ]);
+    expect(results.map((r) => r.path!.replace(/[0-9a-f]{8}/, "H"))).toEqual([
+      `${DIR}/files/file-H.pdf`,
+      `${DIR}/files/file-H.md`,
+      `${DIR}/files/file-H.zip`,
+      `${DIR}/files/file-H`,
+      `${DIR}/files/file-H`,
+    ]);
+    for (const r of results) expect(isFileItemName(r.path!.slice(r.path!.lastIndexOf("/") + 1))).toBe(true);
+    expect(s.itemFile(results[0].path!)).toEqual(PDF);
+    expect(await s.listFiles("data", `${DIR}/files`)).toHaveLength(5);
+    expect(s.adds).toEqual([{ dir: DIR, from: { kind: "pick", item: "file" }, accept: "any" }]);
+  });
+
+  it("writes the same bytes once and refuses a different file at the name", async () => {
+    const s = new MemoryStorage();
+    s.queueAdd([{ name: "a.pdf", bytes: PDF }, { name: "b.pdf", bytes: PDF }]);
+    const [a, b] = await s.addFiles(DIR, { kind: "pick", item: "file" }, "any");
+    expect(b.path).toBe(a.path);
+    expect(s.writes).toHaveLength(1);
+    s.seedItemFile(a.path!, text("other bytes"));
+    s.queueAdd([{ name: "c.pdf", bytes: PDF }]);
+    const [c] = await s.addFiles(DIR, { kind: "pick", item: "file" }, "any");
+    expect(c).toEqual({ name: "c.pdf", path: null, kind: null, error: alreadyNamed(a.path!.slice(a.path!.lastIndexOf("/") + 1)) });
+  });
+
+  it("refuses a file over 100 MB with its own refusal, and takes one at exactly 100 MB", async () => {
+    expect(FILE_MAX_BYTES).toBe(100 * 1024 * 1024);
+    const s = new MemoryStorage();
+    s.queueAdd([
+      { name: "big.zip", bytes: new Uint8Array(FILE_MAX_BYTES + 1) },
+      { name: "cap.zip", bytes: new Uint8Array(FILE_MAX_BYTES) },
+    ]);
+    const [big, cap] = await s.addFiles(DIR, { kind: "pick", item: "file" }, "any");
+    expect(big.error).toBe(FILE_TOO_LARGE);
+    expect(cap.kind).toBe("file");
+  });
+
+  it("sorts by content whichever key added it: a PNG is an image, a video a video, the rest files", async () => {
+    const s = new MemoryStorage();
+    s.queueAdd([
+      { name: "shot.dat", bytes: png },
+      { name: "Clip.MOV", bytes: movBytes("k") },
+      { name: "fake.mp4", bytes: text("not a video") },
+      { name: "anim.gif", bytes: text("GIF89a") },
+    ]);
+    const results = await s.addFiles(DIR, { kind: "drop", paths: ["/a", "/b", "/c", "/d"] }, "any");
+    expect(results.map((r) => r.kind)).toEqual(["image", "video", "file", "file"]);
+    expect(results[0].path).toMatch(/^assessments\/a\/c\/k\/image-[0-9a-f]{8}\.png$/);
+    expect(results[1].path).toMatch(/^assessments\/a\/c\/k\/video-[0-9a-f]{8}\.mov$/);
+    expect(results[2].path).toMatch(/^assessments\/a\/c\/k\/files\/file-[0-9a-f]{8}\.mp4$/);
+    expect(results[3].path).toMatch(/\/files\/file-[0-9a-f]{8}\.gif$/);
+  });
+
+  it("with media, the default, a PDF is still refused as a rich box refuses it today", async () => {
+    const s = new MemoryStorage();
+    s.queueAdd([{ name: "spec.pdf", bytes: PDF }, { name: "shot.png", bytes: png }]);
+    const [pdf, shot] = await s.addFiles(DIR, { kind: "paste", files: [] });
+    expect(pdf).toEqual({ name: "spec.pdf", path: null, kind: null, error: ONLY_VIDEOS_AND_IMAGES });
+    expect(shot.kind).toBe("image");
+    s.queueAdd([{ name: "spec.pdf", bytes: PDF }]);
+    const [again] = await s.addFiles(DIR, { kind: "drop", paths: ["/d/spec.pdf"] }, "media");
+    expect(again.error).toBe(ONLY_VIDEOS_AND_IMAGES);
+    // A default add records no accept, so a rich box's record reads as it always has.
+    expect(s.adds[0]).toEqual({ dir: DIR, from: { kind: "paste", files: [] } });
+  });
+
+  it("reads item text up to 1 MiB, and mirrors the cap, the UTF-8 check and the folder check", async () => {
+    expect(ITEM_TEXT_MAX_BYTES).toBe(1024 * 1024);
+    const s = new MemoryStorage({ "r/notes.md": "# Seeded text" });
+    s.seedItemFile("r/files/file-00000001.md", text("a".repeat(ITEM_TEXT_MAX_BYTES)));
+    s.seedItemFile("r/files/file-00000002.md", text("a".repeat(ITEM_TEXT_MAX_BYTES + 1)));
+    s.seedItemFile("r/files/file-00000003.txt", new Uint8Array([0x61, 0xff, 0xfe]));
+    expect(await s.readItemText("r/files/file-00000001.md")).toHaveLength(ITEM_TEXT_MAX_BYTES);
+    await expect(s.readItemText("r/files/file-00000002.md")).rejects.toThrow(ITEM_TEXT_TOO_LARGE);
+    await expect(s.readItemText("r/files/file-00000003.txt")).rejects.toThrow(NOT_TEXT);
+    expect(await s.readItemText("r/notes.md")).toBe("# Seeded text");
+    expect(await s.readItemText("r/files/missing.md")).toBeNull();
+    for (const bad of ["../x.md", "r/../../x.md", "/etc/hosts"]) await expect(s.readItemText(bad)).rejects.toThrow(NOT_IN_FOLDER);
+    // readText stays uncapped.
+    s.seed({ "r/big.md": "r".repeat(2 * 1024 * 1024) });
+    expect(await s.readText("data", "r/big.md")).toHaveLength(2 * 1024 * 1024);
+  });
+
+  it("records what it opens, and refuses climbs, absolute paths and missing files", async () => {
+    const s = new MemoryStorage();
+    s.seedItemFile("r/files/file-00000001.pdf", PDF);
+    await s.openItem("r/files/file-00000001.pdf");
+    expect(s.opened).toEqual(["r/files/file-00000001.pdf"]);
+    for (const bad of ["../out.pdf", "r/files/../files/file-00000001.pdf", "/r/files/file-00000001.pdf"]) {
+      await expect(s.openItem(bad)).rejects.toThrow(NOT_IN_FOLDER);
+    }
+    await expect(s.openItem("r/files/missing.pdf")).rejects.toThrow(ITEM_MISSING);
+    expect(s.opened).toHaveLength(1);
+  });
+
+  it("gives a file URL only for a real PDF item under files/, counting releases", async () => {
+    const s = new MemoryStorage();
+    s.seedItemFile("r/files/file-1a2b3c4d.pdf", PDF);
+    s.seedItemFile("r/files/file-00000002.pdf", text("text named .pdf"));
+    s.seedItemFile("r/files/file-00000003.md", text("%PDF- but markdown"));
+    s.seedItemFile("r/other/file-00000004.pdf", PDF);
+    s.seedItemFile("r/files/report.pdf", PDF);
+    const got = await s.fileUrl("r/files/file-1a2b3c4d.pdf");
+    expect(got?.url).toBe("blob:memory/r/files/file-1a2b3c4d.pdf");
+    got!.release();
+    expect(s.fileUrls).toEqual([{ path: "r/files/file-1a2b3c4d.pdf", releases: 1 }]);
+    for (const path of ["r/files/file-00000002.pdf", "r/files/file-00000003.md", "r/other/file-00000004.pdf", "r/files/report.pdf", "missing.pdf"]) {
+      expect(await s.fileUrl(path), path).toBeNull();
+    }
+  });
+
+  it("carries a file item into another credential's files/ folder, and still carries videos", async () => {
+    const s = new MemoryStorage({ "r/credential.md": "# C" });
+    s.queueAdd([{ name: "spec.pdf", bytes: PDF }, { name: "a.mp4", bytes: mp4Bytes("carry") }]);
+    const [pdf, video] = await s.addFiles("old", { kind: "pick", item: "file" }, "any");
+    const to = await s.copyItem(pdf.path!, "data", "new");
+    expect(to).toBe(`new/files/${pdf.path!.slice("old/files/".length)}`);
+    expect(await s.copyItem(pdf.path!, "data", "new")).toBe(to);
+    expect(s.itemFile(to)).toEqual(PDF);
+    expect(s.itemFile(pdf.path!)).toEqual(PDF);
+    expect(await s.copyItem(video.path!, "export", "x")).toMatch(/^x\/video-[0-9a-f]{8}\.mp4$/);
+    for (const bad of ["r/credential.md", "missing/files/file-00000000.pdf"]) await expect(s.copyItem(bad, "data", "e")).rejects.toThrow(NOT_AN_ITEM);
+  });
+
+  it("lists, moves and removes item files with the other files", async () => {
+    const s = new MemoryStorage({ "r/a.md": "a" });
+    s.seedItemFile("r/files/file-00000001.pdf", PDF);
+    expect(await s.listFiles("data", "r")).toEqual(["r/a.md", "r/files/file-00000001.pdf"]);
+    await s.moveFile("data", "r/files/file-00000001.pdf", "trash/r/files/file-00000001.pdf");
+    expect(s.itemFile("trash/r/files/file-00000001.pdf")).toEqual(PDF);
+    await expect(s.readDataUri("data", "trash/r/files/file-00000001.pdf")).rejects.toThrow();
+    s.remove("trash/r/files/file-00000001.pdf");
+    expect(await s.listFiles("data", "")).toEqual(["r/a.md"]);
   });
 });

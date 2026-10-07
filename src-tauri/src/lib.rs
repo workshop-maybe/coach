@@ -174,16 +174,27 @@ async fn import_badge_art(
     Ok(Some(rel))
 }
 
-/// Where `add_files` gets its files (KTD5).
+/// Where `add_files` gets its files (KTD5), and which files it takes (reply artifacts KTD3).
+/// Every shape names what it accepts; only `any` keeps a file that is not a picture or video.
 #[derive(serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 enum AddFrom {
-    /// Rust shows a video picker.
-    Pick,
+    /// Rust shows a picker filtered to the key that asked.
+    Pick { item: PickItem, accept: files::Accept },
     /// Paths the page got from the drop event, each checked against the approvals.
-    Drop { paths: Vec<String> },
+    Drop { paths: Vec<String>, accept: files::Accept },
     /// The files the page saw on a paste, matched against the clipboard's file list.
-    Paste { files: Vec<PastedFile> },
+    Paste { files: Vec<PastedFile>, accept: files::Accept },
+}
+
+/// The key a pick came from. It sets the picker's filter only; the content still decides
+/// what each picked file becomes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum PickItem {
+    Image,
+    Video,
+    File,
 }
 
 #[derive(serde::Deserialize)]
@@ -210,8 +221,18 @@ fn clipboard_files() -> Vec<PathBuf> {
     Vec::new()
 }
 
-/// The pick filter. GTK matches extensions by case, so both cases are listed.
+/// The pick filters. GTK matches extensions by case, so both cases are listed.
 const VIDEO_PICK_EXTENSIONS: [&str; 8] = ["mp4", "m4v", "mov", "webm", "MP4", "M4V", "MOV", "WEBM"];
+const IMAGE_PICK_EXTENSIONS: [&str; 6] = ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"];
+
+/// The picker's filter for a key, as its name and extensions. File shows every file.
+fn pick_filter(item: PickItem) -> Option<(&'static str, &'static [&'static str])> {
+    match item {
+        PickItem::Image => Some(("Images", &IMAGE_PICK_EXTENSIONS)),
+        PickItem::Video => Some(("Videos", &VIDEO_PICK_EXTENSIONS)),
+        PickItem::File => None,
+    }
+}
 
 /// Adds files to `dir` in the data root by pick, drop or paste (KTD5), copied by Rust
 /// from each file's path so no bytes cross IPC. Returns one result per file, in order.
@@ -225,28 +246,27 @@ async fn add_files(
     from: AddFrom,
 ) -> Result<Vec<files::AddedFile>, String> {
     let root = state.root("data")?;
-    let candidates = match from {
-        AddFrom::Pick => {
-            let picked = app
-                .dialog()
-                .file()
-                .add_filter("Videos", &VIDEO_PICK_EXTENSIONS)
-                .blocking_pick_files();
-            let Some(picked) = picked else {
+    let (candidates, accept) = match from {
+        AddFrom::Pick { item, accept } => {
+            let mut dialog = app.dialog().file();
+            if let Some((name, extensions)) = pick_filter(item) {
+                dialog = dialog.add_filter(name, extensions);
+            }
+            let Some(picked) = dialog.blocking_pick_files() else {
                 return Ok(Vec::new());
             };
-            files::picked(picked.into_iter().filter_map(|fp| fp.into_path().ok()).collect())
+            (files::picked(picked.into_iter().filter_map(|fp| fp.into_path().ok()).collect()), accept)
         }
-        AddFrom::Drop { paths } => {
+        AddFrom::Drop { paths, accept } => {
             let mut approvals = state.drops.lock().map_err(|e| e.to_string())?;
-            files::take_dropped(&mut approvals, &paths, std::time::Instant::now())
+            (files::take_dropped(&mut approvals, &paths, std::time::Instant::now()), accept)
         }
-        AddFrom::Paste { files: expected } => {
+        AddFrom::Paste { files: expected, accept } => {
             let expected: Vec<(String, u64)> = expected.into_iter().map(|f| (f.name, f.size)).collect();
-            blocking(move || Ok(files::match_pasted(&clipboard_files(), &expected))).await?
+            (blocking(move || Ok(files::match_pasted(&clipboard_files(), &expected))).await?, accept)
         }
     };
-    blocking(move || Ok(files::add_files_in(&root, &dir, candidates))).await
+    blocking(move || Ok(files::add_files_in(&root, &dir, candidates, accept))).await
 }
 
 /// Copies a video from the data root into a folder of the data or export root under its
@@ -261,6 +281,38 @@ async fn copy_video(
     let data = state.root("data")?;
     let target = state.root(&to_root)?;
     blocking(move || files::copy_video_in(&data, &from, &target, &to_dir)).await
+}
+
+/// Copies a reply's video or file item from the data root into a folder of the data or
+/// export root, for the carry (reply artifacts KTD2). Returns the target's root-relative path.
+#[tauri::command]
+async fn copy_item(state: State<'_, AppState>, from: String, to_root: String, to_dir: String) -> Result<String, String> {
+    let data = state.root("data")?;
+    let target = state.root(&to_root)?;
+    blocking(move || files::copy_item_in(&data, &from, &target, &to_dir)).await
+}
+
+/// Reads a reply's Markdown or plain-text item file, capped at 1 MiB (reply artifacts KTD4).
+/// `read_text` stays uncapped, since every result loads through it.
+#[tauri::command]
+async fn read_item_text(state: State<'_, AppState>, path: String) -> Result<Option<String>, String> {
+    let root = state.root("data")?;
+    blocking(move || files::read_item_text_in(&root, &path)).await
+}
+
+/// Opens a reply's item file in its default app when its type is on the allowlist in
+/// `files`, and otherwise shows it in its folder (reply artifacts KTD4). The page sends a
+/// data-root path, never an absolute one, so no opener scope is granted to the page.
+#[tauri::command]
+async fn open_item(app: AppHandle, state: State<'_, AppState>, path: String) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let root = state.root("data")?;
+    let target = blocking(move || files::open_target_in(&root, &path)).await?;
+    let opened = match target {
+        files::OpenTarget::Open(path) => app.opener().open_path(path.to_string_lossy(), None::<&str>),
+        files::OpenTarget::Reveal(path) => app.opener().reveal_item_in_dir(path),
+    };
+    opened.map_err(|_| files::CANNOT_OPEN.to_string())
 }
 
 /// Turns a scheme reply into a response. A reply that cannot be built is an empty 500.
@@ -453,6 +505,9 @@ pub fn run() {
             save_image,
             add_files,
             copy_video,
+            copy_item,
+            read_item_text,
+            open_item,
             read_context,
             jev_status,
             jev_set_key,
@@ -494,24 +549,71 @@ mod tests {
 
     #[test]
     fn add_from_reads_the_three_shapes_of_the_contract() {
-        let pick: AddFrom = serde_json::from_value(serde_json::json!({ "kind": "pick" })).unwrap();
-        assert!(matches!(pick, AddFrom::Pick));
-        let drop: AddFrom =
-            serde_json::from_value(serde_json::json!({ "kind": "drop", "paths": ["/d/a.mov", "/d/b.png"] })).unwrap();
-        assert!(matches!(drop, AddFrom::Drop { paths } if paths == ["/d/a.mov", "/d/b.png"]));
-        let paste: AddFrom = serde_json::from_value(
-            serde_json::json!({ "kind": "paste", "files": [{ "name": "a.mov", "size": 5 }] }),
+        use files::Accept;
+        let pick: AddFrom =
+            serde_json::from_value(serde_json::json!({ "kind": "pick", "item": "video", "accept": "media" })).unwrap();
+        assert!(matches!(pick, AddFrom::Pick { item: PickItem::Video, accept: Accept::Media }));
+        for (item, want) in [("image", PickItem::Image), ("file", PickItem::File)] {
+            let pick: AddFrom =
+                serde_json::from_value(serde_json::json!({ "kind": "pick", "item": item, "accept": "any" })).unwrap();
+            assert!(matches!(pick, AddFrom::Pick { item, accept: Accept::Any } if item == want));
+        }
+        let drop: AddFrom = serde_json::from_value(
+            serde_json::json!({ "kind": "drop", "paths": ["/d/a.mov", "/d/b.png"], "accept": "any" }),
         )
         .unwrap();
-        assert!(matches!(paste, AddFrom::Paste { files } if files.len() == 1 && files[0].name == "a.mov" && files[0].size == 5));
+        assert!(matches!(drop, AddFrom::Drop { paths, accept: Accept::Any } if paths == ["/d/a.mov", "/d/b.png"]));
+        let paste: AddFrom = serde_json::from_value(
+            serde_json::json!({ "kind": "paste", "files": [{ "name": "a.mov", "size": 5 }], "accept": "media" }),
+        )
+        .unwrap();
+        assert!(
+            matches!(paste, AddFrom::Paste { files, accept: Accept::Media } if files.len() == 1 && files[0].name == "a.mov" && files[0].size == 5)
+        );
         for bad in [
-            serde_json::json!({ "kind": "Pick" }),
-            serde_json::json!({ "kind": "drop" }),
-            serde_json::json!({ "kind": "paste", "files": [{ "name": "a.mov", "size": -1 }] }),
-            serde_json::json!({ "kind": "path", "path": "/etc/hosts" }),
+            serde_json::json!({ "kind": "Pick", "item": "video", "accept": "media" }),
+            serde_json::json!({ "kind": "drop", "accept": "media" }),
+            serde_json::json!({ "kind": "paste", "files": [{ "name": "a.mov", "size": -1 }], "accept": "media" }),
+            serde_json::json!({ "kind": "path", "path": "/etc/hosts", "accept": "any" }),
+            // Every shape names what it accepts, and a pick names its key.
+            serde_json::json!({ "kind": "pick", "item": "video" }),
+            serde_json::json!({ "kind": "pick", "accept": "media" }),
+            serde_json::json!({ "kind": "drop", "paths": [] }),
+            serde_json::json!({ "kind": "paste", "files": [] }),
+            serde_json::json!({ "kind": "drop", "paths": [], "accept": "everything" }),
+            serde_json::json!({ "kind": "drop", "paths": [], "accept": "Any" }),
+            serde_json::json!({ "kind": "pick", "item": "folder", "accept": "any" }),
+            serde_json::json!({ "kind": "pick", "item": "Video", "accept": "media" }),
         ] {
             assert!(serde_json::from_value::<AddFrom>(bad.clone()).is_err(), "{bad}");
         }
+    }
+
+    #[test]
+    fn each_pick_key_filters_to_its_kind_in_both_cases_and_file_shows_everything() {
+        let (name, exts) = pick_filter(PickItem::Image).unwrap();
+        assert_eq!(name, "Images");
+        for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"] {
+            assert!(exts.contains(&ext), "{ext}");
+        }
+        assert_eq!(exts.len(), 6);
+        let (name, exts) = pick_filter(PickItem::Video).unwrap();
+        assert_eq!((name, exts), ("Videos", &VIDEO_PICK_EXTENSIONS[..]));
+        assert!(pick_filter(PickItem::File).is_none());
+    }
+
+    #[test]
+    fn only_open_item_opens_a_path_and_it_asks_files_what_to_do() {
+        let src = app_source();
+        assert_eq!(src.matches(".open_path(").count(), 1);
+        assert_eq!(src.matches("open_target_in(").count(), 1);
+        let command = src.find("async fn open_item(").expect("an open_item command");
+        let open = src.find(".open_path(").unwrap();
+        let decide = src.find("open_target_in(").unwrap();
+        assert!(command < decide && decide < open, "the target is decided before anything opens");
+        // The page never passes an absolute path or a program to open it with.
+        assert!(src[command..open].contains("state.root(\"data\")"));
+        assert!(src.contains(".open_path(path.to_string_lossy(), None::<&str>)"));
     }
 }
 

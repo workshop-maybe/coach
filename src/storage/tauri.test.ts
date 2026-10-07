@@ -28,11 +28,41 @@ afterEach(() => {
 });
 
 describe("TauriStorage commands (IPC contract)", () => {
-  it("sends add_files the folder and where the files come from", async () => {
-    vi.mocked(invoke).mockResolvedValueOnce([{ name: "a.mp4", path: "agents/video-1a2b3c4d.mp4", error: null }]);
+  it("sends add_files the folder and where the files come from, accepting media by default", async () => {
+    const added = [{ name: "a.mp4", path: "agents/video-1a2b3c4d.mp4", kind: "video", error: null }];
+    vi.mocked(invoke).mockResolvedValueOnce(added);
     const from = { kind: "paste" as const, files: [{ name: "a.mp4", size: 12 }] };
-    expect(await new TauriStorage("mac").addFiles("agents", from)).toEqual([{ name: "a.mp4", path: "agents/video-1a2b3c4d.mp4", error: null }]);
-    expect(invoke).toHaveBeenCalledWith("add_files", { dir: "agents", from });
+    expect(await new TauriStorage("mac").addFiles("agents", from)).toEqual(added);
+    expect(invoke).toHaveBeenCalledWith("add_files", { dir: "agents", from: { ...from, accept: "media" } });
+  });
+
+  it("names what each shape accepts, and a pick with no key picks videos as the Video key does", async () => {
+    const storage = new TauriStorage("mac");
+    await storage.addFiles("r", { kind: "pick" });
+    await storage.addFiles("r", { kind: "pick", item: "file" }, "any");
+    await storage.addFiles("r", { kind: "pick", item: "image" });
+    await storage.addFiles("r", { kind: "drop", paths: ["/d/spec.pdf"] }, "any");
+    await storage.addFiles("r", { kind: "paste", files: [] }, "media");
+    expect(vi.mocked(invoke).mock.calls.map(([, args]) => (args as { from: unknown }).from)).toEqual([
+      { kind: "pick", item: "video", accept: "media" },
+      { kind: "pick", item: "file", accept: "any" },
+      { kind: "pick", item: "image", accept: "media" },
+      { kind: "drop", paths: ["/d/spec.pdf"], accept: "any" },
+      { kind: "paste", files: [], accept: "media" },
+    ]);
+  });
+
+  it("sends read_item_text, open_item and copy_item a data-root path", async () => {
+    const storage = new TauriStorage("mac");
+    vi.mocked(invoke).mockResolvedValueOnce("# Notes");
+    expect(await storage.readItemText("r/files/file-1a2b3c4d.md")).toBe("# Notes");
+    expect(invoke).toHaveBeenLastCalledWith("read_item_text", { path: "r/files/file-1a2b3c4d.md" });
+    vi.mocked(invoke).mockResolvedValueOnce(undefined);
+    await storage.openItem("r/files/file-1a2b3c4d.pdf");
+    expect(invoke).toHaveBeenLastCalledWith("open_item", { path: "r/files/file-1a2b3c4d.pdf" });
+    vi.mocked(invoke).mockResolvedValueOnce("s/files/file-1a2b3c4d.pdf");
+    expect(await storage.copyItem("r/files/file-1a2b3c4d.pdf", "data", "s")).toBe("s/files/file-1a2b3c4d.pdf");
+    expect(invoke).toHaveBeenLastCalledWith("copy_item", { from: "r/files/file-1a2b3c4d.pdf", toRoot: "data", toDir: "s" });
   });
 
   it("sends copy_video the source path, the target root and the target folder", async () => {
@@ -103,5 +133,34 @@ describe("TauriStorage.videoUrl on Linux (KTD4)", () => {
     fetchMock.mockRejectedValueOnce(new TypeError("Load failed"));
     const storage = new TauriStorage("linux");
     for (let i = 0; i < 3; i++) expect(await storage.videoUrl(PATH)).toBeNull();
+  });
+});
+
+describe("TauriStorage.fileUrl (reply artifacts KTD4, KTD5)", () => {
+  const FILE = "r/files/file-1a2b3c4d.pdf";
+  const FILE_URL = "media://localhost/r%2Ffiles%2Ffile-1a2b3c4d.pdf";
+
+  it("asks with HEAD on macOS and gives the scheme URL, or null on a 404", async () => {
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 200 }));
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 404 }));
+    const storage = new TauriStorage("mac");
+    expect((await storage.fileUrl(FILE))?.url).toBe(FILE_URL);
+    expect(await storage.fileUrl(FILE)).toBeNull();
+    expect(fetchMock).toHaveBeenCalledWith(FILE_URL, { method: "HEAD" });
+  });
+
+  it("fetches a blob on Linux, whose release revokes it, and null when the fetch fails", async () => {
+    const revoke = vi.spyOn(URL, "revokeObjectURL");
+    fetchMock.mockResolvedValueOnce(new Response(new Uint8Array([0x25, 0x50]), { status: 200, headers: { "Content-Type": "application/pdf" } }));
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 404 }));
+    fetchMock.mockRejectedValueOnce(new TypeError("Load failed"));
+    const storage = new TauriStorage("linux");
+    const got = await storage.fileUrl(FILE);
+    expect(fetchMock).toHaveBeenCalledWith(FILE_URL);
+    expect(got?.url).toMatch(/^blob:/);
+    got!.release();
+    expect(revoke).toHaveBeenCalledWith(got!.url);
+    expect(await storage.fileUrl(FILE)).toBeNull();
+    expect(await storage.fileUrl(FILE)).toBeNull();
   });
 });

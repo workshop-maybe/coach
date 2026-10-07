@@ -6,23 +6,37 @@ import type { ContextReading } from "../domain/types";
 
 export type RootKind = "data" | "export";
 
+/** What an added file became, by its content (reply artifacts KTD3). */
+export type AddedKind = "image" | "video" | "file";
+
 /**
- * Where `addFiles` takes its files from (video plan KTD5): Rust's own picker, the paths a
- * drop on the window gave the page, or the Finder files a paste named by base name and size.
+ * Which files `addFiles` takes (reply artifacts KTD3): pictures and videos, as every rich box
+ * adds, or any file, as a reply's items do, where anything else becomes a file item.
+ */
+export type AddAccept = "media" | "any";
+
+/**
+ * Where `addFiles` takes its files from (video plan KTD5): Rust's own picker, filtered to the
+ * key that asked (Video when none is named), the paths a drop on the window gave the page, or
+ * the Finder files a paste named by base name and size.
  */
 export type AddFrom =
-  | { kind: "pick" }
+  | { kind: "pick"; item?: AddedKind }
   | { kind: "drop"; paths: string[] }
   | { kind: "paste"; files: { name: string; size: number }[] };
 
-/** One file `addFiles` considered: exactly one of its root-relative path or a refusal to show. */
+/**
+ * One file `addFiles` considered: its root-relative path and the kind its content gave it, or
+ * a refusal to show. `name` is the original file name, an item's display name.
+ */
 export interface AddedFile {
   name: string;
   path: string | null;
+  kind: AddedKind | null;
   error: string | null;
 }
 
-/** A URL a `<video>` can play. The caller owns it and calls `release` once it lets go. */
+/** A URL a `<video>` can play or a PDF viewer can fetch. The caller owns it and calls `release` once it lets go. */
 export interface VideoUrl {
   url: string;
   release(): void;
@@ -53,17 +67,36 @@ export interface Storage {
   saveImage(root: RootKind, dir: string, bytes: Uint8Array): Promise<string>;
   /**
    * Copies videos, and PNG or JPEG pictures, into `dir` in the data root, sorted by content,
-   * with no bytes crossing to the page (video plan KTD5, KTD6). One result per file, in order;
-   * a refusal for one never stops the rest. A cancelled pick gives an empty list.
+   * with no bytes crossing to the page (video plan KTD5, KTD6). With `accept` "any" every other
+   * file is copied too, into `dir/files/` (reply artifacts KTD3); the default, "media", refuses
+   * it as every rich box does. One result per file, in order; a refusal for one never stops the
+   * rest. A cancelled pick gives an empty list.
    */
-  addFiles(dir: string, from: AddFrom): Promise<AddedFile[]>;
+  addFiles(dir: string, from: AddFrom, accept?: AddAccept): Promise<AddedFile[]>;
   /**
    * Copies a video from the data root into `toDir` in either root under its content-addressed
    * name and returns the target path (KTD7). The same bytes already there are not written again.
    */
   copyVideo(from: string, toRoot: RootKind, toDir: string): Promise<string>;
+  /**
+   * Copies a reply's video or file item from the data root into `toDir` in either root, for the
+   * carry, and returns the target path. A file item lands in `toDir/files/` (reply artifacts KTD2).
+   */
+  copyItem(from: string, toRoot: RootKind, toDir: string): Promise<string>;
   /** A playable URL for a video in the data root, or null when it is missing or refused (KTD4). */
   videoUrl(path: string): Promise<VideoUrl | null>;
+  /** A URL to fetch a PDF item in the data root from, or null when it is missing or refused (reply artifacts KTD4). */
+  fileUrl(path: string): Promise<VideoUrl | null>;
+  /**
+   * An item file in the data root as UTF-8 text, or null when it does not exist. Refuses a file
+   * over 1 MiB, which shows its name and opens instead (reply artifacts KTD4).
+   */
+  readItemText(path: string): Promise<string | null>;
+  /**
+   * Opens an item file in the data root in its default app when Rust's allowlist names its
+   * type, and otherwise shows it in its folder (reply artifacts KTD4).
+   */
+  openItem(path: string): Promise<void>;
   /**
    * This machine plus a fingerprint of the harness's memory for the agent's repo (R1). File
    * contents never cross; only the digest does. Reads outside the chosen folders.
