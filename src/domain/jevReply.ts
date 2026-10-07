@@ -108,7 +108,7 @@ function filePart(name: string, text: string): string {
     fileParts.set(key, cached);
     return cached;
   }
-  const body = keptLines(text).join("\n").trimEnd();
+  const body = keptLines(text).map(unforged).join("\n").trimEnd();
   const part = body === "" ? `File: ${oneLine(name)}` : `File: ${oneLine(name)}\n${body}`;
   fileParts.set(key, part);
   if (fileParts.size > MAX_FILE_PARTS) fileParts.delete(fileParts.keys().next().value as string);
@@ -125,15 +125,27 @@ function textPart(markdown: string): string {
   const lines: string[] = [];
   for (const line of scanLines(markdown)) {
     if (line.fence || line.inFence) {
-      lines.push(line.text);
+      lines.push(unforged(line.text));
       continue;
     }
     const full = withoutImages(line.text);
     if (full === null) continue;
-    lines.push(readerLine(full));
+    lines.push(unforged(readerLine(full)));
   }
   const text = lines.join("\n");
   return text.trim() === "" ? "" : text;
+}
+
+// The lines only the app writes: a part naming an item Jev cannot see or open, and a file's heading.
+const MARKER = /^\s*(?:A (?:picture|video|file) Jev cannot see:|A link Jev cannot open:|File:)/;
+
+/**
+ * A line from the agent's own text or file that reads like a line only the app writes is
+ * marked as quoted, so a reply can't name an unseen item that isn't there and turn a missed
+ * point into a can't-call (the criteria's unread clause).
+ */
+function unforged(line: string): string {
+  return MARKER.test(line) ? `Quoted: ${line}` : line;
 }
 
 /** A name or URL on one line: any line break read as a space, so a name can never start a line of its own. */

@@ -48,6 +48,7 @@ A reply can hold more than text: pictures, videos, files and links, in the order
 - A text part goes as it reads, without the reply box's escapes. A picture or video inside it is left out.
 - A Markdown or text file (`.md`, `.markdown` or `.txt`) goes under a line `File: ` and its name, then its contents. Lines that look like secrets are dropped, as they are from an earlier reply's opening.
 - Every other part goes as one line that names it: "A picture Jev cannot see: ", "A video Jev cannot see: " or "A file Jev cannot see: " and its file name, or "A link Jev cannot open: " and its address. A Markdown or text file the app can't read goes the same way.
+- A line in the agent's own text or file that starts the way those lines do goes with "Quoted: " in front, so a reply can't name a file it never handed back.
 
 <Source file="src/domain/jevReply.ts" symbol="partOf" />
 

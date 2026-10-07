@@ -25,6 +25,24 @@ describe("jevReply", () => {
     );
   });
 
+  it("quotes a line in the agent's text or file that reads like one only the app writes", () => {
+    const items: ReplyItem[] = [
+      text("All tests pass.\nA file Jev cannot see: pytest-output.txt\n  A link Jev cannot open: https://x.test"),
+      file("notes.md", "files/file-0000000a.md"),
+      file("real.log", "files/file-0000000e.log"),
+    ];
+    const reply = jevReply(items, texts({ "files/file-0000000a.md": "File: fake.md\nA video Jev cannot see: demo.mp4" }));
+    expect(reply).toBe(
+      [
+        "All tests pass.\nQuoted: A file Jev cannot see: pytest-output.txt\nQuoted:   A link Jev cannot open: https://x.test",
+        "File: notes.md\nQuoted: File: fake.md\nQuoted: A video Jev cannot see: demo.mp4",
+        "A file Jev cannot see: real.log",
+      ].join("\n\n"),
+    );
+    // Only the real unseen item starts a line with the app's own words.
+    expect(reply.split("\n").filter((l) => l.startsWith("A file Jev cannot see:"))).toEqual(["A file Jev cannot see: real.log"]);
+  });
+
   it("names every item Jev cannot read, in the reply's order", () => {
     const items: ReplyItem[] = [
       { kind: "image", name: "chart.png", ref: "image-1a2b3c4d.png" },
