@@ -1,0 +1,45 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 300] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+6 0 obj
+<< /Length 625 >>
+stream
+0 0 0 rg
+BT /F2 20 Tf 48 250 Td (Release notes for 0.9) Tj ET
+BT /F2 12 Tf 48 214 Td (Before you update) Tj ET
+BT /F1 11 Tf 48 194 Td (Sync is now on by default. If you sync through your own server,) Tj ET
+BT /F1 11 Tf 48 179 Td (add its address under Settings, then Sync, before you update.) Tj ET
+BT /F2 12 Tf 48 149 Td (What changed) Tj ET
+BT /F1 11 Tf 48 129 Td (Edits no longer go missing when the server is busy.) Tj ET
+BT /F1 11 Tf 48 114 Td (Tags can be renamed from the tag list.) Tj ET
+BT /F1 11 Tf 48 99 Td (The old settings screen is gone. Everything it held is under Settings.) Tj ET
+0.75 w 48 236 m 564 236 l S
+endstream
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000251 00000 n 
+0000000321 00000 n 
+0000000396 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+1071
+%%EOF

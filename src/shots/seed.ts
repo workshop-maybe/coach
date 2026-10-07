@@ -58,7 +58,7 @@ import {
 import { FAKE_ON, FakeJev } from "../jev/fakeJev";
 import { JEV_OFF } from "../jev/jev";
 import { MemoryStorage } from "../storage/memory";
-import type { AddFrom, AddedFile, VideoUrl } from "../storage/storage";
+import type { AddAccept, AddFrom, AddedFile, VideoUrl } from "../storage/storage";
 import type { PendingTest } from "../ui/pendingTests";
 import type { JevState, SeedVariant } from "./shots";
 
@@ -103,13 +103,33 @@ export interface SampleFolder {
   pending: PendingTest[];
 }
 
+/** The Markdown file the File key's picker adds beside the sample PDF: Write a release note's answer, as the agent left it. */
+export const SAMPLE_RELEASE_NOTES_MD = `# Release notes for 0.9
+
+## Before you update
+
+- Sync is now on by default. If you sync through your own server, add its address under Settings, then Sync, before you update.
+
+## What changed
+
+- Edits no longer go missing when the server is busy.
+- Tags can be renamed from the tag list.
+- The old settings screen is gone. Everything it held is under Settings.
+`;
+
+/** The names the File key's picker hands back, in order: the sample PDF, then the Markdown file. */
+export const SAMPLE_PICKED_FILES = { pdf: "release-notes-0.9.pdf", markdown: "RELEASE_NOTES.md" } as const;
+
 /**
  * MemoryStorage that answers context reads with the sample machine instead of the test one.
- * Given a sample clip's address, a pick adds that clip and every video plays it (the video
- * plan's KTD12), since the harness has no media scheme.
+ * Given a sample clip's address, the Video key's picker adds that clip and every video plays it
+ * (the video plan's KTD12), since the harness has no media scheme. Given the sample PDF's
+ * address, the File key's picker adds that PDF and the sample Markdown file, as a two-file pick
+ * would, and every PDF item reads from it (reply artifacts U7).
  */
 export class SampleStorage extends MemoryStorage {
   private clip: { url: string; bytes?: Promise<Uint8Array>; blobUrl?: Promise<string> } | null = null;
+  private pdf: { url: string; bytes?: Promise<Uint8Array> } | null = null;
 
   override async readContext(_repo: string, harness: string): Promise<ContextReading> {
     return { ...SAMPLE_READING, memory: MEMORY[harness] ?? SAMPLE_READING.memory };
@@ -120,12 +140,26 @@ export class SampleStorage extends MemoryStorage {
     this.clip = { url };
   }
 
-  override async addFiles(dir: string, from: AddFrom): Promise<AddedFile[]> {
-    if (from.kind === "pick" && this.clip) {
-      this.clip.bytes ??= fetch(this.clip.url).then(async (r) => new Uint8Array(await r.arrayBuffer()));
-      this.queueAdd([{ name: "clip.webm", bytes: await this.clip.bytes }]);
+  /** Uses the PDF at `url` for the File key's picker and for every PDF item. */
+  useSamplePdf(url: string): void {
+    this.pdf = { url };
+  }
+
+  override async addFiles(dir: string, from: AddFrom, accept?: AddAccept): Promise<AddedFile[]> {
+    if (from.kind === "pick") {
+      const item = from.item ?? "video";
+      if (item === "video" && this.clip) {
+        this.clip.bytes ??= fetch(this.clip.url).then(async (r) => new Uint8Array(await r.arrayBuffer()));
+        this.queueAdd([{ name: "clip.webm", bytes: await this.clip.bytes }]);
+      } else if (item === "file" && this.pdf) {
+        this.pdf.bytes ??= fetch(this.pdf.url).then(async (r) => new Uint8Array(await r.arrayBuffer()));
+        this.queueAdd([
+          { name: SAMPLE_PICKED_FILES.pdf, bytes: await this.pdf.bytes },
+          { name: SAMPLE_PICKED_FILES.markdown, bytes: new TextEncoder().encode(SAMPLE_RELEASE_NOTES_MD) },
+        ]);
+      }
     }
-    return super.addFiles(dir, from);
+    return super.addFiles(dir, from, accept);
   }
 
   override async videoUrl(path: string): Promise<VideoUrl | null> {
@@ -137,9 +171,16 @@ export class SampleStorage extends MemoryStorage {
     // The page keeps one blob for the whole shot, so its release does nothing.
     return { url: await clip.blobUrl, release: () => {} };
   }
+
+  /** A PDF item the memory store would serve reads from the sample PDF's address, which the page can fetch. */
+  override async fileUrl(path: string): Promise<VideoUrl | null> {
+    const handle = await super.fileUrl(path);
+    if (!handle || !this.pdf) return handle;
+    handle.release();
+    return { url: this.pdf.url, release: () => {} };
+  }
 }
 
-/** The sample folder in a storage the app can load. */
 export function sampleStorage(sample: SampleFolder): SampleStorage {
   return new SampleStorage(sample.files);
 }
@@ -294,7 +335,7 @@ async function take(
   profile: AgentProfile,
   credential: Credential,
   fileStem: string,
-  fields: Pick<Assessment, "result" | "recordedAt" | "note" | "handBack"> & { copiedAt: string },
+  fields: Pick<Assessment, "result" | "recordedAt" | "note" | "handBack" | "items"> & { copiedAt: string },
 ): Promise<Assessment> {
   const { copiedAt, ...rest } = fields;
   return {
@@ -315,7 +356,7 @@ async function heldTake(
   profile: AgentProfile,
   credential: Credential,
   fileStem: string,
-  fields: Pick<HeldReply, "heldAt" | "handBack"> & { copiedAt: string },
+  fields: Pick<HeldReply, "heldAt" | "handBack" | "items"> & { copiedAt: string },
 ): Promise<HeldReply> {
   const { copiedAt, ...rest } = fields;
   return {

@@ -29,7 +29,7 @@ The state is an object with six fields. Its field names are the ones the questio
 | `rubric_points` | The rubric's points, in order |
 | `rubric_notes` | The rubric's other lines, such as "Met when every point holds." |
 | `learning_targets` | The badge's learning targets, trimmed, with blanks and repeats left out |
-| `reply` | The reply you're judging, as it reads: its Markdown without the reply box's escapes, such as the backslash it puts before a square bracket |
+| `reply` | The reply you're judging, as Jev reads it: its text without the reply box's escapes, such as the backslash it puts before a square bracket, the contents of its Markdown and text files, and a line for each part Jev can't read |
 
 A rubric's points are its top-level list items, bulleted or numbered. A nested item or an indented line folds into the item above it, a task box (`[ ]` or `[x]`) is dropped, and a list inside fenced code doesn't count. A point with the same text as an earlier one counts once, since both would ask Jev the same question. Every other line is a note. A rubric with no list has no points, so its request has no point questions. A numbered answer key in a rubric is a list too, so each of its answers is a point of its own. Written as plain lines, as *Say how sure you are* writes its answers, a key is a note, and reaches every point's question.
 
@@ -39,7 +39,19 @@ The questions are:
 - **One per learning target**, `t1` to `tM`: does the reply show the work this target describes, given the task?
 - **One overall**, `overall`: does the reply satisfy all of the rubric, given the task?
 
-Every question carries criteria that say what a yes and a no mean. A yes needs specific, checkable evidence: the reply names the files, commands or output, or shows the content. A no is a reply that only asserts the point in general terms. Without them, a reply that only claims it is done would read high. TypeSafe's [notes on Jev 1.13](https://docs.typesafe.ai/model-jaggedness/jev-1.13) say text that argues for its own classification can move Jev's answers, and that Jev reads a question literally.
+Every question carries criteria that say what a yes and a no mean. A yes needs specific, checkable evidence: the reply names the files, commands or output, or shows the content. A no is a reply that only asserts the point in general terms. Without them, a reply that only claims it is done would read high. Both sides also say that neither holds when the evidence would sit only in a part of the reply Jev can't see or open, such as a PDF or a link, so a point that rests on one lands near the middle, in Can't call, instead of reading as missed. TypeSafe's [notes on Jev 1.13](https://docs.typesafe.ai/model-jaggedness/jev-1.13) say text that argues for its own classification can move Jev's answers, and that Jev reads a question literally.
+
+## A reply with files and links
+
+A reply can hold more than text: pictures, videos, files and links, in the order you added them. Jev reads text only, and its request still holds the reply as one `reply` string, so the app builds that string from the parts in order, a blank line between each:
+
+- A text part goes as it reads, without the reply box's escapes. A picture or video inside it is left out.
+- A Markdown or text file (`.md`, `.markdown` or `.txt`) goes under a line `File: ` and its name, then its contents. Lines that look like secrets are dropped, as they are from an earlier reply's opening.
+- Every other part goes as one line that names it: "A picture Jev cannot see: ", "A video Jev cannot see: " or "A file Jev cannot see: " and its file name, or "A link Jev cannot open: " and its address. A Markdown or text file the app can't read goes the same way.
+
+<Source file="src/domain/jevReply.ts" symbol="partOf" />
+
+<UI>Ask Jev</UI> waits while the app reads the reply's files, and while it reads the files of earlier replies it may send as examples. Whether a reply is too long for Jev counts all of it, files included.
 
 ## Earlier replies as examples
 
@@ -67,7 +79,7 @@ A result whose reply, trimmed, is the same as the reply you're judging is never 
 
 An example is two fields kept apart: `reply_opening`, the opening of the earlier reply, and `user_reason`, your note on it. Keeping your words apart from the agent's matters because the reply is text Jev reads, and an agent's text can argue for itself. Your note rides on every overall example and on a point's no side. It never rides on a point's yes side, and Rust refuses a request that puts one there.
 
-The opening is cleaned before it is cut:
+An earlier reply is read the way the reply you're judging is, its text, its files' contents and a line for each part Jev can't read, then cleaned before it is cut:
 
 - Every line break reads as a newline, and control and format characters other than tab are dropped, zero-width and direction marks among them. You judged the reply as it rendered and never saw them.
 - Picture and video Markdown, and any picture or video data, are removed. A line left blank by that goes.

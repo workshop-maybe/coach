@@ -29,6 +29,7 @@ import { SAMPLE_FOLDER, sampleFolder, sampleJev, sampleStorage } from "./seed";
 import { SHOTS, type SampleImage, type Shot, type Step, type Target } from "./shots";
 import pastedSample from "./pasted-sample.png";
 import sampleClip from "./sample-clip.webm";
+import sampleReport from "./sample-report.pdf";
 
 /** Each sample picture's address, served by Vite. */
 const SAMPLE_IMAGE_URLS: Record<SampleImage, string> = { "pasted-sample": pastedSample };
@@ -74,6 +75,8 @@ export async function startShot(root: HTMLElement, search: string, shots: readon
   const storage = sampleStorage(sample);
   // The Video key's picker adds the sample clip, served by Vite (the video plan's KTD12).
   storage.useSampleClip(sampleClip);
+  // The File key's picker adds the sample PDF and a Markdown file, and every PDF item reads from it.
+  storage.useSamplePdf(sampleReport);
   const reactRoot = createRoot(root);
   reactRoot.render(
     <StrictMode>
