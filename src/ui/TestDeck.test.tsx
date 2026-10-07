@@ -2674,3 +2674,147 @@ describe("TestDeck's reply items", () => {
     });
   });
 });
+
+describe("TestDeck's Jev reads reply items (reply-artifacts U6, KTD8)", () => {
+  const graded: Credential = { ...review, rubric: "- Shows the demo\n- Writes notes" };
+  const ANSWERS: JevAnswers = { answers: { p1: 0.5, p2: 0.9, t1: 0.7, overall: 0.6 } };
+  const NOTES = new TextEncoder().encode("# Notes\nFlags parse.\nexport API_KEY=abcdefghijklmnopqrstuvwxyz");
+  const next = () => screen.getByRole("button", { name: "Next" }) as HTMLButtonElement;
+  const addKey = (kind: string) => screen.getByRole("button", { name: `Add ${kind}` });
+  const askAction = () => screen.queryByRole("button", { name: /^(Ask Jev|Check with Jev|Asking Jev…)$/ });
+
+  beforeEach(() =>
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    ),
+  );
+  afterEach(() => vi.unstubAllGlobals());
+
+  function renderWithJev(storage: MemoryStorage, fake: FakeJev) {
+    return render(
+      <JevProvider jev={fake}>
+        <FolderProvider storage={storage} folder={FOLDER}>
+          <AppShell onChangeFolder={() => {}} initialRoute={fromBadge} />
+        </FolderProvider>
+      </JevProvider>,
+    );
+  }
+
+  /** Holds every item text read until `release`. */
+  function gateTexts(storage: MemoryStorage) {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((r) => (release = r));
+    const read = storage.readItemText.bind(storage);
+    storage.readItemText = async (path) => {
+      await gate;
+      return read(path);
+    };
+    return () => act(async () => release());
+  }
+
+  /** Text, then a Markdown file from File, then a recording from Video, and on to the judge pane. */
+  async function textFileAndVideo(storage: MemoryStorage) {
+    await takeAndCopy();
+    await userEvent.type(replyBox(), "Demo below.");
+    storage.queueAdd([{ name: "notes.md", bytes: NOTES }]);
+    await userEvent.click(addKey("file"));
+    await screen.findByRole("button", { name: "Remove file notes.md" });
+    storage.queueAdd([{ name: "demo.mp4", bytes: mp4Bytes() }]);
+    await userEvent.click(addKey("video"));
+    await screen.findByRole("button", { name: "Remove video demo.mp4" });
+    await waitFor(() => expect(next().disabled).toBe(false));
+    await userEvent.click(next());
+    await screen.findByRole("heading", { name: "Did it meet it" });
+  }
+
+  it("Covers AE4. Jev reads the text and the Markdown file, a secret line dropped, and is told the video is there", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", ANSWERS);
+    const storage = storageWith({ credentials: [graded], profiles: [opus] });
+    renderWithJev(storage, fake);
+    await textFileAndVideo(storage);
+    await userEvent.click(await screen.findByRole("button", { name: "Ask Jev" }));
+    await screen.findByRole("region", { name: "Jev's reading" });
+    const request = fake.asks[0] as SecondOpinionRequest;
+    expect(request.state.reply).toBe("Demo below.\n\nFile: notes.md\n# Notes\nFlags parse.\n\nA video Jev cannot see: demo.mp4");
+    expect(request.questions.p1.criteria?.true).toContain("cannot see or open");
+    expect(request.questions.p1.criteria?.false).toContain("cannot see or open");
+  });
+
+  it("the reply being judged no longer carries picture or video Markdown", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", ANSWERS);
+    const storage = storageWith({ credentials: [graded], profiles: [opus] });
+    renderWithJev(storage, fake);
+    await takeAndCopy();
+    fireEvent.change(replyBox(), { target: { value: "Recorded it:\n![](video-1a2b3c4d.mp4)\nand a chart ![chart](image-1a2b3c4d.png) here." } });
+    await userEvent.click(next());
+    await screen.findByRole("heading", { name: "Did it meet it" });
+    await userEvent.click(await screen.findByRole("button", { name: "Ask Jev" }));
+    await screen.findByRole("region", { name: "Jev's reading" });
+    expect((fake.asks[0] as SecondOpinionRequest).state.reply).toBe("Recorded it:\nand a chart  here.");
+  });
+
+  it("Ask Jev waits while the reply's file text loads, then offers", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    const storage = storageWith({ credentials: [graded], profiles: [opus] });
+    const release = gateTexts(storage);
+    renderWithJev(storage, fake);
+    await textFileAndVideo(storage);
+    await act(async () => {});
+    expect(askAction()).toBeNull();
+    expect(screen.queryByText("This reply is too long for Jev")).toBeNull();
+    await release();
+    expect(await screen.findByRole("button", { name: "Ask Jev" })).toBeTruthy();
+  });
+
+  it("a short text with a large Markdown file is too long for Jev", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    const storage = storageWith({ credentials: [graded], profiles: [opus] });
+    renderWithJev(storage, fake);
+    await takeAndCopy();
+    await userEvent.type(replyBox(), "Notes attached.");
+    storage.queueAdd([{ name: "notes.md", bytes: new TextEncoder().encode("Long notes. ".repeat(12_000)) }]);
+    await userEvent.click(addKey("file"));
+    await screen.findByRole("button", { name: "Remove file notes.md" });
+    await waitFor(() => expect(next().disabled).toBe(false));
+    await userEvent.click(next());
+    await screen.findByRole("heading", { name: "Did it meet it" });
+    expect(await screen.findByText("This reply is too long for Jev")).toBeTruthy();
+    expect(askAction()).toBeNull();
+  });
+
+  it("Ask Jev waits for a chosen earlier reply's file text, and its excerpt is rebuilt with it", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", ANSWERS);
+    const ref = "files/file-0000000a.md";
+    const earlier = await result(opus, graded, {
+      handBack: "Earlier notes.",
+      items: [
+        { kind: "text", text: "Earlier notes." },
+        { kind: "file", name: "old.md", ref },
+      ],
+    });
+    const storage = storageWith({ credentials: [graded], profiles: [opus], assessments: [earlier] });
+    storage.seedItemFile(`assessments/opus/${graded.collectionSlug}/${graded.slug}/${ref}`, new TextEncoder().encode("The old fix."));
+    const release = gateTexts(storage);
+    renderWithJev(storage, fake);
+    await takeAndCopy();
+    await userEvent.type(replyBox(), "A new reply.");
+    await userEvent.click(next());
+    await screen.findByRole("heading", { name: "Did it meet it" });
+    await act(async () => {});
+    expect(askAction()).toBeNull();
+    await release();
+    await userEvent.click(await screen.findByRole("button", { name: "Ask Jev" }));
+    await screen.findByRole("region", { name: "Jev's reading" });
+    const overall = (fake.asks[0] as SecondOpinionRequest).questions.overall.criteria?.true;
+    const openings = overall && typeof overall !== "string" ? overall.examples.map((e) => e.reply_opening) : [];
+    expect(openings).toEqual(["Earlier notes.\n\nFile: old.md\nThe old fix."]);
+  });
+});

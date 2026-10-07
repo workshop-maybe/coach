@@ -27,8 +27,8 @@
         "question": "Does `reply_1` cover `point` better than `reply_2`, read with `rubric_notes`, given `task`?"
       },
       "criteria": {
-        "true": "`reply_1` gives more specific, checkable evidence that this point is met than `reply_2` does: it names more of the files, commands or output, or shows more of the content",
-        "false": "`reply_2` gives evidence as strong or stronger, or neither reply addresses this point"
+        "true": "`reply_1` gives more specific, checkable evidence that this point is met than `reply_2` does: it names more of the files, commands or output, or shows more of the content. Neither holds when this point's evidence, in either reply, would sit only in an item that reply names as one Jev cannot see or open",
+        "false": "`reply_2` gives evidence as strong or stronger, or neither reply addresses this point. Neither holds when this point's evidence, in either reply, would sit only in an item that reply names as one Jev cannot see or open"
       }
     },
     "a2": {
@@ -39,8 +39,8 @@
         "question": "Does `reply_1` cover `point` better than `reply_2`, read with `rubric_notes`, given `task`?"
       },
       "criteria": {
-        "true": "`reply_1` gives more specific, checkable evidence that this point is met than `reply_2` does: it names more of the files, commands or output, or shows more of the content",
-        "false": "`reply_2` gives evidence as strong or stronger, or neither reply addresses this point"
+        "true": "`reply_1` gives more specific, checkable evidence that this point is met than `reply_2` does: it names more of the files, commands or output, or shows more of the content. Neither holds when this point's evidence, in either reply, would sit only in an item that reply names as one Jev cannot see or open",
+        "false": "`reply_2` gives evidence as strong or stronger, or neither reply addresses this point. Neither holds when this point's evidence, in either reply, would sit only in an item that reply names as one Jev cannot see or open"
       }
     },
     "a3": {
@@ -51,8 +51,8 @@
         "question": "Does `reply_1` cover `point` better than `reply_2`, read with `rubric_notes`, given `task`?"
       },
       "criteria": {
-        "true": "`reply_1` gives more specific, checkable evidence that this point is met than `reply_2` does: it names more of the files, commands or output, or shows more of the content",
-        "false": "`reply_2` gives evidence as strong or stronger, or neither reply addresses this point"
+        "true": "`reply_1` gives more specific, checkable evidence that this point is met than `reply_2` does: it names more of the files, commands or output, or shows more of the content. Neither holds when this point's evidence, in either reply, would sit only in an item that reply names as one Jev cannot see or open",
+        "false": "`reply_2` gives evidence as strong or stronger, or neither reply addresses this point. Neither holds when this point's evidence, in either reply, would sit only in an item that reply names as one Jev cannot see or open"
       }
     },
     "a4": {
@@ -63,8 +63,8 @@
         "question": "Does `reply_1` cover `point` better than `reply_2`, read with `rubric_notes`, given `task`?"
       },
       "criteria": {
-        "true": "`reply_1` gives more specific, checkable evidence that this point is met than `reply_2` does: it names more of the files, commands or output, or shows more of the content",
-        "false": "`reply_2` gives evidence as strong or stronger, or neither reply addresses this point"
+        "true": "`reply_1` gives more specific, checkable evidence that this point is met than `reply_2` does: it names more of the files, commands or output, or shows more of the content. Neither holds when this point's evidence, in either reply, would sit only in an item that reply names as one Jev cannot see or open",
+        "false": "`reply_2` gives evidence as strong or stronger, or neither reply addresses this point. Neither holds when this point's evidence, in either reply, would sit only in an item that reply names as one Jev cannot see or open"
       }
     },
     "a5": {
@@ -75,8 +75,8 @@
         "question": "Does `reply_1` cover `point` better than `reply_2`, read with `rubric_notes`, given `task`?"
       },
       "criteria": {
-        "true": "`reply_1` gives more specific, checkable evidence that this point is met than `reply_2` does: it names more of the files, commands or output, or shows more of the content",
-        "false": "`reply_2` gives evidence as strong or stronger, or neither reply addresses this point"
+        "true": "`reply_1` gives more specific, checkable evidence that this point is met than `reply_2` does: it names more of the files, commands or output, or shows more of the content. Neither holds when this point's evidence, in either reply, would sit only in an item that reply names as one Jev cannot see or open",
+        "false": "`reply_2` gives evidence as strong or stronger, or neither reply addresses this point. Neither holds when this point's evidence, in either reply, would sit only in an item that reply names as one Jev cannot see or open"
       }
     },
     "b1": {
@@ -87,8 +87,8 @@
         "question": "Does `reply_2` cover `point` better than `reply_1`, read with `rubric_notes`, given `task`?"
       },
       "criteria": {
-        "true": "`reply_2` gives more specific, checkable evidence that this point is met than `reply_1` does: it names more of the files, commands or output, or shows more of the content",
-        "false": "`reply_1` gives evidence as strong or stronger, or neither reply addresses this point"
+        "true": "`reply_2` gives more specific, checkable evidence that this point is met than `reply_1` does: it names more of the files, commands or output, or shows more of the content. Neither holds when this point's evidence, in either reply, would sit only in an item that reply names as one Jev cannot see or open",
+        "false": "`reply_1` gives evidence as strong or stronger, or neither reply addresses this point. Neither holds when this point's evidence, in either reply, would sit only in an item that reply names as one Jev cannot see or open"
       }
     },
     "b2": {
@@ -99,8 +99,8 @@
         "question": "Does `reply_2` cover `point` better than `reply_1`, read with `rubric_notes`, given `task`?"
       },
       "criteria": {
-        "true": "`reply_2` gives more specific, checkable evidence that this point is met than `reply_1` does: it names more of the files, commands or output, or shows more of the content",
-        "false": "`reply_1` gives evidence as strong or stronger, or neither reply addresses this point"
+        "true": "`reply_2` gives more specific, checkable evidence that this point is met than `reply_1` does: it names more of the files, commands or output, or shows more of the content. Neither holds when this point's evidence, in either reply, would sit only in an item that reply names as one Jev cannot see or open",
+        "false": "`reply_1` gives evidence as strong or stronger, or neither reply addresses this point. Neither holds when this point's evidence, in either reply, would sit only in an item that reply names as one Jev cannot see or open"
       }
     },
     "b3": {
@@ -111,8 +111,8 @@
         "question": "Does `reply_2` cover `point` better than `reply_1`, read with `rubric_notes`, given `task`?"
       },
       "criteria": {
-        "true": "`reply_2` gives more specific, checkable evidence that this point is met than `reply_1` does: it names more of the files, commands or output, or shows more of the content",
-        "false": "`reply_1` gives evidence as strong or stronger, or neither reply addresses this point"
+        "true": "`reply_2` gives more specific, checkable evidence that this point is met than `reply_1` does: it names more of the files, commands or output, or shows more of the content. Neither holds when this point's evidence, in either reply, would sit only in an item that reply names as one Jev cannot see or open",
+        "false": "`reply_1` gives evidence as strong or stronger, or neither reply addresses this point. Neither holds when this point's evidence, in either reply, would sit only in an item that reply names as one Jev cannot see or open"
       }
     },
     "b4": {
@@ -123,8 +123,8 @@
         "question": "Does `reply_2` cover `point` better than `reply_1`, read with `rubric_notes`, given `task`?"
       },
       "criteria": {
-        "true": "`reply_2` gives more specific, checkable evidence that this point is met than `reply_1` does: it names more of the files, commands or output, or shows more of the content",
-        "false": "`reply_1` gives evidence as strong or stronger, or neither reply addresses this point"
+        "true": "`reply_2` gives more specific, checkable evidence that this point is met than `reply_1` does: it names more of the files, commands or output, or shows more of the content. Neither holds when this point's evidence, in either reply, would sit only in an item that reply names as one Jev cannot see or open",
+        "false": "`reply_1` gives evidence as strong or stronger, or neither reply addresses this point. Neither holds when this point's evidence, in either reply, would sit only in an item that reply names as one Jev cannot see or open"
       }
     },
     "b5": {
@@ -135,8 +135,8 @@
         "question": "Does `reply_2` cover `point` better than `reply_1`, read with `rubric_notes`, given `task`?"
       },
       "criteria": {
-        "true": "`reply_2` gives more specific, checkable evidence that this point is met than `reply_1` does: it names more of the files, commands or output, or shows more of the content",
-        "false": "`reply_1` gives evidence as strong or stronger, or neither reply addresses this point"
+        "true": "`reply_2` gives more specific, checkable evidence that this point is met than `reply_1` does: it names more of the files, commands or output, or shows more of the content. Neither holds when this point's evidence, in either reply, would sit only in an item that reply names as one Jev cannot see or open",
+        "false": "`reply_1` gives evidence as strong or stronger, or neither reply addresses this point. Neither holds when this point's evidence, in either reply, would sit only in an item that reply names as one Jev cannot see or open"
       }
     }
   }

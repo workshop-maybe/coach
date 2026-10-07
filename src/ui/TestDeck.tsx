@@ -65,7 +65,12 @@
 // record and the hold save them with blank text items dropped, and a change of agent or badge
 // carries their files to the new folder. The paste cleanup belongs to the text item the last
 // paste went into: it cleans that item, Put back restores it, an edit to it ends both offers,
-// and removing it does too. Jev still reads the text items joined (`textOf`) until U6.
+// and removing it does too.
+//
+// Jev reads the reply as it will save (U6, KTD8, `jevReply`): its text, the texts of its
+// Markdown and plain-text files, read ahead through useItemTexts, and a line for each other
+// item. Ask Jev waits, as it waits for the version, while a file text the reply or a chosen
+// earlier reply needs is still loading, and "too long for Jev" counts all of it (R15).
 //
 // Compare shares pieces of this deck (jev-in-compare U1, KTD14): the two steps' bodies and
 // words live in `verdictSteps.tsx`, the reading as it is saved in `domain/savedReading.ts`,
@@ -79,6 +84,7 @@ import { sameSetup } from "../domain/matrix";
 import { calibrationOf, isOverrule, type Calibration } from "../domain/calls";
 import { fitSecondOpinion } from "../domain/jevBudget";
 import { examplesFor, rankExamples } from "../domain/jevExamples";
+import { jevReply, pendingTexts, type RefTexts } from "../domain/jevReply";
 import { answeringModel } from "../domain/jevRequest";
 import { assessmentDir, credentialsDir } from "../domain/folder";
 import { cleanUpLineBreaks, lineBreakBatches } from "../domain/lineBreaks";
@@ -109,6 +115,7 @@ import { Deck, type Beat } from "./Deck";
 import { backToTest } from "./HandoffDecks";
 import { handoffLabel } from "./format";
 import { imageSource } from "./imageSource";
+import { useItemTexts } from "./useItemTexts";
 import { useJev } from "./jevContext";
 import { jevFailure } from "./jevFailure";
 import { JevReadingPanel } from "./JevReading";
@@ -265,7 +272,7 @@ export function TestDeck(props: TestDeckProps) {
   const collectionOf = (c: Credential) => state?.collections.find((x) => x.slug === c.collectionSlug);
   const waiting = pending.find((p) => p.profileSlug === profileSlug && p.credentialKey === key);
   const items = useMemo(() => entries.map((e) => e.item), [entries]);
-  // The reply's text items joined, which is what Jev reads until U6, and its identity.
+  // The reply's text items joined, whose pictures and videos the folder keeps, and its identity.
   const reply = useMemo(() => textOf(items), [items]);
   const replyId = useMemo(() => replyKey(items), [items]);
   // A pasted image and an added item go in the folder the result will be recorded in. Picking
@@ -273,6 +280,15 @@ export function TestDeck(props: TestDeckProps) {
   const replyDir = profile && credential ? assessmentDir(profile.slug, credential.collectionSlug, credential.slug) : null;
   const replyImages = useRichImages(replyDir, reply, items);
   const rubricImages = credential ? imageSource(storage, credentialsDir(credential.collectionSlug)) : undefined;
+  // The reply as it will save, blank text items dropped, so the judge sees what is recorded and Jev reads it.
+  const judged = useMemo((): ReplyItem[] => {
+    const kept = normalizeReply(items);
+    return kept ? replyItems(kept) : items;
+  }, [items]);
+  // File texts read ahead for Jev (KTD8). A file that couldn't be read is tried again once
+  // the copies in flight land, and on each folder reload.
+  const itemTexts = useItemTexts(storage, replyImages.busy ? null : state);
+  const replyTexts = useMemo<RefTexts>(() => (replyDir ? (ref) => itemTexts(`${replyDir}/${ref}`) : () => null), [replyDir, itemTexts]);
 
   // The badge's results ranked as example sources, once per folder snapshot, badge and
   // assignment version (growing context KTD10). Null while the version is loading.
@@ -280,16 +296,17 @@ export function TestDeck(props: TestDeckProps) {
   // The second opinion this reply would ask for, with the targets and as many examples as fit
   // Jev's budget (KTD19, growing context KTD10). Null when the reply alone is too long, which
   // is what decides "too long for Jev" and whether the round offers Jev, examples or not.
-  const fitted = useMemo(
-    () =>
-      credential && jev.usable && credential.rubric.trim() !== ""
-        ? fitSecondOpinion(
-            { task: credential.task, rubric: credential.rubric, reply, learningTargets: credential.learningTargets },
-            ranked ? examplesFor(ranked, reply) : [],
-          )
-        : null,
-    [credential?.task, credential?.rubric, credential?.learningTargets, reply, jev.usable, ranked], // eslint-disable-line react-hooks/exhaustive-deps
-  );
+  // The reply goes as Jev reads it (KTD8), and `textsWait` holds while a file text it or a
+  // chosen example needs is still loading. Files are read only while Jev is usable.
+  const { fitted, textsWait } = useMemo(() => {
+    if (!credential || !jev.usable || credential.rubric.trim() === "") return { fitted: null, textsWait: false };
+    // What is still loading: the reply's refs, then the examples' data-root paths. Only the count is read.
+    const loading: string[] = pendingTexts(judged, replyTexts);
+    const read = jevReply(judged, replyTexts);
+    const entries = ranked ? examplesFor(ranked, read, itemTexts, loading) : [];
+    const fitted = fitSecondOpinion({ task: credential.task, rubric: credential.rubric, reply: read, learningTargets: credential.learningTargets }, entries);
+    return { fitted, textsWait: loading.length > 0 };
+  }, [credential?.task, credential?.rubric, credential?.learningTargets, judged, replyTexts, itemTexts, jev.usable, ranked]); // eslint-disable-line react-hooks/exhaustive-deps
   const fits = fitted !== null;
   // The badge's rubric points, for the missed-points step, parsed once per rubric.
   const points = useMemo(() => (credential ? rubricParts(credential.rubric).points : []), [credential?.rubric]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -617,7 +634,7 @@ export function TestDeck(props: TestDeckProps) {
 
   /** Asks Jev about this reply once; the same inputs keep the reading in hand (KTD11). */
   async function askJev() {
-    if (!fitted || !state || !key || version === null || inFlight.current || shown) return;
+    if (!fitted || textsWait || !state || !key || version === null || inFlight.current || shown) return;
     const { request, sources } = fitted;
     const gen = ++askGen.current;
     inFlight.current = true;
@@ -1084,21 +1101,20 @@ export function TestDeck(props: TestDeckProps) {
     ),
   });
 
-  // The reply as it will save, blank text items dropped, so the judge sees what is recorded.
-  const kept = normalizeReply(items);
-  const judged: ReplyItem[] = kept ? replyItems(kept) : items;
   const rubric = credential?.rubric.trim() ?? "";
-  // The round's Jev decision, or what it would be if the judge pane showed now (KTD10).
-  const live = { offered: jev.usable && rubric !== "" && fits, tooLong: jev.usable && rubric !== "" && !fits };
+  // The round's Jev decision, or what it would be if the judge pane showed now (KTD10). While
+  // file texts load, the reply is not yet known to be too long, so the round offers Jev.
+  const live = { offered: jev.usable && rubric !== "" && (fits || textsWait), tooLong: jev.usable && rubric !== "" && !fits && !textsWait };
   const decided = decision?.round === round ? decision : null;
   const jevRound = (decided ?? live).offered;
   const decide = () => setDecision((d) => (d?.round === round ? d : { round, ...live }));
   const trouble = jevTrouble?.round === round ? jevTrouble : null;
   const tooLong = live.tooLong && (jevRound || !!decided?.tooLong);
-  const canAsk = jevRound && live.offered && version !== null && !shown && (trouble?.retry ?? true);
+  // Ask Jev waits while the version or a file text Jev reads is loading (KTD8).
+  const canAsk = jevRound && live.offered && version !== null && !textsWait && !shown && (trouble?.retry ?? true);
   // What goes with the ask as it would go now, after the budget's drops (growing context KTD6).
-  // Nothing is said while the version loads, since no ask goes then.
-  const quoted = version !== null && fitted ? fitted.sources.length : 0;
+  // Nothing is said while the version or a file text loads, since no ask goes then.
+  const quoted = version !== null && !textsWait && fitted ? fitted.sources.length : 0;
   const sendsLine =
     quoted === 0
       ? null

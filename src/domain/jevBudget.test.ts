@@ -10,7 +10,9 @@ import {
   type RouteRequest,
   type SecondOpinionRequest,
 } from "./jevRequest";
+import { jevReply } from "./jevReply";
 import { secondOpinionRequest, type SecondOpinionInput } from "./secondOpinion";
+import type { ReplyItem } from "./types";
 
 // The cases mirror the native side's budget test in src-tauri/src/jev.rs, so the two
 // checks stay the same check (KTD19).
@@ -270,6 +272,19 @@ describe("fitSecondOpinion", () => {
     expect(fitSecondOpinion({ ...input, reply }, [entry("A", 0, "p1", "true")])).toBeNull();
     expect(fitSecondOpinion({ ...input, reply }, [])).toBeNull();
     expect(fitsJev(secondOpinionRequest({ ...input, reply }))).toBe(false);
+  });
+
+  it("measures everything Jev reads of a reply: a short text with a large Markdown file is too long (reply-artifacts R15)", () => {
+    const items: ReplyItem[] = [
+      { kind: "text", text: "Done, notes attached." },
+      { kind: "file", name: "notes.md", ref: "files/file-0000000a.md" },
+    ];
+    const big = "The notes go on. ".repeat(8_000);
+    const reply = jevReply(items, (ref) => (ref === "files/file-0000000a.md" ? big : null));
+    expect(reply).toContain("File: notes.md\nThe notes go on.");
+    expect(fitSecondOpinion({ ...input, reply }, [])).toBeNull();
+    // The same text without the file's contents fits.
+    expect(fitSecondOpinion({ ...input, reply: jevReply(items, () => null) }, [])).not.toBeNull();
   });
 
   it("measures the reply alone with the targets' questions in it", () => {

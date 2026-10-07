@@ -9,12 +9,14 @@ import {
   firstOverId,
   headToHeadPoints,
   headToHeadRequest,
+  PAIR_UNREAD_CLAUSE,
   SECOND_OVER_CRITERIA,
   SECOND_OVER_QUESTION,
   SECOND_OVER_QUESTION_WITHOUT_NOTES,
   secondOverId,
 } from "./headToHead";
 import { fitsJev } from "./jevBudget";
+import { jevReply } from "./jevReply";
 import { POINT_CRITERIA, secondOpinionRequest } from "./secondOpinion";
 
 const pair = (rubric: string, first = "I wrote README.md.", second = "Done, the README is updated.") =>
@@ -82,8 +84,8 @@ describe("headToHeadRequest", () => {
 
   it("words the criteria evidence first, as a second opinion's point criteria, so a reply that only claims a point never covers it better (KTD5)", () => {
     expect(FIRST_OVER_CRITERIA).toEqual({
-      true: "`reply_1` gives more specific, checkable evidence that this point is met than `reply_2` does: it names more of the files, commands or output, or shows more of the content",
-      false: "`reply_2` gives evidence as strong or stronger, or neither reply addresses this point",
+      true: `\`reply_1\` gives more specific, checkable evidence that this point is met than \`reply_2\` does: it names more of the files, commands or output, or shows more of the content. ${PAIR_UNREAD_CLAUSE}`,
+      false: `\`reply_2\` gives evidence as strong or stronger, or neither reply addresses this point. ${PAIR_UNREAD_CLAUSE}`,
     });
     expect(FIRST_OVER_CRITERIA.true).toContain("specific, checkable evidence that this point is met");
     expect(POINT_CRITERIA.true).toContain("specific, checkable evidence that this point is met");
@@ -122,10 +124,32 @@ describe("headToHeadRequest", () => {
     expect(req?.state).toMatchObject({ task: "  Task\n", rubric: "- One  \n", reply_1: "\n First \n", reply_2: "Second\n\n\n" });
   });
 
-  it("sends both replies as a reader sees them, without the reply box's escapes, code as written", () => {
-    const req = headToHeadRequest({ task: "T.", rubric: "- One", first: "Key: \\[2, 1\\] &lt;ok&gt;", second: "Ran `a\\_b` and snake\\_case" });
-    expect(req?.state.reply_1).toBe("Key: [2, 1] <ok>");
-    expect(req?.state.reply_2).toBe("Ran `a\\_b` and snake_case");
+  it("puts each multi-item reply's projection in reply_1 and reply_2, and no other state field (reply-artifacts KTD8)", () => {
+    const first = jevReply(
+      [
+        { kind: "text", text: "Key: \\[2, 1\\] &lt;ok&gt;" },
+        { kind: "file", name: "notes.md", ref: "files/file-0000000a.md" },
+      ],
+      (ref) => (ref === "files/file-0000000a.md" ? "Flags parse." : null),
+    );
+    const second = jevReply(
+      [
+        { kind: "text", text: "Ran `a\\_b` and snake\\_case" },
+        { kind: "link", url: "https://example.com/run/1" },
+      ],
+      () => null,
+    );
+    const req = headToHeadRequest({ task: "T.", rubric: "- One", first, second });
+    expect(req?.state.reply_1).toBe("Key: [2, 1] <ok>\n\nFile: notes.md\nFlags parse.");
+    expect(req?.state.reply_2).toBe("Ran `a\\_b` and snake_case\n\nA link Jev cannot open: https://example.com/run/1");
+    expect(Object.keys(req?.state ?? {}).sort()).toEqual(["learning_targets", "reply_1", "reply_2", "rubric", "rubric_notes", "rubric_points", "task"]);
+  });
+
+  it("names unread items as no clear difference on both sides of both orders (KTD9)", () => {
+    for (const criteria of [FIRST_OVER_CRITERIA, SECOND_OVER_CRITERIA]) {
+      expect(criteria.true).toContain(PAIR_UNREAD_CLAUSE);
+      expect(criteria.false).toContain(PAIR_UNREAD_CLAUSE);
+    }
   });
 
   it("is null for a rubric with no points, which has no head-to-head (KTD6)", () => {

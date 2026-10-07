@@ -9,7 +9,9 @@ import {
   readingKey,
   type CompareTake,
 } from "./compareJev";
+import { assessmentDir } from "./folder";
 import { assignmentVersion } from "./hash";
+import type { FileTexts } from "./jevReply";
 import type { Take } from "./handoffResults";
 import type { AgentProfile, Assessment, Credential, FolderState, HeadToHead, HeadToHeadPoint, HeldReading, HeldReply, JevReading } from "./types";
 
@@ -138,9 +140,9 @@ function entries(takes: Take[]): CompareTake[] {
 
 const idOf = (t: Take) => `${t.profileSlug}/${t.fileStem}`;
 
-async function plan(state: FolderState, takes: Take[], skipped?: ReadonlySet<string>, credential = state.credentials[0]) {
+async function plan(state: FolderState, takes: Take[], skipped?: ReadonlySet<string>, credential = state.credentials[0], texts?: FileTexts) {
   const version = await assignmentVersion(credential.task, credential.rubric);
-  return planCompareJev({ state, key: KEY, credential, version, takes: entries(takes), skipped });
+  return planCompareJev({ state, key: KEY, credential, version, takes: entries(takes), skipped, texts });
 }
 
 const pairsOf = (p: Awaited<ReturnType<typeof plan>>) => p.pairs.map((x) => [x.first.id, x.second.id]);
@@ -277,6 +279,49 @@ describe("what compare asks Jev (KTD8)", () => {
     const p = await plan(folder({ held: [a, b, c] }), [a, b, c]);
     expect(p.readings.map((r) => r.entry.id)).toEqual([idOf(a), idOf(c)]);
     expect(pairsOf(p)).toEqual([[idOf(a), idOf(c)]]);
+  });
+
+  describe("replies with items (reply-artifacts KTD8)", () => {
+    const NOTES = "files/file-0000000a.md";
+    const withItems = (profile: AgentProfile, day: number) =>
+      held(profile, day, {
+        items: [
+          { kind: "text", text: `${profile.name}'s reply.` },
+          { kind: "file", name: "notes.md", ref: NOTES },
+          { kind: "video", name: "demo.mp4", ref: "video-1a2b3c4d.mp4" },
+        ],
+      });
+    const notesOf = (t: Take) => `${assessmentDir(t.profileSlug, t.collectionSlug, t.credentialSlug)}/${NOTES}`;
+
+    it("sends each take's projection in its reading and in both sides of its pairs", async () => {
+      const a = withItems(claude, 1);
+      const b = withItems(codex, 2);
+      const texts: FileTexts = (path) => (path === notesOf(a) ? "Claude's notes." : path === notesOf(b) ? "Codex's notes." : undefined);
+      const p = await plan(folder({ held: [a, b] }), [a, b], undefined, undefined, texts);
+      const projection = (who: string, notes: string) => `${who}'s reply.\n\nFile: notes.md\n${notes}\n\nA video Jev cannot see: demo.mp4`;
+      expect(p.waiting).toBe(false);
+      expect(p.readings.map((r) => r.request.state.reply)).toEqual([projection("Claude Code", "Claude's notes."), projection("Codex", "Codex's notes.")]);
+      expect(p.pairs[0].request.state).toMatchObject({ reply_1: projection("Claude Code", "Claude's notes."), reply_2: projection("Codex", "Codex's notes.") });
+    });
+
+    it("waits, saying nothing, while a take's file texts load", async () => {
+      const a = withItems(claude, 1);
+      const b = held(codex, 2);
+      const p = await plan(folder({ held: [a, b] }), [a, b], undefined, undefined, () => undefined);
+      expect(p.waiting).toBe(true);
+      expect(p.countLine).toBeNull();
+      expect(p.tooLongLines).toEqual([]);
+      expect(p.readings).toEqual([]);
+      expect(p.pairs).toEqual([]);
+    });
+
+    it("measures a take's file text against the budget", async () => {
+      const a = withItems(claude, 1);
+      const b = held(codex, 2);
+      const texts: FileTexts = (path) => (path === notesOf(a) ? "x".repeat(130_000) : undefined);
+      const p = await plan(folder({ held: [a, b] }), [a, b], undefined, undefined, texts);
+      expect(p.tooLongLines).toContain("Claude Code's reply is too long for Jev");
+    });
   });
 
   describe("too long for Jev", () => {

@@ -50,6 +50,7 @@ import { assignmentVersion } from "../../../src/domain/hash";
 import { JEV_LIMITS, JEV_MODEL, MAX_EXAMPLES_PER_SIDE, answeringModel, type CriteriaSide, type JevAnswers, type JevExample, type JevExampleEntry, type SecondOpinionRequest } from "../../../src/domain/jevRequest";
 import { fitSecondOpinion, fitsTokens, jevTokens } from "../../../src/domain/jevBudget";
 import { examplesFor, rankExamples, type ExampleCandidate } from "../../../src/domain/jevExamples";
+import { jevReply } from "../../../src/domain/jevReply";
 import { cutOffAfter, joinLines, lineBreakBatches, lineBreakState, lineId } from "../../../src/domain/lineBreaks";
 import { scanLines } from "../../../src/domain/markdownLines";
 import { judgeHeldReply, recordAssessment, rejudgeResult, saveHeadToHead, takeAgentForJob } from "../../../src/domain/operations";
@@ -182,8 +183,11 @@ async function buildSecondOpinionCase(): Promise<SecondOpinionCase> {
   // The reply as the reply box holds a plain-text paste: after the paste's fixes.
   const reply = fixPastedText(CASE_REPLY).text;
 
+  // Jev reads the reply as one text item, as TestDeck projects it (reply-artifacts KTD8).
+  const read = jevReply([{ kind: "text", text: reply }], () => null);
+
   const ranked = rankExamples(state, key, version);
-  const fitted = fitSecondOpinion({ task: credential.task, rubric: credential.rubric, reply, learningTargets: credential.learningTargets }, examplesFor(ranked, reply))!;
+  const fitted = fitSecondOpinion({ task: credential.task, rubric: credential.rubric, reply: read, learningTargets: credential.learningTargets }, examplesFor(ranked, read))!;
   const answers: JevAnswers = { answers: { ...CASE_CALLS }, model: JEV_MODEL };
   const parts = readingParts(fitted.request.state.rubric_points, answers, fitted.request.state.learning_targets)!;
   const model = answeringModel(answers);

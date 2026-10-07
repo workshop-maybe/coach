@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { calibrationOf, callOf } from "./calls";
+import { assessmentDir } from "./folder";
 import { examplesFor, excerptOf, rankExamples, reasonOf } from "./jevExamples";
 import { MAX_OPENING_CHARS, MAX_REASON_CHARS } from "./jevRequest";
 import type { CriteriaSide, JevExampleEntry } from "./jevRequest";
@@ -254,6 +255,61 @@ describe("examples from a badge's results", () => {
 
   it("a badge the folder no longer has gives no examples", () => {
     expect(rankExamples(folder([result("codex", "met", 1)]), "eng/gone", "v1")).toEqual([]);
+  });
+});
+
+describe("examples from replies with items (reply-artifacts KTD8)", () => {
+  const NOTES = "files/file-0000000a.md";
+  const notesPath = `${assessmentDir("codex", "eng", "review")}/${NOTES}`;
+  const withFile = (handBack: string, minute: number, overrides: Partial<Assessment> = {}) =>
+    result("codex", "met", minute, {
+      handBack,
+      items: [
+        { kind: "text", text: handBack },
+        { kind: "file", name: "notes.md", ref: NOTES },
+        { kind: "video", name: "demo.mp4", ref: "video-1a2b3c4d.mp4" },
+      ],
+      ...overrides,
+    });
+  const overall = (entries: readonly JevExampleEntry[]) => side(entries, "overall", "true").map((e) => e.item.reply_opening);
+
+  it("an earlier reply's excerpt starts from the reply as Jev reads it: text, its Markdown file, a line for its video", () => {
+    const state = folder([withFile("Wrote the notes.", 1)]);
+    const texts = (path: string) => (path === notesPath ? "The fix is in parse.ts." : undefined);
+    expect(overall(examplesFor(rankExamples(state, KEY, "v1"), "A new reply.", texts))).toEqual([
+      "Wrote the notes.\n\nFile: notes.md\nThe fix is in parse.ts.\n\nA video Jev cannot see: demo.mp4",
+    ]);
+  });
+
+  it("names the file texts still loading, and rebuilds an excerpt built before they loaded", () => {
+    const state = folder([withFile("Wrote the notes.", 1)]);
+    const ranked = rankExamples(state, KEY, "v1");
+    const pending: string[] = [];
+    expect(overall(examplesFor(ranked, "A new reply.", () => undefined, pending))).toEqual([
+      "Wrote the notes.\n\nA file Jev cannot see: notes.md\n\nA video Jev cannot see: demo.mp4",
+    ]);
+    expect(new Set(pending)).toEqual(new Set([notesPath]));
+    const after: string[] = [];
+    const loaded = (path: string) => (path === notesPath ? "Loaded now." : undefined);
+    expect(overall(examplesFor(ranked, "A new reply.", loaded, after))).toEqual([
+      "Wrote the notes.\n\nFile: notes.md\nLoaded now.\n\nA video Jev cannot see: demo.mp4",
+    ]);
+    expect(after).toEqual([]);
+  });
+
+  it("compares projections to drop the reply being judged: the same items read the same way are never an example", () => {
+    const state = folder([withFile("Same reply.", 2), result("claude", "met", 1, { handBack: "Another reply." })]);
+    const texts = (path: string) => (path === notesPath ? "Notes." : undefined);
+    const judged = "Same reply.\n\nFile: notes.md\nNotes.\n\nA video Jev cannot see: demo.mp4";
+    expect(overall(examplesFor(rankExamples(state, KEY, "v1"), judged, texts))).toEqual(["Another reply."]);
+    // A text-only reply equal to the earlier reply's text alone is not the same reply.
+    expect(overall(examplesFor(rankExamples(state, KEY, "v1"), "Same reply.", texts))).toHaveLength(2);
+  });
+
+  it("drops a secret-looking line in an earlier reply's Markdown file", () => {
+    const state = folder([withFile("Wrote the notes.", 1)]);
+    const texts = (path: string) => (path === notesPath ? "export API_KEY=abcdefghijklmnopqrstuvwxyz\nKept line." : undefined);
+    expect(overall(examplesFor(rankExamples(state, KEY, "v1"), "A new reply.", texts))[0]).toContain("File: notes.md\nKept line.");
   });
 });
 

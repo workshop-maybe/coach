@@ -6,8 +6,8 @@
       "question": "Does `reply` show the work `target` describes, given `task`?"
     },
     "criteria": {
-      "true": "the reply gives specific, checkable evidence of the work this target describes: it names the files, commands or output, or shows the content",
-      "false": "the reply only asserts this work in general terms, or does not show it"
+      "true": "the reply gives specific, checkable evidence of the work this target describes: it names the files, commands or output, or shows the content. Neither holds when the evidence would sit only in an item `reply` names as one Jev cannot see or open",
+      "false": "the reply only asserts this work in general terms, or does not show it. Neither holds when the evidence would sit only in an item `reply` names as one Jev cannot see or open"
     }
   }
 }

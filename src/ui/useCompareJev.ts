@@ -8,6 +8,9 @@
 // turns off. Nothing is retried. Each save goes through the compare's one-write-at-a-time
 // gate, from the folder as it is then. Leaving drops the run, and an answer that lands
 // after is not saved, as the test drops an ask on leaving.
+//
+// Each take goes as Jev reads it, with its Markdown and plain-text files' texts read ahead
+// (reply-artifacts KTD8, useItemTexts). While one the plan needs is loading, the action waits.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { planCompareJev, type CompareItem, type CompareTake } from "../domain/compareJev";
@@ -19,6 +22,7 @@ import { readingBeforeVerdict } from "../domain/savedReading";
 import { readingParts } from "../domain/secondOpinion";
 import { credentialKey, type Credential, type FolderState } from "../domain/types";
 import { JevError, toJevError } from "../jev/jev";
+import { useItemTexts } from "./useItemTexts";
 import { useJev } from "./jevContext";
 import { jevFailure } from "./jevFailure";
 import { describeError, useFolder } from "./useFolderState";
@@ -91,9 +95,11 @@ export function useCompareJev({ key, credential, version, takes, exclusive }: Co
   // Nothing reads the plan unless Jev is offered, so it is built only then.
   const offered = jev.usable && !!credential && credential.rubric.trim() !== "";
   const takesKey = takes.map((t) => `${t.id}\n${t.name}`).join("\n\n");
+  // File texts the plan reads, tried again on each folder reload when one couldn't be read.
+  const texts = useItemTexts(storage, state);
   const plan = useMemo(
-    () => (offered && state && credential && version !== null ? planCompareJev({ state, key, credential, version, takes, skipped }) : null),
-    [offered, state, key, credential, version, takesKey, skipped], // eslint-disable-line react-hooks/exhaustive-deps
+    () => (offered && state && credential && version !== null ? planCompareJev({ state, key, credential, version, takes, skipped, texts }) : null),
+    [offered, state, key, credential, version, takesKey, skipped, texts], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   const canAsk = offered && version !== null && !!plan && plan.countLine !== null && !hidden;

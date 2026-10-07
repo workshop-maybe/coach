@@ -25,7 +25,6 @@ import {
   type SecondOpinionRequest,
 } from "./jevRequest";
 import { scanLines } from "./markdownLines";
-import { readerText } from "./readerText";
 import type { JevPoint, JevReading } from "./types";
 
 export interface RubricParts {
@@ -40,7 +39,7 @@ export interface SecondOpinionInput {
   task: string;
   /** The badge's rubric, in full. */
   rubric: string;
-  /** The agent's reply, as the reply box holds it. It is sent as a reader sees it (`readerText`). */
+  /** The agent's reply as Jev reads it (`jevReply`, reply-artifacts KTD8), sent as given. */
   reply: string;
   /** The badge's learning targets. Sent trimmed, without blanks or repeats (KTD12). */
   learningTargets?: readonly string[];
@@ -57,22 +56,30 @@ export const OVERALL_QUESTION = "Does `reply` satisfy all of `rubric`, given `ta
 /** The question for each learning target. */
 export const TARGET_QUESTION = "Does `reply` show the work `target` describes, given `task`?";
 
+/**
+ * The clause on both sides of every criteria (reply-artifacts KTD9): `reply` names each item
+ * Jev can't read in a line of its own ("A video Jev cannot see: demo.mp4"), and evidence that
+ * would sit only there is neither met nor missed. With both sides ruled out, the answer lands
+ * near the middle, in the can't-call band, instead of reading as a miss.
+ */
+export const UNREAD_CLAUSE = "Neither holds when the evidence would sit only in an item `reply` names as one Jev cannot see or open";
+
 /** Every point question's criteria. Without them, a reply that claims it is done reads high (KTD7). */
 export const POINT_CRITERIA: JevCriteria = Object.freeze({
-  true: "the reply gives specific, checkable evidence that this point is met: it names the files, commands or output, or shows the content",
-  false: "the reply only asserts the point is met in general terms, or does not address it",
+  true: `the reply gives specific, checkable evidence that this point is met: it names the files, commands or output, or shows the content. ${UNREAD_CLAUSE}`,
+  false: `the reply only asserts the point is met in general terms, or does not address it. ${UNREAD_CLAUSE}`,
 });
 
 /** The overall question's criteria: the point criteria, for the whole rubric. */
 export const OVERALL_CRITERIA: JevCriteria = Object.freeze({
-  true: "the reply gives specific, checkable evidence that the rubric is met as a whole: it names the files, commands or output, or shows the content",
-  false: "the reply only asserts the rubric is met in general terms, or does not address it",
+  true: `the reply gives specific, checkable evidence that the rubric is met as a whole: it names the files, commands or output, or shows the content. ${UNREAD_CLAUSE}`,
+  false: `the reply only asserts the rubric is met in general terms, or does not address it. ${UNREAD_CLAUSE}`,
 });
 
 /** Every target question's criteria: the point criteria, for the work a target describes. */
 export const TARGET_CRITERIA: JevCriteria = Object.freeze({
-  true: "the reply gives specific, checkable evidence of the work this target describes: it names the files, commands or output, or shows the content",
-  false: "the reply only asserts this work in general terms, or does not show it",
+  true: `the reply gives specific, checkable evidence of the work this target describes: it names the files, commands or output, or shows the content. ${UNREAD_CLAUSE}`,
+  false: `the reply only asserts this work in general terms, or does not show it. ${UNREAD_CLAUSE}`,
 });
 
 /** The overall question's id. */
@@ -144,9 +151,10 @@ export function rubricParts(rubric: string): RubricParts {
 /**
  * The request for Jev's second opinion: one question per rubric point ("p1" … "pN"), one
  * per learning target ("t1" … "tM"), plus one overall. The state holds only the task, the
- * rubric, the learning targets and the reply (R5), the reply as a reader sees it, without the
- * reply box's escapes. Examples go on the point and overall questions they are keyed to; one
- * keyed to any other id is not sent.
+ * rubric, the learning targets and the reply (R5), the reply as `jevReply` built it: read as
+ * a reader sees it, with its files' texts and a line for each item Jev can't read
+ * (reply-artifacts KTD8). Examples go on the point and overall questions they are keyed to;
+ * one keyed to any other id is not sent.
  */
 export function secondOpinionRequest({ task, rubric, reply, learningTargets = [], examples = {} }: SecondOpinionInput): SecondOpinionRequest {
   const { points, notes } = rubricParts(rubric);
@@ -169,7 +177,7 @@ export function secondOpinionRequest({ task, rubric, reply, learningTargets = []
   questions[OVERALL_ID] = withExamples({ type: "noul", instructions: OVERALL_QUESTION, criteria: OVERALL_CRITERIA }, examples[OVERALL_ID]);
   return {
     kind: "secondOpinion",
-    state: { task, rubric_points: points, rubric_notes: notes, rubric, learning_targets: targets, reply: readerText(reply) },
+    state: { task, rubric_points: points, rubric_notes: notes, rubric, learning_targets: targets, reply },
     questions,
   };
 }

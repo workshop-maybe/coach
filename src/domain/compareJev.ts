@@ -7,12 +7,19 @@
 // both. Each request is built as the test builds a second opinion, and one over Jev's
 // budget, or one Jev refused as too long this session, is named in its own line instead
 // of being counted.
+//
+// Each take goes as Jev reads it (reply-artifacts KTD8, `jevReply`): its text, its Markdown
+// and plain-text files' texts, and a line for each other item. While any file text a take or
+// a chosen example needs is still loading, the plan waits and says nothing, so no ask goes
+// with a file Jev was told it can't see that it could.
 
 import { betterReply, headToHeadRequest } from "./headToHead";
 import { readingOfTake, isHeld, runIdOf, type Take } from "./handoffResults";
 import { fitSecondOpinion, fitsJev } from "./jevBudget";
 import { examplesFor, rankExamples, type ExampleCandidate } from "./jevExamples";
+import { jevReply, NO_TEXTS, pendingTexts, textsIn, type FileTexts } from "./jevReply";
 import type { HeadToHeadRequest, SecondOpinionRequest } from "./jevRequest";
+import { replyItems } from "./replyItems";
 import { rubricParts, savedPointOf, targetsToSend } from "./secondOpinion";
 import { credentialKey, type Credential, type FolderState, type HeadToHead, type JevReading, type ReplyRef } from "./types";
 
@@ -62,6 +69,8 @@ export interface CompareJevPlan {
   examplesLine: string | null;
   /** One line per item too long for Jev: readings in strip order, then pairs. */
   tooLongLines: string[];
+  /** Whether a file text a take or a chosen example needs is still loading; the plan is then empty. */
+  waiting: boolean;
 }
 
 export interface CompareJevInput {
@@ -74,9 +83,11 @@ export interface CompareJevInput {
   takes: readonly CompareTake[];
   /** Items Jev refused as too long while this compare has been open (KTD9). */
   skipped?: ReadonlySet<string>;
+  /** The file texts read so far, by data-root path (src/ui/useItemTexts.ts). Without them every file reads as one Jev cannot see. */
+  texts?: FileTexts;
 }
 
-const NOTHING: CompareJevPlan = { readings: [], pairs: [], countLine: null, examplesLine: null, tooLongLines: [] };
+const NOTHING: CompareJevPlan = { readings: [], pairs: [], countLine: null, examplesLine: null, tooLongLines: [], waiting: false };
 
 /** A reading's key in the session's too-long set. */
 export function readingKey(id: string): string {
@@ -89,13 +100,24 @@ export function pairKey(firstId: string, secondId: string): string {
 }
 
 /** What the compare's takes are missing, each with its request, and the lines that say so. Nothing for a badge with no rubric. */
-export function planCompareJev({ state, key, credential, version, takes, skipped = new Set() }: CompareJevInput): CompareJevPlan {
+export function planCompareJev({ state, key, credential, version, takes, skipped = new Set(), texts = NO_TEXTS }: CompareJevInput): CompareJevPlan {
   if (credential.rubric.trim() === "" || takes.length === 0) return NOTHING;
   const run = runIdOf(takes[0].take);
   const covered = takes.filter((t) => runIdOf(t.take) === run);
   const { task, rubric, learningTargets } = credential;
   const targets = targetsToSend(learningTargets);
   const tooLongLines: string[] = [];
+  // Each take as Jev reads it, and the file texts any take or chosen example still waits on:
+  // the takes' refs, then the examples' data-root paths. Only the count is read.
+  const pending: string[] = [];
+  const read = new Map<string, string>();
+  for (const entry of covered) {
+    const items = replyItems(entry.take);
+    const byRef = textsIn(texts, entry.take);
+    pending.push(...pendingTexts(items, byRef));
+    read.set(entry.id, jevReply(items, byRef));
+  }
+  const projection = (entry: CompareTake) => read.get(entry.id) ?? "";
 
   const readings: ReadingItem[] = [];
   let ranked: ExampleCandidate[] | null = null;
@@ -103,12 +125,12 @@ export function planCompareJev({ state, key, credential, version, takes, skipped
     if (!needsReading(state, entry.take, version, targets)) continue;
     const itemKey = readingKey(entry.id);
     ranked ??= rankExamples(state, key, version);
-    const fitted = skipped.has(itemKey)
-      ? null
-      : fitSecondOpinion({ task, rubric, reply: entry.take.handBack, learningTargets }, examplesFor(ranked, entry.take.handBack));
+    const reply = projection(entry);
+    const fitted = skipped.has(itemKey) ? null : fitSecondOpinion({ task, rubric, reply, learningTargets }, examplesFor(ranked, reply, texts, pending));
     if (fitted) readings.push({ kind: "reading", itemKey, entry, ...fitted });
     else tooLongLines.push(`${entry.name}'s reply is too long for Jev`);
   }
+  if (pending.length > 0) return { ...NOTHING, waiting: true };
 
   const pairs: PairItem[] = [];
   if (rubricParts(rubric).points.length > 0) {
@@ -116,14 +138,14 @@ export function planCompareJev({ state, key, credential, version, takes, skipped
       for (const second of covered.slice(i + 1)) {
         if (currentHeadToHead(state, key, first.take, second.take, version)) continue;
         const itemKey = pairKey(first.id, second.id);
-        const request = headToHeadRequest({ task, rubric, learningTargets, first: first.take.handBack, second: second.take.handBack });
+        const request = headToHeadRequest({ task, rubric, learningTargets, first: projection(first), second: projection(second) });
         if (request && !skipped.has(itemKey) && fitsJev(request)) pairs.push({ kind: "pair", itemKey, first, second, request });
         else tooLongLines.push(`${first.name} and ${second.name} are too long for Jev together`);
       }
     });
   }
 
-  return { readings, pairs, countLine: countLine(readings.length, pairs.length), examplesLine: examplesLine(readings), tooLongLines };
+  return { readings, pairs, countLine: countLine(readings.length, pairs.length), examplesLine: examplesLine(readings), tooLongLines, waiting: false };
 }
 
 /**
