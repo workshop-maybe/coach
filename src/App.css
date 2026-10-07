@@ -3190,6 +3190,7 @@ button.primary:focus-visible {
   flex: none;
   display: flex;
   align-items: center;
+  gap: var(--space-sm);
 }
 
 .compare-top > .deck-close {
