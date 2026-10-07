@@ -9,7 +9,7 @@
 // The banners stay mounted and compact to a line each in CSS, so an alert is not announced
 // again, and nothing above the pane scrolls, so the window keys stay in view (R10).
 
-import { useLayoutEffect, useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { InkDefs } from "../cast/InkDefs";
 import { AgentDetail } from "./AgentDetail";
 import { BadgeDetail } from "./BadgeDetail";
@@ -34,6 +34,7 @@ import { PaneContext, usePaneClaims } from "./pane";
 import { PlayerCard } from "./PlayerCard";
 import { ReplyView } from "./ReplyView";
 import { RouterDeck } from "./RouterDeck";
+import { Sheet } from "./Sheet";
 import type { DeckRoute, ItemRoute, Route } from "./routes";
 import { TestDeck } from "./TestDeck";
 import { describeError, useFolder } from "./useFolderState";
@@ -51,12 +52,12 @@ export function AppShell({ onChangeFolder, initialRoute = { view: "home" } }: Ap
   const [route, navigate] = useState<Route>(initialRoute);
   const [exporting, setExporting] = useState(false);
   const nav = useMemo(() => ({ route, navigate }), [route]);
-  // Each view opens at its top. #root is the page scroller and keeps its offset across views,
-  // so a page opened from a scrolled one would arrive with its top bar out of view (R6, R10).
-  // A layout effect, so it lands before ReplyList's effect scrolls a lit row into view.
+  // Each view opens at its top. The sheet's scroller keeps its offset across views, so a page
+  // opened from a scrolled one would arrive scrolled part way down (R6, R10). A layout effect,
+  // so it lands before ReplyList's effect scrolls a lit row into view.
+  const scroller = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
-    const root = document.getElementById("root");
-    if (root) root.scrollTop = 0;
+    if (scroller.current) scroller.current.scrollTop = 0;
   }, [route]);
   const { pane, claims } = usePaneClaims();
   // Tauri's drag script toggles maximize on a double press, before any handler here could
@@ -111,27 +112,31 @@ export function AppShell({ onChangeFolder, initialRoute = { view: "home" } }: Ap
               </>
             )}
           </header>
-          {notice && (
-            <div className="banner banner-notice" role="status">
-              <span>{notice}</span>
-              <button type="button" className="link" onClick={() => setNotice(null)}>
-                Dismiss
-              </button>
-            </div>
-          )}
-          <LoadErrors errors={state?.errors ?? []} />
-          <LoadWarnings warnings={state?.warnings ?? []} />
-          <main className="content">
-            {state === null ? (
-              <p className="muted">{loading ? "Loading…" : "The folder could not be loaded."}</p>
-            ) : route.view === "home" ? (
-              <Home />
-            ) : route.view === "deck" ? (
-              <DeckView key={JSON.stringify(route)} route={route} />
-            ) : (
-              <ItemView key={JSON.stringify(route)} route={route} />
+          {/* The paper, set into the board as a sheet with a drawn edge. Only the sheet scrolls, so
+              the top strip stays on the board and Home's doors pin to the sheet's foot. */}
+          <Sheet scroller={scroller}>
+            {notice && (
+              <div className="banner banner-notice" role="status">
+                <span>{notice}</span>
+                <button type="button" className="link" onClick={() => setNotice(null)}>
+                  Dismiss
+                </button>
+              </div>
             )}
-          </main>
+            <LoadErrors errors={state?.errors ?? []} />
+            <LoadWarnings warnings={state?.warnings ?? []} />
+            <main className="content">
+              {state === null ? (
+                <p className="muted">{loading ? "Loading…" : "The folder could not be loaded."}</p>
+              ) : route.view === "home" ? (
+                <Home />
+              ) : route.view === "deck" ? (
+                <DeckView key={JSON.stringify(route)} route={route} />
+              ) : (
+                <ItemView key={JSON.stringify(route)} route={route} />
+              )}
+            </main>
+          </Sheet>
         </div>
       </PaneContext.Provider>
     </NavContext.Provider>

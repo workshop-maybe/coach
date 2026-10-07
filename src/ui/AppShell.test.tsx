@@ -168,39 +168,40 @@ describe("pane mode in the shell", () => {
 });
 
 describe("a view the shell opens", () => {
-  // #root is the page scroller (App.css) and keeps its offset across views, so without a reset a
-  // page opened from a scrolled one arrives with its top bar out of view (R6, R10).
+  // The sheet's scroller (App.css) keeps its offset across views, so without a reset a page
+  // opened from a scrolled one arrives scrolled part way down (R6, R10).
   function pageScroller() {
-    const root = document.createElement("div");
-    root.id = "root";
-    document.body.append(root);
+    const scroller = document.querySelector(".sheet > .sheet-scroll") as HTMLElement;
     const scrolledTo = vi.fn();
-    Object.defineProperty(root, "scrollTop", { configurable: true, get: () => 120, set: scrolledTo });
-    return { scrolledTo, remove: () => root.remove() };
+    Object.defineProperty(scroller, "scrollTop", { configurable: true, get: () => 120, set: scrolledTo });
+    return scrolledTo;
   }
 
-  it("starts at the top of the page when the route changes", async () => {
-    const { scrolledTo, remove } = pageScroller();
-    try {
-      const { press } = await openShell();
-      scrolledTo.mockClear();
-      await press("Open again");
-      expect(scrolledTo).toHaveBeenCalledWith(0);
-    } finally {
-      remove();
-    }
+  it("holds the banners and the view inside the sheet, and the bar on the board outside it", async () => {
+    await openShell();
+    const sheet = document.querySelector(".shell > .sheet") as HTMLElement;
+    expect(sheet.querySelector(".sheet-scroll > main.content")).toBeTruthy();
+    expect(sheet.contains(bar())).toBe(false);
   });
 
-  it("leaves the page alone when nothing navigates", async () => {
-    const { scrolledTo, remove } = pageScroller();
-    try {
-      const { press } = await openShell();
-      scrolledTo.mockClear();
-      await press("Toggle A");
-      expect(scrolledTo).not.toHaveBeenCalled();
-    } finally {
-      remove();
-    }
+  it("keeps the sheet around a view that claims the window as a pane", async () => {
+    const { press } = await openShell();
+    await press("Toggle A");
+    expect(document.querySelector(".shell[data-pane] > .sheet > .sheet-scroll > main.content")).toBeTruthy();
+  });
+
+  it("starts at the top of the sheet when the route changes", async () => {
+    const { press } = await openShell();
+    const scrolledTo = pageScroller();
+    await press("Open again");
+    expect(scrolledTo).toHaveBeenCalledWith(0);
+  });
+
+  it("leaves the sheet alone when nothing navigates", async () => {
+    const { press } = await openShell();
+    const scrolledTo = pageScroller();
+    await press("Toggle A");
+    expect(scrolledTo).not.toHaveBeenCalled();
   });
 });
 

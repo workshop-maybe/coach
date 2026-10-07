@@ -21,12 +21,12 @@ body {
   color: var(--text);
 }
 
-/* The window's frame: the paper, clipped to the window's rounded corners, scrolling
-   inside so the corners stay put. The one rounded thing in the app (CLAUDE.md). */
+/* The window's frame: the board, clipped to the window's rounded corners. It never scrolls;
+   the sheet set into it does (.sheet below). The one rounded thing in the app (CLAUDE.md). */
 #root {
   height: 100vh;
-  overflow: auto;
-  background: var(--bg);
+  overflow: hidden;
+  background: var(--board);
   border-radius: var(--window-radius);
 }
 
@@ -198,12 +198,60 @@ button:focus-visible {
 }
 
 /* ---------------------------------------------------------------------------
-   Shell: the paper, and the folder in a mono header with its three actions. */
+   Shell: the board, the folder in a mono strip with its actions on the board, and the paper
+   set into the board as a sheet. */
 
 .shell {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100%;
+}
+
+.shell > :is(.topbar, .gate-bar) {
+  flex: none;
+}
+
+/* The sheet: the paper inset into the board, its edge drawn the way the machine's case is
+   drawn (src/cast/Machine.tsx), a sketched outline whose strokes run past the corners and a
+   lighter second pass just inside it. Both are the cards' sketched frame laid over as masks;
+   the second pass takes a narrower slice, so its strokes are thinner. They sit above the
+   content (the edge is only ever at the sheet's rim) and never take the pointer. */
+.sheet {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0 var(--gutter) var(--gutter);
+  background: var(--bg);
+}
+
+.sheet::before,
+.sheet::after {
+  content: "";
+  position: absolute;
+  z-index: 30;
+  pointer-events: none;
+}
+
+.sheet::after {
+  inset: -5px;
+  background: var(--rule);
+  -webkit-mask-box-image: url("./assets/sketch-frame.svg") 16 / 16px round;
+  mask-border: url("./assets/sketch-frame.svg") 16 / 16px round;
+}
+
+.sheet::before {
+  inset: -1px;
+  background: var(--sheet-pass);
+  -webkit-mask-box-image: url("./assets/sketch-frame.svg") 16 / 11px round;
+  mask-border: url("./assets/sketch-frame.svg") 16 / 11px round;
+}
+
+/* The one scroller: the banners and the content, inside the sheet. */
+.sheet-scroll {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: auto;
 }
 
 .brand {
@@ -220,7 +268,6 @@ button:focus-visible {
   align-items: center;
   gap: var(--space-base);
   padding: var(--space-md) var(--space-xl);
-  border-bottom: 1px solid var(--cell);
 }
 
 .folder-path {
@@ -306,30 +353,27 @@ button:focus-visible {
 
 /* ---------------------------------------------------------------------------
    Pane mode (KTD3, KTD4): a view has claimed the window (src/ui/pane.tsx) and the bar
-   holds only the window keys and the brand. The shell is exactly the window's height and
-   never scrolls, so the keys stay in view whatever shows above the pane (R10). Each banner
-   keeps to its first line, its list still readable to a screen reader, clipped rather
-   than unmounted so an alert is not announced again. The content area hands the view all
-   the height left. */
+   holds only the window keys and the brand. The sheet's scroller does not scroll, so the
+   keys stay in view whatever shows above the pane (R10). Each banner keeps to its first
+   line, its list still readable to a screen reader, clipped rather than unmounted so an
+   alert is not announced again. The content area hands the view all the height left. */
 
-.shell[data-pane] {
-  height: 100%;
-  min-height: 0;
+.shell[data-pane] .sheet-scroll {
   overflow: hidden;
 }
 
-.shell[data-pane] > :is(.topbar, .banner) {
+.shell[data-pane] .sheet-scroll > .banner {
   flex: none;
 }
 
-.shell[data-pane] > .banner {
+.shell[data-pane] .sheet-scroll > .banner {
   position: relative;
   margin-top: var(--space-sm);
   padding-block: var(--space-xs);
   overflow: hidden;
 }
 
-.shell[data-pane] > .banner :is(.banner-title, .banner-notice > span) {
+.shell[data-pane] .sheet-scroll > .banner :is(.banner-title, .banner-notice > span) {
   min-width: 0;
   margin: 0;
   overflow: hidden;
@@ -337,7 +381,7 @@ button:focus-visible {
   text-overflow: ellipsis;
 }
 
-.shell[data-pane] > .banner ul {
+.shell[data-pane] .sheet-scroll > .banner ul {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -346,7 +390,7 @@ button:focus-visible {
   white-space: nowrap;
 }
 
-.shell[data-pane] > .content {
+.shell[data-pane] .sheet-scroll > .content {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;

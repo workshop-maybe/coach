@@ -68,6 +68,12 @@
      while the window is maximized or full screen (below). */
   --window-radius: 6px;
 
+  /* The chassis: the window is a darker board, and the paper sits on it as a sheet inset by
+     the gutter, its edge drawn twice (a lighter second pass just inside the first). */
+  --board: color-mix(in srgb, var(--paper) 88%, var(--sys-ink));
+  --gutter: 10px;
+  --sheet-pass: var(--ink-ghost);
+
   /* Pieces. */
   --rule-width: 1.5px;
   --header-bar: 38px;

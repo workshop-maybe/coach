@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { InkDefs } from "../cast/InkDefs";
 import { Lockup } from "./Lockup";
+import { Sheet } from "./Sheet";
 import { WindowControls } from "./WindowControls";
 import { useWindowFrame } from "./windowFrame";
 import { describeError } from "./useFolderState";
@@ -62,21 +63,24 @@ export function FolderGate({ getFolder = defaultGetFolder, pickFolder = defaultP
 
   if (gate.status === "ready") return <>{children(gate.folder, choose)}</>;
 
+  // The same board and sheet as the app (R5): the window keys on the board, the ask on the sheet.
   return (
-    <>
+    <div className="shell">
       <InkDefs />
       <div className="gate-bar" data-tauri-drag-region={fullscreen ? undefined : true}>
         <WindowControls />
       </div>
-      <main className="gate">
-      <Lockup className="lockup-wrap" />
-      <h1 className="visually-hidden">Andamio Desktop</h1>
-      <p>Pick a folder for your credentials, agents and results. Everything is stored there as Markdown and JSON.</p>
-      <button type="button" className="primary" onClick={() => void choose()}>
-        Choose folder
-      </button>
-      {error && <p className="gate-error" role="alert">{error}</p>}
-      </main>
-    </>
+      <Sheet>
+        <main className="gate">
+          <Lockup className="lockup-wrap" />
+          <h1 className="visually-hidden">Andamio Desktop</h1>
+          <p>Pick a folder for your credentials, agents and results. Everything is stored there as Markdown and JSON.</p>
+          <button type="button" className="primary" onClick={() => void choose()}>
+            Choose folder
+          </button>
+          {error && <p className="gate-error" role="alert">{error}</p>}
+        </main>
+      </Sheet>
+    </div>
   );
 }
