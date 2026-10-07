@@ -9,14 +9,32 @@
 // revokes another's. A missing video is never remembered, so one added later shows. Like the
 // image reads, a video URL comes only from the storage port's confined data root, never from
 // the network (R9 of the video plan).
+//
+// A reply's item files (U3 of docs/plans/2026-10-07-0620-feat-reply-artifacts-plan.md, KTD4)
+// come through the same folder source: a PDF's URL, a text file read under the 1 MiB cap, and
+// an open that hands Rust the data-root path. None of them is cached, since each view reads
+// its file once and lets the URL go once it has the bytes.
 
 import { ASSESSMENTS_DIR, assessmentDir } from "../domain/folder";
 import type { Assessment } from "../domain/types";
 import type { Storage, VideoUrl } from "../storage/storage";
 import type { RichImageSource, RichVideo } from "./richImage";
 
+/**
+ * A result folder's images and videos, plus its item files (KTD4). Every ref is relative to
+ * the folder, such as `files/file-1a2b3c4d.pdf`.
+ */
+export interface ItemSource extends RichImageSource {
+  /** A URL to fetch a PDF item from, or null when it is missing or refused. The caller releases it. */
+  file(ref: string): Promise<VideoUrl | null>;
+  /** A Markdown or plain-text item as text, or null when it is missing. Rejects one over 1 MiB or not UTF-8. */
+  text(ref: string): Promise<string | null>;
+  /** Opens an item file in its default app, or shows it in its folder (Rust decides). */
+  open(ref: string): Promise<void>;
+}
+
 const cache = new WeakMap<Storage, Map<string, Promise<string | null>>>();
-const sources = new WeakMap<Storage, Map<string, RichImageSource>>();
+const sources = new WeakMap<Storage, Map<string, ItemSource>>();
 
 /** One path's video URL from storage, and how many handles to it are out. */
 interface HeldVideo {
@@ -87,16 +105,16 @@ async function holdVideo(storage: Storage, path: string, preload: RichVideo["pre
 }
 
 /** The images beside a recorded result's file. */
-export function resultImages(storage: Storage, a: Pick<Assessment, "profileSlug" | "collectionSlug" | "credentialSlug">): RichImageSource {
+export function resultImages(storage: Storage, a: Pick<Assessment, "profileSlug" | "collectionSlug" | "credentialSlug">): ItemSource {
   return imageSource(storage, assessmentDir(a.profileSlug, a.collectionSlug, a.credentialSlug));
 }
 
 /**
- * The images and videos beside a file in `dir`. One object per storage and folder, so it
+ * The images, videos and item files beside a file in `dir`. One object per storage and folder, so it
  * never changes identity. A video in a reply's folder gets preload "none", so nothing decodes
  * a file an agent named until the person presses play; anywhere else it loads its first frame.
  */
-export function imageSource(storage: Storage, dir: string): RichImageSource {
+export function imageSource(storage: Storage, dir: string): ItemSource {
   let byDir = sources.get(storage);
   if (!byDir) sources.set(storage, (byDir = new Map()));
   let source = byDir.get(dir);
@@ -106,6 +124,9 @@ export function imageSource(storage: Storage, dir: string): RichImageSource {
     source = {
       load: (name) => readImage(storage, pathOf(name)),
       video: (name) => holdVideo(storage, pathOf(name), preload),
+      file: (ref) => storage.fileUrl(pathOf(ref)).catch(() => null),
+      text: (ref) => storage.readItemText(pathOf(ref)),
+      open: (ref) => storage.openItem(pathOf(ref)),
     };
     byDir.set(dir, source);
   }
