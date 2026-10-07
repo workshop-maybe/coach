@@ -226,4 +226,20 @@ describe("ReplyList", () => {
     expect(opusRow.getAttribute("aria-current")).toBe("true");
     expect(codexRow.className).not.toContain("lit");
   });
+
+  it("a reply whose first item is a video previews the video's name", async () => {
+    await setup([
+      await result(opus, review, {
+        ...day(1),
+        handoff: ran,
+        handBack: "",
+        items: [
+          { kind: "video", name: "demo.mp4", ref: "video-1a2b3c4d.mp4" },
+          { kind: "link", url: "https://example.com" },
+        ],
+      }),
+    ]);
+    const row = screen.getAllByRole("listitem")[0];
+    expect(row.querySelector(".take-preview")?.textContent).toBe("demo.mp4");
+  });
 });

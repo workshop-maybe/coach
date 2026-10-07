@@ -34,12 +34,38 @@ vi.mock("../domain/matrix", async (importOriginal) => {
   };
 });
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ writeText: vi.fn() }));
+vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn(() => Promise.resolve()) }));
+const pdf = vi.hoisted(() => ({ openPdf: vi.fn() }));
+vi.mock("./pdfDocument", () => pdf);
 
 beforeEach(() => {
   localStorage.clear();
   builds.last = null;
 });
 afterEach(cleanup);
+
+// Reply items (U5 of the reply artifacts plan, R9-R12, KTD6).
+const SHOT = "data:image/png;base64,iVBORw0KGgo=";
+const PDF_BYTES = new TextEncoder().encode("%PDF-1.7\n%%EOF\n");
+const itemDir = (slug: string) => `assessments/${slug}/eng/review`;
+
+/** A one-page PDF document, as pdf.js would open it. */
+function fakePdf() {
+  return {
+    numPages: 1,
+    getPage: async () => ({ width: 600, height: 800, render: async () => undefined, cleanup: () => undefined }),
+    destroy: () => undefined,
+  };
+}
+
+class NoObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+/** The kind and name in each item's header bar, in order. */
+const itemHeaders = (el: HTMLElement) => [...el.querySelectorAll(".reply-item-bar")].map((h) => h.textContent);
 
 const codex = { ...opus, slug: "codex", name: "Codex agent", harness: "codex", model: "gpt-5", effort: "medium" };
 const a: Handoff = { id: "a", collectionSlug: "eng", credentialSlug: "review", text: "# A\n\n{{task}}\n" };
@@ -819,5 +845,73 @@ describe("CompareView, Compare with Jev", () => {
     expect(await screen.findByText("Jev couldn't be reached.")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Compare with Jev" })).toBeTruthy();
     expect(screen.getByText("Sends 2 requests: 1 reading and 1 head-to-head")).toBeTruthy();
+  });
+});
+
+describe("CompareView, reply items", () => {
+  beforeEach(() => {
+    pdf.openPdf.mockReset();
+    pdf.openPdf.mockImplementation(async () => fakePdf());
+    vi.stubGlobal("IntersectionObserver", NoObserver);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("Covers AE5. two held replies, one a PDF and one a PDF and a link, show as two stacks side by side, both PDFs rendered", async () => {
+    const held = [
+      await heldReply(opus, review, {
+        fileStem: day(1).fileStem,
+        heldAt: day(1).recordedAt,
+        handoff: ranA,
+        handBack: "",
+        items: [{ kind: "file", name: "opus-report.pdf", ref: "files/file-0000aaaa.pdf" }],
+      }),
+      await heldReply(codex, review, {
+        fileStem: day(2).fileStem,
+        heldAt: day(2).recordedAt,
+        handoff: ranA,
+        handBack: "",
+        items: [
+          { kind: "file", name: "codex-report.pdf", ref: "files/file-0000bbbb.pdf" },
+          { kind: "link", url: "https://example.com/pr/2" },
+        ],
+      }),
+    ];
+    const storage = folder([], [opus, codex], held);
+    storage.seedItemFile(`${itemDir("opus")}/files/file-0000aaaa.pdf`, PDF_BYTES);
+    storage.seedItemFile(`${itemDir("codex")}/files/file-0000bbbb.pdf`, PDF_BYTES);
+    open(storage, [take("opus", 1), take("codex", 2)]);
+    await screen.findByRole("region", { name: "Compare replies" });
+    const [left, right] = panes().map((p) => within(p).getByRole("region", { name: "Reply" }));
+    expect(itemHeaders(left)).toEqual(["Fileopus-report.pdf"]);
+    expect(itemHeaders(right)).toEqual(["Filecodex-report.pdf", "Link"]);
+    expect(within(right).getByText("https://example.com/pr/2")).toBeTruthy();
+    await waitFor(() => {
+      expect(left.querySelectorAll("canvas")).toHaveLength(1);
+      expect(right.querySelectorAll("canvas")).toHaveLength(1);
+    });
+    expect(pdf.openPdf).toHaveBeenCalledWith(`blob:memory/${itemDir("opus")}/files/file-0000aaaa.pdf`);
+    expect(pdf.openPdf).toHaveBeenCalledWith(`blob:memory/${itemDir("codex")}/files/file-0000bbbb.pdf`);
+  });
+
+  it("an old result beside a multi-item one: one bare text item on its side, every item on the other", async () => {
+    const storage = folder([
+      await result(opus, review, { ...day(1), handBack: "Plain old reply." }),
+      await result(codex, review, {
+        ...day(2),
+        handBack: "Notes",
+        items: [
+          { kind: "text", text: "Notes" },
+          { kind: "image", name: "shot.png", ref: "image-00000001.png" },
+        ],
+      }),
+    ]);
+    storage.seedImage(`${itemDir("codex")}/image-00000001.png`, SHOT);
+    open(storage, [take("opus", 1), take("codex", 2)]);
+    await screen.findByRole("region", { name: "Compare replies" });
+    const [left, right] = panes().map((p) => within(p).getByRole("region", { name: "Reply" }));
+    expect(itemHeaders(left)).toEqual([]);
+    expect(within(left).getByText("Plain old reply.")).toBeTruthy();
+    expect(itemHeaders(right)).toEqual(["Text", "Imageshot.png"]);
+    await waitFor(() => expect(right.querySelector("img")?.getAttribute("src")).toBe(SHOT));
   });
 });

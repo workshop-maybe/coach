@@ -4,7 +4,7 @@
     "instructions": "Does `reply` satisfy all of `rubric`, given `task`?",
     "criteria": {
       "true": {
-        "what": "the reply gives specific, checkable evidence that the rubric is met as a whole: it names the files, commands or output, or shows the content",
+        "what": "the reply gives specific, checkable evidence that the rubric is met as a whole: it names the files, commands or output, or shows the content. Neither holds when the evidence would sit only in an item `reply` names as one Jev cannot see or open",
         "examples": [
           {
             "reply_opening": "1 holds. 2 wrong: no, 2100 fails the 400 rule. 3 wrong: 671/1296, since adding counts two sixes twice. 4 holds. 5 wrong: 2^100 is larger, as 1,024 > 1,000.",
@@ -16,7 +16,7 @@
         ]
       },
       "false": {
-        "what": "the reply only asserts the rubric is met in general terms, or does not address it",
+        "what": "the reply only asserts the rubric is met in general terms, or does not address it. Neither holds when the evidence would sit only in an item `reply` names as one Jev cannot see or open",
         "examples": [
           {
             "reply_opening": "1. Holds. 24 trailing zeros.\n2. Does not hold. 2100 is not a leap year, since it is not divisible by 400.\n3. Does not hold. The answer is 671/1296, about 0.52.\n4. Does not hold. The slice [1:] keeps the first item, so the answer is [3, 2].\n5. Does not hold. 2^100 is larger than 10^30.",

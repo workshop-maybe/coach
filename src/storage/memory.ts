@@ -1,10 +1,24 @@
 // In-memory Storage for tests. One Map of path -> text per root, plus separate Maps per
-// root of path -> data URI for images and path -> bytes for videos.
+// root of path -> data URI for images, path -> bytes for videos and path -> bytes for a
+// reply's item files.
 
+import {
+  FILES_DIR,
+  FILE_MAX_BYTES,
+  FILE_TOO_LARGE,
+  ITEM_MISSING,
+  ITEM_TEXT_MAX_BYTES,
+  ITEM_TEXT_TOO_LARGE,
+  NOT_AN_ITEM,
+  NOT_IN_FOLDER,
+  NOT_TEXT,
+  isFileItemPath,
+  itemExtension,
+} from "../domain/files";
 import { IMAGE_TOO_LARGE, NOT_AN_IMAGE, PASTED_IMAGE_MAX_BYTES, bytesToBase64, imageExtension } from "../domain/images";
 import type { ContextReading } from "../domain/types";
 import { ONLY_VIDEOS_AND_IMAGES, VIDEO_MAX_BYTES, VIDEO_TOO_LARGE, alreadyNamed, isLocalVideoName } from "../domain/videos";
-import type { AddFrom, AddedFile, RootKind, Storage, VideoUrl } from "./storage";
+import type { AddAccept, AddFrom, AddedFile, AddedKind, RootKind, Storage, VideoUrl } from "./storage";
 
 /** What `readContext` returns when nothing is queued. */
 const TEST_CONTEXT: ContextReading = { machineId: "test-machine", machine: "Test Mac", memory: "000000000000" };
@@ -32,6 +46,11 @@ export class MemoryStorage implements Storage {
     export: new Map(),
   };
 
+  private readonly itemFiles: Record<RootKind, Map<string, Uint8Array>> = {
+    data: new Map(),
+    export: new Map(),
+  };
+
   /** Picks that `importBadgeArt` will return, in order. null models a cancelled picker. */
   private readonly artQueue: (string | null)[] = [];
 
@@ -44,11 +63,20 @@ export class MemoryStorage implements Storage {
   /** Every write, in order, for asserting what the domain layer touched. */
   readonly writes: { root: RootKind; path: string }[] = [];
 
-  /** Every `addFiles` call, in order, for asserting what the page asked for. */
-  readonly adds: { dir: string; from: AddFrom }[] = [];
+  /**
+   * Every `addFiles` call, in order, for asserting what the page asked for. `accept` is set only
+   * when the caller passed one, so a rich box's default add records as it always has.
+   */
+  readonly adds: { dir: string; from: AddFrom; accept?: AddAccept }[] = [];
 
   /** One entry per URL `videoUrl` handed out, with how many times it was released. */
   readonly videoUrls: { path: string; releases: number }[] = [];
+
+  /** One entry per URL `fileUrl` handed out, with how many times it was released. */
+  readonly fileUrls: { path: string; releases: number }[] = [];
+
+  /** Every path `openItem` opened or revealed, in order. Which of the two is Rust's call. */
+  readonly opened: string[] = [];
 
   constructor(seed: Record<string, string> = {}, root: RootKind = "data") {
     this.seed(seed, root);
@@ -65,13 +93,18 @@ export class MemoryStorage implements Storage {
 
   async listFiles(root: RootKind, dir: string): Promise<string[]> {
     const prefix = dir === "" || dir.endsWith("/") ? dir : `${dir}/`;
-    const paths = new Set([...this.roots[root].keys(), ...this.images[root].keys(), ...this.videos[root].keys()]);
+    const paths = new Set([
+      ...this.roots[root].keys(),
+      ...this.images[root].keys(),
+      ...this.videos[root].keys(),
+      ...this.itemFiles[root].keys(),
+    ]);
     return [...paths].filter((p) => p.startsWith(prefix)).sort();
   }
 
   /** Mirrors the Rust command: a missing source or an existing target is an error. */
   async moveFile(root: RootKind, from: string, to: string): Promise<void> {
-    const maps: Map<string, unknown>[] = [this.roots[root], this.images[root], this.videos[root]];
+    const maps: Map<string, unknown>[] = [this.roots[root], this.images[root], this.videos[root], this.itemFiles[root]];
     const map = maps.find((m) => m.has(from));
     if (map === undefined) throw new Error(`Cannot move "${from}": it does not exist.`);
     if (maps.some((m) => m.has(to))) throw new Error(`Cannot move to "${to}": something is already there.`);
@@ -83,7 +116,9 @@ export class MemoryStorage implements Storage {
   async readDataUri(root: RootKind, path: string): Promise<string | null> {
     const uri = this.images[root].get(path);
     if (uri !== undefined) return uri;
-    if (this.roots[root].has(path) || this.videos[root].has(path)) throw new Error(`"${path}": That file is not a JPEG or PNG image.`);
+    if (this.roots[root].has(path) || this.videos[root].has(path) || this.itemFiles[root].has(path)) {
+      throw new Error(`"${path}": That file is not a JPEG or PNG image.`);
+    }
     return null;
   }
 
@@ -120,27 +155,34 @@ export class MemoryStorage implements Storage {
   /**
    * Mirrors the Rust command: takes the next queued batch (nothing queued is a cancelled
    * pick) and sorts each file by content into the data root's `dir`. A picture goes through
-   * `saveImage`'s rules and a video through the family check, cap and naming; a refusal is
-   * reported for its file and never stops the rest.
+   * `saveImage`'s rules and a video through the family check, cap and naming. Anything else is
+   * refused with "media", the default, and kept as a file item in `dir/files/` with "any". A
+   * refusal is reported for its file and never stops the rest.
    */
-  async addFiles(dir: string, from: AddFrom): Promise<AddedFile[]> {
-    this.adds.push({ dir, from });
+  async addFiles(dir: string, from: AddFrom, accept?: AddAccept): Promise<AddedFile[]> {
+    this.adds.push(accept === undefined ? { dir, from } : { dir, from, accept });
     const batch = this.addQueue.shift() ?? [];
     if (batch instanceof Error) throw batch;
     const results: AddedFile[] = [];
     for (const file of batch) {
       if ("error" in file) {
-        results.push({ name: file.name, path: null, error: file.error });
+        results.push({ name: file.name, path: null, kind: null, error: file.error });
         continue;
       }
       try {
-        const path =
-          imageExtension(file.bytes) !== null
-            ? await this.saveImage("data", dir, file.bytes)
-            : this.saveVideo("data", dir, file.bytes, extensionOf(file.name));
-        results.push({ name: file.name, path, error: null });
+        const ext = extensionOf(file.name);
+        let kind: AddedKind;
+        let path: string;
+        if (imageExtension(file.bytes) !== null) {
+          [kind, path] = ["image", await this.saveImage("data", dir, file.bytes)];
+        } else if (videoFamilyAgrees(file.bytes, ext) || accept !== "any") {
+          [kind, path] = ["video", this.saveVideo("data", dir, file.bytes, ext)];
+        } else {
+          [kind, path] = ["file", this.saveFile("data", pathIn(dir, FILES_DIR), file.bytes, itemExtension(file.name))];
+        }
+        results.push({ name: file.name, path, kind, error: null });
       } catch (e) {
-        results.push({ name: file.name, path: null, error: e instanceof Error ? e.message : String(e) });
+        results.push({ name: file.name, path: null, kind: null, error: e instanceof Error ? e.message : String(e) });
       }
     }
     return results;
@@ -151,6 +193,47 @@ export class MemoryStorage implements Storage {
     const bytes = this.videos.data.get(from);
     if (bytes === undefined) throw new Error(`Cannot copy "${from}": it is not a video in the data folder.`);
     return this.saveVideo(toRoot, toDir, bytes, extensionOf(from));
+  }
+
+  /** Mirrors the Rust command: a video copies as `copyVideo` does, and a file item into `toDir/files/`. */
+  async copyItem(from: string, toRoot: RootKind, toDir: string): Promise<string> {
+    const name = from.slice(from.lastIndexOf("/") + 1);
+    if (isLocalVideoName(name) && !name.startsWith("file-")) return this.copyVideo(from, toRoot, toDir);
+    const bytes = this.itemFiles.data.get(from);
+    if (bytes === undefined || !isFileItemPath(from)) throw new Error(NOT_AN_ITEM);
+    return this.saveFile(toRoot, pathIn(toDir, FILES_DIR), bytes, itemExtension(name));
+  }
+
+  /** Mirrors the Rust command: the folder check, the 1 MiB cap and strict UTF-8. Text seeded with `seed` reads too. */
+  async readItemText(path: string): Promise<string | null> {
+    checkItemPath(path);
+    const text = this.roots.data.get(path);
+    const bytes = this.itemFiles.data.get(path) ?? (text === undefined ? undefined : new TextEncoder().encode(text));
+    if (bytes === undefined) return null;
+    if (bytes.length > ITEM_TEXT_MAX_BYTES) throw new Error(ITEM_TEXT_TOO_LARGE);
+    try {
+      return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    } catch {
+      throw new Error(NOT_TEXT);
+    }
+  }
+
+  /** Mirrors the Rust command's refusals and records the path. The open-or-reveal allowlist lives only in Rust. */
+  async openItem(path: string): Promise<void> {
+    checkItemPath(path);
+    const maps = [this.roots.data, this.images.data, this.videos.data, this.itemFiles.data];
+    if (!maps.some((m) => m.has(path))) throw new Error(ITEM_MISSING);
+    this.opened.push(path);
+  }
+
+  /** A `blob:memory/` URL for a PDF item the scheme would serve: `files/file-<8 hex>.pdf` whose bytes start `%PDF-`. */
+  async fileUrl(path: string): Promise<VideoUrl | null> {
+    const bytes = this.itemFiles.data.get(path);
+    const pdf = bytes !== undefined && String.fromCharCode(...bytes.subarray(0, 5)) === "%PDF-";
+    if (!pdf || !isFileItemPath(path) || !path.endsWith(".pdf")) return null;
+    const handed = { path, releases: 0 };
+    this.fileUrls.push(handed);
+    return { url: `blob:memory/${path}`, release: () => void handed.releases++ };
   }
 
   /**
@@ -176,6 +259,20 @@ export class MemoryStorage implements Storage {
     if (existing !== undefined && sameBytes(existing, bytes)) return path;
     if (existing !== undefined || this.roots[root].has(path) || this.images[root].has(path)) throw new Error(alreadyNamed(name));
     this.videos[root].set(path, bytes);
+    this.writes.push({ root, path });
+    return path;
+  }
+
+  /** The cap and the content-addressed name `file-<8 hex>[.<ext>]` (KTD3); the same bytes are not written twice. */
+  private saveFile(root: RootKind, dir: string, bytes: Uint8Array, ext: string | null): string {
+    if (bytes.length > FILE_MAX_BYTES) throw new Error(FILE_TOO_LARGE);
+    const name = ext === null ? `file-${hash8(bytes)}` : `file-${hash8(bytes)}.${ext}`;
+    const path = pathIn(dir, name);
+    const existing = this.itemFiles[root].get(path);
+    if (existing !== undefined && sameBytes(existing, bytes)) return path;
+    const taken = [this.roots, this.images, this.videos, this.itemFiles].some((maps) => maps[root].has(path));
+    if (taken) throw new Error(alreadyNamed(name));
+    this.itemFiles[root].set(path, bytes);
     this.writes.push({ root, path });
     return path;
   }
@@ -226,6 +323,16 @@ export class MemoryStorage implements Storage {
     return this.videoUrls.filter((u) => u.releases === 0).map((u) => u.path);
   }
 
+  /** Puts an item file in place as bytes, as if it already existed on disk. */
+  seedItemFile(path: string, bytes: Uint8Array, root: RootKind = "data"): void {
+    this.itemFiles[root].set(path, bytes);
+  }
+
+  /** Current bytes of an item file, or undefined when absent. */
+  itemFile(path: string, root: RootKind = "data"): Uint8Array | undefined {
+    return this.itemFiles[root].get(path);
+  }
+
   /** Puts an image in place as a data URI, as if it already existed on disk. */
   seedImage(path: string, dataUri: string, root: RootKind = "data"): void {
     this.images[root].set(path, dataUri);
@@ -251,7 +358,13 @@ export class MemoryStorage implements Storage {
     this.roots[root].delete(path);
     this.images[root].delete(path);
     this.videos[root].delete(path);
+    this.itemFiles[root].delete(path);
   }
+}
+
+/** Mirrors Rust's item path check: no absolute path and no `..`, even one that stays inside. */
+function checkItemPath(path: string): void {
+  if (path.startsWith("/") || path.split("/").includes("..")) throw new Error(NOT_IN_FOLDER);
 }
 
 /** The lowercased extension of a file name, or "" when it has none. */

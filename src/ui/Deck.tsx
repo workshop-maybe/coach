@@ -51,6 +51,8 @@ export interface Beat {
   pane?: boolean;
   /** Arriving puts focus on the body's first text field or editor instead of the heading (R21). */
   focusBody?: boolean;
+  /** True holds Back and Escape on this card, such as while a file it is adding is still being copied. */
+  holdBack?: boolean;
 }
 
 export interface DeckProps {
@@ -187,6 +189,7 @@ export function Deck({ label, beats, startAt = 0, onClose, onFinish, onUseTheirs
   }, [queued, index]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function back() {
+    if (beat.holdBack) return;
     setTrouble({ kind: "none" });
     // Back on the first card closes without changing the card, so it drops a queued move itself.
     setQueued(null);
@@ -245,7 +248,7 @@ export function Deck({ label, beats, startAt = 0, onClose, onFinish, onUseTheirs
             </p>
           )}
           <div className="deck-actions">
-            <button type="button" className="ghost deck-back" onClick={back}>
+            <button type="button" className="ghost deck-back" onClick={back} disabled={beat.holdBack}>
               Back
             </button>
             {beat.forward && (

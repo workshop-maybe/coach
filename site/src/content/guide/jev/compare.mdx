@@ -39,15 +39,15 @@ A head-to-head asks about two replies to one handoff, in the compare's order. It
 | `rubric_notes` | The rubric's other lines |
 | `rubric` | The rubric, in full |
 | `learning_targets` | The badge's learning targets, as a second opinion sends them |
-| `reply_1` | The first reply, as it reads |
-| `reply_2` | The second reply, as it reads |
+| `reply_1` | The first reply, as Jev reads it |
+| `reply_2` | The second reply, as Jev reads it |
 
 For each rubric point it asks two questions, one in each order:
 
 - `a1` to `aN`: does `reply_1` cover this point better than `reply_2`?
 - `b1` to `bN`: does `reply_2` cover this point better than `reply_1`?
 
-Each question carries its point and the rubric's notes in its instructions, and criteria that ask for evidence first, as a second opinion's do: a reply that only claims a point never covers it better. A head-to-head carries no earlier replies as examples, and no question about learning targets or the whole bar.
+Each question carries its point and the rubric's notes in its instructions, and criteria that ask for evidence first, as a second opinion's do: a reply that only claims a point never covers it better. Each reply is built as a second opinion builds it, from its text, the contents of its Markdown and text files, and a line for each part Jev can't read ([A reply with files and links](/jev/second-opinion/#a-reply-with-files-and-links)). Both sides of the criteria say neither holds when a point's evidence, in either reply, would sit only in a part Jev can't see or open, so such a point reads as no clear difference. A head-to-head carries no earlier replies as examples, and no question about learning targets or the whole bar.
 
 <Source file="src/domain/headToHead.ts" symbol="FIRST_OVER_QUESTION" to="SECOND_OVER_CRITERIA" />
 

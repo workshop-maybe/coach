@@ -1,6 +1,6 @@
-// Which pastes are image pastes (KTD5 of the paste-images plan), and which are video pastes
-// (KTD5 of the video plan). Shared by the rich box and its flow-test stub, so both take the
-// same pastes.
+// Which pastes are image pastes (KTD5 of the paste-images plan), which are video pastes
+// (KTD5 of the video plan), and which are a reply's file pastes (KTD7 of the reply artifacts
+// plan). Shared by the rich box and its flow-test stub, so both take the same pastes.
 
 import { hasVideoExtension } from "../domain/videos";
 
@@ -67,5 +67,23 @@ export function videoPaste(data: DataTransfer | null): { name: string; size: num
   if (!data) return [];
   const files = pastedFiles(data);
   if (!files.some(isVideo) || pasteHasText(data, new Set(files.map((f) => f.name)))) return [];
+  return files.map((f) => ({ name: f.name, size: f.size }));
+}
+
+/** Whether a pasted file stays inline in a text item: a PNG, a JPEG or a video (reply artifacts KTD7). */
+function staysInline(file: File): boolean {
+  return file.type === "image/png" || file.type === "image/jpeg" || isVideo(file);
+}
+
+/**
+ * The files to hand a reply's editor from a paste into one of its text items (reply artifacts
+ * KTD7): every file the paste carries, when at least one is not a PNG, a JPEG or a video and
+ * the paste carries no real text. Only names and sizes leave the page, as a video paste's do,
+ * and Rust sorts each by content into an item. Empty for any other paste, which stays inline.
+ */
+export function filePaste(data: DataTransfer | null): { name: string; size: number }[] {
+  if (!data) return [];
+  const files = pastedFiles(data);
+  if (files.every(staysInline) || pasteHasText(data, new Set(files.map((f) => f.name)))) return [];
   return files.map((f) => ({ name: f.name, size: f.size }));
 }

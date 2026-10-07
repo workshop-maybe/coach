@@ -58,6 +58,20 @@
 // clears both drafts, the save re-derives both from the choice as it stands, and leaving
 // the judge card forward drops any ask in flight, so no reading lands on a later card.
 //
+// The reply is a list of items (U4 of docs/plans/2026-10-07-0620-feat-reply-artifacts-plan.md,
+// R1-R4, R7, R9, KTD7). "What came back" builds it in ReplyItemsEditor, which opens as one
+// empty text box so a paste lands as before, and Next goes once the reply has something in it
+// and no copy is in flight. The judge pane shows the items as the stack every view uses, the
+// record and the hold save them with blank text items dropped, and a change of agent or badge
+// carries their files to the new folder. The paste cleanup belongs to the text item the last
+// paste went into: it cleans that item, Put back restores it, an edit to it ends both offers,
+// and removing it does too.
+//
+// Jev reads the reply as it will save (U6, KTD8, `jevReply`): its text, the texts of its
+// Markdown and plain-text files, read ahead through useItemTexts, and a line for each other
+// item. Ask Jev waits, as it waits for the version, while a file text the reply or a chosen
+// earlier reply needs is still loading, and "too long for Jev" counts all of it (R15).
+//
 // Compare shares pieces of this deck (jev-in-compare U1, KTD14): the two steps' bodies and
 // words live in `verdictSteps.tsx`, the reading as it is saved in `domain/savedReading.ts`,
 // and the failed-ask line in `jevFailure.ts`, re-exported here for this deck's tests.
@@ -70,12 +84,14 @@ import { sameSetup } from "../domain/matrix";
 import { calibrationOf, isOverrule, type Calibration } from "../domain/calls";
 import { fitSecondOpinion } from "../domain/jevBudget";
 import { examplesFor, rankExamples } from "../domain/jevExamples";
+import { isTextFileRef, jevReply, pendingTexts, type RefTexts } from "../domain/jevReply";
 import { answeringModel } from "../domain/jevRequest";
 import { assessmentDir, credentialsDir } from "../domain/folder";
 import { cleanUpLineBreaks, lineBreakBatches } from "../domain/lineBreaks";
 import { goToOf, resultOf } from "../domain/goTo";
 import { heldOn, runIdOf } from "../domain/handoffResults";
 import { holdReply, markGoTo, recordAssessment } from "../domain/operations";
+import { hasContent, normalizeReply, replyItems, replyKey, textOf } from "../domain/replyItems";
 import { reasonLine } from "../domain/reasonLine";
 import { readingBeforeVerdict, savedReading } from "../domain/savedReading";
 import { readingParts, rubricParts, tappedPoints, type JevReadingParts } from "../domain/secondOpinion";
@@ -85,6 +101,7 @@ import {
   type AssessmentResult,
   type Credential,
   type HandoffTemplate,
+  type ReplyItem,
   type Slug,
   type TestContext,
 } from "../domain/types";
@@ -93,18 +110,20 @@ import { Cartridge } from "../cast/Cartridge";
 import { HandoffBox } from "../cast/HandoffBox";
 import { Machine } from "../cast/Machine";
 import { Outline } from "../cast/Outline";
-import { handoffKeys, machineKeys, openingChoice, replyScreen, trigPages, type HandoffKey, type ScreenState } from "../cast/mappings";
+import { handoffKeys, machineKeys, openingChoice, replyItemsScreen, trigPages, type HandoffKey, type ScreenState } from "../cast/mappings";
 import { Deck, type Beat } from "./Deck";
 import { backToTest } from "./HandoffDecks";
 import { handoffLabel } from "./format";
 import { imageSource } from "./imageSource";
+import { useItemTexts } from "./useItemTexts";
 import { useJev } from "./jevContext";
 import { jevFailure } from "./jevFailure";
 import { JevReadingPanel } from "./JevReading";
 import { useNav } from "./nav";
 import { livePlugs, plugFor, usePendingTests, type PendingTest } from "./pendingTests";
-import { RichText } from "./RichText";
-import type { PastePayload, RichTextHandle } from "./RichText";
+import type { PastePayload } from "./RichText";
+import { ReplyItemsEditor, replyEntry, type ReplyEntry, type ReplyItemsEditorHandle } from "./ReplyItemsEditor";
+import { ReplyStack } from "./ReplyStack";
 import { RichView } from "./RichView";
 import type { TestPick } from "./routes";
 import { Missing, StoredSwitch, focusOnMount, useEscape } from "./shared";
@@ -118,6 +137,9 @@ export { jevFailure };
 
 /** How long the dots run across the screen after Copy before the cursor waits. */
 export const SENDING_MS = 700;
+
+/** Said beside Ask Jev when the reply holds a picture, video, PDF, other file or link. */
+export const JEV_EYES_NOTE = "Jev reads the words. The pictures, videos, files and links are here for your own eyes.";
 
 function reducedMotion(): boolean {
   return typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -151,9 +173,13 @@ interface Unedited {
   note?: { line: string; failed: boolean; retry: boolean };
 }
 
+/** A reply as the beat opens it: one empty text item (KTD7). */
+const freshReply = (): ReplyEntry[] => [replyEntry({ kind: "text", text: "" })];
+
 /** Jev's reading in hand, with what it was asked about (KTD11). */
 export interface ReadingInHand {
   round: number;
+  /** The reply it was asked about, as `replyKey` of its items. */
   reply: string;
   assignmentVersion: string;
   askedAt: string;
@@ -180,7 +206,8 @@ export function TestDeck(props: TestDeckProps) {
     agent: !props.profileSlug || !!props.credentialKey,
   }));
   const [round, setRound] = useState(0);
-  const [reply, setReply] = useState("");
+  // The reply's items as they are built, each with an id that outlives its place (KTD7).
+  const [entries, setEntries] = useState<ReplyEntry[]>(freshReply);
   // The judge card shows the reply and the rubric as stored rather than rendered (R12).
   const [asStored, setAsStored] = useState(false);
   const [outcome, setOutcome] = useState<Outcome>({ kind: "open" });
@@ -216,10 +243,13 @@ export function TestDeck(props: TestDeckProps) {
   // The request generation: an answer lands only while its ask is still the latest (KTD11).
   const askGen = useRef(0);
   const inFlight = useRef(false);
-  // Jev's cleanup of the paste (KTD18). The ref is the reply box's handle while it is mounted.
-  const replyBox = useRef<RichTextHandle>(null);
-  // The last paste into the reply box: as it came, as the fixes left it, and whether it can be cleaned up.
-  const [pasted, setPasted] = useState<{ raw: string; fixed: string; cleanable: boolean } | null>(null);
+  // Jev's cleanup of the paste (KTD18). The ref is the reply editor's handle while it is mounted.
+  const replyBox = useRef<ReplyItemsEditorHandle>(null);
+  // The last paste into a text item: as it came, as the fixes left it, whether it can be
+  // cleaned up, and the item it went into (KTD7).
+  const [pasted, setPasted] = useState<{ raw: string; fixed: string; cleanable: boolean; into: number } | null>(null);
+  // The item that paste went into, current within the paste and change handlers before a render.
+  const pastedInto = useRef<number | null>(null);
   // The reply as the app last wrote it, or null once anything else changed it. The ref is the
   // same, current within the paste and change handlers before a render.
   const [unedited, setUnedited] = useState<Unedited | null>(null);
@@ -244,10 +274,24 @@ export function TestDeck(props: TestDeckProps) {
   const version = useAssignmentVersion(credential);
   const collectionOf = (c: Credential) => state?.collections.find((x) => x.slug === c.collectionSlug);
   const waiting = pending.find((p) => p.profileSlug === profileSlug && p.credentialKey === key);
-  // A pasted image goes in the folder the result will be recorded in. Picking another agent
-  // or badge moves the folder, and the images the reply still names go along (R10).
-  const replyImages = useRichImages(profile && credential ? assessmentDir(profile.slug, credential.collectionSlug, credential.slug) : null, reply);
+  const items = useMemo(() => entries.map((e) => e.item), [entries]);
+  // The reply's text items joined, whose pictures and videos the folder keeps, and its identity.
+  const reply = useMemo(() => textOf(items), [items]);
+  // A pasted image and an added item go in the folder the result will be recorded in. Picking
+  // another agent or badge moves the folder, and the files the reply still names go along (R10).
+  const replyDir = profile && credential ? assessmentDir(profile.slug, credential.collectionSlug, credential.slug) : null;
+  const replyImages = useRichImages(replyDir, reply, items);
+  // The result folder's files, for the reply's editor and its stack (`imageSource` keeps one per folder).
+  const replySource = replyDir ? imageSource(storage, replyDir) : null;
   const rubricImages = credential ? imageSource(storage, credentialsDir(credential.collectionSlug)) : undefined;
+  // The reply as it will save, blank text items dropped, so the judge sees what is recorded and Jev reads it.
+  const judged = useMemo(() => asSaved(items), [items]);
+  // A reading belongs to the reply as it saves, so a blank text item never drops it.
+  const replyId = useMemo(() => replyKey(judged), [judged]);
+  // File texts read ahead for Jev (KTD8). A file that couldn't be read is tried again once
+  // the copies in flight land, and on each folder reload.
+  const itemTexts = useItemTexts(storage, replyImages.busy ? null : state);
+  const replyTexts = useMemo<RefTexts>(() => (replyDir ? (ref) => itemTexts(`${replyDir}/${ref}`) : () => null), [replyDir, itemTexts]);
 
   // The badge's results ranked as example sources, once per folder snapshot, badge and
   // assignment version (growing context KTD10). Null while the version is loading.
@@ -255,23 +299,24 @@ export function TestDeck(props: TestDeckProps) {
   // The second opinion this reply would ask for, with the targets and as many examples as fit
   // Jev's budget (KTD19, growing context KTD10). Null when the reply alone is too long, which
   // is what decides "too long for Jev" and whether the round offers Jev, examples or not.
-  const fitted = useMemo(
-    () =>
-      credential && jev.usable && credential.rubric.trim() !== ""
-        ? fitSecondOpinion(
-            { task: credential.task, rubric: credential.rubric, reply, learningTargets: credential.learningTargets },
-            ranked ? examplesFor(ranked, reply) : [],
-          )
-        : null,
-    [credential?.task, credential?.rubric, credential?.learningTargets, reply, jev.usable, ranked], // eslint-disable-line react-hooks/exhaustive-deps
-  );
+  // The reply goes as Jev reads it (KTD8), and `textsWait` holds while a file text it or a
+  // chosen example needs is still loading. Files are read only while Jev is usable.
+  const { fitted, textsWait } = useMemo(() => {
+    if (!credential || !jev.usable || credential.rubric.trim() === "") return { fitted: null, textsWait: false };
+    // What is still loading: the reply's refs, then the examples' data-root paths. Only the count is read.
+    const loading: string[] = pendingTexts(judged, replyTexts);
+    const read = jevReply(judged, replyTexts);
+    const examples = ranked ? examplesFor(ranked, read, itemTexts, loading) : [];
+    const fit = fitSecondOpinion({ task: credential.task, rubric: credential.rubric, reply: read, learningTargets: credential.learningTargets }, examples);
+    return { fitted: fit, textsWait: loading.length > 0 };
+  }, [credential?.task, credential?.rubric, credential?.learningTargets, judged, replyTexts, itemTexts, jev.usable, ranked]); // eslint-disable-line react-hooks/exhaustive-deps
   const fits = fitted !== null;
   // The badge's rubric points, for the missed-points step, parsed once per rubric.
   const points = useMemo(() => (credential ? rubricParts(credential.rubric).points : []), [credential?.rubric]); // eslint-disable-line react-hooks/exhaustive-deps
   // Whether Jev can be asked about the paste at all: not when the paste alone is over Jev's budget (KTD19).
   const pasteFits = useMemo(() => !!pasted?.cleanable && lineBreakBatches(pasted.fixed) !== null, [pasted]);
   // The reading counts only for the round, reply and assignment version it was asked about.
-  const shown = inHand && inHand.round === round && inHand.reply === reply && inHand.assignmentVersion === version ? inHand : null;
+  const shown = inHand && inHand.round === round && inHand.reply === replyId && inHand.assignmentVersion === version ? inHand : null;
 
   // Leaving the deck drops any ask or cleanup in flight.
   useEffect(() => {
@@ -404,7 +449,7 @@ export function TestDeck(props: TestDeckProps) {
         credentialSlug: credential.slug,
         result: verdict,
         note,
-        handBack: reply,
+        items,
         ...(waiting?.context ? { context: waiting.context } : {}),
         ...(handoff ? { handoff } : {}),
         ...(jevReading ? { jev: jevReading } : {}),
@@ -441,7 +486,7 @@ export function TestDeck(props: TestDeckProps) {
         profileSlug: profile.slug,
         collectionSlug: credential.collectionSlug,
         credentialSlug: credential.slug,
-        handBack: reply,
+        items,
         ...(waiting?.context ? { context: waiting.context } : {}),
         ...(handoff ? { handoff } : {}),
         ...(jevReading ? { jev: jevReading } : {}),
@@ -485,17 +530,24 @@ export function TestDeck(props: TestDeckProps) {
     setAsking(false);
   }
 
+  /** The text of the item the last paste went into, or null once it is gone. */
+  const pastedText = (list: readonly ReplyEntry[]) => {
+    const target = list.find((e) => e.id === pastedInto.current)?.item;
+    return target?.kind === "text" ? target.text : null;
+  };
+
   /**
-   * A changed reply drops the reading and any ask about the old one (KTD11). A change that
-   * is not the app's own write also ends the cleanup's offers and any cleanup in flight (KTD18).
+   * A changed reply drops the reading and any ask about the old one (KTD11). A change to the
+   * item the last paste went into that is not the app's own write, or its removal, also ends
+   * the cleanup's offers and any cleanup in flight (KTD18, KTD7).
    */
-  function editReply(next: string) {
-    setReply(next);
-    if (next !== reply && (inHand || inFlight.current)) {
+  function editReply(next: ReplyEntry[]) {
+    setEntries(next);
+    if (replyKey(asSaved(next.map((e) => e.item))) !== replyId && (inHand || inFlight.current)) {
       dropAsk();
       setInHand(null);
     }
-    if (!writing.current && uneditedNow.current && next !== uneditedNow.current.markdown) {
+    if (!writing.current && uneditedNow.current && pastedText(next) !== uneditedNow.current.markdown) {
       markUnedited(null);
       dropCleanup();
     }
@@ -513,25 +565,26 @@ export function TestDeck(props: TestDeckProps) {
     setCleaning(false);
   }
 
-  /** A paste into the reply box, with the fixes in: the reply is now what it produced (KTD18). */
-  function onPaste(paste: PastePayload) {
+  /** A paste into text item `into`, with the fixes in: that item is now what it produced (KTD18, KTD7). */
+  function onPaste(into: number, paste: PastePayload) {
     dropCleanup();
-    setPasted({ raw: paste.raw, fixed: paste.fixed, cleanable: paste.terminal && paste.candidates && paste.whole });
+    pastedInto.current = into;
+    setPasted({ raw: paste.raw, fixed: paste.fixed, cleanable: paste.terminal && paste.candidates && paste.whole, into });
     markUnedited({ markdown: paste.markdown, by: "paste" });
   }
 
-  /** Writes text into the reply box the way a paste would, as the app's own write (KTD18). */
+  /** Writes text into the item the last paste went into, the way a paste would, as the app's own write (KTD18). */
   function writeReply(text: string, by: Unedited["by"]) {
     const box = replyBox.current;
-    if (!box) return;
+    if (!box || !pasted) return;
     writing.current = true;
-    let markdown: string;
+    let markdown: string | null;
     try {
-      markdown = box.replaceAsPaste(text);
+      markdown = box.replaceAsPaste(pasted.into, text);
     } finally {
       writing.current = false;
     }
-    markUnedited({ markdown, by });
+    if (markdown !== null) markUnedited({ markdown, by });
   }
 
   /**
@@ -584,13 +637,13 @@ export function TestDeck(props: TestDeckProps) {
 
   /** Asks Jev about this reply once; the same inputs keep the reading in hand (KTD11). */
   async function askJev() {
-    if (!fitted || !state || !key || version === null || inFlight.current || shown) return;
+    if (!fitted || textsWait || !state || !key || version === null || inFlight.current || shown) return;
     const { request, sources } = fitted;
     const gen = ++askGen.current;
     inFlight.current = true;
     setAsking(true);
     setJevTrouble(null);
-    const asked = { round, reply, assignmentVersion: version, askedAt: new Date().toISOString(), examplesSent: sources.length };
+    const asked = { round, reply: replyId, assignmentVersion: version, askedAt: new Date().toISOString(), examplesSent: sources.length };
     try {
       const answers = await jev.ask(request);
       const parts = readingParts(request.state.rubric_points, answers, request.state.learning_targets);
@@ -625,7 +678,7 @@ export function TestDeck(props: TestDeckProps) {
   function tryAnother() {
     setProfileSlug(undefined);
     setAsks({ agent: true, badge: false });
-    setReply("");
+    setEntries(freshReply());
     setOutcome({ kind: "open" });
     setSending(false);
     setCopied(null);
@@ -641,6 +694,7 @@ export function TestDeck(props: TestDeckProps) {
     setJevTrouble(null);
     // And no paste to clean up or put back.
     dropCleanup();
+    pastedInto.current = null;
     setPasted(null);
     markUnedited(null);
     setCarried(null);
@@ -966,11 +1020,11 @@ export function TestDeck(props: TestDeckProps) {
 
   const stale = staleReason(waiting, version, profile);
   const plugId = waiting ? waiting.handoff?.id ?? SKELETON_ID : here?.id;
-  const replyScreenState: ScreenState = sending ? { kind: "sending" } : reply.trim() ? replyScreen(reply) : { kind: "waiting" };
+  const replyScreenState: ScreenState = sending ? { kind: "sending" } : hasContent(items) ? replyItemsScreen(items) : { kind: "waiting" };
   const replyStage = here ? boxStage(replyScreenState, here) : stage(replyScreenState, { plugged: plugId ? { label: labelOf(plugId) } : null });
   // The cleanup's offers (KTD18): clean up while the reply is still what a paste or a
   // put-back wrote, put back while it is still what the cleanup wrote.
-  const untouched = unedited !== null && unedited.markdown === reply ? unedited : null;
+  const untouched = unedited !== null && unedited.markdown === pastedText(entries) ? unedited : null;
   const note = untouched?.note;
   const offerCleanup = jev.usable && !!pasted?.cleanable && (untouched?.by === "paste" || untouched?.by === "putBack") && (note?.retry ?? true);
   const offerPutBack = untouched?.by === "cleanup" && pasted !== null;
@@ -1004,7 +1058,9 @@ export function TestDeck(props: TestDeckProps) {
     forward: stale ? undefined : "Next",
     // A waiting test is checked for a changed task before its reply can be recorded, and
     // a cleanup in flight is waited for.
-    valid: reply.trim() !== "" && !(waiting && version === null) && !cleaning && !replyImages.busy,
+    valid: hasContent(items) && !(waiting && version === null) && !cleaning && !replyImages.busy,
+    // Leaving while a file is still being copied would drop it from the reply once it lands.
+    holdBack: replyImages.busy,
     // The reply box takes the window and the first focus; a stale test asks for Copy again on a page.
     pane: !stale,
     focusBody: !stale,
@@ -1027,7 +1083,17 @@ export function TestDeck(props: TestDeckProps) {
     ) : (
       <>
         <div className="test-strip">{replyStage}</div>
-        <RichText ref={replyBox} aria-label="Reply" value={reply} onChange={editReply} placeholder="Paste the reply" cleanPaste onPaste={onPaste} images={replyImages.images} />
+        {replySource && (
+          <ReplyItemsEditor
+            ref={replyBox}
+            value={entries}
+            onChange={editReply}
+            images={replyImages.images}
+            source={replySource}
+            addItems={replyImages.addItems}
+            onPaste={onPaste}
+          />
+        )}
         <OnLeave run={dropCleanup} />
         {cleanupPart}
         {waiting && <PullLink onPull={pull} />}
@@ -1041,24 +1107,29 @@ export function TestDeck(props: TestDeckProps) {
   });
 
   const rubric = credential?.rubric.trim() ?? "";
-  // The round's Jev decision, or what it would be if the judge pane showed now (KTD10).
-  const live = { offered: jev.usable && rubric !== "" && fits, tooLong: jev.usable && rubric !== "" && !fits };
+  // The round's Jev decision, or what it would be if the judge pane showed now (KTD10). While
+  // file texts load, the reply is not yet known to be too long, so the round offers Jev.
+  const live = { offered: jev.usable && rubric !== "" && (fits || textsWait), tooLong: jev.usable && rubric !== "" && !fits && !textsWait };
   const decided = decision?.round === round ? decision : null;
   const jevRound = (decided ?? live).offered;
   const decide = () => setDecision((d) => (d?.round === round ? d : { round, ...live }));
   const trouble = jevTrouble?.round === round ? jevTrouble : null;
   const tooLong = live.tooLong && (jevRound || !!decided?.tooLong);
-  const canAsk = jevRound && live.offered && version !== null && !shown && (trouble?.retry ?? true);
+  // Ask Jev waits while the version or a file text Jev reads is loading (KTD8).
+  const canAsk = jevRound && live.offered && version !== null && !textsWait && !shown && (trouble?.retry ?? true);
   // What goes with the ask as it would go now, after the budget's drops (growing context KTD6).
-  // Nothing is said while the version loads, since no ask goes then.
-  const quoted = version !== null && fitted ? fitted.sources.length : 0;
+  // Nothing is said while the version or a file text loads, since no ask goes then.
+  const quoted = version !== null && !textsWait && fitted ? fitted.sources.length : 0;
   const sendsLine =
     quoted === 0
       ? null
       : (quoted === 1 ? "Also sends 1 earlier reply on this badge" : `Also sends ${quoted} earlier replies on this badge`) + (fitted?.withNotes ? " with your notes" : "");
+  // Jev reads words. What it can't see is there for the person to judge (R14).
+  const unseen = judged.some((i) => i.kind === "image" || i.kind === "video" || i.kind === "link" || (i.kind === "file" && !isTextFileRef(i.ref)));
   const jevPart =
     jevRound || tooLong ? (
       <div className="meet-jev" aria-live="polite">
+        {unseen && <p className="jev-note">{JEV_EYES_NOTE}</p>}
         {tooLong && <p className="muted">This reply is too long for Jev</p>}
         {trouble && <p className="deck-error">{trouble.line}</p>}
         {(canAsk || asking) && (
@@ -1110,7 +1181,7 @@ export function TestDeck(props: TestDeckProps) {
             <span className="meet-text-head" aria-hidden="true">
               Reply
             </span>
-            <RichView aria-label="Reply" value={reply} stored={asStored} images={replyImages.images} />
+            {replySource && <ReplyStack items={judged} source={replySource} stored={asStored} aria-label="Reply" />}
           </div>
         </div>
         <div className="meet-choices">
@@ -1218,7 +1289,7 @@ export function TestDeck(props: TestDeckProps) {
       label="Test an agent"
       beats={beats}
       startAt={startAt}
-      unsaved={reply.trim() !== ""}
+      unsaved={hasContent(items)}
       onClose={home}
       onFinish={async () => {
         if (chosen) await finish(chosen);
@@ -1264,4 +1335,10 @@ function PullLink({ onPull }: { onPull(): void }) {
       </button>
     </p>
   );
+}
+
+/** The reply as it saves, blank text items dropped (R4). */
+function asSaved(items: ReplyItem[]): ReplyItem[] {
+  const kept = normalizeReply(items);
+  return kept ? replyItems(kept) : items;
 }

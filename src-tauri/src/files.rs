@@ -1,5 +1,6 @@
 //! Confined file I/O over the folders the user picked: text files, plus
-//! JPEG/PNG images (badge art, pasted images) written in and read back as data URIs.
+//! JPEG/PNG images (badge art, pasted images) written in and read back as data URIs,
+//! videos, and a reply's item files (copied in, read capped, and opened safely).
 //!
 //! Everything here is plain Rust with no Tauri types, so the confinement rules
 //! are unit-tested without a runtime. The Tauri commands in `lib.rs` are thin
@@ -598,8 +599,13 @@ fn video_temp_name() -> String {
 
 /// Streams `reader` into a new temp file in `dir`, hashing as it goes, and stops one byte
 /// past `cap`. Returns the temp path and the first 4 bytes of the SHA-256 as 8 hex. A
-/// source that runs past the cap is refused and its temp file removed.
-fn stream_to_temp(reader: impl std::io::Read, dir: &Path, cap: u64) -> Result<(PathBuf, String), String> {
+/// source that runs past the cap is refused with `too_large` and its temp file removed.
+fn stream_to_temp(
+    reader: impl std::io::Read,
+    dir: &Path,
+    cap: u64,
+    too_large: &str,
+) -> Result<(PathBuf, String), String> {
     use sha2::{Digest, Sha256};
     use std::io::{Read, Write};
 
@@ -608,14 +614,14 @@ fn stream_to_temp(reader: impl std::io::Read, dir: &Path, cap: u64) -> Result<(P
         .write(true)
         .create_new(true)
         .open(&temp)
-        .map_err(|e| format!("Cannot save the video: {e}"))?;
+        .map_err(|e| format!("Cannot save the file: {e}"))?;
     let mut limited = reader.take(cap.saturating_add(1));
     let mut hasher = Sha256::new();
     let mut total: u64 = 0;
     let mut buf = vec![0u8; 256 * 1024];
     let result = loop {
         let n = match limited.read(&mut buf) {
-            Ok(0) => break out.sync_all().map_err(|e| format!("Cannot save the video: {e}")),
+            Ok(0) => break out.sync_all().map_err(|e| format!("Cannot save the file: {e}")),
             Ok(n) => n,
             Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
             Err(_) => break Err(CANNOT_READ.to_string()),
@@ -625,11 +631,11 @@ fn stream_to_temp(reader: impl std::io::Read, dir: &Path, cap: u64) -> Result<(P
         };
         total = match total.checked_add(n as u64) {
             Some(t) if t <= cap => t,
-            _ => break Err(VIDEO_TOO_LARGE.to_string()),
+            _ => break Err(too_large.to_string()),
         };
         hasher.update(chunk);
         if let Err(e) = out.write_all(chunk) {
-            break Err(format!("Cannot save the video: {e}"));
+            break Err(format!("Cannot save the file: {e}"));
         }
     };
     drop(out);
@@ -685,17 +691,30 @@ fn video_target_dir(root: &Path, dir: &str) -> Result<(PathBuf, String), String>
     Ok((abs, rel_dir))
 }
 
-/// Copies an open, sniffed video into `dir` under `root` per KTD6 and returns its
-/// root-relative path. The cap is checked from `len` before anything is written and
-/// again while streaming. The name is `video-<8 hex>.<ext>`; the same bytes already there
-/// give the same path, and anything else at the name is refused and left alone.
-fn copy_open_video(file: std::fs::File, len: u64, ext: &str, root: &Path, dir: &str) -> Result<String, String> {
-    if len > MAX_VIDEO_BYTES {
-        return Err(VIDEO_TOO_LARGE.into());
+/// What a streamed copy is named and capped by.
+struct Streamed<'a> {
+    /// The name's prefix before the hash: `video` or `file`.
+    prefix: &'a str,
+    /// The lowercased extension, if the name has one.
+    ext: Option<&'a str>,
+    cap: u64,
+    too_large: &'a str,
+}
+
+/// Copies an open file into `dir` under `root` and returns its root-relative path. The cap
+/// is checked from `len` before anything is written and again while streaming. The name is
+/// `<prefix>-<8 hex>[.<ext>]`; the same bytes already there give the same path, and anything
+/// else at the name is refused and left alone.
+fn copy_open(file: std::fs::File, len: u64, how: &Streamed<'_>, root: &Path, dir: &str) -> Result<String, String> {
+    if len > how.cap {
+        return Err(how.too_large.into());
     }
     let (dir_abs, rel_dir) = video_target_dir(root, dir)?;
-    let (temp, hash) = stream_to_temp(file, &dir_abs, MAX_VIDEO_BYTES)?;
-    let name = format!("video-{hash}.{ext}");
+    let (temp, hash) = stream_to_temp(file, &dir_abs, how.cap, how.too_large)?;
+    let name = match how.ext {
+        Some(ext) => format!("{}-{hash}.{ext}", how.prefix),
+        None => format!("{}-{hash}", how.prefix),
+    };
     let rel = if rel_dir.is_empty() { name.clone() } else { format!("{rel_dir}/{name}") };
     let target = dir_abs.join(&name);
     let discard = |err: String| {
@@ -705,9 +724,9 @@ fn copy_open_video(file: std::fs::File, len: u64, ext: &str, root: &Path, dir: &
     match std::fs::symlink_metadata(&target) {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => match std::fs::rename(&temp, &target) {
             Ok(()) => Ok(rel),
-            Err(e) => discard(format!("Cannot save the video as \"{rel}\": {e}")),
+            Err(e) => discard(format!("Cannot save the file as \"{rel}\": {e}")),
         },
-        Err(e) => discard(format!("Cannot save the video as \"{rel}\": {e}")),
+        Err(e) => discard(format!("Cannot save the file as \"{rel}\": {e}")),
         Ok(m) if m.file_type().is_symlink() || !m.is_file() => {
             discard(format!("Something other than a plain file is already named {name}."))
         }
@@ -725,10 +744,27 @@ fn copy_open_video(file: std::fs::File, len: u64, ext: &str, root: &Path, dir: &
     }
 }
 
+/// Copies an open, sniffed video into `dir` under `root` per KTD6, as `video-<8 hex>.<ext>`.
+fn copy_open_video(file: std::fs::File, len: u64, ext: &str, root: &Path, dir: &str) -> Result<String, String> {
+    let how = Streamed { prefix: "video", ext: Some(ext), cap: MAX_VIDEO_BYTES, too_large: VIDEO_TOO_LARGE };
+    copy_open(file, len, &how, root, dir)
+}
+
+/// Copies an open file of any type into `<dir>/files/` under `root` (reply artifacts KTD2,
+/// KTD3), as `file-<8 hex>[.<ext>]`. The subfolder keeps a copied Markdown file from loading
+/// as a result, and the `file-` prefix keeps a stamp from being read out of its name.
+fn copy_open_file(file: std::fs::File, len: u64, ext: Option<&str>, root: &Path, dir: &str) -> Result<String, String> {
+    let how = Streamed { prefix: "file", ext, cap: MAX_FILE_BYTES, too_large: FILE_TOO_LARGE };
+    let files_dir = if dir.is_empty() { FILES_DIR.to_string() } else { format!("{dir}/{FILES_DIR}") };
+    copy_open(file, len, &how, root, &files_dir)
+}
+
 /// Adds the file at `source` to `dir` in `root`, sorted by content (KTD5): a PNG or JPEG
 /// by the pasted-image rules, a video whose family agrees with its extension by KTD6, and
-/// anything else refused. Errors never name `source`.
-pub fn add_file_in(root: &Path, dir: &str, source: &Path) -> Result<String, String> {
+/// anything else refused with `Accept::Media`, or kept as a file item with `Accept::Any`
+/// (reply artifacts KTD3). Returns the path and the kind the content gave it. Errors never
+/// name `source`.
+pub fn add_file_in(root: &Path, dir: &str, source: &Path, accept: Accept) -> Result<(String, ItemKind), String> {
     use std::io::Read;
 
     let Some((mut file, len)) = open_regular(source)? else {
@@ -743,12 +779,18 @@ pub fn add_file_in(root: &Path, dir: &str, source: &Path) -> Result<String, Stri
         file.take(MAX_PASTED_IMAGE_BYTES as u64 + 1)
             .read_to_end(&mut bytes)
             .map_err(|_| CANNOT_READ.to_string())?;
-        return save_image_in(root, dir, &bytes);
+        return Ok((save_image_in(root, dir, &bytes)?, ItemKind::Image));
     }
     let ext = source.file_name().and_then(|n| n.to_str()).and_then(video_ext_of_name);
-    match (ext, sniff_video(&head)) {
-        (Some(ext), Some(family)) if family_agrees(family, ext) => copy_open_video(file, len, ext, root, dir),
-        _ => Err(UNSUPPORTED_FILE.into()),
+    match (ext, sniff_video(&head), accept) {
+        (Some(ext), Some(family), _) if family_agrees(family, ext) => {
+            Ok((copy_open_video(file, len, ext, root, dir)?, ItemKind::Video))
+        }
+        (_, _, Accept::Any) => {
+            let ext = source.file_name().and_then(item_ext);
+            Ok((copy_open_file(file, len, ext.as_deref(), root, dir)?, ItemKind::File))
+        }
+        (_, _, Accept::Media) => Err(UNSUPPORTED_FILE.into()),
     }
 }
 
@@ -766,6 +808,162 @@ pub fn copy_video_in(data_root: &Path, from: &str, to_root: &Path, to_dir: &str)
         return Err(NOT_A_VIDEO.into());
     }
     copy_open_video(file, len, ext, to_root, to_dir)
+}
+
+// --- Reply item files (reply artifacts KTD2 to KTD4) ---
+
+/// The subfolder of a result's folder that holds its file items.
+pub const FILES_DIR: &str = "files";
+
+/// Largest file item accepted, in bytes (100 MiB, inclusive), the same as a video.
+pub const MAX_FILE_BYTES: u64 = 100 * 1024 * 1024;
+
+/// Largest item file `read_item_text_in` reads, in bytes (1 MiB, inclusive).
+pub const MAX_ITEM_TEXT_BYTES: u64 = 1024 * 1024;
+
+// Refusals, word for word in `src/domain/files.ts`.
+pub const FILE_TOO_LARGE: &str = "That file is larger than 100 MB.";
+pub const ITEM_TEXT_TOO_LARGE: &str = "That file is larger than 1 MB, so it can't be shown here.";
+pub const NOT_TEXT: &str = "That file is not UTF-8 text.";
+pub const NOT_IN_FOLDER: &str = "That file is not in the data folder.";
+pub const ITEM_MISSING: &str = "That file is no longer in the data folder.";
+pub const NOT_AN_ITEM: &str = "Only a reply's videos and files can be copied.";
+pub const CANNOT_OPEN: &str = "That file can't be opened.";
+
+/// Which files an add takes: `Media` (pictures and videos, as every rich box adds) or `Any`
+/// (a reply's items, where anything else becomes a file item).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Accept {
+    Media,
+    Any,
+}
+
+/// What an added file became, by its content.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ItemKind {
+    Image,
+    Video,
+    File,
+}
+
+/// The longest extension a file item keeps.
+const MAX_ITEM_EXT: usize = 16;
+
+/// The extension a file item is stored under: the original's, lowercased, when it is 1 to
+/// 16 ASCII letters and digits. Anything else is dropped, so every stored name matches
+/// `is_file_item_name`.
+fn item_ext(name: &std::ffi::OsStr) -> Option<String> {
+    let ext = Path::new(name).extension()?.to_str()?;
+    let fits = (1..=MAX_ITEM_EXT).contains(&ext.len()) && ext.bytes().all(|b| b.is_ascii_alphanumeric());
+    fits.then(|| ext.to_ascii_lowercase())
+}
+
+/// Whether `name` is a stored file item's name: `file-`, 8 lowercase hex, then optionally
+/// `.` and 1 to 16 lowercase ASCII letters or digits.
+pub fn is_file_item_name(name: &str) -> bool {
+    let Some(rest) = name.strip_prefix("file-") else {
+        return false;
+    };
+    let (hash, ext) = match rest.split_once('.') {
+        Some((hash, ext)) => (hash, Some(ext)),
+        None => (rest, None),
+    };
+    let hex = hash.len() == 8 && hash.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'));
+    let ext_ok = ext.is_none_or(|e| {
+        (1..=MAX_ITEM_EXT).contains(&e.len()) && e.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
+    });
+    hex && ext_ok
+}
+
+/// Resolves an item path inside `root`. Refuses an absolute path and any `..`, even one that
+/// stays inside, since the page only ever holds the plain paths Rust gave it.
+fn item_path(root: &Path, rel: &str) -> Result<PathBuf, String> {
+    use std::path::Component;
+    let path = Path::new(rel);
+    if path.is_absolute() || path.components().any(|c| !matches!(c, Component::Normal(_) | Component::CurDir)) {
+        return Err(NOT_IN_FOLDER.into());
+    }
+    resolve_in_root(root, rel).map_err(|_| NOT_IN_FOLDER.to_string())
+}
+
+/// Reads an item file in `root` as UTF-8 text, up to `MAX_ITEM_TEXT_BYTES`. `None` when it
+/// does not exist. Larger files are refused from their size, and again while reading, so a
+/// file that grows never loads whole. `read_text_in` stays uncapped for results.
+pub fn read_item_text_in(root: &Path, rel: &str) -> Result<Option<String>, String> {
+    use std::io::Read;
+    let path = item_path(root, rel)?;
+    let (file, len) = match open_regular(&path) {
+        Ok(Some(open)) => open,
+        Ok(None) => return Err(CANNOT_READ.into()),
+        Err(_) if std::fs::symlink_metadata(&path).is_err() => return Ok(None),
+        Err(e) => return Err(e),
+    };
+    if len > MAX_ITEM_TEXT_BYTES {
+        return Err(ITEM_TEXT_TOO_LARGE.into());
+    }
+    let mut bytes = Vec::new();
+    file.take(MAX_ITEM_TEXT_BYTES + 1).read_to_end(&mut bytes).map_err(|_| CANNOT_READ.to_string())?;
+    if bytes.len() as u64 > MAX_ITEM_TEXT_BYTES {
+        return Err(ITEM_TEXT_TOO_LARGE.into());
+    }
+    String::from_utf8(bytes).map(Some).map_err(|_| NOT_TEXT.to_string())
+}
+
+/// The file types `open_item` hands to their default app (KTD4): documents, pictures and
+/// archives. Everything else is revealed in its folder, so a click never runs an agent's code.
+const OPEN_EXTENSIONS: [&str; 15] =
+    ["pdf", "png", "jpg", "jpeg", "gif", "webp", "txt", "md", "csv", "json", "docx", "xlsx", "pptx", "odt", "zip"];
+
+/// What `open_item` does with a file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OpenTarget {
+    /// Open it in its default app.
+    Open(PathBuf),
+    /// Show it in its folder.
+    Reveal(PathBuf),
+}
+
+/// Decides how to open the item file at `rel` in `root`. Only a regular file is opened or
+/// revealed, never a folder, since an app bundle is one. The type is judged on the resolved
+/// path, so a link named `.pdf` that points at a script is revealed.
+pub fn open_target_in(root: &Path, rel: &str) -> Result<OpenTarget, String> {
+    let path = item_path(root, rel)?;
+    let path = path.canonicalize().map_err(|_| ITEM_MISSING.to_string())?;
+    if !path.starts_with(root) {
+        return Err(NOT_IN_FOLDER.into());
+    }
+    if !std::fs::metadata(&path).is_ok_and(|m| m.is_file()) {
+        return Err(ITEM_MISSING.into());
+    }
+    let ext = path.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase);
+    if ext.is_some_and(|e| OPEN_EXTENSIONS.contains(&e.as_str())) {
+        Ok(OpenTarget::Open(path))
+    } else {
+        Ok(OpenTarget::Reveal(path))
+    }
+}
+
+/// Copies a reply's item from `from` in the data root into `to_dir` of a target root, under
+/// its content-addressed name, for the carry. A video goes as `copy_video_in` copies it, and a
+/// file item into `<to_dir>/files/` with its extension kept. Anything else is refused.
+pub fn copy_item_in(data_root: &Path, from: &str, to_root: &Path, to_dir: &str) -> Result<String, String> {
+    let parts = normalize_rel(from)?;
+    let name = parts.last().and_then(|n| n.to_str()).ok_or(NOT_AN_ITEM)?;
+    if video_ext_of_name(name).is_some() && !name.starts_with("file-") {
+        return copy_video_in(data_root, from, to_root, to_dir);
+    }
+    let in_files = parts.len() >= 2 && parts.get(parts.len() - 2).is_some_and(|p| *p == FILES_DIR);
+    if !in_files || !is_file_item_name(name) {
+        return Err(NOT_AN_ITEM.into());
+    }
+    let source = resolve_in_root(data_root, from)?;
+    let Some((file, len)) = open_regular(&source).map_err(|_| NOT_AN_ITEM.to_string())? else {
+        return Err(NOT_AN_ITEM.into());
+    };
+    let ext = name.split_once('.').map(|(_, ext)| ext);
+    copy_open_file(file, len, ext, to_root, to_dir)
 }
 
 // --- Adding files by pick, drop or paste (KTD5) ---
@@ -815,11 +1013,13 @@ pub struct Candidate {
     pub path: Option<PathBuf>,
 }
 
-/// The result for one file: a root-relative path, or a refusal. Exactly one is set.
+/// The result for one file: a root-relative path and the kind its content gave it, or a
+/// refusal. `name` is the original file name, the item's display name.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct AddedFile {
     pub name: String,
     pub path: Option<String>,
+    pub kind: Option<ItemKind>,
     pub error: Option<String>,
 }
 
@@ -858,17 +1058,17 @@ pub fn match_pasted(clipboard: &[PathBuf], expected: &[(String, u64)]) -> Vec<Ca
 }
 
 /// Adds each candidate to `dir` in `root`, in order. One failure never stops the rest.
-pub fn add_files_in(root: &Path, dir: &str, candidates: Vec<Candidate>) -> Vec<AddedFile> {
+pub fn add_files_in(root: &Path, dir: &str, candidates: Vec<Candidate>, accept: Accept) -> Vec<AddedFile> {
     candidates
         .into_iter()
         .map(|c| {
             let result = match &c.path {
                 None => Err(NOT_ADDABLE.to_string()),
-                Some(path) => add_file_in(root, dir, path),
+                Some(path) => add_file_in(root, dir, path, accept),
             };
             match result {
-                Ok(rel) => AddedFile { name: c.name, path: Some(rel), error: None },
-                Err(e) => AddedFile { name: c.name, path: None, error: Some(e) },
+                Ok((rel, kind)) => AddedFile { name: c.name, path: Some(rel), kind: Some(kind), error: None },
+                Err(e) => AddedFile { name: c.name, path: None, kind: None, error: Some(e) },
             }
         })
         .collect()
@@ -1716,7 +1916,7 @@ mod tests {
             ("talk.webm", ebml("webm", 64), "webm"),
         ];
         for (name, bytes, ext) in cases {
-            let rel = add_file_in(&root, DIR, &source(&src, name, &bytes)).unwrap();
+            let rel = add_media(&root, DIR, &source(&src, name, &bytes)).unwrap();
             assert_eq!(rel, format!("{DIR}/video-{}.{ext}", hash8(&bytes)), "{name}");
             assert_eq!(fs::read(root.join(&rel)).unwrap(), bytes, "{name}");
         }
@@ -1728,7 +1928,7 @@ mod tests {
         let (_d, root) = root();
         let src = sources();
         let bytes = ftyp(b"qt  ", 40);
-        let rel = add_file_in(&root, "", &source(&src, "Clip 1.MOV", &bytes)).unwrap();
+        let rel = add_media(&root, "", &source(&src, "Clip 1.MOV", &bytes)).unwrap();
         assert_eq!(rel, format!("video-{}.mov", hash8(&bytes)));
     }
 
@@ -1747,7 +1947,7 @@ mod tests {
             ("empty.mp4", Vec::new()),
         ];
         for (name, bytes) in cases {
-            let err = add_file_in(&root, DIR, &source(&src, name, &bytes)).unwrap_err();
+            let err = add_media(&root, DIR, &source(&src, name, &bytes)).unwrap_err();
             assert_eq!(err, UNSUPPORTED_FILE, "{name}");
         }
         assert_eq!(fs::read_dir(&root).unwrap().count(), 0);
@@ -1792,13 +1992,13 @@ mod tests {
         // One byte over, sparse: refused from its size before anything is written.
         let big = source(&src, "big.mp4", &ftyp(b"isom", 32));
         fs::File::options().write(true).open(&big).unwrap().set_len(MAX_VIDEO_BYTES + 1).unwrap();
-        assert_eq!(add_file_in(&root, DIR, &big).unwrap_err(), VIDEO_TOO_LARGE);
+        assert_eq!(add_media(&root, DIR, &big).unwrap_err(), VIDEO_TOO_LARGE);
         assert_eq!(fs::read_dir(&root).unwrap().count(), 0);
 
         // Exactly the cap is copied whole.
         let at_cap = source(&src, "cap.mp4", &ftyp(b"isom", 32));
         fs::File::options().write(true).open(&at_cap).unwrap().set_len(MAX_VIDEO_BYTES).unwrap();
-        let rel = add_file_in(&root, DIR, &at_cap).unwrap();
+        let rel = add_media(&root, DIR, &at_cap).unwrap();
         assert_eq!(fs::metadata(root.join(&rel)).unwrap().len(), MAX_VIDEO_BYTES);
         assert_eq!(all_entries(&root.join(DIR)), vec![rel.rsplit('/').next().unwrap().to_string()]);
     }
@@ -1807,13 +2007,13 @@ mod tests {
     fn a_source_that_grows_past_the_cap_while_streaming_is_refused_and_its_temp_removed() {
         let dir = tempfile::tempdir().unwrap();
         // The reader yields one byte more than the cap, as a file growing during the copy would.
-        let err = stream_to_temp(std::io::Cursor::new(vec![7u8; 17]), dir.path(), 16).unwrap_err();
+        let err = stream_to_temp(std::io::Cursor::new(vec![7u8; 17]), dir.path(), 16, VIDEO_TOO_LARGE).unwrap_err();
         assert_eq!(err, VIDEO_TOO_LARGE);
         assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 0);
 
         // At the cap it streams into one temp file carrying the marker, hashed as it went.
         let bytes = vec![7u8; 16];
-        let (temp, hash) = stream_to_temp(std::io::Cursor::new(bytes.clone()), dir.path(), 16).unwrap();
+        let (temp, hash) = stream_to_temp(std::io::Cursor::new(bytes.clone()), dir.path(), 16, VIDEO_TOO_LARGE).unwrap();
         assert_eq!(hash, hash8(&bytes));
         assert_eq!(temp.parent(), Some(dir.path()));
         assert!(temp.file_name().unwrap().to_string_lossy().contains(TEMP_MARKER));
@@ -1825,10 +2025,10 @@ mod tests {
         let (_d, root) = root();
         let src = sources();
         let bytes = ftyp(b"isom", 500);
-        let first = add_file_in(&root, DIR, &source(&src, "a.mp4", &bytes)).unwrap();
+        let first = add_media(&root, DIR, &source(&src, "a.mp4", &bytes)).unwrap();
         let before = fs::symlink_metadata(root.join(&first)).unwrap();
         // Another name, same bytes.
-        let second = add_file_in(&root, DIR, &source(&src, "b.MP4", &bytes)).unwrap();
+        let second = add_media(&root, DIR, &source(&src, "b.MP4", &bytes)).unwrap();
         assert_eq!(second, first);
         let after = fs::symlink_metadata(root.join(&first)).unwrap();
         assert_eq!(after.modified().unwrap(), before.modified().unwrap());
@@ -1855,16 +2055,16 @@ mod tests {
         let mut same_len = bytes.clone();
         *same_len.last_mut().unwrap() = 1;
         fs::write(&at_name, &same_len).unwrap();
-        assert_eq!(add_file_in(&root, DIR, &from).unwrap_err(), format!("A different file is already named {name}."));
+        assert_eq!(add_media(&root, DIR, &from).unwrap_err(), format!("A different file is already named {name}."));
         assert_eq!(fs::read(&at_name).unwrap(), same_len);
 
         fs::write(&at_name, b"short").unwrap();
-        assert_eq!(add_file_in(&root, DIR, &from).unwrap_err(), format!("A different file is already named {name}."));
+        assert_eq!(add_media(&root, DIR, &from).unwrap_err(), format!("A different file is already named {name}."));
         assert_eq!(fs::read(&at_name).unwrap(), b"short");
 
         fs::remove_file(&at_name).unwrap();
         fs::create_dir(&at_name).unwrap();
-        assert!(add_file_in(&root, DIR, &from).is_err());
+        assert!(add_media(&root, DIR, &from).is_err());
         assert!(at_name.is_dir());
         assert_eq!(fs::read_dir(&at_name).unwrap().count(), 0);
         // Only the folder is there: no temp file was left by any refusal.
@@ -1881,14 +2081,14 @@ mod tests {
         let name = format!("video-{}.mp4", hash8(&bytes));
         write_text_in(&root, &format!("{DIR}/foo.md"), "foo").unwrap();
         symlink(root.join(DIR).join("foo.md"), root.join(DIR).join(&name)).unwrap();
-        assert!(add_file_in(&root, DIR, &source(&src, "clip.mp4", &bytes)).is_err());
+        assert!(add_media(&root, DIR, &source(&src, "clip.mp4", &bytes)).is_err());
         assert_eq!(fs::read_to_string(root.join(DIR).join("foo.md")).unwrap(), "foo");
         assert!(fs::symlink_metadata(root.join(DIR).join(&name)).unwrap().file_type().is_symlink());
 
         // A link to a file holding the very same bytes is refused too.
         copy_bytes_into_root(&root, "other/same.mp4", &bytes).unwrap();
         symlink("same.mp4", root.join("other").join(&name)).unwrap();
-        assert!(add_file_in(&root, "other", &source(&src, "clip2.mp4", &bytes)).is_err());
+        assert!(add_media(&root, "other", &source(&src, "clip2.mp4", &bytes)).is_err());
         assert!(fs::symlink_metadata(root.join("other").join(&name)).unwrap().file_type().is_symlink());
         assert_eq!(all_entries(&root.join("other")).len(), 2);
     }
@@ -1899,11 +2099,11 @@ mod tests {
         let src = sources();
         let from = source(&src, "clip.mp4", &ftyp(b"isom", 64));
         for dir in ["..", "../out", "a/../..", "collections/../../out", "/"] {
-            assert!(add_file_in(&root, dir, &from).is_err(), "dir {dir:?}");
+            assert!(add_media(&root, dir, &from).is_err(), "dir {dir:?}");
         }
         let abs = outer.path().join("abs");
-        assert!(add_file_in(&root, abs.to_str().unwrap(), &from).is_err());
-        assert!(add_file_in(&root, root.join("inside").to_str().unwrap(), &from).is_err());
+        assert!(add_media(&root, abs.to_str().unwrap(), &from).is_err());
+        assert!(add_media(&root, root.join("inside").to_str().unwrap(), &from).is_err());
         outer_holds_only_the_root(&outer);
         assert_eq!(fs::read_dir(&root).unwrap().count(), 0);
     }
@@ -1917,8 +2117,8 @@ mod tests {
         symlink(outside.path(), root.join("link")).unwrap();
         let src = sources();
         let from = source(&src, "clip.mp4", &ftyp(b"isom", 64));
-        assert!(add_file_in(&root, "link", &from).is_err());
-        assert!(add_file_in(&root, "link/deeper", &from).is_err());
+        assert!(add_media(&root, "link", &from).is_err());
+        assert!(add_media(&root, "link/deeper", &from).is_err());
         assert_eq!(fs::read_dir(outside.path()).unwrap().count(), 0);
     }
 
@@ -1966,15 +2166,15 @@ mod tests {
         let src = sources();
         let p = png(300);
         // The content decides, not the name.
-        let rel = add_file_in(&root, DIR, &source(&src, "shot.png", &p)).unwrap();
+        let rel = add_media(&root, DIR, &source(&src, "shot.png", &p)).unwrap();
         assert_eq!(rel, format!("{DIR}/image-{}.png", hash8(&p)));
         assert_eq!(fs::read(root.join(&rel)).unwrap(), p);
         let j = jpeg(300);
-        let rel = add_file_in(&root, DIR, &source(&src, "photo.JPG", &j)).unwrap();
+        let rel = add_media(&root, DIR, &source(&src, "photo.JPG", &j)).unwrap();
         assert_eq!(rel, format!("{DIR}/image-{}.jpg", hash8(&j)));
 
         let big = source(&src, "big.png", &png(MAX_PASTED_IMAGE_BYTES + 1));
-        assert_eq!(add_file_in(&root, DIR, &big).unwrap_err(), "That image is larger than 10 MB.");
+        assert_eq!(add_media(&root, DIR, &big).unwrap_err(), "That image is larger than 10 MB.");
         assert_eq!(all_entries(&root.join(DIR)).len(), 2);
     }
 
@@ -1989,7 +2189,7 @@ mod tests {
         let (tx, rx) = std::sync::mpsc::channel();
         let root2 = root.clone();
         std::thread::spawn(move || {
-            let _ = tx.send(add_file_in(&root2, DIR, &fifo));
+            let _ = tx.send(add_media(&root2, DIR, &fifo));
         });
         let result = rx.recv_timeout(std::time::Duration::from_secs(5)).expect("the add blocked on a FIFO");
         assert_eq!(result.unwrap_err(), UNSUPPORTED_FILE);
@@ -2001,11 +2201,11 @@ mod tests {
         let (_d, root) = root();
         let src = sources();
         let missing = src.path().join("gone.mov");
-        let err = add_file_in(&root, DIR, &missing).unwrap_err();
+        let err = add_media(&root, DIR, &missing).unwrap_err();
         assert_eq!(err, CANNOT_READ);
         let folder = src.path().join("clips.mov");
         fs::create_dir(&folder).unwrap();
-        assert_eq!(add_file_in(&root, DIR, &folder).unwrap_err(), UNSUPPORTED_FILE);
+        assert_eq!(add_media(&root, DIR, &folder).unwrap_err(), UNSUPPORTED_FILE);
         assert_eq!(fs::read_dir(&root).unwrap().count(), 0);
     }
 
@@ -2082,6 +2282,7 @@ mod tests {
             &root,
             DIR,
             take_dropped(&mut approvals, &[path_str(&existing), path_str(&missing)], now),
+            Accept::Any,
         );
         assert_eq!(results.len(), 2);
         assert_eq!(results[0], results[1]);
@@ -2111,14 +2312,15 @@ mod tests {
         let mut approvals = DropApprovals::default();
         approvals.approve(&paths, now);
         let sent: Vec<String> = paths.iter().map(|p| path_str(p)).collect();
-        let results = add_files_in(&root, DIR, take_dropped(&mut approvals, &sent, now));
-        let saved = |name: &str, path: String| AddedFile { name: name.into(), path: Some(path), error: None };
-        let refused = |name: &str, error: &str| AddedFile { name: name.into(), path: None, error: Some(error.into()) };
+        let results = add_files_in(&root, DIR, take_dropped(&mut approvals, &sent, now), Accept::Media);
+        let saved = |name: &str, path: String, kind| AddedFile { name: name.into(), path: Some(path), kind: Some(kind), error: None };
+        let refused =
+            |name: &str, error: &str| AddedFile { name: name.into(), path: None, kind: None, error: Some(error.into()) };
         assert_eq!(
             results,
             vec![
-                saved("Clip.MOV", format!("{DIR}/video-{}.mov", hash8(&mov))),
-                saved("shot.png", format!("{DIR}/image-{}.png", hash8(&p))),
+                saved("Clip.MOV", format!("{DIR}/video-{}.mov", hash8(&mov)), ItemKind::Video),
+                saved("shot.png", format!("{DIR}/image-{}.png", hash8(&p)), ItemKind::Image),
                 refused("notes.txt", UNSUPPORTED_FILE),
                 refused("clips", UNSUPPORTED_FILE),
             ]
@@ -2137,14 +2339,14 @@ mod tests {
 
         let matched = match_pasted(&clipboard, &[("a.mov".into(), 40)]);
         assert_eq!(matched, vec![Candidate { name: "a.mov".into(), path: Some(clipboard[0].clone()) }]);
-        let results = add_files_in(&root, DIR, matched);
+        let results = add_files_in(&root, DIR, matched, Accept::Media);
         assert_eq!(results[0].path.as_deref(), Some(format!("{DIR}/video-{}.mov", hash8(&a)).as_str()));
         assert_eq!(all_entries(&root.join(DIR)), vec![format!("video-{}.mov", hash8(&a))]);
 
         // A size that does not match copies nothing and never names a clipboard path.
         let matched = match_pasted(&clipboard, &[("a.mov".into(), 41), ("b.mov".into(), 40), ("c.mov".into(), 40)]);
         assert!(matched.iter().all(|c| c.path.is_none()));
-        let results = add_files_in(&root, DIR, matched);
+        let results = add_files_in(&root, DIR, matched, Accept::Media);
         let src_text = path_str(src.path());
         for r in &results {
             assert_eq!(r.error.as_deref(), Some(NOT_ADDABLE));
@@ -2181,15 +2383,364 @@ mod tests {
 
     #[test]
     fn an_added_file_serializes_to_the_contract_shape() {
-        let saved = AddedFile { name: "a.mov".into(), path: Some("d/video-1a2b3c4d.mov".into()), error: None };
+        let saved =
+            AddedFile { name: "a.mov".into(), path: Some("d/video-1a2b3c4d.mov".into()), kind: Some(ItemKind::Video), error: None };
         assert_eq!(
             serde_json::to_value(&saved).unwrap(),
-            serde_json::json!({ "name": "a.mov", "path": "d/video-1a2b3c4d.mov", "error": null })
+            serde_json::json!({ "name": "a.mov", "path": "d/video-1a2b3c4d.mov", "kind": "video", "error": null })
         );
-        let refused = AddedFile { name: "a.txt".into(), path: None, error: Some(UNSUPPORTED_FILE.into()) };
+        let file = AddedFile {
+            name: "Report Final.PDF".into(),
+            path: Some("d/files/file-1a2b3c4d.pdf".into()),
+            kind: Some(ItemKind::File),
+            error: None,
+        };
+        assert_eq!(
+            serde_json::to_value(&file).unwrap(),
+            serde_json::json!({ "name": "Report Final.PDF", "path": "d/files/file-1a2b3c4d.pdf", "kind": "file", "error": null })
+        );
+        assert_eq!(serde_json::to_value(ItemKind::Image).unwrap(), serde_json::json!("image"));
+        let refused = AddedFile { name: "a.txt".into(), path: None, kind: None, error: Some(UNSUPPORTED_FILE.into()) };
         assert_eq!(
             serde_json::to_value(&refused).unwrap(),
-            serde_json::json!({ "name": "a.txt", "path": null, "error": UNSUPPORTED_FILE })
+            serde_json::json!({ "name": "a.txt", "path": null, "kind": null, "error": UNSUPPORTED_FILE })
         );
+    }
+
+    // --- Reply item files (reply artifacts U2) ---
+
+    /// Adds as a rich box does: pictures and videos only, the path alone.
+    fn add_media(root: &Path, dir: &str, source: &Path) -> Result<String, String> {
+        add_file_in(root, dir, source, Accept::Media).map(|(path, _)| path)
+    }
+
+    /// Adds as the reply editor does: any file, with the kind its content gave it.
+    fn add_any(root: &Path, dir: &str, source: &Path) -> Result<(String, ItemKind), String> {
+        add_file_in(root, dir, source, Accept::Any)
+    }
+
+    const PDF: &[u8] = b"%PDF-1.7\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n";
+
+    #[test]
+    fn any_file_is_copied_into_files_under_its_hash_with_its_extension_lowercased() {
+        let (_d, root) = root();
+        let src = sources();
+        let zip = b"PK\x03\x04 a zip archive".to_vec();
+        let cases: [(&str, &[u8], &str); 5] = [
+            ("Report Final.PDF", PDF, ".pdf"),
+            ("notes.md", b"# Notes\n", ".md"),
+            ("bundle.zip", &zip, ".zip"),
+            ("Makefile", b"all:\n\ttrue\n", ""),
+            ("archive.tar.gz", b"\x1f\x8b gzip", ".gz"),
+        ];
+        for (name, bytes, ext) in cases {
+            let (rel, kind) = add_any(&root, DIR, &source(&src, name, bytes)).unwrap();
+            assert_eq!(rel, format!("{DIR}/files/file-{}{ext}", hash8(bytes)), "{name}");
+            assert_eq!(kind, ItemKind::File, "{name}");
+            assert_eq!(fs::read(root.join(&rel)).unwrap(), bytes, "{name}");
+            assert!(is_file_item_name(rel.rsplit('/').next().unwrap()), "{rel}");
+        }
+        // Only the copies are there: no temp file is left.
+        assert_eq!(all_entries(&root.join(DIR).join(FILES_DIR)).len(), 5);
+    }
+
+    #[test]
+    fn an_odd_extension_is_dropped_rather_than_carried_into_the_name() {
+        let (_d, root) = root();
+        let src = sources();
+        for name in [".bashrc", "trailing.", "space.b c", "long.abcdefghijklmnopq", "dash.tar-gz", "accent.pdé"] {
+            let bytes = format!("contents of {name}");
+            let (rel, _) = add_any(&root, "", &source(&src, name, bytes.as_bytes())).unwrap();
+            assert_eq!(rel, format!("files/file-{}", hash8(bytes.as_bytes())), "{name:?}");
+        }
+        // Sixteen characters is the longest kept.
+        let (rel, _) = add_any(&root, "", &source(&src, "ok.abcdefghijklmnop", b"sixteen")).unwrap();
+        assert!(rel.ends_with(".abcdefghijklmnop"), "{rel}");
+    }
+
+    #[test]
+    fn the_same_file_twice_is_one_copy_and_a_different_one_at_the_name_is_refused() {
+        let (_d, root) = root();
+        let src = sources();
+        let (first, _) = add_any(&root, DIR, &source(&src, "a.pdf", PDF)).unwrap();
+        let before = fs::metadata(root.join(&first)).unwrap().modified().unwrap();
+        let (second, _) = add_any(&root, DIR, &source(&src, "copy of a.PDF", PDF)).unwrap();
+        assert_eq!(second, first);
+        assert_eq!(fs::metadata(root.join(&first)).unwrap().modified().unwrap(), before);
+
+        // A hash-prefix collision: other bytes already hold the name.
+        let name = first.rsplit('/').next().unwrap().to_string();
+        fs::write(root.join(&first), b"other bytes").unwrap();
+        let err = add_any(&root, DIR, &source(&src, "b.pdf", PDF)).unwrap_err();
+        assert_eq!(err, format!("A different file is already named {name}."));
+        assert_eq!(fs::read(root.join(&first)).unwrap(), b"other bytes");
+        assert_eq!(all_entries(&root.join(DIR).join(FILES_DIR)), vec![name]);
+    }
+
+    #[test]
+    fn the_file_cap_is_100_mib_inclusive_with_its_own_refusal() {
+        assert_eq!(MAX_FILE_BYTES, 100 * 1024 * 1024);
+        let (_d, root) = root();
+        let src = sources();
+        let big = source(&src, "big.zip", b"PK");
+        fs::File::options().write(true).open(&big).unwrap().set_len(MAX_FILE_BYTES + 1).unwrap();
+        assert_eq!(add_any(&root, DIR, &big).unwrap_err(), FILE_TOO_LARGE);
+        assert!(!root.join(DIR).join(FILES_DIR).exists() || all_entries(&root.join(DIR).join(FILES_DIR)).is_empty());
+
+        let at_cap = source(&src, "cap.zip", b"PK");
+        fs::File::options().write(true).open(&at_cap).unwrap().set_len(MAX_FILE_BYTES).unwrap();
+        let (rel, _) = add_any(&root, DIR, &at_cap).unwrap();
+        assert_eq!(fs::metadata(root.join(&rel)).unwrap().len(), MAX_FILE_BYTES);
+
+        // A source that grows past the cap while streaming gets the file refusal too.
+        let dir = tempfile::tempdir().unwrap();
+        let err = stream_to_temp(std::io::Cursor::new(vec![7u8; 17]), dir.path(), 16, FILE_TOO_LARGE).unwrap_err();
+        assert_eq!(err, FILE_TOO_LARGE);
+        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn content_decides_the_kind_whichever_key_added_it() {
+        let (_d, root) = root();
+        let src = sources();
+        let p = png(64);
+        let mov = ftyp(b"qt  ", 64);
+        let gif = b"GIF89a tiny".to_vec();
+        let (rel, kind) = add_any(&root, DIR, &source(&src, "shot.png", &p)).unwrap();
+        assert_eq!((rel, kind), (format!("{DIR}/image-{}.png", hash8(&p)), ItemKind::Image));
+        // A PNG named as something else is still a picture.
+        let (rel, kind) = add_any(&root, DIR, &source(&src, "shot.dat", &p)).unwrap();
+        assert_eq!((rel, kind), (format!("{DIR}/image-{}.png", hash8(&p)), ItemKind::Image));
+        let (rel, kind) = add_any(&root, DIR, &source(&src, "Clip.MOV", &mov)).unwrap();
+        assert_eq!((rel, kind), (format!("{DIR}/video-{}.mov", hash8(&mov)), ItemKind::Video));
+        // A picture format other than PNG and JPEG is a file item.
+        let (rel, kind) = add_any(&root, DIR, &source(&src, "anim.GIF", &gif)).unwrap();
+        assert_eq!((rel, kind), (format!("{DIR}/files/file-{}.gif", hash8(&gif)), ItemKind::File));
+        // A video whose content disagrees with its name is kept as a file, never played.
+        let (rel, kind) = add_any(&root, DIR, &source(&src, "fake.mp4", b"not a video")).unwrap();
+        assert_eq!((rel, kind), (format!("{DIR}/files/file-{}.mp4", hash8(b"not a video")), ItemKind::File));
+        // Media adds report their kind too.
+        let (_, kind) = add_file_in(&root, DIR, &source(&src, "again.png", &p), Accept::Media).unwrap();
+        assert_eq!(kind, ItemKind::Image);
+    }
+
+    #[test]
+    fn with_accept_media_a_pdf_is_still_refused_as_today() {
+        let (_d, root) = root();
+        let src = sources();
+        let pdf = source(&src, "spec.pdf", PDF);
+        assert_eq!(add_file_in(&root, DIR, &pdf, Accept::Media).unwrap_err(), UNSUPPORTED_FILE);
+        let now = Instant::now();
+        let mut approvals = DropApprovals::default();
+        approvals.approve(std::slice::from_ref(&pdf), now);
+        let results = add_files_in(&root, DIR, take_dropped(&mut approvals, &[path_str(&pdf)], now), Accept::Media);
+        assert_eq!(results[0].error.as_deref(), Some(UNSUPPORTED_FILE));
+        assert_eq!(results[0].kind, None);
+        let results = add_files_in(&root, DIR, match_pasted(std::slice::from_ref(&pdf), &[("spec.pdf".into(), PDF.len() as u64)]), Accept::Media);
+        assert_eq!(results[0].error.as_deref(), Some(UNSUPPORTED_FILE));
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 0);
+
+        // The same drop with accept any is a file item named by its original name.
+        approvals.approve(std::slice::from_ref(&pdf), now);
+        let results = add_files_in(&root, DIR, take_dropped(&mut approvals, &[path_str(&pdf)], now), Accept::Any);
+        assert_eq!(
+            results,
+            vec![AddedFile {
+                name: "spec.pdf".into(),
+                path: Some(format!("{DIR}/files/file-{}.pdf", hash8(PDF))),
+                kind: Some(ItemKind::File),
+                error: None,
+            }]
+        );
+    }
+
+    #[test]
+    fn any_still_refuses_a_folder_a_missing_file_and_a_fifo_without_a_path() {
+        let (_d, root) = root();
+        let src = sources();
+        let folder = src.path().join("Some.app");
+        fs::create_dir(&folder).unwrap();
+        assert_eq!(add_any(&root, DIR, &folder).unwrap_err(), UNSUPPORTED_FILE);
+        assert_eq!(add_any(&root, DIR, &src.path().join("gone.pdf")).unwrap_err(), CANNOT_READ);
+        #[cfg(unix)]
+        {
+            let fifo = src.path().join("pipe.txt");
+            assert!(std::process::Command::new("mkfifo").arg(&fifo).status().unwrap().success());
+            assert_eq!(add_any(&root, DIR, &fifo).unwrap_err(), UNSUPPORTED_FILE);
+        }
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn a_file_folder_that_leaves_the_root_is_refused() {
+        let (outer, root) = nested_root();
+        let src = sources();
+        let from = source(&src, "a.pdf", PDF);
+        for dir in ["..", "../out", "a/../..", "/"] {
+            assert!(add_any(&root, dir, &from).is_err(), "dir {dir:?}");
+        }
+        outer_holds_only_the_root(&outer);
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn the_file_item_name_rule_is_strict() {
+        for ok in ["file-1a2b3c4d.pdf", "file-00000000", "file-deadbeef.md", "file-1a2b3c4d.abcdefghijklmnop"] {
+            assert!(is_file_item_name(ok), "{ok}");
+        }
+        for bad in [
+            "file-1a2b3c4d.PDF",
+            "file-1A2B3C4D.pdf",
+            "file-1a2b3c4.pdf",
+            "file-1a2b3c4d5.pdf",
+            "file-1a2b3c4d.",
+            "file-1a2b3c4d.p f",
+            "file-1a2b3c4d.pdf.exe/",
+            "file-1a2b3c4d.tar.gz",
+            "video-1a2b3c4d.mp4",
+            "xfile-1a2b3c4d.pdf",
+            "file-1a2b3c4d.abcdefghijklmnopq",
+            "",
+        ] {
+            assert!(!is_file_item_name(bad), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn read_item_text_reads_up_to_one_mib_and_refuses_past_it() {
+        assert_eq!(MAX_ITEM_TEXT_BYTES, 1024 * 1024);
+        let (_d, root) = root();
+        let at_cap = "a".repeat(MAX_ITEM_TEXT_BYTES as usize);
+        write_text_in(&root, "r/files/file-00000001.md", &at_cap).unwrap();
+        assert_eq!(read_item_text_in(&root, "r/files/file-00000001.md").unwrap().as_deref(), Some(at_cap.as_str()));
+        write_text_in(&root, "r/files/file-00000002.md", &format!("{at_cap}b")).unwrap();
+        assert_eq!(read_item_text_in(&root, "r/files/file-00000002.md").unwrap_err(), ITEM_TEXT_TOO_LARGE);
+        // A sparse file far past the cap is refused from its size.
+        write_text_in(&root, "r/files/file-00000003.txt", "x").unwrap();
+        fs::File::options().write(true).open(root.join("r/files/file-00000003.txt")).unwrap().set_len(1 << 30).unwrap();
+        assert_eq!(read_item_text_in(&root, "r/files/file-00000003.txt").unwrap_err(), ITEM_TEXT_TOO_LARGE);
+        assert_eq!(read_item_text_in(&root, "r/files/missing.md").unwrap(), None);
+    }
+
+    #[test]
+    fn read_item_text_refuses_bytes_that_are_not_utf8_and_paths_outside_the_folder() {
+        let (outer, root) = nested_root();
+        copy_bytes_into_root(&root, "files/file-00000001.txt", &[b'a', 0xFF, 0xFE, b'b']).unwrap();
+        assert_eq!(read_item_text_in(&root, "files/file-00000001.txt").unwrap_err(), NOT_TEXT);
+        fs::write(outer.path().join("secret.md"), "secret").unwrap();
+        for rel in ["../secret.md", "files/../../secret.md", outer.path().join("secret.md").to_str().unwrap()] {
+            assert_eq!(read_item_text_in(&root, rel).unwrap_err(), NOT_IN_FOLDER, "{rel}");
+        }
+        fs::create_dir_all(root.join("files/dir.md")).unwrap();
+        assert!(read_item_text_in(&root, "files/dir.md").is_err());
+    }
+
+    #[test]
+    fn read_text_stays_uncapped_for_results() {
+        let (_d, root) = root();
+        let big = "r".repeat(2 * 1024 * 1024);
+        write_text_in(&root, "assessments/a/c/k/20261007T000000Z.md", &big).unwrap();
+        assert_eq!(read_text_in(&root, "assessments/a/c/k/20261007T000000Z.md").unwrap().map(|s| s.len()), Some(big.len()));
+    }
+
+    #[test]
+    fn open_item_opens_documents_and_reveals_everything_else() {
+        let (_d, root) = root();
+        for name in [
+            "file-00000001.pdf",
+            "file-00000002.zip",
+            "file-00000003.md",
+            "file-00000004.docx",
+            "image-00000005.png",
+            "Upper.PDF",
+            "plain.TXT",
+        ] {
+            write_text_in(&root, &format!("r/files/{name}"), "x").unwrap();
+            let target = root.join("r/files").join(name);
+            assert_eq!(open_target_in(&root, &format!("r/files/{name}")).unwrap(), OpenTarget::Open(target), "{name}");
+        }
+        for name in ["file-00000006.command", "file-00000007.terminal", "file-00000008.py", "file-00000009", "run.sh", "x.app", "a.pdf.command"] {
+            write_text_in(&root, &format!("r/files/{name}"), "x").unwrap();
+            let target = root.join("r/files").join(name);
+            assert_eq!(open_target_in(&root, &format!("r/files/{name}")).unwrap(), OpenTarget::Reveal(target), "{name}");
+        }
+    }
+
+    #[test]
+    fn open_item_refuses_climbs_absolute_paths_folders_and_missing_files() {
+        let (outer, root) = nested_root();
+        fs::write(outer.path().join("out.pdf"), "x").unwrap();
+        write_text_in(&root, "r/files/file-00000001.pdf", "x").unwrap();
+        let abs = outer.path().join("out.pdf");
+        let inside_abs = root.join("r/files/file-00000001.pdf");
+        for rel in ["../out.pdf", "r/../../out.pdf", "r/files/../files/file-00000001.pdf", abs.to_str().unwrap(), inside_abs.to_str().unwrap()] {
+            assert_eq!(open_target_in(&root, rel).unwrap_err(), NOT_IN_FOLDER, "{rel}");
+        }
+        assert_eq!(open_target_in(&root, "r/files/missing.pdf").unwrap_err(), ITEM_MISSING);
+        // A folder is never opened, since an app bundle is one.
+        fs::create_dir_all(root.join("r/files/Tool.app")).unwrap();
+        assert_eq!(open_target_in(&root, "r/files/Tool.app").unwrap_err(), ITEM_MISSING);
+        assert_eq!(open_target_in(&root, "").unwrap_err(), ITEM_MISSING);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn open_item_judges_a_link_by_what_it_points_at() {
+        use std::os::unix::fs::symlink;
+        let (_d, root) = root();
+        write_text_in(&root, "r/files/run.command", "#!/bin/sh").unwrap();
+        symlink(root.join("r/files/run.command"), root.join("r/files/file-00000001.pdf")).unwrap();
+        assert_eq!(
+            open_target_in(&root, "r/files/file-00000001.pdf").unwrap(),
+            OpenTarget::Reveal(root.join("r/files/run.command"))
+        );
+        let outside = tempfile::tempdir().unwrap();
+        fs::write(outside.path().join("a.pdf"), "x").unwrap();
+        symlink(outside.path().join("a.pdf"), root.join("r/files/file-00000002.pdf")).unwrap();
+        assert!(open_target_in(&root, "r/files/file-00000002.pdf").is_err());
+    }
+
+    #[test]
+    fn the_carry_copies_a_file_item_into_another_credentials_files_folder() {
+        let (_d, data) = root();
+        let src = sources();
+        let (from, _) = add_any(&data, "assessments/a/c/old", &source(&src, "spec.pdf", PDF)).unwrap();
+        let to = copy_item_in(&data, &from, &data, "assessments/a/c/new").unwrap();
+        assert_eq!(to, format!("assessments/a/c/new/files/file-{}.pdf", hash8(PDF)));
+        assert_eq!(fs::read(data.join(&to)).unwrap(), PDF);
+        // Twice is one copy, and the source stays.
+        assert_eq!(copy_item_in(&data, &from, &data, "assessments/a/c/new").unwrap(), to);
+        assert_eq!(fs::read(data.join(&from)).unwrap(), PDF);
+        // A file with no extension keeps having none.
+        let (bare, _) = add_any(&data, "old", &source(&src, "Makefile", b"all:")).unwrap();
+        assert_eq!(copy_item_in(&data, &bare, &data, "new").unwrap(), format!("new/files/file-{}", hash8(b"all:")));
+    }
+
+    #[test]
+    fn the_carry_still_copies_videos_and_refuses_anything_that_is_not_an_item() {
+        let (outer, data) = nested_root();
+        let (_e, export) = root();
+        let mov = ftyp(b"qt  ", 80);
+        copy_bytes_into_root(&data, "c/video-x.mov", &mov).unwrap();
+        assert_eq!(copy_item_in(&data, "c/video-x.mov", &export, "d").unwrap(), format!("d/video-{}.mov", hash8(&mov)));
+        write_text_in(&data, "c/credential.md", "# C").unwrap();
+        write_text_in(&data, "c/files/notes.md", "# N").unwrap();
+        write_text_in(&data, "c/file-00000001.md", "# not under files").unwrap();
+        for from in ["c/credential.md", "c/files/notes.md", "c/file-00000001.md", "c/files/file-00000009.pdf"] {
+            assert!(copy_item_in(&data, from, &data, "e").is_err(), "{from}");
+        }
+        fs::write(outer.path().join("file-00000002.pdf"), PDF).unwrap();
+        assert!(copy_item_in(&data, "../file-00000002.pdf", &data, "e").is_err());
+        assert!(!data.join("e").exists());
+    }
+
+    #[test]
+    fn the_refusals_are_mirrored_word_for_word_in_typescript() {
+        let ts = include_str!("../../src/domain/files.ts");
+        for refusal in [FILE_TOO_LARGE, ITEM_TEXT_TOO_LARGE, NOT_TEXT, NOT_IN_FOLDER, ITEM_MISSING, NOT_AN_ITEM, CANNOT_OPEN] {
+            assert!(ts.contains(&format!("\"{refusal}\"")), "{refusal}");
+        }
+        assert!(ts.contains("FILE_MAX_BYTES = 100 * 1024 * 1024"));
+        assert!(ts.contains("ITEM_TEXT_MAX_BYTES = 1024 * 1024"));
     }
 }

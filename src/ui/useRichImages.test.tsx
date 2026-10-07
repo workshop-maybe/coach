@@ -14,6 +14,7 @@ import { pngFile } from "../test/paste";
 import { mkvBytes, mp4Bytes, webmBytes } from "../test/videoBytes";
 import { FILE_NOT_APPROVED, ONLY_VIDEOS_AND_IMAGES, VIDEO_TOO_LARGE } from "../domain/videos";
 import { refusalNotice } from "./useRichImages";
+import type { ReplyItem } from "../domain/types";
 
 afterEach(cleanup);
 
@@ -470,5 +471,101 @@ describe("refusalNotice", () => {
 
   it("never prints a missing reason as null", () => {
     expect(refusalNotice([refused("odd.mp4", null)])).toBe("odd.mp4: It could not be added.");
+  });
+});
+
+describe("useRichImages, a reply's items (reply artifacts U4, KTD3, KTD7)", () => {
+  const DIR = "assessments/opus/eng/review";
+  const PDF = new TextEncoder().encode("%PDF-1.7\n%%EOF\n");
+
+  /** The hook over a reply's items, plus the folder's notice. */
+  function setupItems(storage: MemoryStorage, dir: string | null, items: ReplyItem[] = []) {
+    return renderHook(
+      ({ dir, items }: { dir: string | null; items: ReplyItem[] }) => ({ ...useRichImages(dir, "", items), notice: useFolder().notice }),
+      { wrapper: wrapper(storage), initialProps: { dir, items } },
+    );
+  }
+
+  it("adds any file with accept any, and gives back items sorted by content with their original names", async () => {
+    const storage = new MemoryStorage();
+    const png = new Uint8Array(await pngFile().arrayBuffer());
+    storage.queueAdd([
+      { name: "report.pdf", bytes: PDF },
+      { name: "demo.mp4", bytes: mp4Bytes() },
+      { name: "shot.png", bytes: png },
+    ]);
+    const { result } = setupItems(storage, DIR);
+    let items: ReplyItem[] = [];
+    await act(async () => {
+      items = await result.current.addItems!({ kind: "pick", item: "file" });
+    });
+    expect(storage.adds).toEqual([{ dir: DIR, from: { kind: "pick", item: "file" }, accept: "any" }]);
+    expect(items).toEqual([
+      { kind: "file", name: "report.pdf", ref: expect.stringMatching(/^files\/file-[0-9a-f]{8}\.pdf$/) },
+      { kind: "video", name: "demo.mp4", ref: expect.stringMatching(/^video-[0-9a-f]{8}\.mp4$/) },
+      { kind: "image", name: "shot.png", ref: expect.stringMatching(/^image-[0-9a-f]{8}\.png$/) },
+    ]);
+    expect(result.current.notice).toBeNull();
+  });
+
+  it("names every refused file on one notice and gives back the rest, and is busy while it runs", async () => {
+    const storage = new MemoryStorage();
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((r) => (release = r));
+    const addFiles = storage.addFiles.bind(storage);
+    storage.addFiles = async (...args) => {
+      await gate;
+      return addFiles(...args);
+    };
+    storage.queueAdd([
+      { name: "report.pdf", bytes: PDF },
+      { name: "secret.pdf", error: FILE_NOT_APPROVED },
+    ]);
+    const { result } = setupItems(storage, DIR);
+    let done: Promise<ReplyItem[]> = Promise.resolve([]);
+    act(() => {
+      done = result.current.addItems!({ kind: "drop", paths: ["/a/report.pdf", "/b/secret.pdf"] });
+    });
+    await waitFor(() => expect(result.current.busy).toBe(true));
+    let items: ReplyItem[] = [];
+    await act(async () => {
+      release();
+      items = await done;
+    });
+    expect(items.map((i) => i.kind)).toEqual(["file"]);
+    expect(result.current.notice).toBe(`secret.pdf: ${FILE_NOT_APPROVED}`);
+    expect(result.current.busy).toBe(false);
+  });
+
+  it("has no item add with no folder", () => {
+    const { result } = setupItems(new MemoryStorage(), null);
+    expect(result.current.addItems).toBeUndefined();
+  });
+
+  it("carries the file, video and image items it added, and the reply still holds, into a new folder", async () => {
+    const storage = new MemoryStorage();
+    const png = new Uint8Array(await pngFile().arrayBuffer());
+    storage.queueAdd([
+      { name: "report.pdf", bytes: PDF },
+      { name: "demo.mp4", bytes: mp4Bytes() },
+      { name: "shot.png", bytes: png },
+      { name: "dropped.pdf", bytes: new TextEncoder().encode("%PDF-1.4 other") },
+    ]);
+    const { result, rerender } = setupItems(storage, DIR);
+    let items: ReplyItem[] = [];
+    await act(async () => {
+      items = await result.current.addItems!({ kind: "pick", item: "file" });
+    });
+    const kept = items.slice(0, 3);
+    const copy = vi.spyOn(storage, "copyItem");
+    await act(async () => {
+      rerender({ dir: "assessments/codex/eng/review", items: kept });
+    });
+    const refOf = (i: ReplyItem) => (i.kind === "text" || i.kind === "link" ? "" : i.ref);
+    await waitFor(async () =>
+      expect((await storage.listFiles("data", "assessments/codex")).sort()).toEqual(kept.map((i) => `assessments/codex/eng/review/${refOf(i)}`).sort()),
+    );
+    expect(copy).toHaveBeenCalledWith(`${DIR}/${refOf(kept[0])}`, "data", "assessments/codex/eng/review");
+    expect(result.current.busy).toBe(false);
   });
 });

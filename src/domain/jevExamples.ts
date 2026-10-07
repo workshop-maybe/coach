@@ -7,12 +7,20 @@
 // Each reply then walks that ranked list, and only a result that some side still has room
 // for is read and excerpted, since cleaning a long reply is the one real cost. The budget
 // step (`fitSecondOpinion` in ./jevBudget) fits what this returns into the request.
+//
+// A result is read as Jev reads the reply being judged (reply-artifacts KTD8, `jevReply`):
+// its text items, its Markdown and plain-text files, and a line for each other item. The
+// excerpt starts from that, and the duplicate check compares it, so the cache holds both and
+// builds them again once a file text that was loading is in.
 
 import { calibrationsOf, ranksAsOverrule } from "./calls";
+import { assessmentDir } from "./folder";
 import { LINE_BREAK, MAX_EXAMPLES_PER_SIDE, MAX_OPENING_CHARS, MAX_REASON_CHARS, type CriteriaSide, type JevExample, type JevExampleEntry } from "./jevRequest";
 import { fenceStep, type OpenFence } from "./markdownLines";
 import { newestFirst } from "./matrix";
+import { jevReply, NO_TEXTS, pendingTexts, textsIn, type FileTexts } from "./jevReply";
 import { readerLine } from "./readerText";
+import { replyItems } from "./replyItems";
 import { OVERALL_ID, pointId, rubricParts } from "./secondOpinion";
 import { credentialKey, type Assessment, type FolderState } from "./types";
 
@@ -79,20 +87,26 @@ export function rankExamples(state: FolderState, key: string, version: string): 
 
 /**
  * The examples a second opinion on `reply` may carry, from a ranked list: at most two per
- * question side, best rank first. A result whose reply, trimmed, equals `reply` trimmed is
- * never one (KTD9), and neither is one whose excerpt cleans to nothing; the next result
- * takes the place. A reason rides on every overall example and on a point's "doesn't hold"
+ * question side, best rank first. `reply` is the reply as Jev reads it (`jevReply`), and each
+ * result is read the same way, its file texts from `texts` (reply-artifacts KTD8). A result
+ * whose reply so read, trimmed, equals `reply` trimmed is never one (KTD9), and neither is
+ * one whose excerpt cleans to nothing; the next result takes the place. The paths of the
+ * file texts still loading for any result it read go on `pending`, and an ask waits for
+ * them. A reason rides on every overall example and on a point's "doesn't hold"
  * examples, never on a point's "holds" examples.
  */
-export function examplesFor(ranked: readonly ExampleCandidate[], reply: string): JevExampleEntry[] {
+export function examplesFor(ranked: readonly ExampleCandidate[], reply: string, texts: FileTexts = NO_TEXTS, pending?: string[]): JevExampleEntry[] {
   const judged = reply.trim();
   const filled = new Map<string, number>();
   const slot = (feed: ExampleFeed) => `${feed.questionId}:${feed.side}`;
   const entries: JevExampleEntry[] = [];
   for (const candidate of ranked) {
     const open = candidate.feeds.filter((feed) => (filled.get(slot(feed)) ?? 0) < MAX_EXAMPLES_PER_SIDE);
-    if (open.length === 0 || candidate.result.handBack.trim() === judged) continue;
-    const opening = cachedExcerpt(candidate.result);
+    if (open.length === 0) continue;
+    const read = readResult(candidate.result, texts);
+    pending?.push(...read.waiting);
+    if (read.projection.trim() === judged) continue;
+    const opening = read.excerpt;
     if (opening === "") continue;
     for (const feed of open) {
       filled.set(slot(feed), (filled.get(slot(feed)) ?? 0) + 1);
@@ -114,9 +128,14 @@ export function examplesFor(ranked: readonly ExampleCandidate[], reply: string):
  * and such a reply is no example.
  */
 export function excerptOf(reply: string): string {
+  return openingOf(reply, true);
+}
+
+/** An excerpt as `excerptOf` cuts it, the lines read as a reader sees them only with `reader` (a projection already is). */
+function openingOf(reply: string, reader: boolean): string {
   // Lines are cleaned only until enough are kept for the cut: twice the cap in UTF-16
   // units is at least one code point past it, the most the cut ever looks at.
-  const text = cleanLines(reply, 2 * (MAX_OPENING_CHARS + 1), true).join("\n").trim();
+  const text = cleanLines(reply, 2 * (MAX_OPENING_CHARS + 1), reader).join("\n").trim();
   const head: string[] = [];
   for (const ch of text) {
     head.push(ch);
@@ -185,6 +204,17 @@ export const IMAGE = new RegExp(`${ALT}(?:${INLINE_SRC}|${REFERENCE})`, "g");
 export const IMAGE_DEFINITION = /^ {0,3}\[(?:\\.|[^[\]\\])+\]:\s*<?data:(?:image|video)\//i;
 /** An image or video data URI anywhere: its type and parameters, then its data up to whitespace, a closing bracket or a quote. */
 export const IMAGE_DATA = /data:(?:image|video)\/[\w.+;=-]*,[^\s)\]"'<>]*/gi;
+
+/**
+ * A line without its image Markdown and image data, or null when the line goes: a reference
+ * definition to image data, or a line left blank by removing them.
+ */
+export function withoutImages(line: string): string | null {
+  if (IMAGE_DEFINITION.test(line)) return null;
+  const full = line.replace(IMAGE, "").replace(IMAGE_DATA, "");
+  if (full !== line && full.trim() === "") return null;
+  return full;
+}
 
 // Lines that look like secrets (KTD10). A heuristic, not a guarantee: earlier replies may
 // hold keys an agent printed, and some never left the machine before.
@@ -280,9 +310,8 @@ function cleanLines(text: string, enough = Infinity, reader = false): string[] {
       inPem = !PEM_END.test(line);
       continue;
     }
-    if (IMAGE_DEFINITION.test(line)) continue;
-    const full = line.replace(IMAGE, "").replace(IMAGE_DATA, "");
-    if (full !== line && full.trim() === "") continue;
+    const full = withoutImages(line);
+    if (full === null) continue;
     const lead = Math.max(0, full.search(/\S/));
     const read = reader && !step.fence && !step.inFence ? readerLine(full.slice(0, lead + MAX_READ_UNITS)) : full;
     const shown = read.slice(0, lead + MAX_LINE_UNITS);
@@ -294,17 +323,76 @@ function cleanLines(text: string, enough = Infinity, reader = false): string[] {
   return kept;
 }
 
-// Excerpts depend only on the reply, so each result's is built once, and the cache lets go
-// of it with the folder state that holds the result.
-const excerpts = new WeakMap<Assessment, string>();
+/** How far apart the windows `looksSecretAlong` checks start: each overlaps the next by 128 units. */
+const WINDOW_STEP = MAX_LINE_UNITS - 128;
 
-function cachedExcerpt(result: Assessment): string {
-  let excerpt = excerpts.get(result);
-  if (excerpt === undefined) {
-    excerpt = excerptOf(result.handBack);
-    excerpts.set(result, excerpt);
+/**
+ * Whether a line of any length looks like it holds a secret anywhere along it: the patterns
+ * read it in windows of MAX_LINE_UNITS, each overlapping the next, so no pattern reads an
+ * unbounded line and the whole check stays linear in the line's length. A secret that
+ * straddles two windows is caught when it is no longer than the overlap, as every token,
+ * key and hex run the patterns know is. A window's edges can read as a word boundary or a
+ * line end, so a long line is now and then dropped that the whole line would not match: the
+ * check errs toward dropping, never toward sending.
+ */
+function looksSecretAlong(line: string): boolean {
+  for (let start = 0; start < line.length; start += WINDOW_STEP) {
+    if (looksSecret(line.slice(start, start + MAX_LINE_UNITS))) return true;
+    if (start + MAX_LINE_UNITS >= line.length) break;
   }
-  return excerpt;
+  return false;
+}
+
+/**
+ * A file's lines as Jev may read them whole (reply-artifacts KTD8, R13), leading blank lines
+ * dropped: every line break read as `\n`, invisible characters dropped, image Markdown and
+ * image data removed (a line left blank by that goes), and lines that look like secrets
+ * dropped, a PEM block from its BEGIN line to its END line, as `cleanLines` drops them for
+ * an example. Unlike an example's lines, none is cut: a long line is checked along its
+ * length (`looksSecretAlong`) and kept whole, so nothing Jev reads stops mid-line.
+ */
+export function keptLines(text: string): string[] {
+  const kept: string[] = [];
+  let inPem = false;
+  for (const raw of text.split(LINE_BREAK)) {
+    const line = raw.replace(INVISIBLE, "");
+    if (inPem || PEM_BEGIN.test(line)) {
+      inPem = !PEM_END.test(line);
+      continue;
+    }
+    const full = withoutImages(line);
+    if (full === null) continue;
+    if (looksSecretAlong(full)) continue;
+    if (kept.length === 0 && full.trim() === "") continue;
+    kept.push(full);
+  }
+  return kept;
+}
+
+/** A result as an example source reads it: the reply as Jev reads it, its opening, and whether its file texts were all in. */
+interface ReadResult {
+  ready: boolean;
+  projection: string;
+  excerpt: string;
+}
+
+// A result's projection and excerpt are built once its file texts are in, and the cache lets
+// go of them with the folder state that holds the result (KTD8). One built while a text was
+// still loading is kept only until every text is in, then built again. File items are
+// content-addressed, so a text once in never changes.
+const excerpts = new WeakMap<Assessment, ReadResult>();
+
+function readResult(result: Assessment, texts: FileTexts): ReadResult & { waiting: string[] } {
+  const items = replyItems(result);
+  const byRef = textsIn(texts, result);
+  const waiting = pendingTexts(items, byRef);
+  let read = excerpts.get(result);
+  if (read === undefined || (!read.ready && waiting.length === 0)) {
+    const projection = jevReply(items, byRef);
+    read = { ready: waiting.length === 0, projection, excerpt: openingOf(projection, false) };
+    excerpts.set(result, read);
+  }
+  return { ...read, waiting: waiting.map((ref) => `${assessmentDir(result.profileSlug, result.collectionSlug, result.credentialSlug)}/${ref}`) };
 }
 
 /** The question sides a result can show on, per `rankExamples`. */

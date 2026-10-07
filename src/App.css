@@ -812,6 +812,232 @@ button:focus-visible {
   color: var(--ink);
 }
 
+/* One reply as a stack of its items (src/ui/ReplyStack.tsx; R8, KTD6 of the reply artifacts
+   plan). The stack is the scroller: a text item and a video grow with their content inside it,
+   and a PDF or a text file sits in a bounded area of about 70vh, so the next item stays in
+   reach. Each item is a record under a mono header bar naming its kind and file. */
+.reply-stack {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-base);
+  padding: var(--space-base) var(--space-lg);
+  overflow: auto;
+}
+
+.reply-item {
+  flex: none;
+  border: 1px solid var(--cell);
+  background: var(--surface);
+}
+
+/* A one-text reply has no bar or frame, so it shows as a reply always has. */
+.reply-stack-bare {
+  padding: 0;
+}
+
+.reply-stack-bare > .reply-item {
+  border: none;
+  background: none;
+}
+
+.reply-stack-bare .reply-item-body > .rich-view {
+  padding: var(--space-base) var(--space-lg);
+}
+
+.reply-item-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-xs) var(--space-md);
+  padding: var(--space-xs) var(--space-md);
+  border-bottom: 1px solid var(--cell);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: var(--value-tracking);
+}
+
+.reply-item-kind {
+  color: var(--ink-muted);
+}
+
+.reply-item-label {
+  overflow-wrap: anywhere;
+}
+
+.reply-item-body {
+  min-width: 0;
+}
+
+/* Text and a video's player grow with the item; only the stack scrolls. */
+.reply-item-body > .rich-view {
+  overflow: visible;
+  padding: var(--space-md) var(--space-base);
+}
+
+.reply-item-bounded {
+  max-height: 70vh;
+  overflow: auto;
+}
+
+.reply-item-bounded > .rich-view {
+  overflow: visible;
+}
+
+.reply-item-plain {
+  margin: 0;
+  padding: var(--space-md) var(--space-base);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.55;
+  letter-spacing: var(--value-tracking);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+}
+
+.reply-item-pdf {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  background: var(--grid);
+}
+
+.pdf-page {
+  width: 100%;
+  background: var(--surface);
+}
+
+.pdf-page canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.reply-item-image {
+  display: block;
+  max-width: 100%;
+  max-height: 70vh;
+  margin: var(--space-md) auto;
+  object-fit: contain;
+}
+
+.reply-item-url {
+  margin: 0;
+  padding: var(--space-md) var(--space-base);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.reply-item-url a {
+  color: var(--data);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.reply-item-file {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm) var(--space-md);
+  padding: var(--space-md) var(--space-base);
+}
+
+.reply-item-name {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.reply-item-note,
+.reply-item-error {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 13px;
+}
+
+.reply-item-note {
+  color: var(--ink-muted);
+}
+
+.reply-item-error {
+  color: var(--error);
+}
+
+.reply-item-missing,
+.reply-item-waiting {
+  margin: var(--space-md) var(--space-base);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
+}
+
+.reply-item-missing {
+  padding: 1px 4px;
+  border: 1px dashed var(--cell);
+}
+
+/* The reply being built on "What came back" (src/ui/ReplyItemsEditor.tsx; KTD7 of the reply
+   artifacts plan). The stack fills the pane and scrolls, and the quiet add keys sit under it.
+   A reply that is one text item fills the stack, as the reply box always has. The editor is
+   the beat's drop box, so it takes the drop outline (.rich-drop). */
+.reply-edit {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.reply-edit .reply-stack-bare > .reply-item,
+.reply-edit .reply-stack-bare .reply-item-body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.reply-item-remove {
+  margin-left: auto;
+  padding: 0 var(--space-xs);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-muted);
+}
+
+.reply-edit-link {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-md) var(--space-base);
+}
+
+.reply-edit-link input {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.reply-edit-keys {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  padding-top: var(--space-xs);
+}
+
+.reply-edit-key {
+  font-weight: 500;
+}
+
 .rich-menu {
   display: flex;
   z-index: 20;
@@ -2765,7 +2991,7 @@ button:focus-visible {
   padding: 2px;
 }
 
-.reply-record:has(> .judge-step) > .rich-view {
+.reply-record:has(> .judge-step) > .reply-stack {
   min-height: 5rem;
 }
 
@@ -2976,22 +3202,25 @@ button:focus-visible {
 
 @media (max-width: 56rem) {
   .compare-panes {
+    flex: none;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: repeat(2, minmax(0, 1fr));
+    grid-template-rows: none;
   }
 
-  /* Stacked, the grid takes less height, and a reply with its verdict step open takes two
-     thirds of what is left, so the step and a few lines of the reply fit together. */
+  /* Stacked, the grid takes less height. */
   .compare-grid {
     max-height: 25vh;
   }
 
-  .compare-panes:has(> :first-child > .judge-step) {
-    grid-template-rows: minmax(0, 2fr) minmax(0, 1fr);
+  /* Stacked, the view is the one scroller: each record and its stack take their content's
+     height, and a PDF or text file keeps its 70vh bound (reply-artifacts KTD6). */
+  .compare-panes > .reply-record {
+    flex: none;
   }
 
-  .compare-panes:has(> :last-child > .judge-step) {
-    grid-template-rows: minmax(0, 1fr) minmax(0, 2fr);
+  .compare-panes > .reply-record > .reply-stack {
+    flex: none;
+    overflow: visible;
   }
 }
 

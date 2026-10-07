@@ -15,14 +15,18 @@ import { FAKE_ON, FakeJev } from "../jev/fakeJev";
 import { JEV_ERROR_KINDS, JevError } from "../jev/jev";
 import type { MemoryStorage } from "../storage/memory";
 import { firePaste } from "../test/paste";
+import { mp4Bytes } from "../test/videoBytes";
 import { AppShell, type Route } from "./AppShell";
 import { JevProvider } from "./jevContext";
 import { addPending, readPending, type PendingTest } from "./pendingTests";
-import { SENDING_MS, jevFailure } from "./TestDeck";
+import { JEV_EYES_NOTE, SENDING_MS, jevFailure } from "./TestDeck";
 import { FOLDER, opus, renderApp, result, review, snapshot, storageWith } from "./testFolder";
 import { FolderProvider } from "./useFolderState";
 
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ writeText: vi.fn() }));
+vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn(() => Promise.resolve()) }));
+// A PDF item never loads its pages here.
+vi.mock("./pdfDocument", () => ({ openPdf: vi.fn(() => new Promise(() => undefined)) }));
 // ProseMirror typing does not run in jsdom; these flows type into a textarea stand-in.
 vi.mock("./RichText", () => import("./richTextStub"));
 
@@ -1383,6 +1387,21 @@ describe("TestDeck's second opinion", () => {
     expect(button("Ask Jev")).toBeTruthy();
   });
 
+  it("adding a blank text item keeps the reading, since the reply as it saves is unchanged", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", ANSWERS);
+    await judge(fake);
+    await userEvent.click(button("Ask Jev"));
+    await screen.findByRole("region", { name: "Jev's reading" });
+
+    await userEvent.click(button("Back"));
+    await userEvent.click(await screen.findByRole("button", { name: "Add text" }));
+    await userEvent.click(button("Next"));
+    await screen.findByRole("heading", { name: "Did it meet it" });
+    expect(reading()).not.toBeNull();
+    expect(fake.asks).toHaveLength(1);
+  });
+
   it("an edit while a check is in flight drops it, so its answer never shows against the new reply", async () => {
     const fake = new FakeJev(FAKE_ON);
     const ask = held(fake);
@@ -1762,6 +1781,48 @@ describe("TestDeck's paste cleanup", () => {
     expect(putBack()).toBeNull();
     expect(cleanUp()).toBeNull();
     expect(screen.queryByText("Nothing to join")).toBeNull();
+  });
+
+  it("cleans the text item the last paste went into, leaves the other alone, and Put back restores that item", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", JOIN);
+    const storage = await toPaste(fake);
+    await userEvent.type(replyBox(), "Intro line");
+    await userEvent.click(button("Add text"));
+    const second = screen.getByRole("textbox", { name: "Reply text 2" }) as HTMLTextAreaElement;
+    firePaste(second, { "text/plain": TERMINAL });
+    expect(second.value).toBe(FIXED);
+    await userEvent.click(cleanUp()!);
+    await screen.findByRole("button", { name: "Put back the paste" });
+    expect(second.value).toBe(JOINED);
+    expect(replyBox().value).toBe("Intro line");
+    await userEvent.click(button("Put back the paste"));
+    expect(second.value).toBe(FIXED);
+    expect(replyBox().value).toBe("Intro line");
+    await userEvent.click(cleanUp()!);
+    await screen.findByRole("button", { name: "Put back the paste" });
+    // An edit to the other item keeps the offer on the item the paste went into.
+    await userEvent.type(replyBox(), ".");
+    expect(putBack()).toBeTruthy();
+    await userEvent.click(next());
+    await userEvent.click(await screen.findByRole("button", { name: "Met" }));
+    await screen.findByTestId("landing");
+    expect((await loadFolder(storage)).assessments[0].items).toEqual([
+      { kind: "text", text: "Intro line." },
+      { kind: "text", text: JOINED },
+    ]);
+  });
+
+  it("removing the item the paste went into ends the offers", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    await toPaste(fake);
+    await userEvent.type(replyBox(), "Keep me");
+    await userEvent.click(button("Add text"));
+    firePaste(screen.getByRole("textbox", { name: "Reply text 2" }), { "text/plain": TERMINAL });
+    expect(cleanUp()).toBeTruthy();
+    await userEvent.click(button("Remove text 2"));
+    expect(cleanUp()).toBeNull();
+    expect(putBack()).toBeNull();
   });
 });
 
@@ -2503,5 +2564,296 @@ describe("TestDeck's growing context and the verdict's steps", () => {
     await screen.findByRole("heading", { name: "Not yet" });
     await settle();
     expect(await saved(storage)).toHaveLength(1);
+  });
+});
+
+// Building the reply as a list of items (reply artifacts U4, R1-R4, R7, R9, KTD7).
+describe("TestDeck's reply items", () => {
+  const withRubric: Credential = { ...review, rubric: "Shows the **demo**." };
+  const PDF = new TextEncoder().encode("%PDF-1.7\n%%EOF\n");
+  const next = () => screen.getByRole("button", { name: "Next" }) as HTMLButtonElement;
+  const addKey = (kind: string) => screen.getByRole("button", { name: `Add ${kind}` });
+
+  beforeEach(() => vi.stubGlobal("IntersectionObserver", class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }));
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("Covers AE1. A summary, then a PDF from File, then a recording from Video save as three items in that order", async () => {
+    const storage = storageWith({ credentials: [review], profiles: [opus] });
+    renderApp(storage, fromBadge);
+    await takeAndCopy();
+    await userEvent.type(replyBox(), "The summary");
+    storage.queueAdd([{ name: "report.pdf", bytes: PDF }]);
+    await userEvent.click(addKey("file"));
+    await screen.findByRole("button", { name: "Remove file report.pdf" });
+    storage.queueAdd([{ name: "demo.mp4", bytes: mp4Bytes() }]);
+    await userEvent.click(addKey("video"));
+    await screen.findByRole("button", { name: "Remove video demo.mp4" });
+    await waitFor(() => expect(next().disabled).toBe(false));
+    await userEvent.click(next());
+    await userEvent.click(await screen.findByRole("button", { name: "Met" }));
+    await screen.findByTestId("landing");
+    const [saved] = (await loadFolder(storage)).assessments;
+    expect(saved.items).toEqual([
+      { kind: "text", text: "The summary" },
+      { kind: "file", name: "report.pdf", ref: expect.stringMatching(/^files\/file-[0-9a-f]{8}\.pdf$/) },
+      { kind: "video", name: "demo.mp4", ref: expect.stringMatching(/^video-[0-9a-f]{8}\.mp4$/) },
+    ]);
+    expect(saved.handBack).toBe("The summary");
+  });
+
+  it("Covers AE2. With one empty text item Next is held, and a link item lets it go", async () => {
+    const storage = storageWith({ credentials: [review], profiles: [opus] });
+    renderApp(storage, fromBadge);
+    await takeAndCopy();
+    expect(next().disabled).toBe(true);
+    await userEvent.type(replyBox(), "   ");
+    expect(next().disabled).toBe(true);
+    await userEvent.click(addKey("link"));
+    await userEvent.type(screen.getByRole("textbox", { name: "Link" }), "https://example.com/pr/7{Enter}");
+    expect(next().disabled).toBe(false);
+    await userEvent.click(next());
+    await userEvent.click(await screen.findByRole("button", { name: "Met" }));
+    await screen.findByTestId("landing");
+    // The blank text item is dropped as the reply saves.
+    expect((await loadFolder(storage)).assessments[0].items).toEqual([{ kind: "link", url: "https://example.com/pr/7" }]);
+  });
+
+  it("Next and Back wait while a file is still being copied, so the file is never dropped", async () => {
+    const storage = storageWith({ credentials: [review], profiles: [opus] });
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((r) => (release = r));
+    const addFiles = storage.addFiles.bind(storage);
+    storage.addFiles = async (...args) => {
+      await gate;
+      return addFiles(...args);
+    };
+    renderApp(storage, fromBadge);
+    await takeAndCopy();
+    await userEvent.type(replyBox(), "Report attached");
+    storage.queueAdd([{ name: "report.pdf", bytes: PDF }]);
+    await userEvent.click(addKey("file"));
+    await waitFor(() => expect(next().disabled).toBe(true));
+    expect(screen.getByText("Adding")).toBeTruthy();
+    const back = screen.getByRole("button", { name: "Back" }) as HTMLButtonElement;
+    expect(back.disabled).toBe(true);
+    // Escape steps back on a pane, and waits too.
+    await userEvent.keyboard("{Escape}{Escape}");
+    expect(screen.getByRole("heading", { name: "What came back" })).toBeTruthy();
+    await act(async () => release());
+    await waitFor(() => expect(next().disabled).toBe(false));
+    expect(back.disabled).toBe(false);
+    expect(screen.getByRole("region", { name: "report.pdf" })).toBeTruthy();
+  });
+
+  it("the judge pane shows the rubric beside the reply's stack", async () => {
+    const storage = storageWith({ credentials: [withRubric], profiles: [opus] });
+    renderApp(storage, fromBadge);
+    await takeAndCopy();
+    await userEvent.type(replyBox(), "See the link");
+    await userEvent.click(addKey("link"));
+    await userEvent.type(screen.getByRole("textbox", { name: "Link" }), "https://example.com/demo{Enter}");
+    await userEvent.click(next());
+    await screen.findByRole("heading", { name: "Did it meet it" });
+    const reply = screen.getByRole("region", { name: "Reply" });
+    const rubric = screen.getByRole("region", { name: "Rubric" });
+    expect(reply.parentElement?.parentElement).toBe(rubric.parentElement?.parentElement);
+    expect(within(reply).getByText("See the link")).toBeTruthy();
+    expect(within(reply).getByRole("link", { name: "https://example.com/demo" })).toBeTruthy();
+    expect([...reply.querySelectorAll(".reply-item-kind")].map((k) => k.textContent)).toEqual(["Text", "Link"]);
+  });
+
+  it("Hold to compare saves a held reply with the items", async () => {
+    const storage = storageWith({ credentials: [review], profiles: [opus] });
+    renderApp(storage, fromBadge);
+    await takeAndCopy();
+    await userEvent.click(addKey("link"));
+    await userEvent.type(screen.getByRole("textbox", { name: "Link" }), "https://example.com/a{Enter}");
+    storage.queueAdd([{ name: "report.pdf", bytes: PDF }]);
+    await userEvent.click(addKey("file"));
+    await screen.findByRole("button", { name: "Remove file report.pdf" });
+    await waitFor(() => expect(next().disabled).toBe(false));
+    await userEvent.click(next());
+    await userEvent.click(await screen.findByRole("button", { name: "Hold to compare" }));
+    await screen.findByRole("heading", { name: "Reply held" });
+    expect((await loadFolder(storage)).held[0].items).toEqual([
+      { kind: "link", url: "https://example.com/a" },
+      { kind: "file", name: "report.pdf", ref: expect.stringMatching(/^files\/file-[0-9a-f]{8}\.pdf$/) },
+    ]);
+  });
+
+  it("the screen shows the reply's first item with something in it", async () => {
+    const storage = storageWith({ credentials: [review], profiles: [opus] });
+    renderApp(storage, fromBadge);
+    await takeAndCopy();
+    await userEvent.click(addKey("link"));
+    await userEvent.type(screen.getByRole("textbox", { name: "Link" }), "https://ex.co/a{Enter}");
+    await waitFor(() => expect([...machine().querySelectorAll(".cast-screen-reply text")].map((t) => t.textContent)).toEqual(["https://ex.co/a"]), {
+      timeout: SENDING_MS + 1000,
+    });
+  });
+});
+
+describe("TestDeck's Jev reads reply items (reply-artifacts U6, KTD8)", () => {
+  const graded: Credential = { ...review, rubric: "- Shows the demo\n- Writes notes" };
+  const ANSWERS: JevAnswers = { answers: { p1: 0.5, p2: 0.9, t1: 0.7, overall: 0.6 } };
+  const NOTES = new TextEncoder().encode("# Notes\nFlags parse.\nexport API_KEY=abcdefghijklmnopqrstuvwxyz");
+  const next = () => screen.getByRole("button", { name: "Next" }) as HTMLButtonElement;
+  const addKey = (kind: string) => screen.getByRole("button", { name: `Add ${kind}` });
+  const askAction = () => screen.queryByRole("button", { name: /^(Ask Jev|Check with Jev|Asking Jev…)$/ });
+
+  beforeEach(() =>
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    ),
+  );
+  afterEach(() => vi.unstubAllGlobals());
+
+  function renderWithJev(storage: MemoryStorage, fake: FakeJev) {
+    return render(
+      <JevProvider jev={fake}>
+        <FolderProvider storage={storage} folder={FOLDER}>
+          <AppShell onChangeFolder={() => {}} initialRoute={fromBadge} />
+        </FolderProvider>
+      </JevProvider>,
+    );
+  }
+
+  /** Holds every item text read until `release`. */
+  function gateTexts(storage: MemoryStorage) {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((r) => (release = r));
+    const read = storage.readItemText.bind(storage);
+    storage.readItemText = async (path) => {
+      await gate;
+      return read(path);
+    };
+    return () => act(async () => release());
+  }
+
+  /** Text, then a Markdown file from File, then a recording from Video, and on to the judge pane. */
+  async function textFileAndVideo(storage: MemoryStorage) {
+    await takeAndCopy();
+    await userEvent.type(replyBox(), "Demo below.");
+    storage.queueAdd([{ name: "notes.md", bytes: NOTES }]);
+    await userEvent.click(addKey("file"));
+    await screen.findByRole("button", { name: "Remove file notes.md" });
+    storage.queueAdd([{ name: "demo.mp4", bytes: mp4Bytes() }]);
+    await userEvent.click(addKey("video"));
+    await screen.findByRole("button", { name: "Remove video demo.mp4" });
+    await waitFor(() => expect(next().disabled).toBe(false));
+    await userEvent.click(next());
+    await screen.findByRole("heading", { name: "Did it meet it" });
+  }
+
+  it("Covers AE4. Jev reads the text and the Markdown file, a secret line dropped, and is told the video is there", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", ANSWERS);
+    const storage = storageWith({ credentials: [graded], profiles: [opus] });
+    renderWithJev(storage, fake);
+    await textFileAndVideo(storage);
+    await userEvent.click(await screen.findByRole("button", { name: "Ask Jev" }));
+    await screen.findByRole("region", { name: "Jev's reading" });
+    const request = fake.asks[0] as SecondOpinionRequest;
+    expect(request.state.reply).toBe("Demo below.\n\nFile: notes.md\n# Notes\nFlags parse.\n\nA video Jev cannot see: demo.mp4");
+    expect(request.questions.p1.criteria?.true).toContain("cannot see or open");
+    expect(request.questions.p1.criteria?.false).toContain("cannot see or open");
+  });
+
+  it("says Jev reads only the words when the reply holds something it can't see", async () => {
+    const storage = storageWith({ credentials: [graded], profiles: [opus] });
+    renderWithJev(storage, new FakeJev(FAKE_ON));
+    await textFileAndVideo(storage);
+    expect(await screen.findByText(JEV_EYES_NOTE)).toBeTruthy();
+  });
+
+  it("says nothing about media when the reply is all words", async () => {
+    const storage = storageWith({ credentials: [graded], profiles: [opus] });
+    renderWithJev(storage, new FakeJev(FAKE_ON));
+    await takeAndCopy();
+    await userEvent.type(replyBox(), "Just words.");
+    await userEvent.click(next());
+    await screen.findByRole("button", { name: "Ask Jev" });
+    expect(screen.queryByText(JEV_EYES_NOTE)).toBeNull();
+  });
+
+  it("the reply being judged no longer carries picture or video Markdown", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", ANSWERS);
+    const storage = storageWith({ credentials: [graded], profiles: [opus] });
+    renderWithJev(storage, fake);
+    await takeAndCopy();
+    fireEvent.change(replyBox(), { target: { value: "Recorded it:\n![](video-1a2b3c4d.mp4)\nand a chart ![chart](image-1a2b3c4d.png) here." } });
+    await userEvent.click(next());
+    await screen.findByRole("heading", { name: "Did it meet it" });
+    await userEvent.click(await screen.findByRole("button", { name: "Ask Jev" }));
+    await screen.findByRole("region", { name: "Jev's reading" });
+    expect((fake.asks[0] as SecondOpinionRequest).state.reply).toBe("Recorded it:\nand a chart  here.");
+  });
+
+  it("Ask Jev waits while the reply's file text loads, then offers", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    const storage = storageWith({ credentials: [graded], profiles: [opus] });
+    const release = gateTexts(storage);
+    renderWithJev(storage, fake);
+    await textFileAndVideo(storage);
+    await act(async () => {});
+    expect(askAction()).toBeNull();
+    expect(screen.queryByText("This reply is too long for Jev")).toBeNull();
+    await release();
+    expect(await screen.findByRole("button", { name: "Ask Jev" })).toBeTruthy();
+  });
+
+  it("a short text with a large Markdown file is too long for Jev", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    const storage = storageWith({ credentials: [graded], profiles: [opus] });
+    renderWithJev(storage, fake);
+    await takeAndCopy();
+    await userEvent.type(replyBox(), "Notes attached.");
+    storage.queueAdd([{ name: "notes.md", bytes: new TextEncoder().encode("Long notes. ".repeat(12_000)) }]);
+    await userEvent.click(addKey("file"));
+    await screen.findByRole("button", { name: "Remove file notes.md" });
+    await waitFor(() => expect(next().disabled).toBe(false));
+    await userEvent.click(next());
+    await screen.findByRole("heading", { name: "Did it meet it" });
+    expect(await screen.findByText("This reply is too long for Jev")).toBeTruthy();
+    expect(askAction()).toBeNull();
+  });
+
+  it("Ask Jev waits for a chosen earlier reply's file text, and its excerpt is rebuilt with it", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", ANSWERS);
+    const ref = "files/file-0000000a.md";
+    const earlier = await result(opus, graded, {
+      handBack: "Earlier notes.",
+      items: [
+        { kind: "text", text: "Earlier notes." },
+        { kind: "file", name: "old.md", ref },
+      ],
+    });
+    const storage = storageWith({ credentials: [graded], profiles: [opus], assessments: [earlier] });
+    storage.seedItemFile(`assessments/opus/${graded.collectionSlug}/${graded.slug}/${ref}`, new TextEncoder().encode("The old fix."));
+    const release = gateTexts(storage);
+    renderWithJev(storage, fake);
+    await takeAndCopy();
+    await userEvent.type(replyBox(), "A new reply.");
+    await userEvent.click(next());
+    await screen.findByRole("heading", { name: "Did it meet it" });
+    await act(async () => {});
+    expect(askAction()).toBeNull();
+    await release();
+    await userEvent.click(await screen.findByRole("button", { name: "Ask Jev" }));
+    await screen.findByRole("region", { name: "Jev's reading" });
+    const overall = (fake.asks[0] as SecondOpinionRequest).questions.overall.criteria?.true;
+    const openings = overall && typeof overall !== "string" ? overall.examples.map((e) => e.reply_opening) : [];
+    expect(openings).toEqual(["Earlier notes.\n\nFile: old.md\nThe old fix."]);
   });
 });

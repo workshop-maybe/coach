@@ -171,6 +171,11 @@ const RELEASE_REPLY = `# Release notes for 0.9
 - **What is still open:** Whether sync on by default ships in this release.`;
 
 /** From "Hand it over" to the release note pasted under "What came back". */
+/** What Claude Code writes when it leaves the release note as files (reply artifacts U7). */
+const ITEMS_REPLY = "Wrote the release note for 0.9 as a Markdown file, with a PDF of it to send round. The merged changes it covers are in the pull request.";
+/** The pull request it names, on an invented host. */
+const ITEMS_LINK = "https://example.com/notes-app/pull/212";
+
 const RELEASE_TO_REPLY: readonly Step[] = [{ click: { button: "Copy" } }, { waitFor: { text: "What came back" } }, { paste: RELEASE_REPLY }];
 
 // Jev Mode's pictures (U8): the judge card and the reply box with Jev Mode on, and a take
@@ -641,6 +646,32 @@ export const SHOTS: readonly Shot[] = [
     jev: "off",
     expect: { text: "Release notes for 0.9" },
     steps: RELEASE_TO_REPLY,
+  },
+  {
+    // Claude Code left its release note as files: a line of text, a link typed on the Link line
+    // and committed by clicking back into the text, then the File key's pick of the sample PDF
+    // and its Markdown file. The picture is the judge pane after Next, with the text, the link
+    // and the PDF's first page in the reply's stack.
+    id: "reply-items",
+    page: "how-to/add-files-and-links",
+    route: RELEASE_TEST,
+    seed: "full",
+    jev: "off",
+    expect: { selector: '.meet-text .reply-item-pdf canvas[aria-label="Page 1"]' },
+    steps: [
+      { click: { button: "Copy" } },
+      { waitFor: { text: "What came back" } },
+      { paste: ITEMS_REPLY },
+      { click: { button: "Add link" } },
+      { fill: { selector: ".reply-edit-link input" }, value: ITEMS_LINK },
+      { focusEnd: { selector: ".rich-input" } },
+      { waitFor: { selector: '.reply-item[data-kind="link"] .reply-item-url a' } },
+      { click: { button: "Add file" } },
+      { waitFor: { selector: '.reply-item-pdf canvas[aria-label="Page 1"]' } },
+      { click: { button: "Next" } },
+      { waitFor: { text: "Did it meet it" } },
+      { waitFor: { selector: '.reply-item-pdf canvas[aria-label="Page 1"]' } },
+    ],
   },
   {
     // Codex holds Name what matters next's handoff, waiting on its reply.
@@ -1122,7 +1153,7 @@ export const COVERAGE: Record<RouteKind, readonly string[] | typeof NOT_PICTURED
   home: ["home-empty", "home", "home-needs", "router-door", "home-collections"],
   "deck:credential": ["credential-start", "credential-target"],
   "deck:agent": ["first-test-agent", "first-test-hand", "first-test-judge", "first-test-home", "agent-new"],
-  "deck:test": ["test-hand", "test-reply", "judge", "go-to-offer", "missed-points", "held", "jev-ask", "jev-cleanup", "jev-sends", "jev-calls", "jev-record", "jev-reason", "case-check", "case-reading", "case-missed", "case-reason", "case-cleaned"],
+  "deck:test": ["test-hand", "test-reply", "reply-items", "judge", "go-to-offer", "missed-points", "held", "jev-ask", "jev-cleanup", "jev-sends", "jev-calls", "jev-record", "jev-reason", "case-check", "case-reading", "case-missed", "case-reason", "case-cleaned"],
   "deck:edit-credential": ["edit-retest", "go-to-flagged", "paste-image", "add-video"],
   "deck:edit-agent": ["agent-params"],
   // Rename is one name field, which the guide describes in words.

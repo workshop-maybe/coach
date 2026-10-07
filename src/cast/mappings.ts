@@ -5,7 +5,8 @@
 
 import { SKELETON_ID } from "../domain/handoffs";
 import { cellKey, type Matrix } from "../domain/matrix";
-import { credentialKey, type AgentSetup, type Collection, type Slug } from "../domain/types";
+import { previewText } from "../domain/replyItems";
+import { credentialKey, type AgentSetup, type Collection, type ReplyItem, type Slug } from "../domain/types";
 import { EFFORTS, HARNESSES, modelsFor, splitModel } from "../ui/dialLists";
 
 export type EncoderDial = "harness" | "model" | "effort";
@@ -146,6 +147,14 @@ export function cutLine(line: string, columns: number): string {
 export function replyScreen(reply: string, columns = SCREEN_COLUMNS): ScreenState {
   const lines = firstLines(reply, columns);
   return lines.length ? { kind: "reply", lines } : { kind: "idle" };
+}
+
+/**
+ * The screen for a reply's items (reply artifacts U4): its first text item with something in
+ * it, else its first other item's name or URL (`previewText`).
+ */
+export function replyItemsScreen(items: readonly ReplyItem[], columns = SCREEN_COLUMNS): ScreenState {
+  return replyScreen(previewText(items), columns);
 }
 
 /** A text's first three non-blank lines, spaces collapsed, each cut to `columns`. */

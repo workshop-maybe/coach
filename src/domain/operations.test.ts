@@ -70,7 +70,7 @@ import {
 } from "./operations";
 import { BUILT_INS } from "./builtins";
 import { findPreset, presetCredential } from "./presets";
-import { credentialKey, type AgentProfile, type Collection, type AssessmentResult, type FolderState, type HeadToHead, type HeldReading, type JevReading, type Rejudge } from "./types";
+import { credentialKey, type AgentProfile, type Collection, type AssessmentResult, type FolderState, type HeadToHead, type HeldReading, type JevReading, type Rejudge, type ReplyItem } from "./types";
 
 /** Records a result and returns only the folder, as most tests here need. */
 async function recordState(...args: Parameters<typeof recordAssessment>): Promise<FolderState> {
@@ -1981,5 +1981,63 @@ describe("renaming and trashing a collection (collections plan U6, KTD7)", () =>
     expect(builtinStatus(added.state, nostr).kind).toBe("added");
     const next = await trashCollection(storage, added.state, added.slug, now);
     expect(builtinStatus(next, nostr)).toEqual({ kind: "not-added" });
+  });
+});
+
+describe("replies with items (reply-artifacts U1)", () => {
+  const ids = { profileSlug: "claude-opus", collectionSlug: "go-basics", credentialSlug: "write-a-cli" };
+  const at = new Date("2026-10-07T09:00:00.000Z");
+  const pdf: ReplyItem = { kind: "file", name: "report.pdf", ref: "files/file-1a2b3c4d.pdf" };
+  const video: ReplyItem = { kind: "video", name: "demo.mov", ref: "video-5e6f7a8b.mov" };
+  const link: ReplyItem = { kind: "link", url: "https://example.com/pr/12" };
+  const text = (t: string): ReplyItem => ({ kind: "text", text: t });
+
+  it("records a reply's items in order, with its text items joined as the hand-back", async () => {
+    const { storage, state } = await setup();
+    const items = [text("Summary."), pdf, video, link, text("Closing.")];
+    const { state: next, fileStem } = await recordAssessment(storage, state, { ...ids, result: "met", note: "", items }, at);
+    const a = next.assessments.find((x) => x.fileStem === fileStem)!;
+    expect(a.items).toEqual(items);
+    expect(a.handBack).toBe("Summary.\n\nClosing.");
+    expect(await loadFolder(storage)).toEqual(next);
+  });
+
+  it("records one text item exactly as a bare hand-back would be", async () => {
+    const one = await setup();
+    await recordAssessment(one.storage, one.state, { ...ids, result: "met", note: "", items: [text(" Here it is. ")] }, at);
+    const bare = await setup();
+    await recordAssessment(bare.storage, bare.state, { ...ids, result: "met", note: "", handBack: " Here it is. " }, at);
+    const path = assessmentPath("claude-opus", "go-basics", "write-a-cli", "20261007T090000Z");
+    expect(one.storage.file(path)).toBe(bare.storage.file(path));
+    expect(one.storage.file(path)).not.toContain("items:");
+  });
+
+  it("drops whitespace-only text items, so one empty text item plus a PDF saves as one PDF item", async () => {
+    const { storage, state } = await setup();
+    const { state: next } = await holdReply(storage, state, { ...ids, items: [text("  \n"), pdf] }, at);
+    expect(next.held[0].items).toEqual([pdf]);
+    expect(next.held[0].handBack).toBe("");
+  });
+
+  it("Covers AE2. Refuses a reply of only an empty text item, and saves one with a link item", async () => {
+    const { storage, state } = await setup();
+    const before = Object.keys(storage.files()).length;
+    await expect(holdReply(storage, state, { ...ids, items: [text(" ")] }, at)).rejects.toThrow(/hand-back|reply/i);
+    await expect(recordAssessment(storage, state, { ...ids, result: "met", note: "", items: [] }, at)).rejects.toThrow(/hand-back|reply/i);
+    await expect(recordAssessment(storage, state, { ...ids, result: "met", note: "" }, at)).rejects.toThrow(/hand-back|reply/i);
+    expect(Object.keys(storage.files()).length).toBe(before);
+    const { state: next } = await holdReply(storage, state, { ...ids, items: [text(" "), link] }, at);
+    expect(next.held[0].items).toEqual([link]);
+  });
+
+  it("judging a held reply with items records a result with the same items", async () => {
+    const { storage, state } = await setup();
+    const items = [text("Summary."), pdf, link];
+    const held = await holdReply(storage, state, { ...ids, items }, at);
+    const next = await judgeHeldReply(storage, held.state, { ...ids, fileStem: held.fileStem }, "met");
+    const a = next.assessments.find((x) => x.fileStem === held.fileStem)!;
+    expect(a.items).toEqual(items);
+    expect(a.handBack).toBe("Summary.");
+    expect(next.held).toEqual([]);
   });
 });

@@ -16,11 +16,13 @@ import {
   rubricParts,
   secondOpinionRequest,
   TARGET_CRITERIA,
+  UNREAD_CLAUSE,
   TARGET_QUESTION,
   targetId,
   tappedPoints,
 } from "./secondOpinion";
-import type { JevReading } from "./types";
+import { jevReply } from "./jevReply";
+import type { JevReading, ReplyItem } from "./types";
 
 const points = (rubric: string) => rubricParts(rubric).points;
 const ask = (rubric: string, reply = "Done.") => secondOpinionRequest({ task: "Write the README.", rubric, reply });
@@ -118,9 +120,24 @@ describe("rubricParts: points", () => {
 });
 
 describe("secondOpinionRequest", () => {
-  it("sends the reply as a reader sees it, without the reply box's escapes, fenced code as written", () => {
-    const reply = "Key: \\[2, 1\\], a\\_b &amp; c\n```\n\\[x\\]\n```";
-    expect(ask("- One", reply).state.reply).toBe("Key: [2, 1], a_b & c\n```\n\\[x\\]\n```");
+  it("sends the reply as given: jevReply has already read it as a reader sees it (reply-artifacts KTD8)", () => {
+    const reply = "Key: \\[2, 1\\], a\\_b &amp; c";
+    expect(ask("- One", reply).state.reply).toBe(reply);
+    const items: ReplyItem[] = [
+      { kind: "text", text: reply },
+      { kind: "file", name: "notes.md", ref: "files/file-0000000a.md" },
+      { kind: "video", name: "demo.mp4", ref: "video-1a2b3c4d.mp4" },
+    ];
+    const read = jevReply(items, (ref) => (ref === "files/file-0000000a.md" ? "Notes \\_ as written." : null));
+    expect(ask("- One", read).state.reply).toBe("Key: [2, 1], a_b & c\n\nFile: notes.md\nNotes \\_ as written.\n\nA video Jev cannot see: demo.mp4");
+  });
+
+  it("names unread items as neither met nor missed in every criteria side it sends (KTD9)", () => {
+    for (const criteria of [POINT_CRITERIA, OVERALL_CRITERIA, TARGET_CRITERIA]) {
+      expect(criteria.true).toContain(UNREAD_CLAUSE);
+      expect(criteria.false).toContain(UNREAD_CLAUSE);
+    }
+    expect(UNREAD_CLAUSE).toContain("cannot see or open");
   });
 
   it("covers AE4: three point questions plus an overall question", () => {
@@ -166,8 +183,8 @@ describe("secondOpinionRequest", () => {
 
   it("gives every question type noul, and every point question KTD7's evidence criteria", () => {
     expect(POINT_CRITERIA).toEqual({
-      true: "the reply gives specific, checkable evidence that this point is met: it names the files, commands or output, or shows the content",
-      false: "the reply only asserts the point is met in general terms, or does not address it",
+      true: `the reply gives specific, checkable evidence that this point is met: it names the files, commands or output, or shows the content. ${UNREAD_CLAUSE}`,
+      false: `the reply only asserts the point is met in general terms, or does not address it. ${UNREAD_CLAUSE}`,
     });
     const req = ask("1. One\n2. Two\n3. Three");
     for (const q of Object.values(req.questions)) expect(q.type).toBe("noul");

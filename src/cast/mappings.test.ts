@@ -13,6 +13,7 @@ import {
   handoffKeys,
   handoffLetter,
   openingChoice,
+  replyItemsScreen,
   replyScreen,
   trigKeys,
   trigPages,
@@ -103,6 +104,14 @@ describe("trigKeys and trigPages", () => {
 
   it("always has one page, even with no keys", () => {
     expect(trigPages([])).toEqual([[]]);
+  });
+});
+
+describe("replyItemsScreen", () => {
+  it("shows the first text item with something in it, else the first other item's name", () => {
+    expect(replyItemsScreen([{ kind: "text", text: " " }, { kind: "text", text: "Done\nall" }])).toEqual({ kind: "reply", lines: ["Done", "all"] });
+    expect(replyItemsScreen([{ kind: "text", text: "" }, { kind: "file", name: "report.pdf", ref: "files/file-1a2b3c4d.pdf" }])).toEqual({ kind: "reply", lines: ["report.pdf"] });
+    expect(replyItemsScreen([{ kind: "text", text: "" }])).toEqual({ kind: "idle" });
   });
 });
 

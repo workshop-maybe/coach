@@ -3,7 +3,7 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import type { ContextReading } from "../domain/types";
 import { currentPlatform, type Platform } from "../domain/videos";
-import type { AddFrom, AddedFile, RootKind, Storage, VideoUrl } from "./storage";
+import type { AddAccept, AddFrom, AddedFile, RootKind, Storage, VideoUrl } from "./storage";
 
 export class TauriStorage implements Storage {
   /** The platform is read once, when the app builds its storage. */
@@ -38,15 +38,38 @@ export class TauriStorage implements Storage {
     return invoke<string>("save_image", bytes, { headers: { "x-root": root, "x-dir": encodeURIComponent(dir) } });
   }
 
-  addFiles(dir: string, from: AddFrom): Promise<AddedFile[]> {
-    return invoke<AddedFile[]>("add_files", { dir, from });
+  addFiles(dir: string, from: AddFrom, accept: AddAccept = "media"): Promise<AddedFile[]> {
+    // Every shape names what it accepts, and a pick names its key (reply artifacts KTD3).
+    const wire = from.kind === "pick" ? { kind: "pick", item: from.item ?? "video", accept } : { ...from, accept };
+    return invoke<AddedFile[]>("add_files", { dir, from: wire });
   }
 
   copyVideo(from: string, toRoot: RootKind, toDir: string): Promise<string> {
     return invoke<string>("copy_video", { from, toRoot, toDir });
   }
 
-  async videoUrl(path: string): Promise<VideoUrl | null> {
+  copyItem(from: string, toRoot: RootKind, toDir: string): Promise<string> {
+    return invoke<string>("copy_item", { from, toRoot, toDir });
+  }
+
+  readItemText(path: string): Promise<string | null> {
+    return invoke<string | null>("read_item_text", { path });
+  }
+
+  openItem(path: string): Promise<void> {
+    return invoke<void>("open_item", { path });
+  }
+
+  videoUrl(path: string): Promise<VideoUrl | null> {
+    return this.mediaUrl(path);
+  }
+
+  /** The scheme serves a PDF item as it serves a video, so a PDF's URL is made the same way. */
+  fileUrl(path: string): Promise<VideoUrl | null> {
+    return this.mediaUrl(path);
+  }
+
+  private async mediaUrl(path: string): Promise<VideoUrl | null> {
     const url = convertFileSrc(path, "media");
     // WebKitGTK will not hand a custom-scheme URL to GStreamer, so Linux plays a blob (KTD4).
     // With no URL to fall back on, any failure there shows the placeholder.

@@ -56,6 +56,7 @@ import { heldOf, heldReadingOf } from "./handoffResults";
 import { assignmentVersion } from "./hash";
 import { findPreset, presetCredential } from "./presets";
 import { reasonLine } from "./reasonLine";
+import { hasContent, normalizeReply } from "./replyItems";
 import { jobFirstLine } from "./router";
 import { rubricParts, tappedPoints } from "./secondOpinion";
 import { uniqueSlug } from "./slug";
@@ -74,6 +75,7 @@ import {
   type JevReading,
   type Mark,
   type Rejudge,
+  type ReplyItem,
   type ReplyRef,
   type RoutingRecord,
   type Slug,
@@ -544,7 +546,13 @@ export interface AssessmentInput {
   credentialSlug: Slug;
   result: AssessmentResult;
   note: string;
-  handBack: string;
+  /**
+   * The reply's items in order (reply-artifacts R2). Whitespace-only text items are dropped
+   * when it saves, and it needs at least one item left (R4).
+   */
+  items?: ReplyItem[];
+  /** The reply as one text item, for a caller that has no items. Ignored when `items` is given. */
+  handBack?: string;
   /** The context captured when the test prompt was copied, when there was one. */
   context?: TestContext;
   /** The handoff the test ran with, as copied. Recording it locks that handoff (KTD5). */
@@ -558,11 +566,15 @@ export interface AssessmentInput {
 /** A reply to hold: what a result would record, without the verdict, a note or missed points. */
 export type HoldInput = Omit<AssessmentInput, "result" | "note" | "missedPoints">;
 
-/** What a result or a held reply stamps about the test from the folder as it is now (R16). */
+/**
+ * What a result or a held reply stamps about the test from the folder as it is now (R16), and
+ * the reply as it saves: whitespace-only text items dropped, refused when nothing is left
+ * (reply-artifacts R4).
+ */
 async function stampTest(state: FolderState, input: HoldInput) {
-  if (typeof input.handBack !== "string" || input.handBack.trim() === "") {
-    throw new Error("Paste the agent's hand-back before saving.");
-  }
+  const given = input.items ?? (typeof input.handBack === "string" ? [{ kind: "text" as const, text: input.handBack }] : []);
+  const reply = hasContent(given) ? normalizeReply(given) : null;
+  if (reply === null) throw new Error("Paste the agent's hand-back before saving.");
   const profile = findProfile(state, input.profileSlug);
   const credential = findCredential(state, input.collectionSlug, input.credentialSlug);
   const version = await assignmentVersion(credential.task, credential.rubric);
@@ -570,7 +582,8 @@ async function stampTest(state: FolderState, input: HoldInput) {
     ids: { profileSlug: profile.slug, collectionSlug: credential.collectionSlug, credentialSlug: credential.slug },
     assignmentVersion: version,
     setup: { harness: profile.harness, model: profile.model, effort: profile.effort },
-    handBack: input.handBack,
+    handBack: reply.handBack,
+    ...(reply.items ? { items: reply.items } : {}),
     ...(input.context ? { context: input.context } : {}),
     ...(input.handoff ? { handoff: { id: input.handoff.id, text: input.handoff.text } } : {}),
     ...(input.jev && input.jev.assignmentVersion === version ? { jev: input.jev } : {}),

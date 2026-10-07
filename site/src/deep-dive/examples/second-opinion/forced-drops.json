@@ -1,8 +1,8 @@
 {
-  "reply_characters": 126421,
-  "state_tokens": 31698,
-  "longest_question_tokens": 281,
-  "all_question_tokens": 915,
+  "reply_characters": 126215,
+  "state_tokens": 31647,
+  "longest_question_tokens": 333,
+  "all_question_tokens": 1122,
   "limits": {
     "state_plus_longest": 32000,
     "state_plus_all": 64000

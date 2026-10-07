@@ -38,7 +38,7 @@ One agent's verdict on one badge, Met or Not met, recorded by the user with the 
 
 ### Reply
 
-The text an agent sent back for a test, pasted into the app and saved on its result, or its held reply, as it stands in the reply box after any cleanup. Also called the handback.
+What an agent sent back for a test, saved on its result or its held reply: an ordered list of items, each of one kind (text, image, video, file or link), that the user adds on "What came back". Text stands as it is in its box after any cleanup. Also called the handback.
 
 ### Run
 

@@ -6,10 +6,11 @@
 // on to what it found.
 //
 // The take is a record: a mono header bar with the agent, its setup, the verdict, the date
-// and the note, then the reply rendered at a readable measure with a switch to the text as
-// stored, then Jev's saved reading and the handoff text that ran, each collapsed. Close and
-// Escape go back by the rule in replyRoute.ts, worked out when the view closes: the page
-// that holds the take, its row lit and focused, the list's picks kept (R16).
+// and the note, then the reply's items as one stack (ReplyStack.tsx) at a readable measure,
+// with a switch to its text as stored, then Jev's saved reading and the handoff text that
+// ran, each collapsed. Close and Escape go back by the rule in replyRoute.ts, worked out when
+// the view closes: the page that holds the take, its row lit and focused, the list's picks
+// kept (R16).
 //
 // A held reply opens the same way, marked Held, with Met and Not yet under it (hold-and-compare
 // R6, KTD3), and the reading it shows is the one chosen for the badge's current version, as
@@ -23,6 +24,7 @@
 import { useId, useState } from "react";
 import { handoffTextOf, isHeld, readingOfTake, takeTime } from "../domain/handoffResults";
 import { rubricParts } from "../domain/secondOpinion";
+import { replyItems } from "../domain/replyItems";
 import { credentialKey } from "../domain/types";
 import { formatDate, handoffText } from "./format";
 import { resultImages } from "./imageSource";
@@ -31,7 +33,7 @@ import { JudgeStep, useVerdictStep } from "./JudgeStep";
 import { useNav } from "./nav";
 import { usePane } from "./pane";
 import { backFromReply, takeIdOf, takeOf } from "./replyRoute";
-import { RichView } from "./RichView";
+import { ReplyStack } from "./ReplyStack";
 import type { TakeRef } from "./routes";
 import { Missing, StoredSwitch, TakeBar, useEscape } from "./shared";
 import { TakeActions, useTakeWrites } from "./takeActions";
@@ -83,7 +85,7 @@ export function ReplyView({ credentialKey: key, take, picks }: { credentialKey: 
           <StoredSwitch asStored={asStored} onToggle={() => setAsStored((s) => !s)} />
           {note !== "" && <p className="reply-note">{note}</p>}
         </TakeBar>
-        <RichView aria-label="Reply" value={a.handBack} stored={asStored} images={resultImages(storage, a)} />
+        <ReplyStack aria-label="Reply" items={replyItems(a)} stored={asStored} source={resultImages(storage, a)} />
         {step ? (
           <JudgeStep
             key={`${step.id} ${step.verdict}`}

@@ -13,11 +13,20 @@
 // same folder, so no bytes pass through the page. It counts in `busy` like a paste (R7), and
 // every file it refused goes on one notice that names them (R5). Its files join the same
 // record a carry reads, and a carry moves a video with `copyVideo`, inside Rust (KTD7, R13).
+//
+// A reply's items (U4 of docs/plans/2026-10-07-0620-feat-reply-artifacts-plan.md, KTD3, KTD7)
+// add through `addItems`, which asks for any file: Rust sorts each by content into an image,
+// a video or a file item, and the item keeps the file's original name. Those adds count in
+// `busy` and share the refusal notice. The carry also takes every image, video and file the
+// reply's items still name, a file item through `copyItem` into the new folder's `files/`.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { IMAGE_TOO_LARGE, ONLY_PNG_OR_JPEG, PASTED_IMAGE_MAX_BYTES, dataUriToBytes, folderOf, isLocalImageName, localRefNames } from "../domain/images";
+import { IMAGE_TOO_LARGE, ONLY_PNG_OR_JPEG, PASTED_IMAGE_MAX_BYTES, dataUriToBytes, isLocalImageName, localRefNames } from "../domain/images";
 import { isLocalVideoName } from "../domain/videos";
-import type { AddedFile } from "../storage/storage";
+import { FILES_DIR } from "../domain/files";
+import { displayNameOf } from "../domain/replyItems";
+import type { ReplyItem } from "../domain/types";
+import type { AddFrom, AddedFile } from "../storage/storage";
 import { forgetImage, imageSource } from "./imageSource";
 import type { RichImageSource } from "./richImage";
 import type { RichImages } from "./RichText";
@@ -47,18 +56,34 @@ export function refusalNotice(refused: Pick<AddedFile, "name" | "error">[]): str
   return [...byReason].map(([reason, names]) => `${listNames(names)}: ${reason}`).join(" ");
 }
 
+/** The refs a reply's items name: an image's or video's bare name, a file's `files/` ref. */
+function itemRefs(items: readonly ReplyItem[]): string[] {
+  return items.flatMap((item) => (item.kind === "image" || item.kind === "video" || item.kind === "file" ? [item.ref] : []));
+}
+
+/** Adds files as a reply's items: an item for each file added, in order, having told the person about the rest. */
+export type AddItems = (from: AddFrom) => Promise<ReplyItem[]>;
+
 /**
  * The images of a box whose file is in `dir` (null: no folder yet, so nothing saves), and
- * whether a write is in flight. `text` is the box's Markdown, which decides what a change of
- * folder carries along.
+ * whether a write is in flight. `text` is the box's Markdown and `items` a reply's items,
+ * which together decide what a change of folder carries along. `addItems` adds any file as
+ * a reply's item (KTD3); there is none with no folder.
  */
-export function useRichImages(dir: string | null, text = ""): { images: RichImages; busy: boolean } {
+export function useRichImages(
+  dir: string | null,
+  text = "",
+  items: readonly ReplyItem[] = [],
+): { images: RichImages; busy: boolean; addItems?: AddItems } {
   const { storage, setNotice } = useFolder();
   const [inFlight, setInFlight] = useState(0);
-  // What this box saved this visit: bare name to root-relative path.
+  // What this box saved this visit: its ref in the folder (a bare name, or `files/` and a
+  // bare name for a file item) to its root-relative path.
   const saved = useRef(new Map<string, string>());
   const latestText = useRef(text);
   latestText.current = text;
+  const latestItems = useRef(items);
+  latestItems.current = items;
 
   const track = useCallback(async <T,>(work: () => Promise<T>): Promise<T> => {
     setInFlight((n) => n + 1);
@@ -69,16 +94,21 @@ export function useRichImages(dir: string | null, text = ""): { images: RichImag
     }
   }, []);
 
-  const images = useMemo<RichImages>(() => {
-    const { load, video } = dir === null ? NOTHING : imageSource(storage, dir);
-    /** Records a file this visit saved, for the carry, and returns its bare name. */
-    const remember = (path: string): string => {
+  /** Records a file this visit saved, for the carry, and returns its ref in `dir`. */
+  const remember = useCallback(
+    (path: string): string => {
       // A file read as missing before it was added is there now.
       forgetImage(storage, path);
       const name = fileName(path);
-      saved.current.set(name, path);
-      return name;
-    };
+      const ref = dir !== null && path === `${dir}/${FILES_DIR}/${name}` ? `${FILES_DIR}/${name}` : name;
+      saved.current.set(ref, path);
+      return ref;
+    },
+    [storage, dir],
+  );
+
+  const images = useMemo<RichImages>(() => {
+    const { load, video } = dir === null ? NOTHING : imageSource(storage, dir);
     return {
       load,
       video,
@@ -122,20 +152,47 @@ export function useRichImages(dir: string | null, text = ""): { images: RichImag
         },
       }),
     };
-  }, [storage, dir, setNotice, track]);
+  }, [storage, dir, setNotice, track, remember]);
+
+  const addItems = useMemo<AddItems | undefined>(() => {
+    if (dir === null) return undefined;
+    return (from) =>
+      track(async () => {
+        let files: AddedFile[];
+        try {
+          files = await storage.addFiles(dir, from, "any");
+        } catch (e) {
+          setNotice(describeError(e));
+          throw e;
+        }
+        const added: ReplyItem[] = [];
+        for (const { name, path, kind } of files) {
+          if (path === null || kind === null) continue;
+          added.push({ kind, name: displayNameOf(name), ref: remember(path) });
+        }
+        const refused = files.filter((f) => f.path === null || f.kind === null);
+        if (refused.length > 0) setNotice(refusalNotice(refused));
+        return added;
+      });
+  }, [storage, dir, setNotice, track, remember]);
 
   // A new folder takes the images and videos this box saved that its text still names (R10,
-  // R13). A video is copied inside Rust; a picture is read and written again.
+  // R13), and the items a reply still holds (KTD7). A video or a file is copied inside Rust;
+  // a picture is read and written again. A ref already at its place in the new folder stays.
   const carriedTo = useRef(dir);
   useEffect(() => {
     if (dir === null || carriedTo.current === dir) return;
     carriedTo.current = dir;
-    const names = new Set(localRefNames(latestText.current, isLocalFileName));
-    const moving = [...saved.current].filter(([name, path]) => names.has(name) && folderOf(path) !== dir);
+    const names = new Set([...localRefNames(latestText.current, isLocalFileName), ...itemRefs(latestItems.current)]);
+    const moving = [...saved.current].filter(([ref, path]) => names.has(ref) && path !== `${dir}/${ref}`);
     if (moving.length === 0) return;
     void track(async () => {
       for (const [name, from] of moving) {
         try {
+          if (name.startsWith(`${FILES_DIR}/`)) {
+            saved.current.set(name, await storage.copyItem(from, "data", dir));
+            continue;
+          }
           if (isLocalVideoName(name)) {
             saved.current.set(name, await storage.copyVideo(from, "data", dir));
             continue;
@@ -152,5 +209,5 @@ export function useRichImages(dir: string | null, text = ""): { images: RichImag
     });
   }, [dir, storage, setNotice, track]);
 
-  return { images, busy: inFlight > 0 };
+  return { images, busy: inFlight > 0, ...(addItems ? { addItems } : {}) };
 }

@@ -82,16 +82,16 @@ Turning Jev Mode on, opening a badge, judging without asking, or pasting a reply
 A second opinion sends:
 
 - the badge's task, its rubric in full, the rubric split into its points and its other lines, and its learning targets;
-- the reply you're judging, as it reads: its Markdown, without the escapes the reply box adds, such as the backslash before a square bracket;
+- the reply you're judging, as Jev reads it: its text, without the escapes the reply box adds, such as the backslash before a square bracket, then the contents of its Markdown and text files, and a line naming each picture, video, other file or link;
 - the openings of up to a few earlier replies on the same badge, with your notes on them, inside the questions as examples.
 
-A head-to-head sends the same task, rubric and learning targets with two replies, each whole and as it reads, and no earlier replies.
+A head-to-head sends the same task, rubric and learning targets with two replies, each whole and as Jev reads it, and no earlier replies.
 
 A cleanup sends only the text you pasted, after the app's own fixes, with each line tagged by its number.
 
 A routing ask sends the job, and the names, tasks and learning targets of your badges, never a rubric.
 
-None of them sends your agents' names or setups, your folder's location, or a reply from another badge. Only a routing ask sends other badges, and only their names, tasks and learning targets. A picture or a video never goes as an image: the reply goes as its Markdown text, so a picture in it goes only as its file name, and earlier replies' openings drop picture and video Markdown altogether. Rust holds the second opinion's state to exactly these fields and refuses any other:
+None of them sends your agents' names or setups, your folder's location, or a reply from another badge. Only a routing ask sends other badges, and only their names, tasks and learning targets. A picture, a video, a PDF or any other file never goes as a file: Jev reads only text. A reply's pictures and videos go only as a line naming each file, a link only as its address, and a Markdown or text file as its contents. All of it still travels in the one `reply` field, so the fields Rust allows are the same as before replies held files. Earlier replies' openings drop picture and video Markdown altogether. [The second opinion, end to end](/jev/second-opinion/#a-reply-with-files-and-links) shows how the reply is built. Rust holds the second opinion's state to exactly these fields and refuses any other:
 
 <Source file="src-tauri/src/jev.rs" symbol="OpinionState" />
 

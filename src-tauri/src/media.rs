@@ -1,6 +1,7 @@
-//! The `media` URI scheme (KTD3): plays videos from the data folder, confined to it,
-//! with Range support. `respond` is plain Rust with no Tauri types; `lib.rs` registers
-//! the scheme and turns a `Reply` into a response.
+//! The `media` URI scheme (KTD3): plays videos from the data folder, and serves a reply's
+//! PDF items under `files/` (reply artifacts KTD4), confined to it, with Range support.
+//! `respond` is plain Rust with no Tauri types; `lib.rs` registers the scheme and turns a
+//! `Reply` into a response.
 
 use std::path::Path;
 
@@ -45,19 +46,24 @@ fn content_type(ext: &str) -> &'static str {
     }
 }
 
-/// A video found under the root, open and checked.
+/// A file found under the root, open and checked.
 struct Found {
     file: std::fs::File,
     len: u64,
-    ext: &'static str,
+    content_type: &'static str,
+    /// The largest file served whole without a Range.
+    cap: u64,
 }
 
-/// Finds the video a request path names, or None for anything refused, missing or
-/// outside the root, so every such case gets the same answer.
-fn find_video(root: Option<&Path>, raw: &str) -> Option<Found> {
+/// What a PDF's bytes start with.
+const PDF_MAGIC: &[u8] = b"%PDF-";
+
+/// Finds the video or PDF item a request path names, or None for anything refused, missing
+/// or outside the root, so every such case gets the same answer.
+fn find_media(root: Option<&Path>, raw: &str) -> Option<Found> {
     use crate::files::{
-        family_agrees, is_local_video_name, normalize_rel, open_regular, read_head, resolve_in_root, sniff_video,
-        video_ext_of_name,
+        family_agrees, is_file_item_name, is_local_video_name, normalize_rel, open_regular, read_head, resolve_in_root,
+        sniff_video, video_ext_of_name, FILES_DIR, MAX_FILE_BYTES, MAX_VIDEO_BYTES,
     };
     let root = root?;
     let raw = raw.split(['?', '#']).next().unwrap_or_default();
@@ -68,18 +74,24 @@ fn find_video(root: Option<&Path>, raw: &str) -> Option<Found> {
     }
     let parts = normalize_rel(&decoded).ok()?;
     let name = parts.last()?.to_str()?;
-    if !is_local_video_name(name) {
+    // A video by the bare-name rule, or a PDF item: `files/file-<8 hex>.pdf`.
+    let video_ext = if is_local_video_name(name) { video_ext_of_name(name) } else { None };
+    let in_files = parts.len() >= 2 && parts.get(parts.len() - 2).is_some_and(|p| *p == FILES_DIR);
+    let pdf = video_ext.is_none() && in_files && is_file_item_name(name) && name.ends_with(".pdf");
+    if video_ext.is_none() && !pdf {
         return None;
     }
-    let ext = video_ext_of_name(name)?;
     let rel = crate::files::rel_string(&parts);
     let path = resolve_in_root(root, &rel).ok()?;
     let (mut file, len) = open_regular(&path).ok()??;
     let head = read_head(&mut file).ok()?;
-    if !sniff_video(&head).is_some_and(|family| family_agrees(family, ext)) {
-        return None;
+    match video_ext {
+        Some(ext) if sniff_video(&head).is_some_and(|family| family_agrees(family, ext)) => {
+            Some(Found { file, len, content_type: content_type(ext), cap: MAX_VIDEO_BYTES })
+        }
+        None if head.starts_with(PDF_MAGIC) => Some(Found { file, len, content_type: "application/pdf", cap: MAX_FILE_BYTES }),
+        _ => None,
     }
-    Some(Found { file, len, ext })
 }
 
 /// Digits only, so a sign or a space never parses.
@@ -146,14 +158,14 @@ fn answer(root: Option<&Path>, request: &Request<'_>, debug: bool) -> Reply {
             return empty(405, headers);
         }
     };
-    let Some(mut found) = find_video(root, request.path) else {
+    let Some(mut found) = find_media(root, request.path) else {
         return empty(404, headers);
     };
-    headers.push(("Content-Type", content_type(found.ext).into()));
+    headers.push(("Content-Type", found.content_type.into()));
     let len = found.len;
 
     let (status, start, count) = match request.range {
-        None if len > crate::files::MAX_VIDEO_BYTES => return empty(413, headers),
+        None if len > found.cap => return empty(413, headers),
         None => (200, 0, len),
         Some(range) => match parse_range(range, len) {
             None => {
@@ -539,5 +551,97 @@ mod tests {
         // Slashes left unencoded work too.
         let r = get(&root, "/my%20clips/R%C3%A9vision%20%E6%97%A5%E6%9C%AC/video-1a2b3c4d.mp4", None);
         assert_eq!(r.status, 200);
+    }
+
+
+    // --- PDFs under files/ (reply artifacts U2) ---
+
+    /// A PDF of `len` bytes whose later bytes count up, so a range is checkable.
+    fn pdf(len: usize) -> Vec<u8> {
+        let mut v: Vec<u8> = (0..len).map(|i| (i % 251) as u8).collect();
+        v[..5].copy_from_slice(b"%PDF-");
+        v
+    }
+
+    const P: &str = "/r%2Ffiles%2Ffile-1a2b3c4d.pdf";
+
+    #[test]
+    fn a_pdf_under_files_is_served_as_a_pdf_with_ranges() {
+        let (_d, root) = root();
+        let v = pdf(40);
+        put(&root, "r/files/file-1a2b3c4d.pdf", &v);
+        let r = get(&root, P, None);
+        assert_eq!((r.status, r.body.as_slice()), (200, &v[..]));
+        assert_eq!(header(&r, "Content-Type"), Some("application/pdf"));
+        assert_eq!(header(&r, "Accept-Ranges"), Some("bytes"));
+        let r = get(&root, "/r/files/file-1a2b3c4d.pdf", Some("bytes=5-9"));
+        assert_eq!((r.status, r.body.as_slice()), (206, &v[5..10]));
+        assert_eq!(header(&r, "Content-Range"), Some("bytes 5-9/40"));
+        assert_eq!(header(&r, "Content-Type"), Some("application/pdf"));
+        assert_416(&get(&root, P, Some("bytes=40-")), 40);
+        let r = answer(Some(&root), &req("HEAD", P, None), true);
+        assert_eq!((r.status, header(&r, "Content-Length")), (200, Some("40")));
+        // CORS is answered as for a video, so the page can fetch the bytes.
+        let r = answer(Some(&root), &Request { method: "GET", path: P, range: None, origin: Some("tauri://localhost") }, false);
+        assert_eq!(header(&r, "Access-Control-Allow-Origin"), Some("tauri://localhost"));
+        // A PDF at the root's own files/ folder too.
+        put(&root, "files/file-00000000.pdf", &v);
+        assert_eq!(get(&root, "/files/file-00000000.pdf", None).status, 200);
+    }
+
+    #[test]
+    fn a_pdf_over_100_mib_is_413_without_a_range_and_served_with_one() {
+        let (_d, root) = root();
+        put(&root, "files/file-1a2b3c4d.pdf", &pdf(16));
+        fs::File::options()
+            .write(true)
+            .open(root.join("files/file-1a2b3c4d.pdf"))
+            .unwrap()
+            .set_len(crate::files::MAX_FILE_BYTES + 1)
+            .unwrap();
+        assert_eq!(get(&root, "/files/file-1a2b3c4d.pdf", None).status, 413);
+        assert_eq!(get(&root, "/files/file-1a2b3c4d.pdf", Some("bytes=0-4")).body, b"%PDF-");
+    }
+
+    #[test]
+    fn anything_but_a_real_pdf_item_under_files_gets_the_same_404() {
+        let (outer, root) = nested_root();
+        let missing = get(&root, "/files/file-00000000.pdf", None);
+        assert_eq!(missing.status, 404);
+        put(&root, "files/file-1a2b3c4d.pdf", b"just text named .pdf");
+        put(&root, "notfiles/file-1a2b3c4d.pdf", &pdf(20));
+        put(&root, "files/report.pdf", &pdf(20));
+        put(&root, "files/file-0000000a.PDF", &pdf(20));
+        put(&root, "files/file-1a2b3c4d.md", b"%PDF- but markdown");
+        put(&root, "files/file-1a2b3c4d.html", b"%PDF-<script></script>");
+        put(&root, "files/file-1a2b3c4d", &pdf(20));
+        put(&root, "image-1a2b3c4d.pdf", &pdf(20));
+        fs::create_dir_all(outer.path().join("files")).unwrap();
+        fs::write(outer.path().join("files/file-1a2b3c4d.pdf"), pdf(20)).unwrap();
+        let mut paths = vec![
+            "/files/file-1a2b3c4d.pdf",
+            "/notfiles/file-1a2b3c4d.pdf",
+            "/files/report.pdf",
+            "/files/file-0000000a.PDF",
+            "/files/file-1a2b3c4d.md",
+            "/files/file-1a2b3c4d.html",
+            "/files/file-1a2b3c4d",
+            "/image-1a2b3c4d.pdf",
+            "/file-1a2b3c4d.pdf",
+            "/../files/file-1a2b3c4d.pdf",
+            "/..%2Ffiles%2Ffile-1a2b3c4d.pdf",
+        ];
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::symlink;
+            fs::create_dir_all(root.join("x/files")).unwrap();
+            symlink(outer.path().join("files/file-1a2b3c4d.pdf"), root.join("x/files/file-0badc0de.pdf")).unwrap();
+            symlink(outer.path().join("files"), root.join("y")).unwrap();
+            paths.extend(["/x/files/file-0badc0de.pdf", "/y/file-1a2b3c4d.pdf"]);
+        }
+        for path in paths {
+            assert_eq!(get(&root, path, None), missing, "{path}");
+            assert_eq!(get(&root, path, Some("bytes=0-1")), missing, "{path}");
+        }
     }
 }

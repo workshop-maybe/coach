@@ -33,12 +33,38 @@ vi.mock("../domain/matrix", async (importOriginal) => {
   };
 });
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ writeText: vi.fn() }));
+vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn(() => Promise.resolve()) }));
+const pdf = vi.hoisted(() => ({ openPdf: vi.fn() }));
+vi.mock("./pdfDocument", () => pdf);
 
 beforeEach(() => {
   localStorage.clear();
   builds.last = null;
 });
 afterEach(cleanup);
+
+// Reply items (U5 of the reply artifacts plan, R9-R12, KTD6).
+const SHOT = "data:image/png;base64,iVBORw0KGgo=";
+const PDF_BYTES = new TextEncoder().encode("%PDF-1.7\n%%EOF\n");
+const itemDir = (slug: string) => `assessments/${slug}/eng/review`;
+
+/** A one-page PDF document, as pdf.js would open it. */
+function fakePdf() {
+  return {
+    numPages: 1,
+    getPage: async () => ({ width: 600, height: 800, render: async () => undefined, cleanup: () => undefined }),
+    destroy: () => undefined,
+  };
+}
+
+class NoObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+/** The kind and name in each item's header bar, in order. */
+const itemHeaders = (el: HTMLElement) => [...el.querySelectorAll(".reply-item-bar")].map((h) => h.textContent);
 
 const codex = { ...opus, slug: "codex", name: "Codex agent", harness: "codex", model: "gpt-5", effort: "medium" };
 const a: Handoff = { id: "a", collectionSlug: "eng", credentialSlug: "review", text: "# A\n\n{{task}}\n" };
@@ -577,5 +603,85 @@ describe("ReplyView, judging against Jev and again", () => {
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(within(bar()).getByText("Met")).toBeTruthy());
     expect(screen.getByText("Changed from Not met")).toBeTruthy();
+  });
+});
+
+describe("ReplyView, reply items", () => {
+  beforeEach(() => {
+    pdf.openPdf.mockReset();
+    pdf.openPdf.mockResolvedValue(fakePdf());
+    vi.stubGlobal("IntersectionObserver", NoObserver);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("shows every item of a multi-item result in order, then its actions", async () => {
+    const storage = folder([
+      await result(opus, review, {
+        ...day(1),
+        handBack: "Here is the report.",
+        items: [
+          { kind: "text", text: "Here is the report." },
+          { kind: "file", name: "report.pdf", ref: "files/file-1a2b3c4d.pdf" },
+          { kind: "link", url: "https://example.com/pr/1" },
+        ],
+      }),
+    ]);
+    storage.seedItemFile(`${itemDir("opus")}/files/file-1a2b3c4d.pdf`, PDF_BYTES);
+    open(storage);
+    await screen.findByRole("heading", { name: "Opus agent" });
+    const reply = screen.getByRole("region", { name: "Reply" });
+    expect(itemHeaders(reply)).toEqual(["Text", "Filereport.pdf", "Link"]);
+    expect(within(reply).getByText("Here is the report.")).toBeTruthy();
+    expect(within(reply).getByText("https://example.com/pr/1")).toBeTruthy();
+    await waitFor(() => expect(reply.querySelectorAll("canvas")).toHaveLength(1));
+    expect(pdf.openPdf).toHaveBeenCalledWith(`blob:memory/${itemDir("opus")}/files/file-1a2b3c4d.pdf`);
+    // The actions follow the whole stack.
+    const change = screen.getByRole("button", { name: "Change to Not yet" });
+    expect(reply.compareDocumentPosition(change) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("a held reply shows its items, with Met and Not yet under them", async () => {
+    const held = await heldReply(codex, review, {
+      ...{ fileStem: day(2).fileStem, heldAt: day(2).recordedAt },
+      handBack: "",
+      items: [{ kind: "video", name: "demo.mp4", ref: "video-1a2b3c4d.mp4" }, { kind: "link", url: "https://example.com" }],
+    });
+    open(storageWith({ credentials: [review], profiles: [opus, codex], handoffs: [a], held: [held] }), take("codex", 2));
+    await screen.findByRole("heading", { name: "Codex agent" });
+    const reply = screen.getByRole("region", { name: "Reply" });
+    expect(itemHeaders(reply)).toEqual(["Videodemo.mp4", "Link"]);
+    const met = screen.getByRole("button", { name: "Met" });
+    expect(reply.compareDocumentPosition(met) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("Covers AE6. an old result shows one text item, with no item header, and its inline picture", async () => {
+    const storage = folder([await result(opus, review, { ...day(1), handBack: "See the shot.\n\n![](image-00000001.png)" })]);
+    storage.seedImage(`${itemDir("opus")}/image-00000001.png`, SHOT);
+    open(storage);
+    await screen.findByRole("heading", { name: "Opus agent" });
+    const reply = screen.getByRole("region", { name: "Reply" });
+    expect(itemHeaders(reply)).toEqual([]);
+    expect(reply.querySelectorAll(".reply-item")).toHaveLength(1);
+    expect(within(reply).getByText("See the shot.")).toBeTruthy();
+    await waitFor(() => expect(reply.querySelector(".rich-image img")?.getAttribute("src")).toBe(SHOT));
+  });
+
+  it("Show as stored switches text items to their Markdown and leaves the other items as they are", async () => {
+    const storage = folder([
+      await result(opus, review, {
+        ...day(1),
+        handBack: "# Findings",
+        items: [
+          { kind: "text", text: "# Findings" },
+          { kind: "link", url: "https://example.com" },
+        ],
+      }),
+    ]);
+    open(storage);
+    await screen.findByRole("heading", { name: "Opus agent" });
+    await userEvent.click(screen.getByRole("button", { name: "Show as stored" }));
+    const reply = screen.getByRole("region", { name: "Reply" });
+    expect(reply.querySelector("pre")?.textContent).toBe("# Findings");
+    expect(within(reply).getByRole("link", { name: "https://example.com" })).toBeTruthy();
   });
 });
