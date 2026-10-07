@@ -84,7 +84,7 @@ import { sameSetup } from "../domain/matrix";
 import { calibrationOf, isOverrule, type Calibration } from "../domain/calls";
 import { fitSecondOpinion } from "../domain/jevBudget";
 import { examplesFor, rankExamples } from "../domain/jevExamples";
-import { jevReply, pendingTexts, type RefTexts } from "../domain/jevReply";
+import { isTextFileRef, jevReply, pendingTexts, type RefTexts } from "../domain/jevReply";
 import { answeringModel } from "../domain/jevRequest";
 import { assessmentDir, credentialsDir } from "../domain/folder";
 import { cleanUpLineBreaks, lineBreakBatches } from "../domain/lineBreaks";
@@ -137,6 +137,9 @@ export { jevFailure };
 
 /** How long the dots run across the screen after Copy before the cursor waits. */
 export const SENDING_MS = 700;
+
+/** Said beside Ask Jev when the reply holds a picture, video, PDF, other file or link. */
+export const JEV_EYES_NOTE = "Jev reads the words. The pictures, videos, files and links are here for your own eyes.";
 
 function reducedMotion(): boolean {
   return typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -274,7 +277,6 @@ export function TestDeck(props: TestDeckProps) {
   const items = useMemo(() => entries.map((e) => e.item), [entries]);
   // The reply's text items joined, whose pictures and videos the folder keeps, and its identity.
   const reply = useMemo(() => textOf(items), [items]);
-  const replyId = useMemo(() => replyKey(items), [items]);
   // A pasted image and an added item go in the folder the result will be recorded in. Picking
   // another agent or badge moves the folder, and the files the reply still names go along (R10).
   const replyDir = profile && credential ? assessmentDir(profile.slug, credential.collectionSlug, credential.slug) : null;
@@ -283,10 +285,9 @@ export function TestDeck(props: TestDeckProps) {
   const replySource = replyDir ? imageSource(storage, replyDir) : null;
   const rubricImages = credential ? imageSource(storage, credentialsDir(credential.collectionSlug)) : undefined;
   // The reply as it will save, blank text items dropped, so the judge sees what is recorded and Jev reads it.
-  const judged = useMemo((): ReplyItem[] => {
-    const kept = normalizeReply(items);
-    return kept ? replyItems(kept) : items;
-  }, [items]);
+  const judged = useMemo(() => asSaved(items), [items]);
+  // A reading belongs to the reply as it saves, so a blank text item never drops it.
+  const replyId = useMemo(() => replyKey(judged), [judged]);
   // File texts read ahead for Jev (KTD8). A file that couldn't be read is tried again once
   // the copies in flight land, and on each folder reload.
   const itemTexts = useItemTexts(storage, replyImages.busy ? null : state);
@@ -542,7 +543,7 @@ export function TestDeck(props: TestDeckProps) {
    */
   function editReply(next: ReplyEntry[]) {
     setEntries(next);
-    if (replyKey(next.map((e) => e.item)) !== replyId && (inHand || inFlight.current)) {
+    if (replyKey(asSaved(next.map((e) => e.item))) !== replyId && (inHand || inFlight.current)) {
       dropAsk();
       setInHand(null);
     }
@@ -1058,6 +1059,8 @@ export function TestDeck(props: TestDeckProps) {
     // A waiting test is checked for a changed task before its reply can be recorded, and
     // a cleanup in flight is waited for.
     valid: hasContent(items) && !(waiting && version === null) && !cleaning && !replyImages.busy,
+    // Leaving while a file is still being copied would drop it from the reply once it lands.
+    holdBack: replyImages.busy,
     // The reply box takes the window and the first focus; a stale test asks for Copy again on a page.
     pane: !stale,
     focusBody: !stale,
@@ -1121,9 +1124,12 @@ export function TestDeck(props: TestDeckProps) {
     quoted === 0
       ? null
       : (quoted === 1 ? "Also sends 1 earlier reply on this badge" : `Also sends ${quoted} earlier replies on this badge`) + (fitted?.withNotes ? " with your notes" : "");
+  // Jev reads words. What it can't see is there for the person to judge (R14).
+  const unseen = judged.some((i) => i.kind === "image" || i.kind === "video" || i.kind === "link" || (i.kind === "file" && !isTextFileRef(i.ref)));
   const jevPart =
     jevRound || tooLong ? (
       <div className="meet-jev" aria-live="polite">
+        {unseen && <p className="jev-note">{JEV_EYES_NOTE}</p>}
         {tooLong && <p className="muted">This reply is too long for Jev</p>}
         {trouble && <p className="deck-error">{trouble.line}</p>}
         {(canAsk || asking) && (
@@ -1329,4 +1335,10 @@ function PullLink({ onPull }: { onPull(): void }) {
       </button>
     </p>
   );
+}
+
+/** The reply as it saves, blank text items dropped (R4). */
+function asSaved(items: ReplyItem[]): ReplyItem[] {
+  const kept = normalizeReply(items);
+  return kept ? replyItems(kept) : items;
 }

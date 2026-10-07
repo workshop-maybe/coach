@@ -19,7 +19,7 @@ import { mp4Bytes } from "../test/videoBytes";
 import { AppShell, type Route } from "./AppShell";
 import { JevProvider } from "./jevContext";
 import { addPending, readPending, type PendingTest } from "./pendingTests";
-import { SENDING_MS, jevFailure } from "./TestDeck";
+import { JEV_EYES_NOTE, SENDING_MS, jevFailure } from "./TestDeck";
 import { FOLDER, opus, renderApp, result, review, snapshot, storageWith } from "./testFolder";
 import { FolderProvider } from "./useFolderState";
 
@@ -1387,6 +1387,21 @@ describe("TestDeck's second opinion", () => {
     expect(button("Ask Jev")).toBeTruthy();
   });
 
+  it("adding a blank text item keeps the reading, since the reply as it saves is unchanged", async () => {
+    const fake = new FakeJev(FAKE_ON);
+    fake.queue("ask", ANSWERS);
+    await judge(fake);
+    await userEvent.click(button("Ask Jev"));
+    await screen.findByRole("region", { name: "Jev's reading" });
+
+    await userEvent.click(button("Back"));
+    await userEvent.click(await screen.findByRole("button", { name: "Add text" }));
+    await userEvent.click(button("Next"));
+    await screen.findByRole("heading", { name: "Did it meet it" });
+    expect(reading()).not.toBeNull();
+    expect(fake.asks).toHaveLength(1);
+  });
+
   it("an edit while a check is in flight drops it, so its answer never shows against the new reply", async () => {
     const fake = new FakeJev(FAKE_ON);
     const ask = held(fake);
@@ -2607,7 +2622,7 @@ describe("TestDeck's reply items", () => {
     expect((await loadFolder(storage)).assessments[0].items).toEqual([{ kind: "link", url: "https://example.com/pr/7" }]);
   });
 
-  it("Next waits while a file is still being copied", async () => {
+  it("Next and Back wait while a file is still being copied, so the file is never dropped", async () => {
     const storage = storageWith({ credentials: [review], profiles: [opus] });
     let release: () => void = () => undefined;
     const gate = new Promise<void>((r) => (release = r));
@@ -2623,8 +2638,15 @@ describe("TestDeck's reply items", () => {
     await userEvent.click(addKey("file"));
     await waitFor(() => expect(next().disabled).toBe(true));
     expect(screen.getByText("Adding")).toBeTruthy();
+    const back = screen.getByRole("button", { name: "Back" }) as HTMLButtonElement;
+    expect(back.disabled).toBe(true);
+    // Escape steps back on a pane, and waits too.
+    await userEvent.keyboard("{Escape}{Escape}");
+    expect(screen.getByRole("heading", { name: "What came back" })).toBeTruthy();
     await act(async () => release());
     await waitFor(() => expect(next().disabled).toBe(false));
+    expect(back.disabled).toBe(false);
+    expect(screen.getByRole("region", { name: "report.pdf" })).toBeTruthy();
   });
 
   it("the judge pane shows the rubric beside the reply's stack", async () => {
@@ -2744,6 +2766,23 @@ describe("TestDeck's Jev reads reply items (reply-artifacts U6, KTD8)", () => {
     expect(request.state.reply).toBe("Demo below.\n\nFile: notes.md\n# Notes\nFlags parse.\n\nA video Jev cannot see: demo.mp4");
     expect(request.questions.p1.criteria?.true).toContain("cannot see or open");
     expect(request.questions.p1.criteria?.false).toContain("cannot see or open");
+  });
+
+  it("says Jev reads only the words when the reply holds something it can't see", async () => {
+    const storage = storageWith({ credentials: [graded], profiles: [opus] });
+    renderWithJev(storage, new FakeJev(FAKE_ON));
+    await textFileAndVideo(storage);
+    expect(await screen.findByText(JEV_EYES_NOTE)).toBeTruthy();
+  });
+
+  it("says nothing about media when the reply is all words", async () => {
+    const storage = storageWith({ credentials: [graded], profiles: [opus] });
+    renderWithJev(storage, new FakeJev(FAKE_ON));
+    await takeAndCopy();
+    await userEvent.type(replyBox(), "Just words.");
+    await userEvent.click(next());
+    await screen.findByRole("button", { name: "Ask Jev" });
+    expect(screen.queryByText(JEV_EYES_NOTE)).toBeNull();
   });
 
   it("the reply being judged no longer carries picture or video Markdown", async () => {
