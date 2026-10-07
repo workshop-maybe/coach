@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // A PDF item, read page by page (U3 of the reply artifacts plan, KTD5). pdf.js is mocked: jsdom
 // has no canvas, and the wrapper in pdfDocument.ts is the only place that touches it.
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -61,6 +61,12 @@ function source(over: Partial<ItemSource> = {}): ItemSource & { released: number
   };
   return s as ItemSource & { released: number };
 }
+
+// The first import of the mocked module can outlast waitFor's second when the whole suite runs
+// at once, so the import is made before any test starts.
+beforeAll(async () => {
+  await import("./pdfDocument");
+});
 
 beforeEach(() => {
   observed.clear();
