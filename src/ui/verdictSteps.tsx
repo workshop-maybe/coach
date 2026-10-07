@@ -12,6 +12,7 @@ import { MAX_REASON_CHARS } from "../domain/jevRequest";
 import { savedPointOf } from "../domain/secondOpinion";
 import type { AssessmentResult, JevPoint } from "../domain/types";
 import { CALL_WORDS } from "./JevReading";
+import { Field } from "./shared";
 
 /** The missed-points step's title. */
 export const MISSED_POINTS_TITLE = "Which points did it miss";
@@ -72,7 +73,9 @@ export function ReasonBody({ verdict, value, onChange, inputRef }: ReasonBodyPro
   return (
     <>
       <p className="muted">{REASON_LINES[verdict]}</p>
-      <input ref={inputRef} aria-label="Reason" value={value} maxLength={MAX_REASON_CHARS} autoComplete="off" onChange={(e) => onChange(e.target.value)} />
+      <Field>
+        <input ref={inputRef} aria-label="Reason" value={value} maxLength={MAX_REASON_CHARS} autoComplete="off" onChange={(e) => onChange(e.target.value)} />
+      </Field>
     </>
   );
 }

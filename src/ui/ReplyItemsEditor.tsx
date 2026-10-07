@@ -26,6 +26,7 @@ import type { ItemSource } from "./imageSource";
 import { ItemBar, ItemWaiting, KIND_LABEL } from "./replyItemParts";
 import { ItemBody } from "./ReplyStack";
 import { RichText } from "./RichText";
+import { Field } from "./shared";
 import type { PastePayload, RichImages, RichTextHandle } from "./RichText";
 import { externalHref } from "./RichView";
 import type { AddItems } from "./useRichImages";
@@ -279,20 +280,22 @@ export function ReplyItemsEditor({ value, onChange, images, source, addItems, on
               <span className="reply-item-kind">{KIND_LABEL.link}</span>
             </header>
             <div className="reply-item-body reply-edit-link">
-              <input
-                aria-label="Link"
-                value={link}
-                placeholder="https://"
-                autoFocus
-                aria-invalid={linkError !== null}
-                aria-describedby={linkError !== null ? "reply-link-error" : undefined}
-                onChange={(e) => {
-                  setLink(e.target.value);
-                  setLinkError(null);
-                }}
-                onKeyDown={onLinkKey}
-                onBlur={commitLink}
-              />
+              <Field>
+                <input
+                  aria-label="Link"
+                  value={link}
+                  placeholder="https://"
+                  autoFocus
+                  aria-invalid={linkError !== null}
+                  aria-describedby={linkError !== null ? "reply-link-error" : undefined}
+                  onChange={(e) => {
+                    setLink(e.target.value);
+                    setLinkError(null);
+                  }}
+                  onKeyDown={onLinkKey}
+                  onBlur={commitLink}
+                />
+              </Field>
               {linkError && (
                 <p id="reply-link-error" className="reply-item-error">
                   {linkError}

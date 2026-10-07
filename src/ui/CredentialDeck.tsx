@@ -29,7 +29,7 @@ import { useNav } from "./nav";
 import type { FromJob, TestPick } from "./routes";
 import { useRichDraft } from "./richDraft";
 import { Lines } from "./EditDecks";
-import { CopyHelper, Missing, focusOnMount } from "./shared";
+import { CopyHelper, Field, Missing, focusOnMount } from "./shared";
 import { RichText } from "./RichText";
 import { useFolder } from "./useFolderState";
 import { useRichImages } from "./useRichImages";
@@ -189,7 +189,11 @@ export function CredentialDeck({ returnTo, fromJob, collectionSlug }: { returnTo
       forward: "Next",
       valid: name.trim() !== "",
       settled: name.trim(),
-      body: <input aria-label="Name" value={name} autoComplete="off" onChange={(e) => setName(e.target.value)} />,
+      body: (
+        <Field>
+          <input aria-label="Name" value={name} autoComplete="off" onChange={(e) => setName(e.target.value)} />
+        </Field>
+      ),
     },
     {
       id: "targets",

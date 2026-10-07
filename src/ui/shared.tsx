@@ -10,6 +10,15 @@ import { checkTarget, type TargetMove } from "../domain/target-check";
 import { formatDate, setupText, takeLabel, takeStateOf } from "./format";
 import { describeError } from "./useFolderState";
 
+/**
+ * A text field's drawn edge (the drawn chassis plan, KTD6). An input or a textarea cannot
+ * carry the sketched frame itself, so it sits in this wrapper, which draws the edge pale at
+ * rest and in full ink while the field has focus.
+ */
+export function Field({ className, children }: { className?: string; children: ReactNode }) {
+  return <span className={className ? `field ${className}` : "field"}>{children}</span>;
+}
+
 /** A stable ref callback that focuses a card's heading once, when it appears. */
 export const focusOnMount = (el: HTMLElement | null) => el?.focus();
 

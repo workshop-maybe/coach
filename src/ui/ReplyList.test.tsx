@@ -106,6 +106,8 @@ describe("ReplyList", () => {
     expect(document.activeElement).toBe(head(older));
     expect((within(codexRow).getByRole("checkbox") as HTMLInputElement).checked).toBe(true);
     expect(screen.getAllByRole("checkbox").filter((b) => (b as HTMLInputElement).checked)).toHaveLength(1);
+    // A pick box keeps its own look: it is no text field, so it takes no drawn field edge.
+    expect(screen.getAllByRole("checkbox").some((b) => b.closest(".field"))).toBe(false);
   });
 
   it("a carried-back take or pick that is gone focuses nothing and counts for nothing", async () => {

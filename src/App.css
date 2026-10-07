@@ -68,8 +68,9 @@ pre {
 }
 
 /* ---------------------------------------------------------------------------
-   Controls. The view's main action is the ink block; others are ink outlines on
-   the surface. Blue is data and links, never a fill. */
+   Controls. Every key is drawn by hand, and how much ink it carries sets its rank: the
+   view's main action is the ink block, a plain key has a full drawn edge, a ghost key a
+   pale one, and a link a drawn underline. Blue is data and links, never a fill. */
 
 button,
 input,
@@ -80,25 +81,64 @@ textarea {
 }
 
 button {
+  position: relative;
   padding: 6px 14px;
-  border: var(--rule-width) solid var(--ink);
+  border: var(--rule-width) solid transparent;
   border-radius: 0;
   background: var(--surface);
   color: var(--ink);
   font-weight: 600;
   font-size: 13px;
   cursor: pointer;
-  transition: opacity 120ms ease;
+  /* The drawn edge: its ink, how far it reaches past the key, and the slice it is drawn
+     at (a wider slice draws thicker strokes, so a hovered key's edge thickens). */
+  --key-edge: var(--ink);
+  --key-reach: 3px;
+  --key-slice: 8px;
 }
 
-button:hover:not(:disabled) {
+/* A key's edge is a sketched frame (src/assets/sketch-key.svg, the cards' frame at a
+   third of the size) laid over the clear border as a mask, filled from --key-edge. Keys
+   that are their own drawing (window keys, the brand, rich-text tools, the hit areas over
+   a machine's keys), cards that are buttons (they wear the cards' frame) and the rows
+   that read as records keep no key edge, and keep the plain fade on hover. */
+button:where(:not(.window-key, .brand, .rich-menu button, .rich-bar button, .machine-key, .dial-step, .door, .part, .agent-card, .badge-card, .earned, .need, .handoff-run, .take-head, .link))::after {
+  content: "";
+  position: absolute;
+  inset: calc(-1 * var(--key-reach));
+  pointer-events: none;
+  background: var(--key-edge);
+  -webkit-mask-box-image: url("./assets/sketch-key.svg") 8 / var(--key-slice) round;
+  mask-border: url("./assets/sketch-key.svg") 8 / var(--key-slice) round;
+}
+
+button:where(.window-key, .brand, .rich-menu button, .rich-bar button, .machine-key, .dial-step, .door, .part, .agent-card, .badge-card, .earned, .need, .handoff-run, .take-head):hover:not(:disabled) {
   opacity: 0.85;
 }
 
+/* Hover inks a key's edge and draws it a little heavier; the label never fades. */
+button:hover:not(:disabled) {
+  --key-edge: var(--ink);
+  --key-reach: 3.6px;
+  --key-slice: 10px;
+}
+
+/* A selected key (the chosen handoff, Met or Not yet, a picked choice) is drawn in data blue. */
+button[aria-pressed="true"],
+button[aria-pressed="true"]:hover:not(:disabled) {
+  --key-edge: var(--data);
+}
+
+/* The ink block. An ink edge on an ink fill would vanish, so the fill runs a little past
+   the drawn edge, down and to the right, the way a quick hand fills a box. */
 button.primary {
   background: var(--ink);
-  border-color: var(--ink);
   color: var(--on-ink);
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+button.primary:hover:not(:disabled) {
+  box-shadow: 3px 3px 0 var(--ink);
 }
 
 /* The main action leads with the world's square, in paper on ink. */
@@ -112,31 +152,54 @@ button.primary::before {
   background: var(--on-ink);
 }
 
+/* A ghost key (Back, the deck's close) is drawn pale and inks under the pointer. */
 button.ghost {
-  border-color: transparent;
   background: transparent;
+  --key-edge: var(--ink-ghost);
 }
 
+/* A disabled key, the ink block too, is a pale outline with a ghost label. */
 button:disabled,
 button.primary:disabled {
   background: transparent;
-  border-color: var(--cell);
+  box-shadow: none;
   color: var(--ink-ghost);
   cursor: default;
+  --key-edge: var(--cell);
 }
 
 button.primary:disabled::before {
   background: var(--ink-ghost);
 }
 
+/* A link: no key around it, and a hand-drawn underline in data blue in place of the typed
+   one (src/assets/sketch-line.svg, a wandering stroke that repeats along the link's foot). */
 button.link {
   border: none;
   background: none;
-  padding: 0;
+  padding: 0 0 3px;
   color: var(--data);
   font-weight: 500;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  text-decoration: none;
+}
+
+/* The stroke stays inside the link's own box, so a scrolling region that ends at a link
+   never clips it. */
+button.link::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 4px;
+  pointer-events: none;
+  background: var(--data);
+  -webkit-mask: url("./assets/sketch-line.svg") repeat-x left center / 40px 4px;
+  mask: url("./assets/sketch-line.svg") repeat-x left center / 40px 4px;
+}
+
+button.link:disabled::after {
+  background: var(--ink-ghost);
 }
 
 input,
@@ -151,6 +214,50 @@ textarea {
   line-height: 1.45;
 }
 
+/* A text field's edge is drawn too (src/ui/shared.tsx, Field): pale at rest, full ink while
+   the field has focus, the key's sketched frame laid over the field's clear border. The
+   inked edge and the caret are the field's focus mark; a ring outside the edge would run
+   into the helper lines set close under a field. A field that is already inside a drawn
+   frame (a dial's own line, the rich-text link box) has no wrapper. */
+.field,
+.rich {
+  --field-edge: var(--ink-ghost);
+}
+
+.field {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+
+.field > :is(input, textarea) {
+  display: block;
+  width: 100%;
+  border-color: transparent;
+}
+
+.field::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  pointer-events: none;
+  background: var(--field-edge);
+  -webkit-mask-box-image: url("./assets/sketch-key.svg") 8 / 8px round;
+  mask-border: url("./assets/sketch-key.svg") 8 / 8px round;
+}
+
+:is(.field, .rich):focus-within {
+  --field-edge: var(--ink);
+}
+
+.field > :is(input, textarea):focus-visible {
+  box-shadow: none;
+}
+
+.field:has(> :disabled) {
+  --field-edge: var(--cell);
+}
+
 ::placeholder {
   color: var(--ink-ghost);
 }
@@ -160,10 +267,15 @@ textarea {
   box-shadow: var(--focus-ring);
 }
 
+/* Keyboard focus rings a key in data blue, clear of its drawn edge. */
 button:focus-visible {
   outline: 1.5px solid var(--data);
-  outline-offset: 2px;
+  outline-offset: 5px;
   box-shadow: none;
+}
+
+button.primary:focus-visible {
+  box-shadow: 2px 2px 0 var(--ink);
 }
 
 /* ---------------------------------------------------------------------------
@@ -539,7 +651,6 @@ button:focus-visible {
   width: 100%;
   font-size: 16px;
   padding: 10px 12px;
-  border: 1px solid var(--cell);
 }
 
 .deck-body textarea {
@@ -557,12 +668,19 @@ button:focus-visible {
 .rich {
   position: relative;
   width: 100%;
-  border: 1px solid var(--cell);
+  border: 1px solid transparent;
   background: var(--surface);
 }
 
-.rich:focus-within {
-  box-shadow: var(--focus-ring);
+/* The rich box is a text field, so it wears a field's drawn edge (.field below). */
+.rich::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  pointer-events: none;
+  background: var(--field-edge);
+  -webkit-mask-box-image: url("./assets/sketch-key.svg") 8 / 8px round;
+  mask-border: url("./assets/sketch-key.svg") 8 / 8px round;
 }
 
 /* The box a file dragged over the window would land in (src/ui/dropFiles.ts): an outline in
@@ -1074,8 +1192,8 @@ button:focus-visible {
   flex: none;
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-xs);
-  padding-top: var(--space-xs);
+  gap: var(--space-sm);
+  padding-top: var(--space-sm);
 }
 
 .reply-edit-key {
@@ -1195,7 +1313,8 @@ button:focus-visible {
 
 .deck.pane > .deck-close {
   grid-area: 1 / 2;
-  position: static;
+  position: relative;
+  top: 0;
 }
 
 .deck.pane > .deck-settled {
@@ -1805,10 +1924,23 @@ button:focus-visible {
   color: var(--ink-muted);
 }
 
+/* A dial is one drawn key with three parts: its edge is drawn around the whole row, and the
+   steps inside it carry no edge of their own. */
 .dial-row {
+  position: relative;
   display: grid;
   grid-template-columns: 2.5rem 1fr 2.5rem;
-  border: var(--rule-width) solid var(--rule);
+  border: var(--rule-width) solid transparent;
+}
+
+.dial-row::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  pointer-events: none;
+  background: var(--ink);
+  -webkit-mask-box-image: url("./assets/sketch-key.svg") 8 / 8px round;
+  mask-border: url("./assets/sketch-key.svg") 8 / 8px round;
 }
 
 .dial-step {
@@ -1900,7 +2032,6 @@ button:focus-visible {
 }
 
 .choice[aria-pressed="true"] {
-  box-shadow: var(--focus-ring);
   color: var(--data);
 }
 
@@ -1911,9 +2042,10 @@ button:focus-visible {
   overflow-wrap: anywhere;
 }
 
+/* Build your own is an empty thing, so its key is drawn in the pale ink the outlines use. */
 .choice-door {
-  border-style: dashed;
   color: var(--ink-muted);
+  --key-edge: var(--ink-ghost);
 }
 
 /* The handoff box for one badge (U7): the box, a key per handoff, the default in blue. */
@@ -1942,6 +2074,13 @@ button:focus-visible {
 /* On its pane (U6, R9, R18) the field takes the height above the slots and holds its text
    to a centered measure of about 70 of its characters, its scrollbar at the pane's edge.
    Scoped to the textarea, so the handoff text folded on a handoff page is untouched. */
+.deck.pane .handoff-field {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 8rem;
+}
+
 .deck.pane textarea.handoff-text {
   flex: 1 1 auto;
   min-height: 8rem;
@@ -2062,7 +2201,6 @@ button:focus-visible {
 /* In a Jev round Met and Not yet are choices that wait for Save (U6, KTD10): the picked
    one is lit in data blue, as a handoff key is, and Save stays the one ink block. */
 .meet-choices button[aria-pressed="true"] {
-  box-shadow: var(--focus-ring);
   color: var(--data);
 }
 
@@ -2205,7 +2343,6 @@ button:focus-visible {
 }
 
 .missed-point button[aria-pressed="true"] {
-  box-shadow: var(--focus-ring);
   color: var(--data);
 }
 
@@ -2327,7 +2464,6 @@ button:focus-visible {
 }
 
 .handoff-key[aria-pressed="true"] {
-  box-shadow: var(--focus-ring);
   color: var(--data);
 }
 
@@ -2874,7 +3010,8 @@ button:focus-visible {
    over the reply, which scrolls on its own at the centered measure (R9, R10). The
    handoff text that ran sits collapsed under the record, in the record mono. */
 .reply-view > .deck-close {
-  position: static;
+  position: relative;
+  top: 0;
   flex: none;
   align-self: flex-end;
 }
@@ -3056,7 +3193,8 @@ button:focus-visible {
 }
 
 .compare-top > .deck-close {
-  position: static;
+  position: relative;
+  top: 0;
 }
 
 /* Jev's part of the compare (jev-in-compare KTD8, KTD9): the quiet Compare with Jev, its
@@ -3110,13 +3248,13 @@ button:focus-visible {
   gap: 2px;
   max-width: 100%;
   padding: var(--space-xs) var(--space-md);
-  border: 1px solid var(--cell);
+  border-width: 1px;
   background: var(--surface);
   text-align: left;
+  --key-edge: var(--ink-ghost);
 }
 
 .compare-chip[aria-pressed="true"] {
-  box-shadow: var(--focus-ring);
   color: var(--data);
 }
 
@@ -3308,10 +3446,6 @@ button:focus-visible {
   text-align: left;
 }
 
-.swatch[aria-pressed="true"] {
-  box-shadow: var(--focus-ring);
-}
-
 .swatch-chip {
   flex: none;
   width: 22px;
@@ -3399,7 +3533,7 @@ button:focus-visible {
 
 .cost-order-keys {
   display: flex;
-  gap: var(--space-xs);
+  gap: var(--space-sm);
 }
 
 .cost-order-keys button {

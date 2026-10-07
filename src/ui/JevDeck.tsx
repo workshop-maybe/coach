@@ -17,6 +17,7 @@ import { toJevError, type JevStatus } from "../jev/jev";
 import { Deck, type Beat } from "./Deck";
 import { useJev } from "./jevContext";
 import { useNav } from "./nav";
+import { Field } from "./shared";
 
 /** TypeSafe's terms, which govern what it keeps of what it receives. */
 export const TYPESAFE_TERMS = "https://docs.typesafe.ai/legal";
@@ -132,17 +133,19 @@ export function JevDeck() {
     </p>
   );
   const keyField = (
-    <input
-      type="password"
-      aria-label="TypeSafe API key"
-      value={draft}
-      autoComplete="off"
-      autoCapitalize="off"
-      autoCorrect="off"
-      spellCheck={false}
-      // A key copied from a terminal can carry a newline; it is no part of the key.
-      onChange={(e) => setDraft(e.target.value.replace(/[\r\n]/g, ""))}
-    />
+    <Field>
+      <input
+        type="password"
+        aria-label="TypeSafe API key"
+        value={draft}
+        autoComplete="off"
+        autoCapitalize="off"
+        autoCorrect="off"
+        spellCheck={false}
+        // A key copied from a terminal can carry a newline; it is no part of the key.
+        onChange={(e) => setDraft(e.target.value.replace(/[\r\n]/g, ""))}
+      />
+    </Field>
   );
   const hasDraft = draft.trim() !== "" && !working;
 

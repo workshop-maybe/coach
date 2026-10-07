@@ -158,6 +158,13 @@ describe("starting an empty one", () => {
     await expectHome();
     expect(JSON.parse(storage.file(collectionPath("client-work"))!)).toMatchObject({ name: "Client work", order: [], codes: {} });
   });
+
+  it("draws the name field's edge from its wrapper, since a field cannot carry the drawing itself", async () => {
+    const user = await openDeck(storageWith());
+    await user.click(choice("Start an empty one"));
+    const name = within(deck()).getByLabelText("Name");
+    expect(name.parentElement?.classList.contains("field")).toBe(true);
+  });
 });
 
 describe("back on Home", () => {
