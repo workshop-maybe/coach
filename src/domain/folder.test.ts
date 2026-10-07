@@ -54,6 +54,7 @@ import { buildExport } from "./export";
 import { rankExamples } from "./jevExamples";
 import { buildMatrix, cellKey } from "./matrix";
 import { reorderCredentials } from "./operations";
+import { replyItems } from "./replyItems";
 import { OVERALL_ID } from "./secondOpinion";
 import { resolveBadgeSettings } from "../badge/settings";
 import type { AgentProfile, Assessment, Collection, Credential, HeadToHead, HeldReading, HeldReply, JevReading, Mark, Rejudge } from "./types";
@@ -1734,5 +1735,146 @@ describe("re-judges, held readings and head-to-heads (jev-in-compare KTD1, KTD3,
       expect(state.headToHeads).toEqual([]);
       expect(state.assessments).toEqual([assessment]);
     });
+  });
+});
+
+describe("reply items (reply-artifacts KTD1, KTD2)", () => {
+  const ids = { profileSlug: "claude-high", collectionSlug: "eng", credentialSlug: "review", fileStem: assessment.fileStem };
+  const pdf = { kind: "file", name: "report.pdf", ref: "files/file-1a2b3c4d.pdf" } as const;
+  const video = { kind: "video", name: "demo.mov", ref: "video-5e6f7a8b.mov" } as const;
+  const image = { kind: "image", name: "2024", ref: "image-0a1b2c3d.png" } as const;
+  const link = { kind: "link", url: "https://example.com/pr/12?a=1#x" } as const;
+  const mixed: Assessment = {
+    ...assessment,
+    handBack: "Summary first.\n\nAnd a closing line.",
+    items: [{ kind: "text", text: "Summary first." }, pdf, video, link, { kind: "text", text: "And a closing line." }],
+  };
+
+  it("Covers AE6. A result from before items, with text and an inline picture, loads as one text item and reserializes to the same bytes", () => {
+    const old: Assessment = { ...assessment, handBack: `${handBack}\n![](image-0a1b2c3d.png)\n` };
+    const text = serializeAssessment(old);
+    const parsed = parseAssessment(text, ids);
+    expect(parsed).toEqual(old);
+    expect(parsed).not.toHaveProperty("items");
+    expect(replyItems(parsed)).toEqual([{ kind: "text", text: old.handBack }]);
+    expect(serializeAssessment(parsed)).toBe(text);
+  });
+
+  it("writes no items or item_break key for a reply of exactly one text item", () => {
+    const one: Assessment = { ...assessment, items: [{ kind: "text", text: handBack }] };
+    const text = serializeAssessment(one);
+    expect(text).toBe(serializeAssessment(assessment));
+    expect(text).not.toMatch(/^items:/m);
+    expect(text).not.toMatch(/^item_break:/m);
+  });
+
+  it("round-trips a reply of text, file, video, link and text with every field, in order", () => {
+    const text = serializeAssessment(mixed);
+    expect(text).toMatch(/^item_break: /m);
+    expect(text).toMatch(/^items:\n {2}- kind: text\n {2}- kind: file\n/m);
+    expect(parseAssessment(text, ids)).toEqual(mixed);
+  });
+
+  it("round-trips a reply with no text item, and a held reply with items", () => {
+    const noText: Assessment = { ...assessment, handBack: "", items: [image, link] };
+    expect(parseAssessment(serializeAssessment(noText), ids)).toEqual(noText);
+    const held: HeldReply = {
+      profileSlug: "claude-high",
+      collectionSlug: "eng",
+      credentialSlug: "review",
+      fileStem: "20261001T090000Z",
+      heldAt: "2026-10-01T09:00:00.456Z",
+      assignmentVersion: "12e456789012",
+      setup: { harness: "claude-code", model: "opus", effort: "high" },
+      handBack: mixed.handBack,
+      items: mixed.items,
+    };
+    expect(parseHeld(serializeHeld(held), { ...ids, fileStem: held.fileStem })).toEqual(held);
+  });
+
+  it("round-trips text items holding another break line, ---, ## Handback, ## Note, U+2028 and U+2029, and names holding them", () => {
+    const texts = [
+      "<!-- item 0123456789ab -->",
+      "---\n## Handback\n\n## Note\n---",
+      "x --- ## Handback <!-- item ffffffffffff -->",
+      "",
+      "\n\n  edge  \n",
+    ];
+    const items = [
+      { kind: "text" as const, text: texts[0] },
+      { ...pdf, name: "odd --- ## Handback.pdf" },
+      { kind: "text" as const, text: texts[1] },
+      { kind: "text" as const, text: texts[2] },
+      link,
+      { kind: "text" as const, text: texts[3] },
+      { kind: "text" as const, text: texts[4] },
+    ];
+    const r: Assessment = { ...assessment, handBack: texts.join("\n\n"), items };
+    const text = serializeAssessment(r);
+    expect(parseAssessment(text, ids)).toEqual(r);
+    const crlf = items.map((i) => (i.kind === "text" ? { ...i, text: i.text.replace(/\n/g, "\r\n") } : i));
+    expect(parseAssessment(text.replace(/\n/g, "\r\n"), ids).items).toEqual(crlf);
+  });
+
+  it("chooses a break token that occurs in no text item", () => {
+    const text = serializeAssessment(mixed);
+    const token = /^item_break: .*<!-- item ([0-9a-f]+) -->/m.exec(text)![1];
+    for (const item of mixed.items!) if (item.kind === "text") expect(item.text).not.toContain(token);
+    expect(text.split(`<!-- item ${token} -->`)).toHaveLength(3);
+  });
+
+  it("reads a malformed items value as absent: the whole body is one text item, with no load error", () => {
+    const text = serializeAssessment(mixed);
+    const body = text.slice(text.indexOf("## Handback\n\n") + "## Handback\n\n".length, -1);
+    const itemsBlock = /^items:\n(?: {2}.*\n)+/m;
+    const breakLine = /^item_break: .*\n/m;
+    const variants = [
+      text.replace(itemsBlock, "items: 3\n"),
+      text.replace(itemsBlock, "items: []\n"),
+      text.replace(itemsBlock, "items:\n  - kind: text\n  - kind: audio\n    name: a.mp3\n    ref: x.mp3\n  - kind: text\n"),
+      text.replace("    ref: files/file-1a2b3c4d.pdf\n", ""),
+      text.replace("ref: files/file-1a2b3c4d.pdf", "ref: ../../../etc/passwd"),
+      text.replace("ref: video-5e6f7a8b.mov", "ref: sub/video-5e6f7a8b.mov"),
+      text.replace("    url: https://example.com/pr/12?a=1#x\n", ""),
+      text.replace(breakLine, ""),
+      text.replace(breakLine, "item_break: 7\n"),
+      text.replace(breakLine, 'item_break: "<!-- item .* -->"\n'),
+      // One text slot too many, and one too few, for the body's break lines.
+      text.replace(itemsBlock, (m) => `${m}  - kind: text\n`),
+      text.replace(itemsBlock, (m) => m.replace("  - kind: text\n", "")),
+    ];
+    for (const v of variants) {
+      expect(v).not.toBe(text);
+      const parsed = parseAssessment(v, ids);
+      expect(parsed).not.toHaveProperty("items");
+      expect(parsed.handBack).toBe(body);
+    }
+  });
+
+  it("reads a file name YAML took as a number as text", () => {
+    const text = serializeAssessment(mixed).replace("name: report.pdf", "name: 2024");
+    expect(parseAssessment(text, ids).items?.[1]).toEqual({ ...pdf, name: "2024" });
+  });
+
+  it("reads a body with text in it as malformed when the items have no text slot", () => {
+    const noText: Assessment = { ...assessment, handBack: "", items: [pdf] };
+    const text = serializeAssessment(noText).replace("## Handback\n\n\n", "## Handback\n\nStray.\n");
+    const parsed = parseAssessment(text, ids);
+    expect(parsed).not.toHaveProperty("items");
+    expect(parsed.handBack).toBe("Stray.");
+  });
+
+  it("loads results with items, and never loads a file in a result's files/ folder as a result (KTD2)", async () => {
+    const storage = fixture();
+    const later = { ...mixed, fileStem: "20261002T090000Z", recordedAt: "2026-10-02T09:00:00.000Z" };
+    storage.seed({
+      [assessmentPath("claude-high", "eng", "review", later.fileStem)]: serializeAssessment(later),
+      "assessments/claude-high/eng/review/files/file-1a2b3c4d.md": "---\nresult: met\n---\n",
+      "assessments/claude-high/eng/review/files/file-1a2b3c4d.pdf": "%PDF-",
+    });
+    const state = await loadFolder(storage);
+    expect(state.errors).toEqual([]);
+    expect(state.assessments).toEqual([assessment, later]);
+    expect(storage.writes).toEqual([]);
   });
 });

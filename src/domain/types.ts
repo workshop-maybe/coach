@@ -83,6 +83,50 @@ export interface TestContext extends ContextReading {
 
 export type AssessmentResult = "met" | "not_met";
 
+/**
+ * One piece of what an agent handed back (reply-artifacts KTD1, KTD2). Text is Markdown and may
+ * hold inline pictures and videos as today. Every other kind names a file copied beside the
+ * result, by its original file name for display (R14) and its ref for reading, or a URL.
+ */
+export type ReplyItem = TextItem | ImageItem | VideoItem | FileItem | LinkItem;
+
+export type ReplyItemKind = ReplyItem["kind"];
+
+export interface TextItem {
+  kind: "text";
+  text: string;
+}
+
+/** A PNG or JPEG beside the result, by bare content-addressed name such as `image-<hash>.png`. */
+export interface ImageItem {
+  kind: "image";
+  /** The original file name, for display. */
+  name: string;
+  ref: string;
+}
+
+/** A video beside the result, by bare content-addressed name such as `video-<hash>.mov`. */
+export interface VideoItem {
+  kind: "video";
+  /** The original file name, for display. */
+  name: string;
+  ref: string;
+}
+
+/** Any other file, in the result folder's `files/` subfolder: `files/file-<hash8>.<ext>`. */
+export interface FileItem {
+  kind: "file";
+  /** The original file name, for display. */
+  name: string;
+  ref: string;
+}
+
+/** A URL the app never fetches (R6). */
+export interface LinkItem {
+  kind: "link";
+  url: string;
+}
+
 export interface Assessment {
   profileSlug: Slug;
   collectionSlug: Slug;
@@ -97,8 +141,16 @@ export interface Assessment {
   /** Profile setup at record time (R16). */
   setup: AgentSetup;
   note: string;
-  /** The agent's reply, pasted verbatim. Never parsed (KTD8). */
+  /**
+   * The agent's reply as text: its text items joined by a blank line, verbatim. On a reply that
+   * is exactly one text item it is the whole `## Handback` body, never parsed (KTD8).
+   */
   handBack: string;
+  /**
+   * The reply's items in order (reply-artifacts KTD1). Absent means exactly one text item
+   * holding `handBack`, as every reply saved before items were; read it through `replyItems`.
+   */
+  items?: ReplyItem[];
   /** The context the test started with. Absent when none was captured. */
   context?: TestContext;
   /** The handoff that ran: its id and the filled text as copied (KTD4). Absent means the skeleton. */
@@ -204,8 +256,10 @@ export interface HeldReply {
   assignmentVersion: string;
   /** Profile setup at hold time. */
   setup: AgentSetup;
-  /** The agent's reply, pasted verbatim. */
+  /** The agent's reply as text, as on a result. */
   handBack: string;
+  /** The reply's items, as on a result. Absent means one text item holding `handBack`. */
+  items?: ReplyItem[];
   context?: TestContext;
   handoff?: HandoffTemplate;
   /** Jev's reading, taken before the reply was held. Always seen "before" the verdict. */

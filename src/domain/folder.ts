@@ -8,6 +8,7 @@ import { ChangedOnDiskError, type Storage } from "../storage/storage";
 import { parseCredentialMd, serializeCredentialMd } from "./credential-md";
 import { isTestContext } from "./context";
 import { isProbability } from "./jevRequest";
+import { chooseBreak, isBreakLine, isItemRef, isOneText, joinSlots, splitSlots, textOf, type ReplyRecord } from "./replyItems";
 import type {
   AgentProfile,
   AgentSetup,
@@ -27,6 +28,7 @@ import type {
   Mark,
   Rejudge,
   ReplyRef,
+  ReplyItem,
   RoutingRecord,
   Slug,
   TestContext,
@@ -394,7 +396,9 @@ export function serializeRoutingRecord(record: RoutingRecord): string {
 // ---------------------------------------------------------------------------
 // Assessment Markdown: YAML frontmatter, then `## Note` and `## Handback`.
 // The hand-back is everything after the first `## Handback` line following the
-// note, minus the one blank line and one final newline the serializer adds.
+// note, minus the one blank line and one final newline the serializer adds. A reply
+// with items other than one text item lists them in front matter, and its text items
+// fill that body between break lines (reply-artifacts KTD1).
 
 const NOTE_HEADING = "## Note";
 const HANDBACK_HEADING = "## Handback";
@@ -424,11 +428,40 @@ function testFields(r: TestRecord): Json {
   };
 }
 
+/**
+ * A reply's front matter fields and the `## Handback` body (reply-artifacts KTD1). A reply of
+ * exactly one text item writes no fields and its text as the body, byte for byte as before items.
+ * Any other writes its items, each text item as a bare slot, and the text slots fill the body in
+ * order with a break line between them. The break is chosen here, so it is the one the body uses.
+ */
+function replyParts(r: ReplyRecord): { fields: Json; body: string } {
+  const items = r.items;
+  if (!items) return { fields: {}, body: r.handBack };
+  if (isOneText(items)) return { fields: {}, body: (items[0] as { text: string }).text };
+  const texts = items.flatMap((item) => (item.kind === "text" ? [item.text] : []));
+  const itemBreak = chooseBreak(texts);
+  return { fields: { item_break: itemBreak, items: items.map(itemEntry) }, body: joinSlots(texts, itemBreak) };
+}
+
+/** One `items` entry. A text item is only its kind: its text is a slot in the body. */
+function itemEntry(item: ReplyItem): Json {
+  switch (item.kind) {
+    case "text":
+      return { kind: "text" };
+    case "link":
+      return { kind: "link", url: item.url };
+    default:
+      return { kind: item.kind, name: item.name, ref: item.ref };
+  }
+}
+
 export function serializeAssessment(a: Assessment): string {
+  const reply = replyParts(a);
   const front = YAML.stringify({
     result: a.result,
     recorded_at: a.recordedAt,
     ...testFields(a),
+    ...reply.fields,
     // A result's own: a held reply has no verdict, so it never carries missed points.
     ...(a.missedPoints && a.missedPoints.length > 0 ? { missed_points: a.missedPoints } : {}),
   });
@@ -440,7 +473,7 @@ export function serializeAssessment(a: Assessment): string {
     `${NOTE_HEADING}\n\n`,
     note === "" ? "" : `${note}\n\n`,
     `${HANDBACK_HEADING}\n\n`,
-    a.handBack,
+    reply.body,
     "\n",
   ].join("");
 }
@@ -635,6 +668,54 @@ function handBackAfter(text: string, end: number): string {
   return text.slice(end).replace(/^\n(?:\r?\n)?/, "").replace(/\r?\n$/, "");
 }
 
+/**
+ * The optional `items` list, each text item with an empty slot. Null when it is not a non-empty
+ * list of known kinds with their fields, or when a file names a ref outside its place (KTD2).
+ * A name YAML took as a number reads as text.
+ */
+function parseItemEntries(raw: unknown): ReplyItem[] | null {
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  const items: ReplyItem[] = [];
+  for (const entry of raw as unknown[]) {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) return null;
+    const { kind, name, ref, url } = entry as Json;
+    if (kind === "text") {
+      items.push({ kind, text: "" });
+    } else if (kind === "link") {
+      if (typeof url !== "string" || url === "") return null;
+      items.push({ kind, url });
+    } else if (kind === "image" || kind === "video" || kind === "file") {
+      const display = jevText(name);
+      if (display === null || typeof ref !== "string" || !isItemRef(kind, ref)) return null;
+      items.push({ kind, name: display, ref });
+    } else {
+      return null;
+    }
+  }
+  return items;
+}
+
+/**
+ * A reply from its front matter and its `## Handback` body (reply-artifacts KTD1). With no
+ * `items`, the body is one text item, as every reply saved before items was (R12). With them,
+ * the body splits at the `item_break` line into one slot per text item. Anything malformed,
+ * including a slot count that does not match, reads as no items: the whole body is one text
+ * item, never a load error, as `parseContext` and `parseJev` read theirs.
+ */
+function parseReply(fm: Json, body: string): ReplyRecord {
+  const asOneText = { handBack: body };
+  const slots = parseItemEntries(fm.items);
+  if (slots === null) return asOneText;
+  const textCount = slots.filter((s) => s.kind === "text").length;
+  const itemBreak = fm.item_break;
+  const texts = typeof itemBreak === "string" && isBreakLine(itemBreak) ? splitSlots(body, itemBreak) : [body];
+  if (textCount === 0 ? body !== "" : texts.length !== textCount) return asOneText;
+  let next = 0;
+  const items = slots.map((s): ReplyItem => (s.kind === "text" ? { kind: "text", text: texts[next++] } : s));
+  if (isOneText(items)) return { handBack: texts[0] };
+  return { handBack: textOf(items), items };
+}
+
 /** The required `result` field of a result or a re-judge. */
 function verdictOf(fm: Json): AssessmentResult {
   const result = fm.result;
@@ -661,7 +742,7 @@ export function parseAssessment(text: string, ids: AssessmentIds): Assessment {
   const afterNote = body.slice(noteLine ? noteLine.end : 0);
   const handLine = findLine(afterNote, HANDBACK_LINE);
   const note = handLine ? afterNote.slice(0, handLine.start) : afterNote;
-  const handBack = handLine ? handBackAfter(afterNote, handLine.end) : "";
+  const reply = parseReply(fm, handLine ? handBackAfter(afterNote, handLine.end) : "");
 
   return {
     ...ids,
@@ -670,7 +751,7 @@ export function parseAssessment(text: string, ids: AssessmentIds): Assessment {
     ...record,
     ...(missedPoints ? { missedPoints } : {}),
     note: note.replace(/\r\n?/g, "\n").trim(),
-    handBack,
+    ...reply,
   };
 }
 
@@ -679,8 +760,9 @@ export function parseAssessment(text: string, ids: AssessmentIds): Assessment {
 // verdict, `held_at` in place of `recorded_at`, then `## Handback`. No note.
 
 export function serializeHeld(h: HeldReply): string {
-  const front = YAML.stringify({ held_at: h.heldAt, ...testFields(h) });
-  return ["---\n", front, "---\n\n", `${HANDBACK_HEADING}\n\n`, h.handBack, "\n"].join("");
+  const reply = replyParts(h);
+  const front = YAML.stringify({ held_at: h.heldAt, ...testFields(h), ...reply.fields });
+  return ["---\n", front, "---\n\n", `${HANDBACK_HEADING}\n\n`, reply.body, "\n"].join("");
 }
 
 /** Parses a held reply. A stray `result` key or a hand-added `## Note` before the reply is ignored. */
@@ -689,7 +771,7 @@ export function parseHeld(text: string, ids: AssessmentIds): HeldReply {
   const heldAt = isoTime(fm, "held_at");
   const record = parseTestRecord(fm);
   const handLine = findLine(body, HANDBACK_LINE);
-  return { ...ids, heldAt, ...record, handBack: handLine ? handBackAfter(body, handLine.end) : "" };
+  return { ...ids, heldAt, ...record, ...parseReply(fm, handLine ? handBackAfter(body, handLine.end) : "") };
 }
 
 // ---------------------------------------------------------------------------
