@@ -21,7 +21,7 @@ import { credentialKey, parseCredentialKey, type Collection, type Credential, ty
 import { Deck, type Beat } from "./Deck";
 import { useNav } from "./nav";
 import type { DeckRoute, HandoffTarget, TestPick } from "./routes";
-import { Missing } from "./shared";
+import { Field, Missing } from "./shared";
 import { useFolder } from "./useFolderState";
 
 /** The test this detour came from, lighting the handoff an edit saved (KTD10). */
@@ -193,7 +193,9 @@ function EditHandoff({ credentialKey: key, returnTo, credential, atOpen }: EditH
       },
       body: (
         <>
-          <textarea className="handoff-text" aria-label="Handoff" value={text} spellCheck={false} onChange={(e) => setText(e.target.value)} />
+          <Field className="handoff-field">
+            <textarea className="handoff-text" aria-label="Handoff" value={text} spellCheck={false} onChange={(e) => setText(e.target.value)} />
+          </Field>
           <p className="helper handoff-slots">
             Slots <code>{SLOTS.name}</code> <code>{SLOTS.learningTargets}</code> <code>{SLOTS.task}</code>
           </p>

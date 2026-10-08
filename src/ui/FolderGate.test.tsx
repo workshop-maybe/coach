@@ -20,6 +20,19 @@ describe("FolderGate", () => {
     expect(children).not.toHaveBeenCalled();
   });
 
+  it("sets the ask on the sheet and the window keys on the board, as the app does", async () => {
+    const { container } = render(
+      <FolderGate getFolder={async () => null} pickFolder={async () => null}>
+        {(folder) => <p>shell for {folder}</p>}
+      </FolderGate>,
+    );
+    const choose = await screen.findByRole("button", { name: "Choose folder" });
+    const sheet = container.querySelector(".shell > .sheet") as HTMLElement;
+    expect(sheet.querySelector(".sheet-scroll > main.gate")?.contains(choose)).toBe(true);
+    expect(container.querySelector(".shell > .gate-bar")).toBeTruthy();
+    expect(sheet.querySelector(".gate-bar")).toBeNull();
+  });
+
   it("choosing a folder renders the children with it", async () => {
     const pickFolder = vi.fn(async () => "/home/me/andamio");
     render(

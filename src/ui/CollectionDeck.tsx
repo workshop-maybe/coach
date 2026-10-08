@@ -17,6 +17,7 @@ import { Outline } from "../cast/Outline";
 import { COLLECTION_REQUESTS_REPO, collectionRequestUrl } from "./collectionRequest";
 import { Deck, type Beat } from "./Deck";
 import { useNav } from "./nav";
+import { Field } from "./shared";
 import { useFolder } from "./useFolderState";
 
 /** The first card's answer: an empty one, or a built-in's slug. */
@@ -155,7 +156,7 @@ export function CollectionDeck() {
             title: "What is it called",
             forward: "Make the collection",
             valid: name.trim() !== "",
-            body: <input aria-label="Name" value={name} autoComplete="off" onChange={(e) => setName(e.target.value)} />,
+            body: <Field><input aria-label="Name" value={name} autoComplete="off" onChange={(e) => setName(e.target.value)} /></Field>,
           },
         ]
       : [first];

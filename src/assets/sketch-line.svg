@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="4" viewBox="0 0 40 4" fill="none" stroke="black" stroke-width="1.2" stroke-linecap="round">
+  <!-- A link's underline as a pen draws it: one stroke that wanders a little, ending where it
+       began, so it repeats along a link's foot as a mask without a seam. -->
+  <path d="M0 2C5 1.6 9 2.5 14 2.2C19 1.9 23 1.5 28 2.1C33 2.6 36 2.3 40 2"/>
+</svg>

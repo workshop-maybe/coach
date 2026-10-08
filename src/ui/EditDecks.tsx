@@ -36,7 +36,7 @@ import { useNav } from "./nav";
 import { useRichDraft } from "./richDraft";
 import { RichText } from "./RichText";
 import type { AgentPart, CollectionPart, CredentialPart } from "./routes";
-import { CopyHelper, LineMove, Missing, TargetHint, fileName, paletteName } from "./shared";
+import { CopyHelper, Field, LineMove, Missing, TargetHint, fileName, paletteName } from "./shared";
 import { describeError, useFolder } from "./useFolderState";
 import { useMatrix } from "./useMatrix";
 import { useRichImages } from "./useRichImages";
@@ -119,7 +119,9 @@ export function Lines({
           ))}
         </ol>
       )}
-      <input aria-label={`New ${label.toLowerCase().replace(/s$/, "")}`} value={line} autoComplete="off" placeholder={placeholder} onChange={(e) => onLine(e.target.value)} onKeyDown={onKeyDown} />
+      <Field>
+        <input aria-label={`New ${label.toLowerCase().replace(/s$/, "")}`} value={line} autoComplete="off" placeholder={placeholder} onChange={(e) => onLine(e.target.value)} onKeyDown={onKeyDown} />
+      </Field>
       {onMove && (
         <TargetHint
           text={line}
@@ -298,7 +300,7 @@ function EditCredential({ credentialKey: key, part, credential: atOpen, collecti
           title: "What is it called",
           forward: "Save",
           valid: name.trim() !== "",
-          body: <input aria-label="Name" value={name} autoComplete="off" onChange={(e) => setName(e.target.value)} />,
+          body: <Field><input aria-label="Name" value={name} autoComplete="off" onChange={(e) => setName(e.target.value)} /></Field>,
         },
       ];
       break;
@@ -425,13 +427,15 @@ function EditCredential({ credentialKey: key, part, credential: atOpen, collecti
           body: (
             <div className="edit-look">
               {preview}
-              <input
-                aria-label="Title"
-                value={look.title?.main ?? ""}
-                placeholder={c.name}
-                autoComplete="off"
-                onChange={(e) => setLook({ ...look, title: { ...look.title, main: e.target.value } })}
-              />
+              <Field>
+                <input
+                  aria-label="Title"
+                  value={look.title?.main ?? ""}
+                  placeholder={c.name}
+                  autoComplete="off"
+                  onChange={(e) => setLook({ ...look, title: { ...look.title, main: e.target.value } })}
+                />
+              </Field>
             </div>
           ),
         },
@@ -488,7 +492,7 @@ function EditCollection({ collectionSlug, collection: atOpen, state: stateAtOpen
     title: "What is it called",
     forward: "Rename the collection",
     valid: name.trim() !== "" && name.trim() !== opened.collection.name,
-    body: <input aria-label="Name" value={name} autoComplete="off" onChange={(e) => setName(e.target.value)} />,
+    body: <Field><input aria-label="Name" value={name} autoComplete="off" onChange={(e) => setName(e.target.value)} /></Field>,
   };
 
   return <Deck label={`Rename ${opened.collection.name}`} beats={[beat]} onClose={home} onFinish={finish} onUseTheirs={() => void useTheirs()} />;
@@ -574,7 +578,7 @@ function EditAgent({ profileSlug, part, profile: atOpen, state: stateAtOpen }: E
         title: "What is it called",
         forward: "Save",
         valid: name.trim() !== "",
-        body: <input aria-label="Name" value={name} autoComplete="off" onChange={(e) => setName(e.target.value)} />,
+        body: <Field><input aria-label="Name" value={name} autoComplete="off" onChange={(e) => setName(e.target.value)} /></Field>,
       };
       break;
     case "repo":
@@ -582,7 +586,7 @@ function EditAgent({ profileSlug, part, profile: atOpen, state: stateAtOpen }: E
         id: "repo",
         title: "Where it works",
         forward: "Save",
-        body: <input aria-label="Repo" value={repo} autoComplete="off" placeholder="The folder it opens in" onChange={(e) => setRepo(e.target.value)} />,
+        body: <Field><input aria-label="Repo" value={repo} autoComplete="off" placeholder="The folder it opens in" onChange={(e) => setRepo(e.target.value)} /></Field>,
       };
       break;
     case "notes":

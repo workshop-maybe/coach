@@ -21,12 +21,12 @@ body {
   color: var(--text);
 }
 
-/* The window's frame: the paper, clipped to the window's rounded corners, scrolling
-   inside so the corners stay put. The one rounded thing in the app (CLAUDE.md). */
+/* The window's frame: the board, clipped to the window's rounded corners. It never scrolls;
+   the sheet set into it does (.sheet below). The one rounded thing in the app (CLAUDE.md). */
 #root {
   height: 100vh;
-  overflow: auto;
-  background: var(--bg);
+  overflow: hidden;
+  background: var(--board);
   border-radius: var(--window-radius);
 }
 
@@ -68,8 +68,9 @@ pre {
 }
 
 /* ---------------------------------------------------------------------------
-   Controls. The view's main action is the ink block; others are ink outlines on
-   the surface. Blue is data and links, never a fill. */
+   Controls. Every key is drawn by hand, and how much ink it carries sets its rank: the
+   view's main action is the ink block, a plain key has a full drawn edge, a ghost key a
+   pale one, and a link a drawn underline. Blue is data and links, never a fill. */
 
 button,
 input,
@@ -80,25 +81,67 @@ textarea {
 }
 
 button {
+  position: relative;
   padding: 6px 14px;
-  border: var(--rule-width) solid var(--ink);
+  border: var(--rule-width) solid transparent;
   border-radius: 0;
   background: var(--surface);
   color: var(--ink);
   font-weight: 600;
   font-size: 13px;
   cursor: pointer;
-  transition: opacity 120ms ease;
+  /* The drawn edge: its ink, how far it reaches past the key, and the slice it is drawn
+     at (a wider slice draws thicker strokes, so a hovered key's edge thickens). */
+  --key-edge: var(--ink);
+  --key-reach: 3px;
+  --key-slice: 8px;
 }
 
-button:hover:not(:disabled) {
+/* A key's edge is a sketched frame (src/assets/sketch-key.svg, the cards' frame at a
+   third of the size) laid over the clear border as a mask, filled from --key-edge. Keys
+   that are their own drawing (window keys, the brand, rich-text tools, the hit areas over
+   a machine's keys), cards that are buttons (they wear the cards' frame) and the rows
+   that read as records keep no key edge, and keep the plain fade on hover. */
+button:where(:not(.window-key, .brand, .rich-menu button, .rich-bar button, .machine-key, .dial-step, .door, .part, .agent-card, .badge-card, .earned, .detail-holder, .need, .handoff-run, .take-head, .link))::after {
+  content: "";
+  position: absolute;
+  inset: calc(-1 * var(--key-reach));
+  pointer-events: none;
+  background: var(--key-edge);
+  -webkit-mask-box-image: url("./assets/sketch-key.svg") 8 / var(--key-slice) round;
+  mask-border: url("./assets/sketch-key.svg") 8 / var(--key-slice) round;
+}
+
+/* The same opt-out list as above, less the link (whose underline is its own drawing): these
+   keep the plain fade on hover. Change the two lists together. */
+button:where(.window-key, .brand, .rich-menu button, .rich-bar button, .machine-key, .dial-step, .door, .part, .agent-card, .badge-card, .earned, .detail-holder, .need, .handoff-run, .take-head):hover:not(:disabled) {
   opacity: 0.85;
 }
 
+/* Hover inks a key's edge and draws it a little heavier; the label never fades. */
+button:hover:not(:disabled) {
+  --key-edge: var(--ink);
+  --key-reach: 3.6px;
+  --key-slice: 10px;
+}
+
+/* A selected key (the chosen handoff, Met or Not yet, a picked choice) is drawn in data blue. */
+button[aria-pressed="true"],
+button[aria-pressed="true"]:hover:not(:disabled) {
+  --key-edge: var(--data);
+}
+
+/* The ink block. An ink edge on an ink fill would vanish, so the fill runs a little past
+   the drawn edge, down and to the right, the way a quick hand fills a box. */
 button.primary {
   background: var(--ink);
-  border-color: var(--ink);
   color: var(--on-ink);
+  --key-fill: 2px;
+  box-shadow: var(--key-fill) var(--key-fill) 0 var(--ink);
+}
+
+button.primary:hover:not(:disabled) {
+  --key-fill: 3px;
 }
 
 /* The main action leads with the world's square, in paper on ink. */
@@ -112,31 +155,54 @@ button.primary::before {
   background: var(--on-ink);
 }
 
+/* A ghost key (Back, the deck's close) is drawn pale and inks under the pointer. */
 button.ghost {
-  border-color: transparent;
   background: transparent;
+  --key-edge: var(--ink-ghost);
 }
 
+/* A disabled key, the ink block too, is a pale outline with a ghost label. */
 button:disabled,
 button.primary:disabled {
   background: transparent;
-  border-color: var(--cell);
+  box-shadow: none;
   color: var(--ink-ghost);
   cursor: default;
+  --key-edge: var(--cell);
 }
 
 button.primary:disabled::before {
   background: var(--ink-ghost);
 }
 
+/* A link: no key around it, and a hand-drawn underline in data blue in place of the typed
+   one (src/assets/sketch-line.svg, a wandering stroke that repeats along the link's foot). */
 button.link {
   border: none;
   background: none;
-  padding: 0;
+  padding: 0 0 3px;
   color: var(--data);
   font-weight: 500;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  text-decoration: none;
+}
+
+/* The stroke stays inside the link's own box, so a scrolling region that ends at a link
+   never clips it. */
+button.link::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 4px;
+  pointer-events: none;
+  background: var(--data);
+  -webkit-mask: url("./assets/sketch-line.svg") repeat-x left center / 40px 4px;
+  mask: url("./assets/sketch-line.svg") repeat-x left center / 40px 4px;
+}
+
+button.link:disabled::after {
+  background: var(--ink-ghost);
 }
 
 input,
@@ -151,6 +217,51 @@ textarea {
   line-height: 1.45;
 }
 
+/* A text field's edge is drawn too (src/ui/shared.tsx, Field): pale at rest, full ink while
+   the field has focus, the key's sketched frame laid over the field's clear border. The
+   inked edge and the caret are the field's focus mark; a ring outside the edge would run
+   into the helper lines set close under a field. A field that is already inside a drawn
+   frame (a dial's own line, the rich-text link box) has no wrapper. */
+.field,
+.rich {
+  --field-edge: var(--ink-ghost);
+}
+
+.field {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+
+.field > :is(input, textarea) {
+  display: block;
+  width: 100%;
+  border-color: transparent;
+}
+
+/* The same drawn edge frames a text field, the rich-text box and a dial's whole row. */
+:is(.field, .rich, .dial-row)::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  pointer-events: none;
+  background: var(--field-edge);
+  -webkit-mask-box-image: url("./assets/sketch-key.svg") 8 / 8px round;
+  mask-border: url("./assets/sketch-key.svg") 8 / 8px round;
+}
+
+:is(.field, .rich):focus-within {
+  --field-edge: var(--ink);
+}
+
+.field > :is(input, textarea):focus-visible {
+  box-shadow: none;
+}
+
+.field:has(> :disabled) {
+  --field-edge: var(--cell);
+}
+
 ::placeholder {
   color: var(--ink-ghost);
 }
@@ -160,10 +271,21 @@ textarea {
   box-shadow: var(--focus-ring);
 }
 
+/* Keyboard focus rings a key in data blue, clear of its drawn edge. */
 button:focus-visible {
   outline: 1.5px solid var(--data);
-  outline-offset: 2px;
+  outline-offset: 5px;
   box-shadow: none;
+}
+
+button.primary:focus-visible {
+  box-shadow: var(--key-fill) var(--key-fill) 0 var(--ink);
+}
+
+/* Keys with no key edge (cards that are buttons, record rows) keep the ring close, so a
+   shelf that scrolls sideways with little padding does not clip it. */
+button:where(.door, .part, .agent-card, .badge-card, .earned, .detail-holder, .need, .handoff-run, .take-head):focus-visible {
+  outline-offset: 2px;
 }
 
 /* ---------------------------------------------------------------------------
@@ -198,12 +320,60 @@ button:focus-visible {
 }
 
 /* ---------------------------------------------------------------------------
-   Shell: the paper, and the folder in a mono header with its three actions. */
+   Shell: the board, the folder in a mono strip with its actions on the board, and the paper
+   set into the board as a sheet. */
 
 .shell {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100%;
+}
+
+.shell > :is(.topbar, .gate-bar) {
+  flex: none;
+}
+
+/* The sheet: the paper inset into the board, its edge drawn the way the machine's case is
+   drawn (src/cast/Machine.tsx), a sketched outline whose strokes run past the corners and a
+   lighter second pass just inside it. Both are the cards' sketched frame laid over as masks;
+   the second pass takes a narrower slice, so its strokes are thinner. They sit above the
+   content (the edge is only ever at the sheet's rim) and never take the pointer. */
+.sheet {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0 var(--gutter) var(--gutter);
+  background: var(--bg);
+}
+
+.sheet::before,
+.sheet::after {
+  content: "";
+  position: absolute;
+  z-index: 30;
+  pointer-events: none;
+}
+
+.sheet::after {
+  inset: -5px;
+  background: var(--rule);
+  -webkit-mask-box-image: url("./assets/sketch-frame.svg") 16 / 16px round;
+  mask-border: url("./assets/sketch-frame.svg") 16 / 16px round;
+}
+
+.sheet::before {
+  inset: -1px;
+  background: var(--sheet-pass);
+  -webkit-mask-box-image: url("./assets/sketch-frame.svg") 16 / 11px round;
+  mask-border: url("./assets/sketch-frame.svg") 16 / 11px round;
+}
+
+/* The one scroller: the banners and the content, inside the sheet. */
+.sheet-scroll {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: auto;
 }
 
 .brand {
@@ -220,7 +390,6 @@ button:focus-visible {
   align-items: center;
   gap: var(--space-base);
   padding: var(--space-md) var(--space-xl);
-  border-bottom: 1px solid var(--cell);
 }
 
 .folder-path {
@@ -306,30 +475,27 @@ button:focus-visible {
 
 /* ---------------------------------------------------------------------------
    Pane mode (KTD3, KTD4): a view has claimed the window (src/ui/pane.tsx) and the bar
-   holds only the window keys and the brand. The shell is exactly the window's height and
-   never scrolls, so the keys stay in view whatever shows above the pane (R10). Each banner
-   keeps to its first line, its list still readable to a screen reader, clipped rather
-   than unmounted so an alert is not announced again. The content area hands the view all
-   the height left. */
+   holds only the window keys and the brand. The sheet's scroller does not scroll, so the
+   keys stay in view whatever shows above the pane (R10). Each banner keeps to its first
+   line, its list still readable to a screen reader, clipped rather than unmounted so an
+   alert is not announced again. The content area hands the view all the height left. */
 
-.shell[data-pane] {
-  height: 100%;
-  min-height: 0;
+.shell[data-pane] .sheet-scroll {
   overflow: hidden;
 }
 
-.shell[data-pane] > :is(.topbar, .banner) {
+.shell[data-pane] .sheet-scroll > .banner {
   flex: none;
 }
 
-.shell[data-pane] > .banner {
+.shell[data-pane] .sheet-scroll > .banner {
   position: relative;
   margin-top: var(--space-sm);
   padding-block: var(--space-xs);
   overflow: hidden;
 }
 
-.shell[data-pane] > .banner :is(.banner-title, .banner-notice > span) {
+.shell[data-pane] .sheet-scroll > .banner :is(.banner-title, .banner-notice > span) {
   min-width: 0;
   margin: 0;
   overflow: hidden;
@@ -337,7 +503,7 @@ button:focus-visible {
   text-overflow: ellipsis;
 }
 
-.shell[data-pane] > .banner ul {
+.shell[data-pane] .sheet-scroll > .banner ul {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -346,7 +512,7 @@ button:focus-visible {
   white-space: nowrap;
 }
 
-.shell[data-pane] > .content {
+.shell[data-pane] .sheet-scroll > .content {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
@@ -495,7 +661,6 @@ button:focus-visible {
   width: 100%;
   font-size: 16px;
   padding: 10px 12px;
-  border: 1px solid var(--cell);
 }
 
 .deck-body textarea {
@@ -513,13 +678,10 @@ button:focus-visible {
 .rich {
   position: relative;
   width: 100%;
-  border: 1px solid var(--cell);
+  border: 1px solid transparent;
   background: var(--surface);
 }
 
-.rich:focus-within {
-  box-shadow: var(--focus-ring);
-}
 
 /* The box a file dragged over the window would land in (src/ui/dropFiles.ts): an outline in
    data blue, never a fill. */
@@ -1030,8 +1192,8 @@ button:focus-visible {
   flex: none;
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-xs);
-  padding-top: var(--space-xs);
+  gap: var(--space-sm);
+  padding-top: var(--space-sm);
 }
 
 .reply-edit-key {
@@ -1151,7 +1313,8 @@ button:focus-visible {
 
 .deck.pane > .deck-close {
   grid-area: 1 / 2;
-  position: static;
+  position: relative;
+  top: 0;
 }
 
 .deck.pane > .deck-settled {
@@ -1761,10 +1924,14 @@ button:focus-visible {
   color: var(--ink-muted);
 }
 
+/* A dial is one drawn key with three parts: its edge is drawn around the whole row, and the
+   steps inside it carry no edge of their own. */
 .dial-row {
+  position: relative;
   display: grid;
   grid-template-columns: 2.5rem 1fr 2.5rem;
-  border: var(--rule-width) solid var(--rule);
+  border: var(--rule-width) solid transparent;
+  --field-edge: var(--ink);
 }
 
 .dial-step {
@@ -1823,7 +1990,7 @@ button:focus-visible {
 }
 
 .player-locked .dial-row {
-  border-color: var(--cell);
+  --field-edge: var(--cell);
   color: var(--ink-muted);
 }
 
@@ -1856,7 +2023,6 @@ button:focus-visible {
 }
 
 .choice[aria-pressed="true"] {
-  box-shadow: var(--focus-ring);
   color: var(--data);
 }
 
@@ -1867,9 +2033,10 @@ button:focus-visible {
   overflow-wrap: anywhere;
 }
 
+/* Build your own is an empty thing, so its key is drawn in the pale ink the outlines use. */
 .choice-door {
-  border-style: dashed;
   color: var(--ink-muted);
+  --key-edge: var(--ink-ghost);
 }
 
 /* The handoff box for one badge (U7): the box, a key per handoff, the default in blue. */
@@ -1893,6 +2060,14 @@ button:focus-visible {
   font-size: 13px;
   letter-spacing: var(--value-tracking);
   white-space: pre-wrap;
+}
+
+/* On its pane the field's wrapper (its drawn edge) takes the height the field takes. */
+.deck.pane .handoff-field {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 8rem;
 }
 
 /* On its pane (U6, R9, R18) the field takes the height above the slots and holds its text
@@ -2018,7 +2193,6 @@ button:focus-visible {
 /* In a Jev round Met and Not yet are choices that wait for Save (U6, KTD10): the picked
    one is lit in data blue, as a handoff key is, and Save stays the one ink block. */
 .meet-choices button[aria-pressed="true"] {
-  box-shadow: var(--focus-ring);
   color: var(--data);
 }
 
@@ -2161,7 +2335,6 @@ button:focus-visible {
 }
 
 .missed-point button[aria-pressed="true"] {
-  box-shadow: var(--focus-ring);
   color: var(--data);
 }
 
@@ -2283,7 +2456,6 @@ button:focus-visible {
 }
 
 .handoff-key[aria-pressed="true"] {
-  box-shadow: var(--focus-ring);
   color: var(--data);
 }
 
@@ -2830,7 +3002,8 @@ button:focus-visible {
    over the reply, which scrolls on its own at the centered measure (R9, R10). The
    handoff text that ran sits collapsed under the record, in the record mono. */
 .reply-view > .deck-close {
-  position: static;
+  position: relative;
+  top: 0;
   flex: none;
   align-self: flex-end;
 }
@@ -3009,10 +3182,12 @@ button:focus-visible {
   flex: none;
   display: flex;
   align-items: center;
+  gap: var(--space-sm);
 }
 
 .compare-top > .deck-close {
-  position: static;
+  position: relative;
+  top: 0;
 }
 
 /* Jev's part of the compare (jev-in-compare KTD8, KTD9): the quiet Compare with Jev, its
@@ -3066,13 +3241,13 @@ button:focus-visible {
   gap: 2px;
   max-width: 100%;
   padding: var(--space-xs) var(--space-md);
-  border: 1px solid var(--cell);
+  border-width: 1px;
   background: var(--surface);
   text-align: left;
+  --key-edge: var(--ink-ghost);
 }
 
 .compare-chip[aria-pressed="true"] {
-  box-shadow: var(--focus-ring);
   color: var(--data);
 }
 
@@ -3264,10 +3439,6 @@ button:focus-visible {
   text-align: left;
 }
 
-.swatch[aria-pressed="true"] {
-  box-shadow: var(--focus-ring);
-}
-
 .swatch-chip {
   flex: none;
   width: 22px;
@@ -3355,7 +3526,7 @@ button:focus-visible {
 
 .cost-order-keys {
   display: flex;
-  gap: var(--space-xs);
+  gap: var(--space-sm);
 }
 
 .cost-order-keys button {
