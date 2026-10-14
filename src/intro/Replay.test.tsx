@@ -1,10 +1,9 @@
 // @vitest-environment jsdom
 // The replay (U6): the intro again from Home, watch-only, an overlay over Home that closes back
-// to it. Remotion's Player does not run under jsdom, so a stand-in records what the replay asks
+// to it. The film's player draws every frame against a clock, so a stand-in records what the replay asks
 // of it and lets each test fire its events.
 import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Ref } from "react";
 import { MemoryStorage } from "../storage/memory";
 import { MARKER_PATH } from "../domain/folder";
 import { renderApp, review, storageWith, snapshot } from "../ui/testFolder";
@@ -15,44 +14,41 @@ import { SCENES } from "./timeline";
 vi.mock("@tauri-apps/api/window", () => ({ getCurrentWindow: () => ({ onResized: async () => () => {}, isFullscreen: async () => false, isMaximized: async () => false }) }));
 
 const player = vi.hoisted(() => {
-  type Listener = (e: { detail: unknown }) => void;
-  const listeners = new Map<string, Set<Listener>>();
-  return {
-    props: null as null | Record<string, unknown>,
-    frame: 0,
+  type Props = {
+    reducedMotion: boolean;
+    muted: boolean;
+    still: number;
+    onReady(api: { play(): void; setMuted(m: boolean): void }): void;
+    onEnded(): void;
+    onFrame(frame: number): void;
+  };
+  const state = {
+    props: null as null | Props,
+    fail: false,
     play: vi.fn(),
-    seekTo: vi.fn(),
     mute: vi.fn(),
     unmute: vi.fn(),
-    listeners,
-    emit(name: string, detail?: unknown) {
-      for (const fn of [...(listeners.get(name) ?? [])]) fn({ detail });
+    /** What the film reports: "frameupdate" with a frame, or "ended". */
+    emit(name: "frameupdate" | "ended", detail?: { frame: number }) {
+      if (name === "ended") state.props?.onEnded();
+      else state.props?.onFrame(detail!.frame);
     },
   };
+  return state;
 });
 
-vi.mock("@remotion/player", async () => {
-  const { useImperativeHandle } = await import("react");
-  function Player(props: Record<string, unknown> & { ref?: Ref<unknown>; initialFrame?: number }) {
+vi.mock("./FilmPlayer", async () => {
+  const { useEffect } = await import("react");
+  function FilmPlayer(props: NonNullable<typeof player.props>) {
+    if (player.fail) throw new Error("the webview cannot draw the film");
     player.props = props;
-    useImperativeHandle(props.ref, () => ({
-      play: player.play,
-      seekTo: (f: number) => {
-        player.frame = f;
-        player.seekTo(f);
-      },
-      getCurrentFrame: () => player.frame,
-      mute: player.mute,
-      unmute: player.unmute,
-      addEventListener: (name: string, fn: (e: { detail: unknown }) => void) => {
-        if (!player.listeners.has(name)) player.listeners.set(name, new Set());
-        player.listeners.get(name)!.add(fn);
-      },
-      removeEventListener: (name: string, fn: (e: { detail: unknown }) => void) => player.listeners.get(name)?.delete(fn),
-    }));
+    useEffect(() => {
+      props.onReady({ play: () => player.play(), setMuted: (m) => (m ? player.mute() : player.unmute()) });
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
     return <div data-testid="player" />;
   }
-  return { Player };
+  return { default: FilmPlayer };
 });
 
 // The composition itself is tested in Intro.test.tsx; here it only has to be importable.
@@ -66,9 +62,8 @@ function stubReducedMotion(reduce: boolean) {
 beforeEach(() => {
   localStorage.clear();
   player.props = null;
-  player.frame = 0;
-  player.listeners.clear();
-  for (const fn of [player.play, player.seekTo, player.mute, player.unmute]) fn.mockReset();
+  player.fail = false;
+  for (const fn of [player.play, player.mute, player.unmute]) fn.mockReset();
   stubReducedMotion(false);
 });
 
@@ -157,7 +152,7 @@ describe("the replay", () => {
   it("starts muted when mute was stored, and Mute persists a change (AE5)", async () => {
     localStorage.setItem(MUTE_STORAGE_KEY, "true");
     const { begin } = await replayOpen();
-    expect(player.props).toMatchObject({ initiallyMuted: true });
+    expect(player.props).toMatchObject({ muted: true });
     fireEvent.click(begin);
     fireEvent.click(await screen.findByRole("button", { name: "Unmute" }));
     expect(player.unmute).toHaveBeenCalled();

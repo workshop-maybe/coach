@@ -1,17 +1,16 @@
-// The intro as one Remotion composition (KTD1, KTD3): five scenes on the board, read from
-// the timeline. Authored once, it plays live in the app through the Player and renders to
-// video for the trailer. It brings its own ink filters, fonts, tokens and cast fills, so
-// it draws the same outside the app shell. The score and cue sounds play inside it, so the
-// trailer carries them too (KTD8).
+// The intro's picture (KTD1, KTD3): five scenes on the board, drawn at one frame of the
+// timeline. It is a pure function of the frame, so it plays live in the app under
+// FilmPlayer's clock and renders frame by frame to video for the trailer
+// (scripts/intro-render.mjs). It brings its own ink filters, fonts, tokens and cast fills,
+// so it draws the same outside the app shell. Its sound is the timeline's SOUND_PLAYS, which
+// the app and the trailer each play their own way (KTD8).
 
 import "@fontsource-variable/inter";
 import "@fontsource/fragment-mono";
 import "../theme/tokens.css";
 import "../theme/app-tokens.css";
 import "./intro.css";
-import { memo } from "react";
-import type { ComponentType } from "react";
-import { AbsoluteFill, Html5Audio, Sequence, useCurrentFrame } from "remotion";
+import type { ComponentType, CSSProperties } from "react";
 import { InkDefs } from "../cast/InkDefs";
 import { Rise } from "./pieces/Rise";
 import { tween } from "./pieces/motion";
@@ -21,8 +20,7 @@ import { Good } from "./scenes/Good";
 import { Horizon } from "./scenes/Horizon";
 import { Judgment } from "./scenes/Judgment";
 import { INTRO_HEIGHT, INTRO_WIDTH, TEXT } from "./scenes/stage";
-import { BED_SRC, BED_VOLUME, CUE_SRC, CUE_VOLUME } from "./sound";
-import { CUE_FRAMES, SCENES, SOUND_CUES, TOTAL_FRAMES, type SceneId, wordFrames } from "./timeline";
+import { SCENES, type SceneId, wordFrames } from "./timeline";
 
 export { INTRO_HEIGHT, INTRO_WIDTH } from "./scenes/stage";
 
@@ -47,13 +45,16 @@ const STRONG_ROWS: readonly (readonly (readonly number[])[])[] = SCENES.map((s) 
 /** Frames a scene's text takes to fade before the next scene's rises. */
 const FADE = 16;
 
-export function Intro() {
-  const frame = useCurrentFrame();
+/** A layer that fills the film's frame. */
+const FILL: CSSProperties = { position: "absolute", inset: 0 };
+
+/** The film at `frame`, drawn at INTRO_WIDTH × INTRO_HEIGHT. */
+export function Intro({ frame }: { frame: number }) {
   const last = SCENES.length - 1;
   const boardIn = tween(frame, 0, 14);
   return (
-    <AbsoluteFill className="intro-film" style={{ background: "var(--board)" }}>
-      <AbsoluteFill style={{ background: "var(--ink)", opacity: 1 - boardIn }} />
+    <div className="intro-film" style={{ ...FILL, width: INTRO_WIDTH, height: INTRO_HEIGHT, background: "var(--board)" }}>
+      <div style={{ ...FILL, background: "var(--ink)", opacity: 1 - boardIn }} />
       <InkDefs />
       <svg
         viewBox={`0 0 ${INTRO_WIDTH} ${INTRO_HEIGHT}`}
@@ -87,29 +88,6 @@ export function Intro() {
           />
         ));
       })}
-      <Sounds />
-    </AbsoluteFill>
+    </div>
   );
 }
-
-/** The score and the cues (KTD8). The Player's mute and volume sit over all of them. */
-const Sounds = memo(function Sounds() {
-  return (
-    <>
-      <Sequence name="score" from={0} durationInFrames={TOTAL_FRAMES} layout="none">
-        <Html5Audio src={BED_SRC} volume={BED_VOLUME} />
-      </Sequence>
-      {SOUND_CUES.map((cue) => (
-        <Sequence
-          key={`${cue.kind}-${cue.frame}`}
-          name={cue.kind}
-          from={cue.frame}
-          durationInFrames={CUE_FRAMES[cue.kind]}
-          layout="none"
-        >
-          <Html5Audio src={CUE_SRC[cue.kind]} volume={CUE_VOLUME} />
-        </Sequence>
-      ))}
-    </>
-  );
-});

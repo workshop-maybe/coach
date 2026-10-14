@@ -30,10 +30,24 @@
   container-type: size;
 }
 
-/* The film fits inside the board without cropping (the Player letterboxes it). */
+/* The film fits inside the board without cropping: drawn at its own size, then scaled
+   about its centre to the largest size that fits (FilmPlayer.tsx). */
 .intro-film-layer {
   position: absolute;
   inset: 0 var(--gutter) var(--gutter);
+}
+
+.intro-film-fit {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.intro-film-scaled {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform-origin: center;
 }
 
 .intro-film-layer:is(:focus, :focus-visible) {

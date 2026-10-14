@@ -1,56 +1,51 @@
 // @vitest-environment jsdom
-// The first run (U4): title card, film, play beat, then the folder gate. Remotion's Player
-// does not run under jsdom, so a stand-in records what the first run asks of it and lets
+// The first run (U4): title card, film, play beat, then the folder gate. The film's player draws
+// every frame against a clock, so a stand-in records what the first run asks of it and lets
 // each test fire its events.
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Ref } from "react";
 import { FolderGate } from "../ui/FolderGate";
 import { HELD_LINE_KEY, readHeldLine } from "./heldLine";
 import { MUTE_STORAGE_KEY } from "./mute";
 import { SCENES, STILLS, TOTAL_FRAMES } from "./timeline";
 
 const player = vi.hoisted(() => {
-  type Listener = (e: { detail: unknown }) => void;
-  const listeners = new Map<string, Set<Listener>>();
-  return {
-    props: null as null | Record<string, unknown>,
-    frame: 0,
+  type Props = {
+    reducedMotion: boolean;
+    muted: boolean;
+    still: number;
+    onReady(api: { play(): void; setMuted(m: boolean): void }): void;
+    onEnded(): void;
+    onFrame(frame: number): void;
+  };
+  const state = {
+    props: null as null | Props,
+    fail: false,
     play: vi.fn(),
-    seekTo: vi.fn(),
     mute: vi.fn(),
     unmute: vi.fn(),
-    listeners,
-    emit(name: string, detail?: unknown) {
-      for (const fn of [...(listeners.get(name) ?? [])]) fn({ detail });
+    /** What the film reports: "frameupdate" with a frame, or "ended". */
+    emit(name: "frameupdate" | "ended", detail?: { frame: number }) {
+      if (name === "ended") state.props?.onEnded();
+      else state.props?.onFrame(detail!.frame);
     },
   };
+  return state;
 });
 
-vi.mock("@remotion/player", async () => {
-  const { useImperativeHandle } = await import("react");
-  function Player(props: Record<string, unknown> & { ref?: Ref<unknown>; initialFrame?: number }) {
-    if ((player as { fail?: boolean }).fail) throw new Error("the webview cannot draw the film");
+vi.mock("./FilmPlayer", async () => {
+  const { useEffect } = await import("react");
+  function FilmPlayer(props: NonNullable<typeof player.props>) {
+    if (player.fail) throw new Error("the webview cannot draw the film");
     player.props = props;
-    useImperativeHandle(props.ref, () => ({
-      play: player.play,
-      seekTo: (f: number) => {
-        player.frame = f;
-        player.seekTo(f);
-      },
-      getCurrentFrame: () => player.frame,
-      mute: player.mute,
-      unmute: player.unmute,
-      addEventListener: (name: string, fn: (e: { detail: unknown }) => void) => {
-        if (!player.listeners.has(name)) player.listeners.set(name, new Set());
-        player.listeners.get(name)!.add(fn);
-      },
-      removeEventListener: (name: string, fn: (e: { detail: unknown }) => void) => player.listeners.get(name)?.delete(fn),
-    }));
+    useEffect(() => {
+      props.onReady({ play: () => player.play(), setMuted: (m) => (m ? player.mute() : player.unmute()) });
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
     return <div data-testid="player" />;
   }
-  return { Player };
+  return { default: FilmPlayer };
 });
 
 // The composition itself is tested in Intro.test.tsx; here it only has to be importable.
@@ -63,13 +58,8 @@ function stubReducedMotion(reduce: boolean) {
 beforeEach(() => {
   localStorage.clear();
   player.props = null;
-  (player as { fail?: boolean }).fail = false;
-  player.frame = 0;
-  player.listeners.clear();
-  player.play.mockReset();
-  player.seekTo.mockReset();
-  player.mute.mockReset();
-  player.unmute.mockReset();
+  player.fail = false;
+  for (const fn of [player.play, player.mute, player.unmute]) fn.mockReset();
   stubReducedMotion(false);
 });
 
@@ -127,25 +117,17 @@ describe("the title card", () => {
     expect(screen.queryByRole("button", { name: "Choose folder" })).toBeNull();
   });
 
-  it("mounts the film paused at its first frame, with the Player's settings fixed", async () => {
+  it("mounts the film behind it, not yet playing, with sound on", async () => {
     await titleCard();
     expect(player.play).not.toHaveBeenCalled();
-    expect(player.props).toMatchObject({
-      durationInFrames: TOTAL_FRAMES,
-      initialFrame: 0,
-      controls: false,
-      clickToPlay: false,
-      spaceKeyToPlayOrPause: false,
-      moveToBeginningWhenEnded: false,
-      initiallyMuted: false,
-    });
+    expect(player.props).toMatchObject({ reducedMotion: false, muted: false });
   });
 
-  it("Begin calls the Player's play once, in the same tick as the key event", async () => {
+  it("Begin plays the film once, inside the key's own event", async () => {
     const { begin } = await titleCard();
+    // fireEvent returns after the click handler ran, so play was called inside the key's own event.
     fireEvent.click(begin);
     expect(player.play).toHaveBeenCalledTimes(1);
-    expect(player.play.mock.calls[0][0]).toHaveProperty("type", "click");
     expect(screen.queryByRole("button", { name: "Begin" })).toBeNull();
   });
 
@@ -198,7 +180,7 @@ describe("the film", () => {
     const { container } = await playing();
     await userEvent.keyboard("{Enter}{ArrowRight}");
     expect(container.querySelector("[aria-live]")?.textContent).toBe(SCENES[0].rows.join(" "));
-    expect(player.seekTo).not.toHaveBeenCalled();
+    expect(player.props?.still).toBe(0);
   });
 
   it("AE2. Escape on the third scene goes to the gate with no line held", async () => {
@@ -233,18 +215,16 @@ describe("the film", () => {
   it("AE5. a stored mute starts the film muted", async () => {
     localStorage.setItem(MUTE_STORAGE_KEY, "true");
     await titleCard();
-    expect(player.props?.initiallyMuted).toBe(true);
+    expect(player.props?.muted).toBe(true);
     expect(screen.getByRole("button", { name: "Unmute" })).toBeTruthy();
   });
 
-  it("on the Player's ended event the play beat mounts over the held last frame, not rewound", async () => {
+  it("when the film ends the play beat mounts over its held last frame", async () => {
     await playing();
     act(() => player.emit("frameupdate", { frame: TOTAL_FRAMES - 1 }));
     act(() => player.emit("ended"));
     expect(await screen.findByRole("heading", { name: "What would a good result look like" })).toBeTruthy();
     expect(screen.getByTestId("player")).toBeTruthy();
-    expect(player.seekTo).not.toHaveBeenCalled();
-    expect(player.props?.moveToBeginningWhenEnded).toBe(false);
     expect(document.activeElement).toBe(field());
     expect(screen.queryByRole("button", { name: "Skip" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Mute" })).toBeNull();
@@ -354,32 +334,30 @@ describe("under reduced motion", () => {
 
   it("AE4. shows the first scene's still, steps on Enter, never plays, and shows no Mute key", async () => {
     const { begin } = await titleCard();
-    expect(player.props?.initialFrame).toBe(STILLS[0]);
-    expect(player.props?.initiallyMuted).toBe(true);
+    expect(player.props).toMatchObject({ reducedMotion: true, still: 0 });
     expect(screen.queryByRole("button", { name: "Mute" })).toBeNull();
     fireEvent.click(begin);
     await screen.findByRole("button", { name: "Skip" });
     expect(screen.queryByRole("button", { name: "Mute" })).toBeNull();
     await userEvent.keyboard("{Enter}");
-    expect(player.seekTo).toHaveBeenLastCalledWith(STILLS[1]);
+    expect(player.props?.still).toBe(1);
     await userEvent.keyboard("{ArrowRight}");
-    expect(player.seekTo).toHaveBeenLastCalledWith(STILLS[2]);
+    expect(player.props?.still).toBe(2);
     await userEvent.keyboard("m");
     expect(player.mute).not.toHaveBeenCalled();
     expect(player.play).not.toHaveBeenCalled();
   });
 
-  it("ignores the Player's own frame and end events, which a seek fires", async () => {
+  it("ignores the film's own frame and end reports while the newcomer steps", async () => {
     const { begin } = await titleCard();
     fireEvent.click(begin);
     await screen.findByRole("button", { name: "Next" });
     await userEvent.keyboard("{Enter}{Enter}");
-    // A late report from the first seek, then the end a seek to the last frame reports.
     act(() => player.emit("frameupdate", { frame: STILLS[1] }));
     act(() => player.emit("ended"));
     expect(screen.queryByRole("button", { name: "Make it a badge" })).toBeNull();
     await userEvent.keyboard("{Enter}");
-    expect(player.seekTo).toHaveBeenLastCalledWith(STILLS[3]);
+    expect(player.props?.still).toBe(3);
   });
 
   it("advancing past the last still mounts the play beat", async () => {
@@ -387,7 +365,7 @@ describe("under reduced motion", () => {
     fireEvent.click(begin);
     await screen.findByRole("button", { name: "Next" });
     for (let i = 1; i < STILLS.length; i++) await userEvent.keyboard("{Enter}");
-    expect(player.seekTo).toHaveBeenLastCalledWith(STILLS[STILLS.length - 1]);
+    expect(player.props?.still).toBe(STILLS.length - 1);
     expect(screen.queryByRole("button", { name: "Make it a badge" })).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "Next" }));
     expect(await screen.findByRole("button", { name: "Make it a badge" })).toBeTruthy();
@@ -397,7 +375,7 @@ describe("under reduced motion", () => {
 
 describe("a film that cannot load or draw", () => {
   it("skips to the folder gate instead of blanking the window", async () => {
-    (player as { fail?: boolean }).fail = true;
+    player.fail = true;
     vi.spyOn(console, "error").mockImplementation(() => {});
     firstRun();
     expect(await screen.findByRole("button", { name: "Choose folder" })).toBeTruthy();
@@ -411,10 +389,10 @@ describe("a held key under reduced motion", () => {
     const { begin } = await titleCard();
     fireEvent.click(begin);
     await screen.findByRole("button", { name: "Skip" });
-    const before = player.seekTo.mock.calls.length;
+    const before = player.props?.still;
     fireEvent.keyDown(window, { key: "Enter", repeat: true });
     fireEvent.keyDown(window, { key: "Enter", repeat: true });
-    expect(player.seekTo.mock.calls.length).toBe(before);
+    expect(player.props?.still).toBe(before);
     expect(screen.queryByRole("button", { name: "Make it a badge" })).toBeNull();
   });
 });

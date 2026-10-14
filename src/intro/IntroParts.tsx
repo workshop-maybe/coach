@@ -1,7 +1,7 @@
 // The pieces the first run and the replay share: the film's stage, the title card and the
 // Skip/Mute strip.
 
-import type { ReactNode, Ref, SyntheticEvent } from "react";
+import type { ReactNode, Ref } from "react";
 import { Lockup } from "../ui/Lockup";
 import { Film, type FilmProps } from "./Film";
 import { SCENES } from "./timeline";
@@ -39,7 +39,7 @@ export function FilmStage({ stage, hidden, filming, film, label }: FilmStageProp
   );
 }
 
-export function TitleCard({ ready, begin, onBegin, onSkip }: { ready: boolean; begin: Ref<HTMLButtonElement>; onBegin(e: SyntheticEvent): void; onSkip(): void }) {
+export function TitleCard({ ready, begin, onBegin, onSkip }: { ready: boolean; begin: Ref<HTMLButtonElement>; onBegin(): void; onSkip(): void }) {
   return (
     <main className="intro-title">
       <Lockup className="intro-lockup" />

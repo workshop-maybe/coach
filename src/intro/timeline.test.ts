@@ -4,11 +4,10 @@ import {
   FPS,
   REPLY_FRAMES,
   SCENES,
-  SHARED_AUDIO_TAGS,
   SOUND_CUES,
+  SOUND_PLAYS,
   STILLS,
   TOTAL_FRAMES,
-  maxConcurrentAudio,
   sceneAt,
   settledAt,
   wordFrames,
@@ -73,15 +72,9 @@ describe("the intro timeline", () => {
     frames.forEach((f) => expect(f).toBeLessThan(TOTAL_FRAMES));
   });
 
-  it("keeps the sounds playing at once within the Player's shared audio tags", () => {
-    expect(maxConcurrentAudio()).toBeLessThanOrEqual(SHARED_AUDIO_TAGS);
-  });
-
-  it("counts the bed and every cue whose window meets another", () => {
-    expect(maxConcurrentAudio([])).toBe(1);
-    // Two cues where one starts on the frame the other ends still both hold a tag.
-    expect(maxConcurrentAudio([{ frame: 10, kind: "reply" }, { frame: 10 + CUE_FRAMES.reply, kind: "reply" }])).toBe(3);
-    expect(maxConcurrentAudio([{ frame: 10, kind: "reply" }, { frame: 11 + CUE_FRAMES.reply, kind: "reply" }])).toBe(2);
+  it("plays the bed under the whole film, then every cue for its window", () => {
+    expect(SOUND_PLAYS[0]).toEqual({ kind: "bed", frame: 0, frames: TOTAL_FRAMES });
+    expect(SOUND_PLAYS.slice(1)).toEqual(SOUND_CUES.map((c) => ({ kind: c.kind, frame: c.frame, frames: CUE_FRAMES[c.kind] })));
   });
 
   it("gives each cue its own place in the film", () => {
