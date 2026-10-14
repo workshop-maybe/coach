@@ -1,6 +1,6 @@
 [package]
 name = "andamio-desktop"
-version = "0.2.0"
+version = "0.2.1"
 description = "Build credentials and offer them to your agents"
 authors = ["Andamio"]
 edition = "2021"
