@@ -90,7 +90,7 @@ export function useIntroFilm({ onEnd, onSkip, listening }: IntroFilmOptions) {
   useEffect(() => {
     if (!listening) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented) return;
+      if (e.defaultPrevented || e.repeat) return;
       if (e.key === "Escape") {
         e.preventDefault();
         skip();
@@ -122,7 +122,7 @@ export function useIntroFilm({ onEnd, onSkip, listening }: IntroFilmOptions) {
   }, [phase]);
 
   /** Spread onto the Film. */
-  const filmProps: FilmProps = { reducedMotion: reduced, muted, still: scene, onReady, onEnded, onFrame };
+  const filmProps: FilmProps = { reducedMotion: reduced, muted, still: scene, onReady, onEnded, onFrame, onFailed: skip };
   /** Spread onto the IntroStrip, with the caller's own `filming`. */
   const stripProps: Omit<StripProps, "filming"> = { reduced, muted, onAdvance: advance, onSkip: skip, onMute: toggleMute };
 

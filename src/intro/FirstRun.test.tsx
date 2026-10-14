@@ -31,6 +31,7 @@ const player = vi.hoisted(() => {
 vi.mock("@remotion/player", async () => {
   const { useImperativeHandle } = await import("react");
   function Player(props: Record<string, unknown> & { ref?: Ref<unknown>; initialFrame?: number }) {
+    if ((player as { fail?: boolean }).fail) throw new Error("the webview cannot draw the film");
     player.props = props;
     useImperativeHandle(props.ref, () => ({
       play: player.play,
@@ -62,6 +63,7 @@ function stubReducedMotion(reduce: boolean) {
 beforeEach(() => {
   localStorage.clear();
   player.props = null;
+  (player as { fail?: boolean }).fail = false;
   player.frame = 0;
   player.listeners.clear();
   player.play.mockReset();
@@ -390,5 +392,29 @@ describe("under reduced motion", () => {
     await userEvent.click(screen.getByRole("button", { name: "Next" }));
     expect(await screen.findByRole("button", { name: "Make it a badge" })).toBeTruthy();
     expect(player.play).not.toHaveBeenCalled();
+  });
+});
+
+describe("a film that cannot load or draw", () => {
+  it("skips to the folder gate instead of blanking the window", async () => {
+    (player as { fail?: boolean }).fail = true;
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    firstRun();
+    expect(await screen.findByRole("button", { name: "Choose folder" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Begin" })).toBeNull();
+  });
+});
+
+describe("a held key under reduced motion", () => {
+  it("advances one still, not every still", async () => {
+    stubReducedMotion(true);
+    const { begin } = await titleCard();
+    fireEvent.click(begin);
+    await screen.findByRole("button", { name: "Skip" });
+    const before = player.seekTo.mock.calls.length;
+    fireEvent.keyDown(window, { key: "Enter", repeat: true });
+    fireEvent.keyDown(window, { key: "Enter", repeat: true });
+    expect(player.seekTo.mock.calls.length).toBe(before);
+    expect(screen.queryByRole("button", { name: "Make it a badge" })).toBeNull();
   });
 });

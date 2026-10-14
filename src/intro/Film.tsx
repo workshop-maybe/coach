@@ -3,8 +3,8 @@
 // fits inside the board without cropping, shows no controls, and holds its last frame when
 // it ends, so the play beat's sheet arrives over it.
 
-import { lazy, Suspense } from "react";
-import type { SyntheticEvent } from "react";
+import { Component, lazy, Suspense } from "react";
+import type { ReactNode, SyntheticEvent } from "react";
 
 /** What the first run can do with a loaded film. */
 export interface FilmApi {
@@ -26,14 +26,38 @@ export interface FilmProps {
   onEnded(): void;
   /** The frame playing, as it changes. */
   onFrame(frame: number): void;
+  /** The film could not load or draw. The intro skips, so the folder stays reachable. */
+  onFailed(): void;
 }
 
 const FilmPlayer = lazy(() => import("./FilmPlayer"));
 
+/**
+ * Nothing above the first run catches a render error, so a film that fails to load or draw
+ * in some webview would blank the window before the folder gate. This boundary skips instead.
+ */
+class FilmBoundary extends Component<{ onFailed(): void; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch() {
+    this.props.onFailed();
+  }
+
+  render() {
+    return this.state.failed ? null : this.props.children;
+  }
+}
+
 export function Film(props: FilmProps) {
   return (
-    <Suspense fallback={null}>
-      <FilmPlayer {...props} />
-    </Suspense>
+    <FilmBoundary onFailed={props.onFailed}>
+      <Suspense fallback={null}>
+        <FilmPlayer {...props} />
+      </Suspense>
+    </FilmBoundary>
   );
 }
