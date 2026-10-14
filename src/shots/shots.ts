@@ -1,6 +1,6 @@
 // The screenshot manifest (U3, U4, KTD6, KTD7, R19, R20): every picture in the user guide,
-// as data. Each shot names the guide page it illustrates, where the app opens (a route, or
-// the first-run gate), the sample folder it opens over, Jev Mode's state, what must be on
+// as data. Each shot names the guide page it illustrates, where the app opens (a route, the
+// first run's title card, or the folder gate), the sample folder it opens over, Jev Mode's state, what must be on
 // screen for the picture to count (`expect`), an optional clip and optional in-page steps.
 // `npm run site:shots` renders each one to site/public/shots/<id>.png through shots.html.
 //
@@ -76,13 +76,21 @@ export interface Clip {
  */
 export const SHOT_SCALE = 2;
 
+/** The two places a shot opens before any folder: the first run's title card, or the folder gate. */
+export type ShotStart = "intro" | "gate";
+
 export interface Shot {
   /** The picture's file name under site/public/shots, kebab-case and unique. */
   id: string;
   /** The guide page it illustrates, as that page's entry id. */
   page: `${PartId}/${string}`;
-  /** Where the app opens: a route, or "gate" for the first-run folder screen. */
-  route: Route | "gate";
+  /**
+   * Where the app opens: a route; "intro" for a first run, at the intro's title card (no
+   * folder ever remembered); or "gate" for the folder gate with no intro, as a remembered
+   * folder that has gone missing opens. Under the harness's reduced motion the intro shows
+   * its stills, which a shot steps through with Next.
+   */
+  route: Route | ShotStart;
   seed: SeedVariant;
   jev: JevState;
   expect: Expect;
@@ -339,14 +347,100 @@ const CASE_TO_READING: readonly Step[] = [
   { waitFor: { text: "Cut-offs fitted to your verdicts" } },
 ];
 
+/**
+ * How many stills the intro steps through under reduced motion (SCENES in
+ * src/intro/timeline.ts, spelled out so this file stays plain data; shots.test.ts checks it).
+ * Next on the last one ends the film.
+ */
+export const SCENE_COUNT = 5;
+
+/** The newcomer's line on the play beat, in the first run's pictures. Six words or fewer, so the badge's name is the whole line. */
+const FIRST_LINE = "Every fix ships with a test";
+
+/** The first run from the title card, still by still under reduced motion, to the play beat. */
+const INTRO_TO_PLAY: readonly Step[] = [
+  { click: { button: "Begin" } },
+  ...Array.from({ length: SCENE_COUNT }, () => ({ click: { button: "Next" } })),
+  { waitFor: { text: "What would a good result look like" } },
+];
+
+/** On from the play beat, with the line typed, to the folder gate that will save it. */
+const INTRO_TO_GATE: readonly Step[] = [
+  ...INTRO_TO_PLAY,
+  { fill: { label: "What good looks like" }, value: FIRST_LINE },
+  { click: { button: "Make it a badge" } },
+  { waitFor: { text: "Choose folder" } },
+];
+
+/** On from the gate to Home, where the badge the line became has its row lit. */
+const INTRO_TO_HOME: readonly Step[] = [...INTRO_TO_GATE, { click: { button: "Choose folder" } }, { waitFor: { selector: ".need.lit" } }];
+
 export const SHOTS: readonly Shot[] = [
   {
+    id: "intro-title",
+    page: "getting-started/intro",
+    route: "intro",
+    seed: "empty",
+    jev: "off",
+    expect: { text: "Begin" },
+    // Begin is enabled once the film has loaded behind the card.
+    steps: [{ waitFor: { selector: ".intro-title button.primary:not([disabled])" } }],
+  },
+  {
+    // The third still: what good looks like.
+    id: "intro-still",
+    page: "getting-started/intro",
+    route: "intro",
+    seed: "empty",
+    jev: "off",
+    expect: { text: "Next" },
+    steps: [{ click: { button: "Begin" } }, { click: { button: "Next" } }, { click: { button: "Next" } }],
+  },
+  {
+    id: "intro-play",
+    page: "getting-started/intro",
+    route: "intro",
+    seed: "empty",
+    jev: "off",
+    expect: { text: "Make it a badge" },
+    steps: [...INTRO_TO_PLAY, { fill: { label: "What good looks like" }, value: FIRST_LINE }],
+  },
+  {
+    // The gate after the play beat: the folder it picks is where the badge is saved.
     id: "first-run",
     page: "getting-started/your-folder",
-    route: "gate",
+    route: "intro",
     seed: "empty",
     jev: "off",
     expect: { text: "Choose folder" },
+    steps: INTRO_TO_GATE,
+  },
+  {
+    id: "folder-missing",
+    page: "help/when-something-breaks",
+    route: "gate",
+    seed: "empty",
+    jev: "off",
+    expect: { selector: ".gate-error" },
+  },
+  {
+    id: "first-badge-home",
+    page: "getting-started/first-test",
+    route: "intro",
+    seed: "empty",
+    jev: "off",
+    expect: { text: "Add its task" },
+    steps: INTRO_TO_HOME,
+  },
+  {
+    // The lit row opens the badge's task, with the prompt that asks an agent for one.
+    id: "first-badge-task",
+    page: "getting-started/first-test",
+    route: "intro",
+    seed: "empty",
+    jev: "off",
+    expect: { text: "Suggest a task" },
+    steps: [...INTRO_TO_HOME, { click: { selector: ".need.lit" } }, { waitFor: { text: "Suggest a task" } }],
   },
   {
     id: "home-empty",
@@ -1136,12 +1230,12 @@ export const SHOTS: readonly Shot[] = [
 /** Marks a route kind no shot pictures yet. */
 export const NOT_PICTURED = "not pictured";
 
-/** Every place the app can open: the gate, home, each deck and each item. */
-export type RouteKind = "gate" | "home" | `deck:${DeckRoute["deck"]}` | `item:${ItemRoute["item"]}`;
+/** Every place the app can open: the intro, the gate, home, each deck and each item. */
+export type RouteKind = ShotStart | "home" | `deck:${DeckRoute["deck"]}` | `item:${ItemRoute["item"]}`;
 
 /** A shot's route kind, as the coverage map keys it. */
-export function routeKind(route: Route | "gate"): RouteKind {
-  if (route === "gate") return "gate";
+export function routeKind(route: Route | ShotStart): RouteKind {
+  if (typeof route === "string") return route;
   if (route.view === "home") return "home";
   if (route.view === "deck") return `deck:${route.deck}`;
   return `item:${route.item}`;
@@ -1149,7 +1243,8 @@ export function routeKind(route: Route | "gate"): RouteKind {
 
 /** For each route kind, the shots that picture it, or NOT_PICTURED. Every shot is listed under its own kind. */
 export const COVERAGE: Record<RouteKind, readonly string[] | typeof NOT_PICTURED> = {
-  gate: ["first-run"],
+  intro: ["intro-title", "intro-still", "intro-play", "first-run", "first-badge-home", "first-badge-task"],
+  gate: ["folder-missing"],
   home: ["home-empty", "home", "home-needs", "router-door", "home-collections"],
   "deck:credential": ["credential-start", "credential-target"],
   "deck:agent": ["first-test-agent", "first-test-hand", "first-test-judge", "first-test-home", "agent-new"],

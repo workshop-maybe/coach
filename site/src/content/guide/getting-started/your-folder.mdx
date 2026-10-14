@@ -1,27 +1,29 @@
 ---
 title: Choose your folder
 part: getting-started
-order: 20
-description: The app keeps everything in one folder you pick the first time it opens.
+order: 30
+description: The app keeps everything in one folder you pick the first time it opens, after the intro.
 ---
 
-{/* Getting started, second page (U6, R4): choosing the data folder. Labels are checked against the app's source (KTD8). */}
+{/* Getting started, third page (U6, R4; first-run intro plan U8, R18): choosing the data folder, which now comes after the intro. Labels are checked against the app's source (KTD8). */}
 
 The app keeps everything you make in one folder on your computer. Before you open it the first time, make an empty folder somewhere easy to find, such as `Documents/Andamio`.
 
 ## Pick it
 
-The first time the app opens, it asks for a folder.
+The first time the app opens, it plays [the intro](/getting-started/intro/), then asks for a folder. If you wrote a line at the end of the intro, the app says your badge will be saved in the folder you pick. If you skipped, it asks for a folder for your credentials, agents and results.
 
-<Shot id="first-run" alt="The first screen: the Andamio logo, a line asking for a folder for your credentials, agents and results, and the Choose folder button" />
+<Shot id="first-run" alt="The folder screen after the intro: the Andamio logo, a line saying your badge is saved in the folder you pick with your agents and results, and the Choose folder button" />
 
 1. Click <UI>Choose folder</UI>.
 2. Pick the empty folder you made.
 
-The app remembers it. Next time, it opens straight to home.
+The app remembers it. Next time, it opens straight to home, with no intro. If you wrote a line, home opens with your new badge on it: [Run your first test](/getting-started/first-test/) goes on from there.
 
 ## What goes in it
 
 Your credentials, your agents and every result you record go in this folder as plain text: Markdown and JSON files you can open and read. The folder is the whole record. You can back it up, or put it under git. [Your data](/help/your-data/) shows how it's laid out, and the little the app keeps outside it.
 
 The folder's path shows in the top bar on home. To work from another folder, click <UI>Change folder</UI>.
+
+If you move or rename the folder while the app is closed, it asks for it again next time, without the intro: [When something breaks](/help/when-something-breaks/#your-folder-moved-or-was-renamed).

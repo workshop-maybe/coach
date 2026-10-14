@@ -1,19 +1,35 @@
 ---
 title: Run your first test
 part: getting-started
-order: 30
-description: Set up an agent, hand it a first badge's task, bring back the reply and judge it.
+order: 40
+description: Give your first badge a task, set up an agent, hand it the task, bring back the reply and judge it.
 ---
 
-{/* Getting started's last page (U6, R4, F1): the first test and the look at home after it, step by step against a new folder. Labels are checked against the app's source (KTD8). */}
+{/* Getting started's last page (U6, R4, F1; first-run intro plan U8, R9, R14, R18, KTD10): giving the intro's badge a task, then the first test and the look at home after it. The pictures of the test itself run on the preset, the skipped path. Labels are checked against the app's source (KTD8). */}
 
-A test hands one badge's task to one agent. You copy the prompt into your assistant, paste its answer back into the app, and decide whether it met the badge's rubric. Your first test does all of that with a badge the app makes for you.
+A test hands one badge's task to one agent. You copy the prompt into your assistant, paste its answer back into the app, and decide whether it met the badge's bar. Your first test runs on the badge your line made at the end of [the intro](/getting-started/intro/). If you skipped that, the app makes a badge for you.
+
+## Give your badge a task
+
+Your line says what good looks like. The badge still needs a task: what the agent is asked to do. Home opens with your badge under <UI>Badges</UI> and its row lit under <UI>What needs you</UI>: <UI>Finish \{name\}</UI>, <UI>Add its task</UI>.
+
+<Shot id="first-badge-home" alt="Home after the first run: the lit row Finish Every fix ships with a test, Add its task, under What needs you, and the Every fix ships with a test badge under Badges with no holders yet" />
+
+1. Click the row. <UI>The task</UI> opens.
+2. Write the task yourself, or let your agent draft it: click <UI>Suggest a task</UI>, paste the prompt into your assistant, and paste the task it suggests back into the box. Change it until it asks for what you meant.
+3. Click <UI>Save</UI>. The badge opens. Close it to go home.
+
+<Shot id="first-badge-task" alt="The task card for the new badge: an empty task box, the Suggest a task, Review this assignment and Write a refine prompt links below it, and Save" />
 
 ## Start it
 
-In a new folder, home is empty. Click <UI>Try a first test</UI>.
+With a task on your badge and no agents yet, home leads with <UI>Try a first test</UI>. Click it. The test runs on your badge.
 
-<Shot id="home-empty" alt="Home in an empty folder: the Try a first test button above the three doors, Create an agent, Create a credential and Find an agent for a job" />
+If you skipped the intro's line, home is empty instead. <UI>Try a first test</UI> runs on a badge the app makes for you, *Name what matters next*, and the pictures on the rest of this page show that one.
+
+<Shot id="home-empty" alt="Home in an empty folder: the Try a first test button above the three doors, Create an agent, Create a credential and Find an agent for a job, and Watch the intro at the top right" />
+
+If you have badges but none has a task yet, there's no <UI>Try a first test</UI>. Add a task to one first, as above.
 
 ## Set up the agent
 
@@ -28,7 +44,7 @@ An agent is the assistant you'll test, as you run it: its harness, its model and
 
 The agent is named for its setup, such as *Claude Code, opus, high*. You can rename it later.
 
-The app also makes your first badge, *Name what matters next*. Its task asks an agent open in a repo to name the three things most worth doing next, with evidence for each. Later you can [build a badge of your own](/how-to/build-a-credential/), with as many learning targets as it needs.
+On your own badge, the test goes straight on to handing it over. If you skipped the intro's line, the app also makes *Name what matters next* now. Its task asks an agent open in a repo to name the three things most worth doing next, with evidence for each. Later you can [build more badges](/how-to/build-a-credential/), with as many learning targets as each needs.
 
 ## Hand it over
 
@@ -50,13 +66,13 @@ If you need to stop before you have a reply, close the test. The agent keeps the
 
 <Shot id="first-test-judge" alt="Did it meet it: the badge's rubric on the left, the pasted reply on the right, and the Met, Not yet and Hold to compare buttons below" />
 
-<UI>Did it meet it</UI> shows the badge's rubric beside the reply.
+<UI>Did it meet it</UI> shows the badge's rubric beside the reply. The badge from your line has no rubric yet, so it shows the reply alone: judge it against your line. You can [add a rubric](/how-to/change-a-badge/) later.
 
-1. Read the rubric.
-2. Check the reply against it. This rubric asks you to look up every file, commit and check the reply names. Only you can judge this one, because you know the repo.
+1. Read the rubric. With no rubric, keep your line in mind: it's the bar.
+2. Check the reply against it. The rubric of *Name what matters next* asks you to look up every file, commit and check the reply names. Only you can judge this one, because you know the repo.
 3. Choose <UI>Met</UI> or <UI>Not yet</UI>. <UI>Hold to compare</UI> is for later, when you want to read several agents' replies side by side before you judge: [Run a bake-off](/how-to/run-a-bake-off/).
 
-The app records your verdict with the reply. On <UI>Met</UI>, it shows <UI>\{agent\} holds it</UI> and waits. Click <UI>Make \{agent\} the go-to</UI> to choose this agent for the badge, which takes you home. [Choose a go-to](/how-to/choose-a-go-to/) explains it. On <UI>Not yet</UI>, it asks <UI>Which points did it miss</UI>. Tap the rubric points the reply missed, or none, and click <UI>Save</UI>. Then click <UI>Done</UI> to go home, or <UI>Try another agent</UI> to hand the same handoff to another agent.
+The app records your verdict with the reply. On <UI>Met</UI>, it shows <UI>\{agent\} holds it</UI> and waits. Click <UI>Make \{agent\} the go-to</UI> to choose this agent for the badge, which takes you home. [Choose a go-to](/how-to/choose-a-go-to/) explains it. On <UI>Not yet</UI>, a badge with a rubric asks <UI>Which points did it miss</UI>. Tap the rubric points the reply missed, or none, and click <UI>Save</UI>. Then click <UI>Done</UI> to go home, or <UI>Try another agent</UI> to hand the same handoff to another agent.
 
 ## Look at home
 

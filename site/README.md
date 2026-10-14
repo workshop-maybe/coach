@@ -44,7 +44,7 @@ description: Copy a badge's handoff into your assistant and bring back its reply
 - Write for someone who knows their AI assistant but not this app: second person, short sentences, the app's own words (CONCEPTS.md), no hype, no heading periods, and never the word "machine".
 
 `npm test` and `npm run site:build` run `tests/content.test.ts`, which fails when:
-- a `<UI>` label matches no string, template literal or JSX text in `src/ui/`, `src/domain/` or `src/jev/`;
+- a `<UI>` label matches no string, template literal or JSX text in `src/ui/`, `src/domain/`, `src/jev/` or `src/intro/`;
 - a picture or internal link points at nothing;
 - a screenshot in the manifest is used by no page, or a PNG has no manifest entry;
 - a heading ends in a period, a page says "machine", or frontmatter is missing.
@@ -74,7 +74,7 @@ Screenshots are data in `src/shots/shots.ts`. Each one opens the real app in a d
 1. Add an entry:
    - `id` names the picture;
    - `page` names the guide page that shows it;
-   - `route` says where the app opens, or `"gate"` for the first-run screen;
+   - `route` says where the app opens: a route, `"intro"` for a first run's title card, or `"gate"` for the folder gate as a missing folder shows it, with no intro. Shots run with reduced motion, so the intro shows its stills and a shot steps through them with `Next`;
    - `seed` picks the folder, `"empty"` or `"full"`;
    - `jev` is `"off"` (How to pages) or `"on"`;
    - `expect` is text or a selector that must be on screen, so a wrong route fails instead of photographing the "Not in the folder" card;
