@@ -74,6 +74,19 @@ const SUGGEST_JOB = [
   "result over work I have to take on trust.",
 ].join("\n");
 
+/** The first run's variant (KTD9): one assignment, its task first so it pastes into the task as is. */
+const SUGGEST_ONE_JOB = [
+  "## What I need",
+  "",
+  "Suggest exactly one assignment for these learning targets. Give me:",
+  "",
+  "- the task, written so it can be handed to someone as is",
+  "- a rubric I can use to decide pass or fail",
+  "",
+  "Put the task first, on its own, so I can paste it straight in. It must make sense without " +
+  "the rubric. Prefer work I can check from the result over work I have to take on trust.",
+].join("\n");
+
 const REFINE_JOB = [
   "## What I need",
   "",
@@ -134,7 +147,8 @@ export function reviewAssignmentPrompt(credential: Credential): string {
   return join([...helperBrief(credential), REVIEW_JOB]);
 }
 
-export function suggestAssignmentsPrompt(credential: Credential): string {
+/** With `count: "one"`, it asks for a single assignment instead of a few to choose from (KTD9). */
+export function suggestAssignmentsPrompt(credential: Credential, options: { count?: "one" } = {}): string {
   const parts = [
     `# ${credential.name}`,
     HELPER_INTRO,
@@ -151,7 +165,7 @@ export function suggestAssignmentsPrompt(credential: Credential): string {
   } else {
     parts.push("I have not written an assignment yet.");
   }
-  parts.push(SUGGEST_JOB);
+  parts.push(options.count === "one" ? SUGGEST_ONE_JOB : SUGGEST_JOB);
   return join(parts);
 }
 

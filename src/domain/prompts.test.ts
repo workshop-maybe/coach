@@ -181,6 +181,17 @@ describe("suggestAssignmentsPrompt", () => {
     const c = credential();
     expect(suggestAssignmentsPrompt(c)).toContain(c.task);
   });
+
+  it("asked for one, carries the learning target and asks for exactly one assignment (KTD9)", () => {
+    const c = credential({ learningTargets: ["It finds the bug and names the line that causes it"], task: "", rubric: "" });
+    const out = suggestAssignmentsPrompt(c, { count: "one" });
+    expect(out).toContain("It finds the bug and names the line that causes it");
+    expect(out).toMatch(/exactly one assignment/i);
+    expect(out).not.toMatch(/two or three/i);
+    expect(out).not.toMatch(/\n{4,}/);
+    // The default still offers a few.
+    expect(suggestAssignmentsPrompt(c)).toMatch(/two or three options/);
+  });
 });
 
 describe("refinePrompt", () => {

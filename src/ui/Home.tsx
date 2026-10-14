@@ -4,9 +4,10 @@
 // agent, a credential, and a job to find an agent for (R9, R12, router R1). When all three sections
 // show, a wide window puts what needs you beside your agents so home fits one screen; the
 // pairing is a class on one wrapper, so a need coming or going never remounts a shelf or a
-// door (App.css). An empty folder leads with "Try a first test", which runs one preset on
-// an agent made on the spot. An agent holding a handoff shows it plugged in wherever it
-// stands (R15). A badge with a go-to names it under its holders, flagged when it needs a
+// door (App.css). With no agents, "Try a first test" leads: in an empty folder it runs one
+// preset on an agent made on the spot, and beside a badge with a task it runs that badge
+// (KTD10). The badge the first run just saved lights its row in What needs you. An agent
+// holding a handoff shows it plugged in wherever it stands (R15). A badge with a go-to names it under its holders, flagged when it needs a
 // look (R7, R9). The cast is hidden from assistive tech, so names and what each agent earned
 // stay in text. With two or more collections, or a lone built-in copy, the badges show as one
 // group per collection under its name, in the same order as the flat list (collections plan
@@ -80,7 +81,12 @@ export function Home() {
   // layout while its matrix builds; until then the full layout shows only its doors.
   const empty = !!state && state.credentials.length === 0 && state.profiles.length === 0;
 
-  const items = useMemo(() => (state && matrix ? needsYou(state, matrix, pending) : []), [state, matrix, pending]);
+  const computed = useMemo(() => (state && matrix ? needsYou(state, matrix, pending) : []), [state, matrix, pending]);
+  // The badge the first run just saved lights its half-made row, which leads the list (KTD10).
+  // Re-found in the folder every render, so a badge gone since lights nothing.
+  const litKey = route.view === "home" ? route.litCredential : undefined;
+  const litItem = litKey === undefined ? undefined : computed.find((i) => i.kind === "half-credential" && i.credentialKey === litKey);
+  const items = litItem ? [litItem, ...computed.filter((i) => i !== litItem)] : computed;
 
   const doors = (
     <div className="doors">
@@ -115,6 +121,17 @@ export function Home() {
   const lit = route.view === "home" ? route.litCollection : undefined;
   // With no collection, no badge can show, so Add a collection moves under the doors (R7).
   const noCollections = !!state && state.collections.length === 0;
+  // With no agents, the first test leads (KTD10): on the preset in an empty folder, on the
+  // first badge with a task otherwise. Badges with no task lead with their rows instead, so the
+  // preset never runs over the user's own badge (R9).
+  const firstTest: { credentialKey?: string } | null = !state || state.profiles.length > 0
+    ? null
+    : state.credentials.length === 0
+      ? {}
+      : (() => {
+          const ready = shelf?.credentials.find((c) => c.credential.task.trim() !== "");
+          return ready ? { credentialKey: ready.key } : null;
+        })();
   const addCollection = () => navigate({ view: "deck", deck: "collection" });
 
   const badgeCard = (c: ShelfCredential) => {
@@ -157,7 +174,7 @@ export function Home() {
               <ol className="needs">
                 {shown.map((item) => (
                   <li key={`${item.kind}:${itemId(item)}`}>
-                    <NeedRow item={item} shelf={shelf} onOpen={() => navigate(item.route)} />
+                    <NeedRow item={item} shelf={shelf} lit={item === litItem} onOpen={() => navigate(item.route)} />
                   </li>
                 ))}
               </ol>
@@ -251,9 +268,20 @@ export function Home() {
         </div>
       )}
 
-      {empty && (
+      {firstTest && (
         <div className="first-test">
-          <button type="button" className="primary" onClick={() => navigate({ view: "deck", deck: "agent", firstTest: true })}>
+          <button
+            type="button"
+            className="primary"
+            onClick={() =>
+              navigate(
+                // On a badge, the agent card's way back to a waiting test opens it at Hand it over.
+                firstTest.credentialKey
+                  ? { view: "deck", deck: "agent", returnTo: { credentialKey: firstTest.credentialKey } }
+                  : { view: "deck", deck: "agent", firstTest: true },
+              )
+            }
+          >
             Try a first test
           </button>
         </div>
@@ -290,7 +318,7 @@ function itemId(item: NeedsYouItem): string {
   return "credentialKey" in item ? `${item.credentialKey}|${"profileSlug" in item ? item.profileSlug : ""}` : item.profileSlug;
 }
 
-function NeedRow({ item, shelf, onOpen }: { item: NeedsYouItem; shelf: Shelf; onOpen(): void }) {
+function NeedRow({ item, shelf, lit, onOpen }: { item: NeedsYouItem; shelf: Shelf; lit: boolean; onOpen(): void }) {
   const cred = "credentialKey" in item ? shelf.byKey.get(item.credentialKey) : undefined;
   const agent = "profileSlug" in item && item.profileSlug ? shelf.profiles.get(item.profileSlug) : undefined;
   const name = cred?.credential.name ?? "";
@@ -332,7 +360,7 @@ function NeedRow({ item, shelf, onOpen }: { item: NeedsYouItem; shelf: Shelf; on
   else if (cred) mark = <Cartridge collection={cred.collection} credential={cred.credential} width={28} />;
 
   return (
-    <button type="button" className={`need need-${item.kind}`} onClick={onOpen}>
+    <button type="button" className={`need need-${item.kind}${lit ? " lit" : ""}`} onClick={onOpen}>
       {mark}
       <span className="need-title">{title}</span>
       <span className="need-detail">{detail}</span>

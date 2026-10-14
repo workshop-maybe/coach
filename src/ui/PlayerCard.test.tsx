@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { loadFolder } from "../domain/folder";
 import { setupName } from "./PlayerCard";
 import { opus, renderApp, result, review, snapshot, storageWith } from "./testFolder";
@@ -260,5 +261,18 @@ describe("PlayerCard in first-test mode", () => {
     const state = await loadFolder(storage);
     expect(state.profiles).toHaveLength(1);
     expect(state.credentials.map((c) => c.name)).toEqual(["Name what matters next"]);
+  });
+
+  it("on a badge of the user's own, Make the agent opens its test at Hand it over and makes no preset (KTD10)", async () => {
+    const storage = storageWith({ credentials: [review] });
+    renderApp(storage, { view: "deck", deck: "agent", returnTo: { credentialKey: "eng/review" } });
+    await userEvent.click(await screen.findByRole("button", { name: "Make the agent" }));
+    expect(await screen.findByRole("heading", { name: "Hand it over" })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Copy" }));
+    expect(vi.mocked(writeText).mock.lastCall?.[0]).toContain("# Test: Code review");
+    const state = await loadFolder(storage);
+    expect(state.profiles).toHaveLength(1);
+    expect(state.credentials.map((c) => c.name)).toEqual(["Code review"]);
+    expect(state.collections.map((c) => c.slug)).toEqual(["eng"]);
   });
 });

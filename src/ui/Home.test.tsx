@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { StrictMode } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AppShell } from "./AppShell";
@@ -10,6 +11,8 @@ import { heldReply, renderWithJev, storageWith as folderWith } from "./testFolde
 import { FolderProvider } from "./useFolderState";
 import { addPending } from "./pendingTests";
 import { MemoryStorage } from "../storage/memory";
+import { readHeldLine, writeHeldLine } from "../intro/heldLine";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import {
   MARKER_PATH,
   assessmentPath,
@@ -178,12 +181,13 @@ describe("Home", () => {
     expect(screen.getByRole("button", { name: "Make the agent" })).toBeTruthy();
   });
 
-  it("a folder with one agent, or one badge, offers no first test", async () => {
+  it("a folder with one agent, or one badge with no task, offers no first test", async () => {
     renderApp(storageWith({ profiles: [opus] }));
     await screen.findByRole("region", { name: "Agents" });
     expect(screen.queryByRole("button", { name: "Try a first test" })).toBeNull();
     cleanup();
-    renderApp(storageWith({ credentials: [review] }));
+    // A badge with no task offers none either: its task comes first (KTD10).
+    renderApp(storageWith({ credentials: [{ ...review, task: "" }] }));
     await screen.findByRole("region", { name: "Badges" });
     expect(screen.queryByRole("button", { name: "Try a first test" })).toBeNull();
     expect(screen.getByRole("button", { name: "Create an agent" })).toBeTruthy();
@@ -744,5 +748,103 @@ describe("Home's collections and the router", () => {
     expect(await screen.findByRole("heading", { name: "Codex agent" })).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "No badge like this job" })).toBeNull();
     expect(jev.asks).toHaveLength(1);
+  });
+});
+
+describe("Arriving from the first run (U5, KTD10)", () => {
+  const held = { line: "It finds the bug and names the line that causes it", name: "It finds the bug and names" };
+  const seededKey = "my-credentials/it-finds-the-bug-and-names";
+
+  function renderAt(storage: MemoryStorage, initialRoute?: Route, strict = false) {
+    const app = (
+      <FolderProvider storage={storage} folder="/data">
+        <AppShell onChangeFolder={() => {}} initialRoute={initialRoute} />
+      </FolderProvider>
+    );
+    return render(strict ? <StrictMode>{app}</StrictMode> : app);
+  }
+
+  const litRows = () => document.querySelectorAll(".need.lit");
+
+  it("Covers AE8. Under StrictMode a held line saves one badge, and Home arrives with its missing-task row lit", async () => {
+    writeHeldLine(held);
+    const storage = storageWith();
+    renderAt(storage, undefined, true);
+    const row = await screen.findByRole("button", { name: /Finish It finds the bug and names/ });
+    expect(row.classList.contains("lit")).toBe(true);
+    expect(row.textContent).toContain("Add its task");
+    expect(litRows()).toHaveLength(1);
+    const state = await loadFolder(storage);
+    expect(state.credentials.map((c) => c.name)).toEqual([held.name]);
+    expect(readHeldLine()).toBeNull();
+  });
+
+  it("Covers AE9. A held line left from an earlier launch lands the badge on Home, lit, from wherever the app opened", async () => {
+    writeHeldLine(held);
+    renderAt(storageWith({ profiles: [opus] }), { view: "item", item: "agent", profileSlug: "opus" });
+    const row = await screen.findByRole("button", { name: /Finish It finds the bug and names/ });
+    expect(row.classList.contains("lit")).toBe(true);
+    expect(readHeldLine()).toBeNull();
+  });
+
+  it("a save that fails keeps the line for next time and says so", async () => {
+    writeHeldLine(held);
+    const storage = storageWith();
+    vi.spyOn(storage, "writeText").mockRejectedValue(new Error("disk full"));
+    renderAt(storage);
+    const notice = await screen.findByText(/Your first badge could not be saved/);
+    expect(notice.textContent).toContain("disk full");
+    expect(readHeldLine()).toEqual(held);
+  });
+
+  it("the seeded badge with no task and no agents leads with its lit row alone, and no first test", async () => {
+    writeHeldLine(held);
+    renderAt(storageWith({ credentials: [{ ...docs, task: "" }] }));
+    const row = await screen.findByRole("button", { name: /Finish It finds the bug and names/ });
+    expect(row.classList.contains("lit")).toBe(true);
+    // The lit row leads, ahead of the older half-made badge.
+    expect((await rows())[0]).toBe(row);
+    expect(screen.queryByRole("button", { name: "Try a first test" })).toBeNull();
+  });
+
+  it("a badge with a task and no agents offers Try a first test on that badge, not the preset", async () => {
+    const storage = storageWith({ credentials: [{ ...docs, task: "" }, review] });
+    renderAt(storage);
+    await userEvent.click(await screen.findByRole("button", { name: "Try a first test" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Make the agent" }));
+    expect(await screen.findByRole("heading", { name: "Hand it over" })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Copy" }));
+    expect(vi.mocked(writeText).mock.lastCall?.[0]).toContain("# Test: Code review");
+    const state = await loadFolder(storage);
+    expect(state.profiles).toHaveLength(1);
+    expect(state.credentials.map((c) => c.name).sort()).toEqual(["Code review", "Write docs"]);
+  });
+
+  it("Covers AE2. No badges and no agents keeps the empty Home and the preset first test", async () => {
+    renderAt(storageWith());
+    await screen.findByRole("button", { name: "Try a first test" });
+    expect(document.querySelector(".home")?.classList.contains("home-empty")).toBe(true);
+    expect(litRows()).toHaveLength(0);
+  });
+
+  it("a lit badge deleted on a focus reload renders without throwing and lights nothing", async () => {
+    const storage = storageWith();
+    writeHeldLine(held);
+    renderAt(storage);
+    await screen.findByRole("button", { name: /Finish It finds the bug and names/ });
+    expect(litRows()).toHaveLength(1);
+    storage.remove(credentialPath("my-credentials", "it-finds-the-bug-and-names"));
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    await waitFor(() => expect(screen.queryByRole("button", { name: /Finish It finds the bug and names/ })).toBeNull());
+    expect(litRows()).toHaveLength(0);
+    expect(screen.getByRole("heading", { name: "Home", level: 1 })).toBeTruthy();
+  });
+
+  it("a route naming a badge that is not in the folder lights nothing", async () => {
+    renderAt(storageWith({ credentials: [{ ...docs, task: "" }] }), { view: "home", litCredential: seededKey });
+    await rows();
+    expect(litRows()).toHaveLength(0);
   });
 });

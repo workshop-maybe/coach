@@ -9,7 +9,7 @@
 // The banners stay mounted and compact to a line each in CSS, so an alert is not announced
 // again, and nothing above the pane scrolls, so the window keys stay in view (R10).
 
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { InkDefs } from "../cast/InkDefs";
 import { AgentDetail } from "./AgentDetail";
 import { BadgeDetail } from "./BadgeDetail";
@@ -34,6 +34,7 @@ import { PaneContext, usePaneClaims } from "./pane";
 import { PlayerCard } from "./PlayerCard";
 import { ReplyView } from "./ReplyView";
 import { RouterDeck } from "./RouterDeck";
+import { seedFailedNotice, seedFirstBadge } from "./seedFirstBadge";
 import { Sheet } from "./Sheet";
 import type { DeckRoute, ItemRoute, Route } from "./routes";
 import { TestDeck } from "./TestDeck";
@@ -59,6 +60,25 @@ export function AppShell({ onChangeFolder, initialRoute = { view: "home" } }: Ap
   useLayoutEffect(() => {
     if (scroller.current) scroller.current.scrollTop = 0;
   }, [route]);
+  // The first run's held line becomes a badge once the folder has loaded, and Home opens with
+  // its row lit (KTD6, KTD10). Run on the load only, not on every reload: a save that failed
+  // keeps its line for the next launch, not for the next window focus.
+  const loaded = state !== null;
+  useEffect(() => {
+    if (!state) return;
+    const seeding = seedFirstBadge(storage, state);
+    if (!seeding) return;
+    let live = true;
+    void seeding.then((seeded) => {
+      if (!live) return;
+      if (!seeded.ok) return setNotice(seedFailedNotice(seeded.message));
+      apply(seeded.state);
+      navigate({ view: "home", litCredential: seeded.key });
+    });
+    return () => {
+      live = false;
+    };
+  }, [loaded]);
   const { pane, claims } = usePaneClaims();
   // Tauri's drag script toggles maximize on a double press, before any handler here could
   // stop it, so in full screen the bar is no drag region at all (R2).

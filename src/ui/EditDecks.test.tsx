@@ -7,6 +7,7 @@ import userEvent from "@testing-library/user-event";
 import { collectionPath, credentialPath, loadFolder, serializeCollection } from "../domain/folder";
 import { serializeCredentialMd } from "../domain/credential-md";
 import type { Collection } from "../domain/types";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { renderApp, review, storageWith } from "./testFolder";
 
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ writeText: vi.fn() }));
@@ -110,5 +111,16 @@ describe("Rename a collection", () => {
     await userEvent.click(screen.getByRole("button", { name: "Home" }));
     const region = await screen.findByRole("region", { name: "Badges" });
     await waitFor(() => expect(within(region).queryByRole("heading", { name: "Client work" })).toBeNull());
+  });
+});
+
+describe("The task edit", () => {
+  it("offers Suggest a task, which copies a prompt asking for one assignment for the badge's targets (KTD9)", async () => {
+    const storage = storageWith({ credentials: [{ ...review, task: "" }] });
+    renderApp(storage, { view: "deck", deck: "edit-credential", credentialKey: "eng/review", part: "task" });
+    await userEvent.click(await screen.findByRole("button", { name: "Suggest a task" }));
+    const copied = vi.mocked(writeText).mock.lastCall?.[0] ?? "";
+    expect(copied).toContain(review.learningTargets[0]);
+    expect(copied).toMatch(/exactly one assignment/i);
   });
 });

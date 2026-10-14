@@ -125,7 +125,10 @@ export type ItemRoute =
   | { view: "item"; item: "reply"; credentialKey: string; take: TakeRef; picks?: TakeRef[] }
   | { view: "item"; item: "compare"; credentialKey: string; takes: TakeRef[]; picks?: TakeRef[] };
 
-/** Home. `litCollection` names a collection just added, whose group lights (collections plan U5). */
-export type HomeRoute = { view: "home"; litCollection?: Slug };
+/**
+ * Home. `litCollection` names a collection just added, whose group lights (collections plan U5).
+ * `litCredential` names the badge the first run just saved, whose needs-you row lights (KTD10).
+ */
+export type HomeRoute = { view: "home"; litCollection?: Slug; litCredential?: string };
 
 export type Route = HomeRoute | DeckRoute | ItemRoute;

@@ -3783,3 +3783,13 @@ button:where(.door, .part, .agent-card, .badge-card, .earned, .detail-holder, .n
     min-height: 2.5rem;
   }
 }
+
+/* The badge the first run just saved lights its row as a reply row is lit: a wash and its
+   title in data blue (first-run plan KTD10). */
+.need.lit {
+  background: var(--data-wash);
+}
+
+.need.lit .need-title {
+  color: var(--data);
+}
