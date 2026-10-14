@@ -1,7 +1,8 @@
 // The intro as one Remotion composition (KTD1, KTD3): five scenes on the board, read from
 // the timeline. Authored once, it plays live in the app through the Player and renders to
 // video for the trailer. It brings its own ink filters, fonts, tokens and cast fills, so
-// it draws the same outside the app shell.
+// it draws the same outside the app shell. The score and cue sounds play inside it, so the
+// trailer carries them too (KTD8).
 
 import "@fontsource-variable/inter";
 import "@fontsource/fragment-mono";
@@ -9,7 +10,7 @@ import "../theme/tokens.css";
 import "../theme/app-tokens.css";
 import "./intro.css";
 import type { ComponentType } from "react";
-import { AbsoluteFill, useCurrentFrame } from "remotion";
+import { AbsoluteFill, Html5Audio, Sequence, useCurrentFrame } from "remotion";
 import { InkDefs } from "../cast/InkDefs";
 import { Rise } from "./pieces/Rise";
 import { tween } from "./pieces/motion";
@@ -19,7 +20,8 @@ import { Good } from "./scenes/Good";
 import { Horizon } from "./scenes/Horizon";
 import { Judgment } from "./scenes/Judgment";
 import { INTRO_HEIGHT, INTRO_WIDTH, TEXT } from "./scenes/stage";
-import { SCENES, type SceneId, wordFrames } from "./timeline";
+import { BED_SRC, BED_VOLUME, CUE_SRC, CUE_VOLUME } from "./sound";
+import { CUE_FRAMES, SCENES, SOUND_CUES, TOTAL_FRAMES, type SceneId, wordFrames } from "./timeline";
 
 export { INTRO_HEIGHT, INTRO_WIDTH } from "./scenes/stage";
 
@@ -79,6 +81,29 @@ export function Intro() {
           />
         ));
       })}
+      <Sounds />
     </AbsoluteFill>
+  );
+}
+
+/** The score and the cues (KTD8). The Player's mute and volume sit over all of them. */
+function Sounds() {
+  return (
+    <>
+      <Sequence name="score" from={0} durationInFrames={TOTAL_FRAMES} layout="none">
+        <Html5Audio src={BED_SRC} volume={BED_VOLUME} />
+      </Sequence>
+      {SOUND_CUES.map((cue) => (
+        <Sequence
+          key={`${cue.kind}-${cue.frame}`}
+          name={cue.kind}
+          from={cue.frame}
+          durationInFrames={CUE_FRAMES[cue.kind]}
+          layout="none"
+        >
+          <Html5Audio src={CUE_SRC[cue.kind]} volume={CUE_VOLUME} />
+        </Sequence>
+      ))}
+    </>
   );
 }

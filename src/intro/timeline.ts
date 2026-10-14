@@ -119,3 +119,36 @@ export const SOUND_CUES: readonly SoundCue[] = [
   ...REPLY_FRAMES.map((frame): SoundCue => ({ frame, kind: "reply" })),
   ...EXTRA_CUES,
 ].sort((a, b) => a.frame - b.frame);
+
+/**
+ * Frames each kind of cue stays mounted. A sound file longer than its window is cut off
+ * when the window ends. Short windows keep few cues mounted at once, inside the Player's
+ * shared audio tags.
+ */
+export const CUE_FRAMES: Readonly<Record<SoundKind, number>> = {
+  line: 18,
+  reply: 4,
+  pull: 15,
+  seat: 9,
+  check: 18,
+};
+
+/**
+ * Audio tags the Player shares among the composition's sounds (`numberOfSharedAudioTags`).
+ * Mounting more at once than this throws, so it holds headroom over `maxConcurrentAudio()`.
+ */
+export const SHARED_AUDIO_TAGS = 6;
+
+/**
+ * The most audio elements mounted at once: the score bed plus the cues whose windows meet.
+ * Windows count as closed, since a cue that starts on the frame another ends can register
+ * its tag before the other lets go of its own.
+ */
+export function maxConcurrentAudio(cues: readonly SoundCue[] = SOUND_CUES): number {
+  let most = 0;
+  for (let f = 0; f < TOTAL_FRAMES; f++) {
+    const mounted = cues.filter((c) => f >= c.frame && f <= c.frame + CUE_FRAMES[c.kind]).length;
+    most = Math.max(most, mounted);
+  }
+  return most + 1;
+}

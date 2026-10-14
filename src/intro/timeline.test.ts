@@ -1,5 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { FPS, REPLY_FRAMES, SCENES, SOUND_CUES, STILLS, TOTAL_FRAMES, sceneAt, settledAt, wordFrames } from "./timeline";
+import {
+  CUE_FRAMES,
+  FPS,
+  REPLY_FRAMES,
+  SCENES,
+  SHARED_AUDIO_TAGS,
+  SOUND_CUES,
+  STILLS,
+  TOTAL_FRAMES,
+  maxConcurrentAudio,
+  sceneAt,
+  settledAt,
+  wordFrames,
+} from "./timeline";
 
 describe("the intro timeline", () => {
   it("runs the five scenes in the story's order", () => {
@@ -58,5 +71,21 @@ describe("the intro timeline", () => {
     const frames = SOUND_CUES.map((c) => c.frame);
     expect(frames).toEqual([...frames].sort((a, b) => a - b));
     frames.forEach((f) => expect(f).toBeLessThan(TOTAL_FRAMES));
+  });
+
+  it("keeps the sounds playing at once within the Player's shared audio tags", () => {
+    expect(maxConcurrentAudio()).toBeLessThanOrEqual(SHARED_AUDIO_TAGS);
+  });
+
+  it("counts the bed and every cue whose window meets another", () => {
+    expect(maxConcurrentAudio([])).toBe(1);
+    // Two cues where one starts on the frame the other ends still both hold a tag.
+    expect(maxConcurrentAudio([{ frame: 10, kind: "reply" }, { frame: 10 + CUE_FRAMES.reply, kind: "reply" }])).toBe(3);
+    expect(maxConcurrentAudio([{ frame: 10, kind: "reply" }, { frame: 11 + CUE_FRAMES.reply, kind: "reply" }])).toBe(2);
+  });
+
+  it("gives each cue its own place in the film", () => {
+    const keys = SOUND_CUES.map((c) => `${c.kind}-${c.frame}`);
+    expect(new Set(keys).size).toBe(keys.length);
   });
 });

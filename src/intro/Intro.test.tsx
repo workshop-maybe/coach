@@ -3,13 +3,23 @@ import { readFileSync, existsSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render } from "@testing-library/react";
-import { SCENES, STILLS } from "./timeline";
+import type { ReactNode } from "react";
+import { BED_SRC, CUE_SRC } from "./sound";
+import { CUE_FRAMES, SCENES, SOUND_CUES, STILLS, TOTAL_FRAMES } from "./timeline";
 
 const frame = vi.hoisted(() => ({ now: 0 }));
 
 vi.mock("remotion", async (importOriginal) => ({
   ...(await importOriginal<typeof import("remotion")>()),
   useCurrentFrame: () => frame.now,
+  // Remotion's Sequence and Html5Audio need a registered composition. These stand-ins
+  // keep what the composition asks of them readable.
+  Sequence: (p: { name?: string; from?: number; durationInFrames?: number; children?: ReactNode }) => (
+    <div data-sequence={p.name} data-from={p.from} data-length={p.durationInFrames}>
+      {p.children}
+    </div>
+  ),
+  Html5Audio: (p: { src: string; volume?: number }) => <audio data-src={p.src} data-volume={p.volume} />,
 }));
 
 const { Intro } = await import("./Intro");
@@ -62,6 +72,20 @@ describe("the intro composition", () => {
     expect(container.querySelector("#cast-ink")).not.toBeNull();
     expect(container.querySelector("#cast-ink-fine")).not.toBeNull();
     expect(container.querySelector<HTMLElement>(".intro-film")!.style.background).toBe("var(--board)");
+  });
+
+  it("plays the score under the whole film and a sound at every cue", () => {
+    const { container } = renderAt(0);
+    const sounds = [...container.querySelectorAll<HTMLElement>("[data-sequence]")].map((seq) => ({
+      name: seq.dataset.sequence,
+      from: Number(seq.dataset.from),
+      length: Number(seq.dataset.length),
+      src: seq.querySelector<HTMLElement>("audio")!.dataset.src,
+    }));
+    expect(sounds[0]).toEqual({ name: "score", from: 0, length: TOTAL_FRAMES, src: BED_SRC });
+    expect(sounds.slice(1)).toEqual(
+      SOUND_CUES.map((c) => ({ name: c.kind, from: c.frame, length: CUE_FRAMES[c.kind], src: CUE_SRC[c.kind] })),
+    );
   });
 });
 
