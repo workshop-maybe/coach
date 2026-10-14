@@ -33,6 +33,29 @@ function brandViolations(css: string): string[] {
   return out;
 }
 
+/**
+ * Lines in a script that break the guard (KTD14). The intro's scenes are Remotion
+ * compositions styled inline, which the stylesheet scan never sees: they still take
+ * colours from tokens and keep square corners.
+ */
+function scriptViolations(code: string): string[] {
+  const out: string[] = [];
+  code.split("\n").forEach((text, i) => {
+    const line = text.replace(/\/\/.*$/, "");
+    const colorLiteral = /["'`]\s*#[0-9a-fA-F]{3,8}\b|\b(?:rgba?|hsla?)\(/.test(line);
+    const radius = /borderRadius\s*:\s*([^,}]+)/.exec(line);
+    const badRadius = radius && !/^(0|["'](?:0|50%)["'])$/.test(radius[1].trim());
+    if (colorLiteral || badRadius) out.push(`${i + 1}: ${text.trim()}`);
+  });
+  return out;
+}
+
+const INTRO = join(SRC, "intro");
+
+function introScripts(): string[] {
+  return filesUnder(INTRO, (name) => /\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name));
+}
+
 /** Every break in the stylesheets under root, as "file:line: text" with the file relative to root. */
 function stylesheetViolations(root: string, exempt: string[] = []): string[] {
   return cssFiles(root, exempt).flatMap((file) =>
@@ -82,6 +105,25 @@ describe("stylesheetViolations", () => {
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+});
+
+describe("scriptViolations", () => {
+  it("flags a hex colour in a string and a rounded corner in an inline style", () => {
+    expect(scriptViolations(`<p style={{ color: "#2f6bff" }} />`)).toHaveLength(1);
+    expect(scriptViolations(`<div style={{ borderRadius: 6 }} />`)).toHaveLength(1);
+    expect(scriptViolations(`<div style={{ background: "rgba(0,0,0,.5)" }} />`)).toHaveLength(1);
+  });
+
+  it("allows token colours, square corners and filter references", () => {
+    expect(scriptViolations(`<p style={{ color: "var(--ink)", borderRadius: 0 }} />`)).toEqual([]);
+    expect(scriptViolations(`<g filter="url(#cast-ink)" />`)).toEqual([]);
+  });
+});
+
+describe("the intro's scene code", () => {
+  it.each(introScripts().map((f) => [relative(SRC, f), f]))("%s stays on the token layer", (_, file) => {
+    expect(scriptViolations(readFileSync(file, "utf8"))).toEqual([]);
   });
 });
 
