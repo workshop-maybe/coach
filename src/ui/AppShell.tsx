@@ -9,7 +9,7 @@
 // The banners stay mounted and compact to a line each in CSS, so an alert is not announced
 // again, and nothing above the pane scrolls, so the window keys stay in view (R10).
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { InkDefs } from "../cast/InkDefs";
 import { AgentDetail } from "./AgentDetail";
 import { BadgeDetail } from "./BadgeDetail";
@@ -22,6 +22,8 @@ import { EditHandoffDeck, HandoffsDeck } from "./HandoffDecks";
 import { HandoffDetail } from "./HandoffDetail";
 import { JevDeck } from "./JevDeck";
 import { TrashDeck } from "./TrashDeck";
+import { Replay } from "../intro/Replay";
+import { ReplayContext } from "../intro/replayContext";
 import { WindowControls } from "./WindowControls";
 import { useWindowFrame } from "./windowFrame";
 import { exportAll, exportMessage } from "./exportAll";
@@ -52,6 +54,10 @@ export function AppShell({ onChangeFolder, initialRoute = { view: "home" } }: Ap
   const { folder, storage, state, loading, reload, apply, notice, setNotice } = useFolder();
   const [route, navigate] = useState<Route>(initialRoute);
   const [exporting, setExporting] = useState(false);
+  // The intro replay is an overlay over Home, not a route (KTD11).
+  const [replaying, setReplaying] = useState(false);
+  const openReplay = useCallback(() => setReplaying(true), []);
+  const closeReplay = useCallback(() => setReplaying(false), []);
   const nav = useMemo(() => ({ route, navigate }), [route]);
   // Each view opens at its top. The sheet's scroller keeps its offset across views, so a page
   // opened from a scrolled one would arrive scrolled part way down (R6, R10). A layout effect,
@@ -103,7 +109,8 @@ export function AppShell({ onChangeFolder, initialRoute = { view: "home" } }: Ap
   return (
     <NavContext.Provider value={nav}>
       <PaneContext.Provider value={claims}>
-        <div className="shell" data-pane={pane || undefined}>
+       <ReplayContext.Provider value={openReplay}>
+        <div className="shell" data-pane={pane || undefined} inert={replaying}>
           <InkDefs />
           <header className="topbar" data-tauri-drag-region={dragRegion}>
             <WindowControls />
@@ -158,6 +165,8 @@ export function AppShell({ onChangeFolder, initialRoute = { view: "home" } }: Ap
             </main>
           </Sheet>
         </div>
+        {replaying && <Replay onClose={closeReplay} />}
+       </ReplayContext.Provider>
       </PaneContext.Provider>
     </NavContext.Provider>
   );

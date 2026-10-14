@@ -13,6 +13,7 @@
 // group per collection under its name, in the same order as the flat list (collections plan
 // R1, KTD5). A collection just added lights its group, re-read from the folder every render.
 
+import { useReplay } from "../intro/replayContext";
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { goToOf, goToStanding } from "../domain/goTo";
@@ -58,6 +59,7 @@ export function Home() {
   const { pending } = usePendingTests(folder);
   const matrix = useMatrix(state);
   const [all, setAll] = useState(false);
+  const replay = useReplay();
 
   const shelf = useMemo<Shelf | null>(() => {
     if (!matrix || !state) return null;
@@ -165,6 +167,12 @@ export function Home() {
   return (
     <div className={empty ? "home home-empty" : "home"}>
       <h1 className="visually-hidden">Home</h1>
+
+      <p className="home-replay">
+        <button type="button" className="ghost" onClick={replay}>
+          Watch the intro
+        </button>
+      </p>
 
       {shelf && (showNeeds || showAgents || showBadges) && (
         <div className={paired ? "home-shelves home-shelves-paired" : "home-shelves"}>

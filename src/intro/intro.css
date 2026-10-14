@@ -112,3 +112,18 @@
     transform: translateY(105%);
   }
 }
+
+/* The replay (src/intro/Replay.tsx): the board over the whole window, with the window keys
+   kept at its start, so the intro plays above Home and closes back to it. */
+.replay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  background: var(--board);
+}
+
+.replay > .gate-bar {
+  flex: none;
+}

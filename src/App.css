@@ -3793,3 +3793,13 @@ button:where(.door, .part, .agent-card, .badge-card, .earned, .detail-holder, .n
 .need.lit .need-title {
   color: var(--data);
 }
+
+/* Watch the intro: a quiet key at Home's top right, out of the way of the shelves. */
+.home-replay {
+  margin: 0;
+  text-align: right;
+}
+
+.home-empty .home-replay {
+  align-self: flex-end;
+}
