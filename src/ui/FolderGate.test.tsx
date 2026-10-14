@@ -2,27 +2,89 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { FolderGate } from "./FolderGate";
+import { FolderGate, type DataFolderStatus } from "./FolderGate";
+
+// The first run's film: the Player doesn't run under jsdom (src/intro/FirstRun.test.tsx tests it).
+vi.mock("@remotion/player", () => ({ Player: () => <div data-testid="player" /> }));
+vi.mock("../intro/Intro", () => ({ Intro: () => null, INTRO_WIDTH: 1920, INTRO_HEIGHT: 1080 }));
 
 afterEach(cleanup);
 
+/** A remembered folder that has gone missing: the gate with its error, as before the intro. */
+const missing = async (): Promise<DataFolderStatus> => ({ status: "missing", remembered: "/gone/andamio" });
+
 describe("FolderGate", () => {
-  it("with no data folder, shows only the choose-folder screen", async () => {
+  it("with no folder ever remembered, opens the first run's title card, not the gate", async () => {
     const children = vi.fn((folder: string) => <p>shell for {folder}</p>);
     render(
+      <FolderGate getFolder={async () => ({ status: "none" })} pickFolder={async () => null}>
+        {children}
+      </FolderGate>,
+    );
+    expect(await screen.findByRole("button", { name: "Begin" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Choose folder" })).toBeNull();
+    expect(children).not.toHaveBeenCalled();
+  });
+
+  it("reads null from the lookup as no folder ever remembered", async () => {
+    render(
       <FolderGate getFolder={async () => null} pickFolder={async () => null}>
+        {(folder) => <p>shell for {folder}</p>}
+      </FolderGate>,
+    );
+    expect(await screen.findByRole("button", { name: "Begin" })).toBeTruthy();
+  });
+
+  it("AE1. a remembered folder that loads renders the app, with no title card", async () => {
+    render(
+      <FolderGate getFolder={async () => ({ status: "ready", folder: "/data" })} pickFolder={async () => null}>
+        {(folder) => <p>shell for {folder}</p>}
+      </FolderGate>,
+    );
+    expect(await screen.findByText("shell for /data")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Begin" })).toBeNull();
+    expect(screen.queryByTestId("player")).toBeNull();
+  });
+
+  it("AE7. a remembered folder gone missing shows the gate with a folder-not-found error, and no intro", async () => {
+    const children = vi.fn((folder: string) => <p>shell for {folder}</p>);
+    render(
+      <FolderGate getFolder={missing} pickFolder={async () => null}>
         {children}
       </FolderGate>,
     );
     expect(await screen.findByRole("button", { name: "Choose folder" })).toBeTruthy();
+    expect(screen.getByRole("alert").textContent).toMatch(/Folder not found: \/gone\/andamio/);
     expect(screen.getByText(/Pick a folder for your credentials, agents and results/)).toBeTruthy();
-    expect(screen.queryByText(/shell for/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Begin" })).toBeNull();
+    expect(screen.queryByTestId("player")).toBeNull();
     expect(children).not.toHaveBeenCalled();
+  });
+
+  it("AE7. a rejected lookup shows the gate with its error, and no intro", async () => {
+    render(
+      <FolderGate getFolder={() => Promise.reject("settings unreadable")} pickFolder={async () => null}>
+        {(folder) => <p>shell for {folder}</p>}
+      </FolderGate>,
+    );
+    expect(await screen.findByRole("button", { name: "Choose folder" })).toBeTruthy();
+    expect(screen.getByRole("alert").textContent).toContain("settings unreadable");
+    expect(screen.queryByRole("button", { name: "Begin" })).toBeNull();
+  });
+
+  it("choosing a folder from the failed gate clears the error and renders the app", async () => {
+    render(
+      <FolderGate getFolder={missing} pickFolder={async () => "/found"}>
+        {(folder) => <p>shell for {folder}</p>}
+      </FolderGate>,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: "Choose folder" }));
+    expect(await screen.findByText("shell for /found")).toBeTruthy();
   });
 
   it("sets the ask on the sheet and the window keys on the board, as the app does", async () => {
     const { container } = render(
-      <FolderGate getFolder={async () => null} pickFolder={async () => null}>
+      <FolderGate getFolder={missing} pickFolder={async () => null}>
         {(folder) => <p>shell for {folder}</p>}
       </FolderGate>,
     );
@@ -36,7 +98,7 @@ describe("FolderGate", () => {
   it("choosing a folder renders the children with it", async () => {
     const pickFolder = vi.fn(async () => "/home/me/andamio");
     render(
-      <FolderGate getFolder={async () => null} pickFolder={pickFolder}>
+      <FolderGate getFolder={missing} pickFolder={pickFolder}>
         {(folder) => <p>shell for {folder}</p>}
       </FolderGate>,
     );
@@ -47,7 +109,7 @@ describe("FolderGate", () => {
 
   it("a cancelled picker stays on the choose-folder screen", async () => {
     render(
-      <FolderGate getFolder={async () => null} pickFolder={async () => null}>
+      <FolderGate getFolder={missing} pickFolder={async () => null}>
         {(folder) => <p>shell for {folder}</p>}
       </FolderGate>,
     );
@@ -58,7 +120,7 @@ describe("FolderGate", () => {
 
   it("with a remembered folder, renders the children and no choose screen", async () => {
     render(
-      <FolderGate getFolder={async () => "/data"} pickFolder={async () => null}>
+      <FolderGate getFolder={async () => ({ status: "ready", folder: "/data" })} pickFolder={async () => null}>
         {(folder) => <p>shell for {folder}</p>}
       </FolderGate>,
     );
@@ -69,7 +131,7 @@ describe("FolderGate", () => {
   it("changeFolder swaps to the newly picked folder and keeps the old one on cancel", async () => {
     const picks = ["/second", null];
     render(
-      <FolderGate getFolder={async () => "/first"} pickFolder={async () => picks.shift() ?? null}>
+      <FolderGate getFolder={async () => ({ status: "ready", folder: "/first" })} pickFolder={async () => picks.shift() ?? null}>
         {(folder, changeFolder) => (
           <div>
             <p>shell for {folder}</p>

@@ -273,7 +273,7 @@ describe("the frame in the bars", () => {
   function gateIn(frame: WindowFrame) {
     return render(
       <WindowFrameContext.Provider value={frame}>
-        <FolderGate getFolder={async () => null} pickFolder={async () => null}>
+        <FolderGate getFolder={async () => ({ status: "missing", remembered: "/gone" })} pickFolder={async () => null}>
           {() => null}
         </FolderGate>
       </WindowFrameContext.Provider>,
@@ -309,7 +309,7 @@ describe("the frame in the bars", () => {
   it("R2, R4. entering full screen reaches the keys and the bar through the root provider", async () => {
     const { container } = render(
       <WindowFrameProvider>
-        <FolderGate getFolder={async () => null} pickFolder={async () => null}>
+        <FolderGate getFolder={async () => ({ status: "missing", remembered: "/gone" })} pickFolder={async () => null}>
           {() => null}
         </FolderGate>
       </WindowFrameProvider>,

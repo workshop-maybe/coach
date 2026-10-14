@@ -67,11 +67,49 @@ impl Roots {
     }
 }
 
-/// Registers the remembered data folder from settings, if it still exists.
-/// Returns the canonical root when one was registered.
-pub fn register_remembered(roots: &mut Roots, remembered: Option<&str>) -> Option<PathBuf> {
-    let folder = remembered?;
-    roots.set(RootKind::Data, Path::new(folder)).ok()
+/// What became of the data folder remembered in settings at launch.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Remembered {
+    /// It still exists and is now the data root, stored canonical.
+    Registered(PathBuf),
+    /// A folder was remembered but can no longer be used, such as one deleted or on a
+    /// drive that is not mounted. Carries the path as settings hold it.
+    Missing(String),
+    /// No folder was ever remembered: a first run.
+    None,
+}
+
+/// Registers the remembered data folder from settings, if it still exists, and says
+/// which of the three cases held.
+pub fn register_remembered(roots: &mut Roots, remembered: Option<&str>) -> Remembered {
+    let Some(folder) = remembered else {
+        return Remembered::None;
+    };
+    match roots.set(RootKind::Data, Path::new(folder)) {
+        Ok(canon) => Remembered::Registered(canon),
+        Err(_) => Remembered::Missing(folder.to_string()),
+    }
+}
+
+/// The data folder as `get_data_folder` reports it: the approved root, else the
+/// remembered folder that went missing at launch, else none. The UI plays the first-run
+/// intro only on `None`; a missing folder shows the folder gate with its error.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(tag = "status", rename_all = "camelCase")]
+pub enum DataFolderStatus {
+    Ready { folder: String },
+    Missing { remembered: String },
+    None,
+}
+
+pub fn data_folder_status(roots: &Roots, missing: Option<&str>) -> DataFolderStatus {
+    if let Ok(root) = roots.get(RootKind::Data) {
+        return DataFolderStatus::Ready { folder: root.to_string_lossy().into_owned() };
+    }
+    match missing {
+        Some(path) => DataFolderStatus::Missing { remembered: path.to_string() },
+        None => DataFolderStatus::None,
+    }
 }
 
 /// The parts `normalize_rel` returns, joined back into a root-relative path with forward
@@ -1316,7 +1354,7 @@ mod tests {
         let loaded = crate::settings::load(&settings_path);
         let mut roots = Roots::default();
         let registered = register_remembered(&mut roots, loaded.data_folder.as_deref());
-        assert_eq!(registered, Some(dir.path().canonicalize().unwrap()));
+        assert_eq!(registered, Remembered::Registered(dir.path().canonicalize().unwrap()));
         let root = roots.get(RootKind::Data).unwrap();
         assert_eq!(read_text_in(root, "hello.md").unwrap().as_deref(), Some("hi"));
     }
@@ -1324,9 +1362,39 @@ mod tests {
     #[test]
     fn remembered_folder_that_vanished_is_not_registered() {
         let mut roots = Roots::default();
-        assert_eq!(register_remembered(&mut roots, Some("/definitely/not/here/andamio")), None);
-        assert_eq!(register_remembered(&mut roots, None), None);
+        assert_eq!(
+            register_remembered(&mut roots, Some("/definitely/not/here/andamio")),
+            Remembered::Missing("/definitely/not/here/andamio".to_string())
+        );
+        assert_eq!(register_remembered(&mut roots, None), Remembered::None);
         assert!(roots.get(RootKind::Data).is_err());
+    }
+
+    #[test]
+    fn a_vanished_remembered_folder_reports_missing_with_its_path_not_none() {
+        let gone = tempfile::tempdir().unwrap();
+        let path = gone.path().to_string_lossy().into_owned();
+        drop(gone);
+        let mut roots = Roots::default();
+        let missing = match register_remembered(&mut roots, Some(&path)) {
+            Remembered::Missing(p) => p,
+            other => panic!("expected Missing, got {other:?}"),
+        };
+        let status = data_folder_status(&roots, Some(&missing));
+        assert_eq!(status, DataFolderStatus::Missing { remembered: path.clone() });
+        assert_eq!(
+            serde_json::to_value(&status).unwrap(),
+            serde_json::json!({ "status": "missing", "remembered": path })
+        );
+        // Never remembered is none, the only case that plays the intro.
+        assert_eq!(serde_json::to_value(data_folder_status(&Roots::default(), None)).unwrap(), serde_json::json!({ "status": "none" }));
+        // A folder picked since launch is ready, whatever went missing before.
+        let picked = tempfile::tempdir().unwrap();
+        let canon = roots.set(RootKind::Data, picked.path()).unwrap();
+        assert_eq!(
+            data_folder_status(&roots, Some(&missing)),
+            DataFolderStatus::Ready { folder: canon.to_string_lossy().into_owned() }
+        );
     }
 
     #[test]
