@@ -29,6 +29,8 @@ export const ANGLES_SET = [-20, 75, -110] as const;
 
 /** What the setup's screen says once its dials are set. */
 export const SETTINGS = ["harness  local", "model    your pick", "effort   high"] as const;
+/** The settings as the screen's lines, built once. */
+export const SETTINGS_LINES = SETTINGS.map((text) => ({ text }));
 
 /** What good looks like, written on the first badge's label a row at a time. */
 export const LINE = ["every claim", "cites the", "line it", "came from"] as const;

@@ -2,15 +2,9 @@
 // storage, guarded like `src/ui/pendingTests.ts`: storage that is missing or throws reads
 // as sound on and drops the write, since losing it costs only the choice.
 
-export const MUTE_STORAGE_KEY = "andamio-desktop:intro-muted";
+import { defaultStore } from "./localStore";
 
-function defaultStore(): globalThis.Storage | null {
-  try {
-    return typeof localStorage === "undefined" ? null : localStorage;
-  } catch {
-    return null;
-  }
-}
+export const MUTE_STORAGE_KEY = "andamio-desktop:intro-muted";
 
 /** Whether the viewer muted the intro. False when nothing is stored or storage fails. */
 export function readMuted(store: globalThis.Storage | null = defaultStore()): boolean {

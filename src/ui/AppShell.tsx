@@ -11,6 +11,8 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { InkDefs } from "../cast/InkDefs";
+import { Replay } from "../intro/Replay";
+import { ReplayContext } from "../intro/replayContext";
 import { AgentDetail } from "./AgentDetail";
 import { BadgeDetail } from "./BadgeDetail";
 import { CollectionDeck } from "./CollectionDeck";
@@ -22,8 +24,6 @@ import { EditHandoffDeck, HandoffsDeck } from "./HandoffDecks";
 import { HandoffDetail } from "./HandoffDetail";
 import { JevDeck } from "./JevDeck";
 import { TrashDeck } from "./TrashDeck";
-import { Replay } from "../intro/Replay";
-import { ReplayContext } from "../intro/replayContext";
 import { WindowControls } from "./WindowControls";
 import { useWindowFrame } from "./windowFrame";
 import { exportAll, exportMessage } from "./exportAll";
@@ -109,64 +109,64 @@ export function AppShell({ onChangeFolder, initialRoute = { view: "home" } }: Ap
   return (
     <NavContext.Provider value={nav}>
       <PaneContext.Provider value={claims}>
-       <ReplayContext.Provider value={openReplay}>
-        <div className="shell" data-pane={pane || undefined} inert={replaying}>
-          <InkDefs />
-          <header className="topbar" data-tauri-drag-region={dragRegion}>
-            <WindowControls />
-            <button type="button" className="brand" aria-label="Andamio Desktop, go home" onClick={() => navigate({ view: "home" })}>
-              <Lockup />
-            </button>
-            {!pane && (
-              <>
-                <span className="folder-path" title={folder} data-tauri-drag-region={dragRegion}>
-                  {folder}
-                </span>
-                <div className="topbar-actions">
-                  <button type="button" onClick={onChangeFolder}>
-                    Change folder
-                  </button>
-                  <button type="button" onClick={() => void reload()} disabled={loading}>
-                    Reload
-                  </button>
-                  <button type="button" onClick={() => void runExport()} disabled={exporting || !state || state.credentials.length === 0}>
-                    Export
-                  </button>
-                  <button type="button" onClick={() => navigate({ view: "deck", deck: "jev" })}>
-                    Jev Mode
+        <ReplayContext.Provider value={openReplay}>
+          <div className="shell" data-pane={pane || undefined} inert={replaying}>
+            <InkDefs />
+            <header className="topbar" data-tauri-drag-region={dragRegion}>
+              <WindowControls />
+              <button type="button" className="brand" aria-label="Andamio Desktop, go home" onClick={() => navigate({ view: "home" })}>
+                <Lockup />
+              </button>
+              {!pane && (
+                <>
+                  <span className="folder-path" title={folder} data-tauri-drag-region={dragRegion}>
+                    {folder}
+                  </span>
+                  <div className="topbar-actions">
+                    <button type="button" onClick={onChangeFolder}>
+                      Change folder
+                    </button>
+                    <button type="button" onClick={() => void reload()} disabled={loading}>
+                      Reload
+                    </button>
+                    <button type="button" onClick={() => void runExport()} disabled={exporting || !state || state.credentials.length === 0}>
+                      Export
+                    </button>
+                    <button type="button" onClick={() => navigate({ view: "deck", deck: "jev" })}>
+                      Jev Mode
+                    </button>
+                  </div>
+                </>
+              )}
+            </header>
+            {/* The paper, set into the board as a sheet with a drawn edge. Only the sheet scrolls, so
+                the top strip stays on the board and Home's doors pin to the sheet's foot. */}
+            <Sheet scroller={scroller}>
+              {notice && (
+                <div className="banner banner-notice" role="status">
+                  <span>{notice}</span>
+                  <button type="button" className="link" onClick={() => setNotice(null)}>
+                    Dismiss
                   </button>
                 </div>
-              </>
-            )}
-          </header>
-          {/* The paper, set into the board as a sheet with a drawn edge. Only the sheet scrolls, so
-              the top strip stays on the board and Home's doors pin to the sheet's foot. */}
-          <Sheet scroller={scroller}>
-            {notice && (
-              <div className="banner banner-notice" role="status">
-                <span>{notice}</span>
-                <button type="button" className="link" onClick={() => setNotice(null)}>
-                  Dismiss
-                </button>
-              </div>
-            )}
-            <LoadErrors errors={state?.errors ?? []} />
-            <LoadWarnings warnings={state?.warnings ?? []} />
-            <main className="content">
-              {state === null ? (
-                <p className="muted">{loading ? "Loading…" : "The folder could not be loaded."}</p>
-              ) : route.view === "home" ? (
-                <Home />
-              ) : route.view === "deck" ? (
-                <DeckView key={JSON.stringify(route)} route={route} />
-              ) : (
-                <ItemView key={JSON.stringify(route)} route={route} />
               )}
-            </main>
-          </Sheet>
-        </div>
-        {replaying && <Replay onClose={closeReplay} />}
-       </ReplayContext.Provider>
+              <LoadErrors errors={state?.errors ?? []} />
+              <LoadWarnings warnings={state?.warnings ?? []} />
+              <main className="content">
+                {state === null ? (
+                  <p className="muted">{loading ? "Loading…" : "The folder could not be loaded."}</p>
+                ) : route.view === "home" ? (
+                  <Home />
+                ) : route.view === "deck" ? (
+                  <DeckView key={JSON.stringify(route)} route={route} />
+                ) : (
+                  <ItemView key={JSON.stringify(route)} route={route} />
+                )}
+              </main>
+            </Sheet>
+          </div>
+          {replaying && <Replay onClose={closeReplay} />}
+        </ReplayContext.Provider>
       </PaneContext.Provider>
     </NavContext.Provider>
   );

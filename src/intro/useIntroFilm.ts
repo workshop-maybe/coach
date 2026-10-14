@@ -1,10 +1,12 @@
 // The film's playback and keys, shared by the first run and the replay (KTD5, KTD11, KTD12):
 // the title card then the film, mute kept in local storage, the reduced-motion stills, and the
-// capture-phase keys. What happens when the film ends or is skipped is the caller's.
+// capture-phase keys, and focus on Begin then on the board. What happens when the film ends
+// or is skipped is the caller's.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SyntheticEvent } from "react";
-import type { FilmApi } from "./Film";
+import type { FilmApi, FilmProps } from "./Film";
+import type { StripProps } from "./IntroParts";
 import { readMuted, writeMuted } from "./mute";
 import { sceneAt, SCENES } from "./timeline";
 import { usePrefersReducedMotion } from "./usePrefersReducedMotion";
@@ -28,6 +30,8 @@ export function useIntroFilm({ onEnd, onSkip, listening }: IntroFilmOptions) {
   const [scene, setScene] = useState(0);
   const film = useRef<FilmApi | null>(null);
   const begun = useRef(false);
+  const begin = useRef<HTMLButtonElement>(null);
+  const stage = useRef<HTMLDivElement>(null);
 
   const latest = useRef({ onEnd, onSkip });
   latest.current = { onEnd, onSkip };
@@ -108,5 +112,19 @@ export function useIntroFilm({ onEnd, onSkip, listening }: IntroFilmOptions) {
     return () => window.removeEventListener("keydown", onKey, true);
   }, [listening, phase, reduced, skip, toggleMute, advance]);
 
-  return { reduced, phase, muted, ready, scene, onReady, onFrame, onEnded, start, skip, toggleMute, advance };
+  // Focus lands on Begin once the film can play, then on the board once it does.
+  useEffect(() => {
+    if (phase === "title" && ready) begin.current?.focus();
+  }, [phase, ready]);
+
+  useEffect(() => {
+    if (phase === "film") stage.current?.focus();
+  }, [phase]);
+
+  /** Spread onto the Film. */
+  const filmProps: FilmProps = { reducedMotion: reduced, muted, still: scene, onReady, onEnded, onFrame };
+  /** Spread onto the IntroStrip, with the caller's own `filming`. */
+  const stripProps: Omit<StripProps, "filming"> = { reduced, muted, onAdvance: advance, onSkip: skip, onMute: toggleMute };
+
+  return { reduced, phase, muted, ready, scene, begin, stage, filmProps, stripProps, start, skip };
 }

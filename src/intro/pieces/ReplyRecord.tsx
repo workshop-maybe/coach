@@ -1,6 +1,8 @@
 // A record: a crisp square card with a header bar. Records carry facts, so they are
 // never inked. With no text it is a reply's grey lines; with text it speaks in the mono.
 
+import { memo, useMemo } from "react";
+
 export interface ReplyRecordProps {
   w?: number;
   h?: number;
@@ -14,8 +16,13 @@ export interface ReplyRecordProps {
 
 const BAR = 14;
 
-export function ReplyRecord({ w = 132, h = 96, seed = 1, title, text }: ReplyRecordProps) {
-  const rows = [0.86, 0.7, 0.92, 0.58, 0.8].map((v, i) => v - ((seed * (i + 3)) % 7) / 40);
+/** The grey lines' widths, 0-1, varied by seed. */
+function rowsFor(seed: number): number[] {
+  return [0.86, 0.7, 0.92, 0.58, 0.8].map((v, i) => v - ((seed * (i + 3)) % 7) / 40);
+}
+
+export const ReplyRecord = memo(function ReplyRecord({ w = 132, h = 96, seed = 1, title, text }: ReplyRecordProps) {
+  const rows = useMemo(() => rowsFor(seed), [seed]);
   return (
     <g data-piece="record">
       <rect x={0} y={0} width={w} height={h} fill="var(--surface)" stroke="var(--ink)" strokeWidth={1.5} />
@@ -35,4 +42,4 @@ export function ReplyRecord({ w = 132, h = 96, seed = 1, title, text }: ReplyRec
         : rows.map((r, i) => <rect key={i} x={10} y={26 + i * 13} width={(w - 20) * r} height={4} fill="var(--ink-faint)" />)}
     </g>
   );
-}
+});

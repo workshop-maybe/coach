@@ -9,6 +9,7 @@ import "@fontsource/fragment-mono";
 import "../theme/tokens.css";
 import "../theme/app-tokens.css";
 import "./intro.css";
+import { memo } from "react";
 import type { ComponentType } from "react";
 import { AbsoluteFill, Html5Audio, Sequence, useCurrentFrame } from "remotion";
 import { InkDefs } from "../cast/InkDefs";
@@ -37,6 +38,11 @@ const DRAWN: Record<SceneId, ComponentType<{ frame: number }>> = {
 const STRONG: Partial<Record<SceneId, readonly (readonly [number, number])[]>> = {
   agents: [[1, 2]],
 };
+
+/** Each scene's strong words per row, by scene index, built once so each row's props hold still. */
+const STRONG_ROWS: readonly (readonly (readonly number[])[])[] = SCENES.map((s) =>
+  s.rows.map((_, r) => (STRONG[s.id] ?? []).filter(([at]) => at === r).map(([, word]) => word)),
+);
 
 /** Frames a scene's text takes to fade before the next scene's rises. */
 const FADE = 16;
@@ -77,7 +83,7 @@ export function Intro() {
             y={TEXT.rows[r]}
             size={TEXT.size}
             fade={fade}
-            strong={(STRONG[s.id] ?? []).filter(([at]) => at === r).map(([, word]) => word)}
+            strong={STRONG_ROWS[i][r]}
           />
         ));
       })}
@@ -87,7 +93,7 @@ export function Intro() {
 }
 
 /** The score and the cues (KTD8). The Player's mute and volume sit over all of them. */
-function Sounds() {
+const Sounds = memo(function Sounds() {
   return (
     <>
       <Sequence name="score" from={0} durationInFrames={TOTAL_FRAMES} layout="none">
@@ -106,4 +112,4 @@ function Sounds() {
       ))}
     </>
   );
-}
+});

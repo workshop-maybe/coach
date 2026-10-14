@@ -3,12 +3,10 @@
 // the film with Skip and Mute, or the stills under reduced motion. There is no play beat; it
 // closes to Home at the end, on Skip, or on Escape, and never touches the folder.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { WindowControls } from "../ui/WindowControls";
 import { useWindowFrame } from "../ui/windowFrame";
-import { Film } from "./Film";
-import { IntroStrip, TitleCard } from "./IntroParts";
-import { SCENES } from "./timeline";
+import { FilmStage, IntroStrip, TitleCard } from "./IntroParts";
 import { useIntroFilm } from "./useIntroFilm";
 import "./intro.css";
 
@@ -19,10 +17,7 @@ export function Replay({ onClose }: { onClose(): void }) {
     setClosing(true);
     onClose();
   };
-  const filmKeys = useIntroFilm({ listening: !closing, onEnd: close, onSkip: close });
-  const { reduced, phase, muted, ready, scene, skip } = filmKeys;
-  const begin = useRef<HTMLButtonElement>(null);
-  const stage = useRef<HTMLDivElement>(null);
+  const { phase, ready, begin, stage, filmProps, stripProps, start, skip } = useIntroFilm({ listening: !closing, onEnd: close, onSkip: close });
 
   // Focus returns to the key that opened the replay.
   useEffect(() => {
@@ -30,30 +25,15 @@ export function Replay({ onClose }: { onClose(): void }) {
     return () => opener?.focus();
   }, []);
 
-  useEffect(() => {
-    if (phase === "title" && ready) begin.current?.focus();
-  }, [phase, ready]);
-
-  useEffect(() => {
-    if (phase === "film") stage.current?.focus();
-  }, [phase]);
-
-  const current = SCENES[Math.min(scene, SCENES.length - 1)];
-
   return (
     <div className="replay" role="dialog" aria-label="Intro">
       <div className="gate-bar" data-tauri-drag-region={fullscreen ? undefined : true}>
         <WindowControls />
       </div>
       <div className="intro-stage" data-step={phase}>
-        <div className="intro-film-layer" ref={stage} tabIndex={-1} data-hidden={phase === "title" ? "" : undefined}>
-          <Film reducedMotion={reduced} muted={muted} still={scene} onReady={filmKeys.onReady} onEnded={filmKeys.onEnded} onFrame={filmKeys.onFrame} />
-        </div>
-        <p className="visually-hidden" aria-live="polite">
-          {phase === "film" ? current.rows.join(" ") : ""}
-        </p>
-        {phase === "title" && <TitleCard ready={ready} begin={begin} onBegin={filmKeys.start} onSkip={skip} />}
-        <IntroStrip filming={phase === "film"} reduced={reduced} muted={muted} onAdvance={filmKeys.advance} onSkip={skip} onMute={filmKeys.toggleMute} />
+        <FilmStage stage={stage} hidden={phase === "title"} filming={phase === "film"} film={filmProps} />
+        {phase === "title" && <TitleCard ready={ready} begin={begin} onBegin={start} onSkip={skip} />}
+        <IntroStrip filming={phase === "film"} {...stripProps} />
       </div>
     </div>
   );

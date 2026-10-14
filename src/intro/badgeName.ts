@@ -6,14 +6,19 @@
 export const LINE_MAX = 200;
 
 /** The most words the name takes from the line. */
-export const NAME_WORDS = 6;
+const NAME_WORDS = 6;
 
 /** The name when the line has no letters or digits. */
 export const FALLBACK_NAME = "My first badge";
 
+/** Every run of whitespace, line breaks too, as one space. */
+export function flattenWhitespace(s: string): string {
+  return s.replace(/\s+/g, " ");
+}
+
 /** The line on one line: every run of whitespace, line breaks too, as one space, trimmed and capped. */
 export function normalizeLine(raw: string): string {
-  return raw.replace(/\s+/g, " ").trim().slice(0, LINE_MAX).trim();
+  return flattenWhitespace(raw).trim().slice(0, LINE_MAX).trim();
 }
 
 /** The badge's name: up to six words of the line, trailing punctuation trimmed. */

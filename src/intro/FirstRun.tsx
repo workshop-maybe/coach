@@ -4,17 +4,15 @@
 // whole intro. The newcomer's line is held in local storage from the play beat until the
 // badge is saved in the folder they choose (KTD6, R20).
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { ClipboardEvent, CSSProperties, ReactNode } from "react";
 import { Deck } from "../ui/Deck";
 import { Sheet } from "../ui/Sheet";
-import { badgeName, LINE_MAX, normalizeLine } from "./badgeName";
-import { Film } from "./Film";
+import { badgeName, flattenWhitespace, LINE_MAX, normalizeLine } from "./badgeName";
 import { clearHeldLine, writeHeldLine } from "./heldLine";
-import { IntroStrip, TitleCard } from "./IntroParts";
+import { FilmStage, IntroStrip, TitleCard } from "./IntroParts";
 import { useIntroFilm } from "./useIntroFilm";
 import { INTRO_HEIGHT, INTRO_WIDTH, TEXT } from "./scenes/stage";
-import { SCENES } from "./timeline";
 import "./intro.css";
 
 type Step = "title" | "film" | "play" | "gate";
@@ -35,9 +33,7 @@ export function FirstRun({ gate }: FirstRunProps) {
   const [after, setAfter] = useState<"play" | "gate" | null>(null);
   const [line, setLine] = useState("");
   const [held, setHeld] = useState(false);
-  const begin = useRef<HTMLButtonElement>(null);
-  const stage = useRef<HTMLDivElement>(null);
-  const filmKeys = useIntroFilm({
+  const { phase, ready, begin, stage, filmProps, stripProps, start, skip } = useIntroFilm({
     listening: after === null,
     onEnd: () => setAfter((a) => a ?? "play"),
     onSkip: () => {
@@ -45,21 +41,11 @@ export function FirstRun({ gate }: FirstRunProps) {
       setAfter("gate");
     },
   });
-  const { reduced, phase, muted, ready, scene, skip } = filmKeys;
   const step: Step = after ?? phase;
 
   // With no folder remembered, a held line can only be from a run quit before a folder was
   // chosen, and R20 plays that run again from the start.
   useEffect(() => clearHeldLine(), []);
-
-  // Focus lands on Begin once the film can play.
-  useEffect(() => {
-    if (step === "title" && ready) begin.current?.focus();
-  }, [step, ready]);
-
-  useEffect(() => {
-    if (step === "film") stage.current?.focus();
-  }, [step]);
 
   if (step === "gate") return <>{gate(held)}</>;
 
@@ -70,7 +56,7 @@ export function FirstRun({ gate }: FirstRunProps) {
     const el = e.currentTarget;
     const from = el.selectionStart ?? line.length;
     const to = el.selectionEnd ?? from;
-    setLine((line.slice(0, from) + text.replace(/\s+/g, " ") + line.slice(to)).slice(0, LINE_MAX));
+    setLine((line.slice(0, from) + flattenWhitespace(text) + line.slice(to)).slice(0, LINE_MAX));
   }
 
   async function makeBadge() {
@@ -88,27 +74,12 @@ export function FirstRun({ gate }: FirstRunProps) {
   }
 
   const playing = step === "title" || step === "film";
-  const current = SCENES[Math.min(scene, SCENES.length - 1)];
 
   return (
     <div className="intro-stage" data-step={step} style={FILM_GEOMETRY}>
-      <div
-        className="intro-film-layer"
-        ref={stage}
-        tabIndex={-1}
-        aria-label="Intro"
-        role="region"
-        data-hidden={step === "title" ? "" : undefined}
-      >
-        <Film reducedMotion={reduced} muted={muted} still={scene} onReady={filmKeys.onReady} onEnded={filmKeys.onEnded} onFrame={filmKeys.onFrame} />
-      </div>
+      <FilmStage stage={stage} hidden={step === "title"} filming={step === "film"} film={filmProps} label="Intro" />
 
-      {/* Each scene's line, read out as the scene arrives. */}
-      <p className="visually-hidden" aria-live="polite">
-        {step === "film" ? current.rows.join(" ") : ""}
-      </p>
-
-      {step === "title" && <TitleCard ready={ready} begin={begin} onBegin={filmKeys.start} onSkip={skip} />}
+      {step === "title" && <TitleCard ready={ready} begin={begin} onBegin={start} onSkip={skip} />}
 
       {step === "play" && (
         <div className="intro-sheet">
@@ -146,7 +117,7 @@ export function FirstRun({ gate }: FirstRunProps) {
       )}
 
       {playing && (
-        <IntroStrip filming={step === "film"} reduced={reduced} muted={muted} onAdvance={filmKeys.advance} onSkip={skip} onMute={filmKeys.toggleMute} />
+        <IntroStrip filming={step === "film"} {...stripProps} />
       )}
     </div>
   );

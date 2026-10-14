@@ -3,20 +3,14 @@
 // storage that is missing or throws reads as nothing held and drops the write, so a
 // blocked store never stops the newcomer reaching the folder gate.
 
+import { defaultStore } from "./localStore";
+
 export const HELD_LINE_KEY = "andamio-desktop:first-run-line";
 
 /** The line as the badge's first learning target, and the name drawn from it. */
 export interface HeldLine {
   line: string;
   name: string;
-}
-
-function defaultStore(): globalThis.Storage | null {
-  try {
-    return typeof localStorage === "undefined" ? null : localStorage;
-  } catch {
-    return null;
-  }
 }
 
 function isHeld(v: unknown): v is HeldLine {

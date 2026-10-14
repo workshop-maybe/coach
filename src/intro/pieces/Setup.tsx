@@ -2,6 +2,7 @@
 // slot on top and a strip of keys, in the same 320x186 drawing space as the full
 // machine in src/cast (its numbers copied here so the intro stays a leaf, KTD1).
 
+import { memo } from "react";
 import { INK, INK_FINE, sketchRect } from "../../cast/InkDefs";
 import { IntroCartridge } from "./IntroCartridge";
 import { clamp, inked, part } from "./motion";
@@ -68,32 +69,45 @@ export function turnArc(cx: number, cy: number, r: number, from: number, to: num
   return `M${x1.toFixed(2)} ${y1.toFixed(2)}A${r} ${r} 0 ${large} ${sweep} ${x2.toFixed(2)} ${y2.toFixed(2)}`;
 }
 
-export function Setup({ draw = 1, busy = 0, angles = [-60, 20, 90], lit = 0, seat = -1, label, seatDraw = 1, lines = [], fine = false, frame = 0 }: SetupProps) {
+// The drawing's fixed geometry, built once: sketchRect and tick are pure functions of their numbers.
+const c = CASE;
+const CASE_EDGE = sketchRect(c.x, c.y, c.w, c.h, 3);
+const CASE_INNER = sketchRect(c.x + 1.2, c.y + 0.8, c.w - 1.6, c.h - 1.2, 0, 0.8);
+const CASE_SHADOW = `M${c.x + 6} ${c.y + c.h + 4}H${c.x + c.w - 6}`;
+const SCREEN_EDGE = sketchRect(24, 40, 136, 70, 2);
+const RUN_KEY = sketchRect(180, 94, 18, 16, 1.2, 0.4) + "M186.5 98.5L193 102L186.5 105.5Z";
+const STOP_KEY = sketchRect(206, 94, 18, 16, 1.2, 0.4) + "M211.5 98.5h7v7h-7Z";
+const KEY_PATHS = Array.from({ length: KEYS }, (_, i) => sketchRect(keyX(i), 142, 14, 18, 0.8, 0.3));
+const ENCODER_TICKS = ENCODERS.map(({ cx, cy }) => Array.from({ length: 24 }, (_, k) => tick(cx, cy, 13.4, KNOB, (k / 24) * 360)).join(""));
+
+const DEFAULT_ANGLES: readonly number[] = [-60, 20, 90];
+const NO_LINES: readonly ScreenLine[] = [];
+
+export const Setup = memo(function Setup({ draw = 1, busy = 0, angles = DEFAULT_ANGLES, lit = 0, seat = -1, label, seatDraw = 1, lines = NO_LINES, fine = false, frame = 0 }: SetupProps) {
   const ink = fine ? INK_FINE : INK;
   const s = fine ? 1.4 : 1;
-  const c = CASE;
   return (
     <g className="cast" data-piece="setup">
       {seat >= 0 && <IntroCartridge x={SEAT.x} y={SEAT.y + seat * SEAT.drop} w={SEAT.w} draw={seatDraw} fine line={label} />}
       <g filter={ink} fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
         <rect x={c.x} y={c.y} width={c.w} height={c.h} className="cast-paper" stroke="none" opacity={part(draw, 0, 4)} />
-        <path d={sketchRect(c.x, c.y, c.w, c.h, 3)} strokeWidth={2.5 * s} {...inked(part(draw, 0, 4))} />
-        <path d={sketchRect(c.x + 1.2, c.y + 0.8, c.w - 1.6, c.h - 1.2, 0, 0.8)} strokeWidth={1} opacity="0.3" {...inked(part(draw, 1, 4))} />
-        <path d={`M${c.x + 6} ${c.y + c.h + 4}H${c.x + c.w - 6}`} strokeWidth={1.4 * s} {...inked(part(draw, 1, 4))} />
+        <path d={CASE_EDGE} strokeWidth={2.5 * s} {...inked(part(draw, 0, 4))} />
+        <path d={CASE_INNER} strokeWidth={1} opacity="0.3" {...inked(part(draw, 1, 4))} />
+        <path d={CASE_SHADOW} strokeWidth={1.4 * s} {...inked(part(draw, 1, 4))} />
         {/* The slot. */}
         <rect x={184} y={16} width={100} height={11} className="cast-paper" stroke="none" opacity={clamp(draw * 3)} />
         <path d="M184 26.5V16H284V26.5" strokeWidth={2.25 * s} {...inked(part(draw, 1, 4))} />
         <path d="M191 21.5H277" strokeWidth={3.4} {...inked(part(draw, 2, 4))} />
         {/* The screen. */}
-        <path d={sketchRect(24, 40, 136, 70, 2)} strokeWidth={2.25 * s} {...inked(part(draw, 2, 4))} />
+        <path d={SCREEN_EDGE} strokeWidth={2.25 * s} {...inked(part(draw, 2, 4))} />
         <rect x={31} y={47} width={122} height={56} className="cast-glass" strokeWidth={1.4} fillOpacity={part(draw, 2, 4)} {...inked(part(draw, 2, 4))} />
         {/* Run and stop. */}
-        <path d={sketchRect(180, 94, 18, 16, 1.2, 0.4) + "M186.5 98.5L193 102L186.5 105.5Z"} strokeWidth={1.6 * s} {...inked(part(draw, 3, 4))} />
-        <path d={sketchRect(206, 94, 18, 16, 1.2, 0.4) + "M211.5 98.5h7v7h-7Z"} strokeWidth={1.6 * s} {...inked(part(draw, 3, 4))} />
+        <path d={RUN_KEY} strokeWidth={1.6 * s} {...inked(part(draw, 3, 4))} />
+        <path d={STOP_KEY} strokeWidth={1.6 * s} {...inked(part(draw, 3, 4))} />
         <path d="M22 126H298" strokeWidth={1.1} opacity="0.5" {...inked(part(draw, 3, 4))} />
-        {Array.from({ length: KEYS }, (_, i) => (
+        {KEY_PATHS.map((d, i) => (
           <g key={i} opacity={clamp(part(draw, 3, 4) * 2 - i / KEYS)}>
-            <path d={sketchRect(keyX(i), 142, 14, 18, 0.8, 0.3)} strokeWidth={1.4 * s} />
+            <path d={d} strokeWidth={1.4 * s} />
             {i < lit && <rect x={keyX(i) + 3} y={145} width={8} height={3} fill="var(--good)" stroke="none" data-lit="" />}
           </g>
         ))}
@@ -103,7 +117,7 @@ export function Setup({ draw = 1, busy = 0, angles = [-60, 20, 90], lit = 0, sea
         return (
           <g key={cx} transform={`rotate(${(angles[i] ?? 0) * d} ${cx} ${cy})`} filter={ink} fill="none" stroke="currentColor" strokeLinecap="round" opacity={d > 0 ? 1 : 0}>
             <circle cx={cx} cy={cy} r={KNOB} className="cast-paper" strokeWidth={2.5 * s} {...inked(d)} />
-            <path d={Array.from({ length: 24 }, (_, k) => tick(cx, cy, 13.4, KNOB, (k / 24) * 360)).join("")} strokeWidth={1.1} opacity={d} />
+            <path d={ENCODER_TICKS[i]} strokeWidth={1.1} opacity={d} />
             <circle cx={cx} cy={cy} r={9.5} strokeWidth={1.4} {...inked(d)} />
             <path d={`M${cx} ${cy - 2}V${cy - 13}`} strokeWidth={2.8} {...inked(d)} />
           </g>
@@ -122,4 +136,4 @@ export function Setup({ draw = 1, busy = 0, angles = [-60, 20, 90], lit = 0, sea
       </g>
     </g>
   );
-}
+});

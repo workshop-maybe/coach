@@ -5,7 +5,7 @@ import { IntroCartridge } from "../pieces/IntroCartridge";
 import { SEAT, Setup } from "../pieces/Setup";
 import { at, between, drop, ease, tween } from "../pieces/motion";
 import { judgmentAngles } from "./Judgment";
-import { LINE, LINE_LENGTH, SETTINGS, YOU, scene } from "./stage";
+import { LINE, LINE_LENGTH, SETTINGS_LINES, YOU, scene } from "./stage";
 
 const S = scene("good");
 
@@ -36,7 +36,7 @@ export function Good({ frame }: { frame: number }) {
     <g data-scene="good">
       {!seated && draw > 0 && <IntroCartridge x={card.x} y={card.y} w={120 * card.s} draw={draw} fine={fly > 0.5} line={LINE} written={written} />}
       <g transform={at(pose)}>
-        <Setup angles={SET} lines={SETTINGS.map((text) => ({ text }))} seat={seat} label={LINE} />
+        <Setup angles={SET} lines={SETTINGS_LINES} seat={seat} label={LINE} />
       </g>
     </g>
   );

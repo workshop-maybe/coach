@@ -101,7 +101,7 @@ export function settledAt(scene: Scene): number {
 export const STILLS: readonly number[] = SCENES.map((s) => s.start + s.still);
 
 /** The first scene's reply records leave the setup faster and faster. */
-export const REPLY_COUNT = 22;
+const REPLY_COUNT = 22;
 export const REPLY_FRAMES: readonly number[] = Array.from({ length: REPLY_COUNT }, (_, i) =>
   Math.round(52 + 150 * Math.pow(i / REPLY_COUNT, 0.62)),
 );

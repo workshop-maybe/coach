@@ -13,7 +13,6 @@
 // group per collection under its name, in the same order as the flat list (collections plan
 // R1, KTD5). A collection just added lights its group, re-read from the folder every render.
 
-import { useReplay } from "../intro/replayContext";
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { goToOf, goToStanding } from "../domain/goTo";
@@ -24,6 +23,7 @@ import { Cartridge } from "../cast/Cartridge";
 import { Machine } from "../cast/Machine";
 import { Outline } from "../cast/Outline";
 import { machineKeys, type MachineKey } from "../cast/mappings";
+import { useReplay } from "../intro/replayContext";
 import { FLAG_SHORT, goToLine, handoffText, plugMark } from "./format";
 import { useNav } from "./nav";
 import { needsYou, type NeedsYouItem } from "./needsYou";
@@ -87,8 +87,10 @@ export function Home() {
   // The badge the first run just saved lights its half-made row, which leads the list (KTD10).
   // Re-found in the folder every render, so a badge gone since lights nothing.
   const litKey = route.view === "home" ? route.litCredential : undefined;
-  const litItem = litKey === undefined ? undefined : computed.find((i) => i.kind === "half-credential" && i.credentialKey === litKey);
-  const items = litItem ? [litItem, ...computed.filter((i) => i !== litItem)] : computed;
+  const { litItem, items } = useMemo(() => {
+    const litItem = litKey === undefined ? undefined : computed.find((i) => i.kind === "half-credential" && i.credentialKey === litKey);
+    return { litItem, items: litItem ? [litItem, ...computed.filter((i) => i !== litItem)] : computed };
+  }, [computed, litKey]);
 
   const doors = (
     <div className="doors">
@@ -126,14 +128,7 @@ export function Home() {
   // With no agents, the first test leads (KTD10): on the preset in an empty folder, on the
   // first badge with a task otherwise. Badges with no task lead with their rows instead, so the
   // preset never runs over the user's own badge (R9).
-  const firstTest: { credentialKey?: string } | null = !state || state.profiles.length > 0
-    ? null
-    : state.credentials.length === 0
-      ? {}
-      : (() => {
-          const ready = shelf?.credentials.find((c) => c.credential.task.trim() !== "");
-          return ready ? { credentialKey: ready.key } : null;
-        })();
+  const firstTest = firstTestFor(state, shelf);
   const addCollection = () => navigate({ view: "deck", deck: "collection" });
 
   const badgeCard = (c: ShelfCredential) => {
@@ -321,6 +316,14 @@ function plugsOf(state: FolderState, pending: PendingTest[]): Shelf["plugs"] {
 }
 
 /** A row's key. Held rows on one badge are told apart by their handoff (hold-and-compare KTD12). */
+/** The first test Home leads with, if any: the preset (no key) or a badge with a task. */
+function firstTestFor(state: FolderState | null, shelf: Shelf | null): { credentialKey?: string } | null {
+  if (!state || state.profiles.length > 0) return null;
+  if (state.credentials.length === 0) return {};
+  const ready = shelf?.credentials.find((c) => c.credential.task.trim() !== "");
+  return ready ? { credentialKey: ready.key } : null;
+}
+
 function itemId(item: NeedsYouItem): string {
   if (item.kind === "held") return `${item.credentialKey}|${item.handoffId}`;
   return "credentialKey" in item ? `${item.credentialKey}|${"profileSlug" in item ? item.profileSlug : ""}` : item.profileSlug;

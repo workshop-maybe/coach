@@ -2,12 +2,13 @@
 // takes the badge, and their keys light as they earn. Two pass. Then a job comes in and
 // the one to reach for is lit in data blue.
 
+import { memo } from "react";
 import { INK, sketchRect } from "../../cast/InkDefs";
 import { ReplyRecord } from "../pieces/ReplyRecord";
 import { Setup } from "../pieces/Setup";
 import { at, between, clamp, drop, ease, inked, tween } from "../pieces/motion";
 import { judgmentAngles } from "./Judgment";
-import { LINE, SETTINGS, TRIO, YOU, scene } from "./stage";
+import { LINE, SETTINGS_LINES, TRIO, YOU, scene } from "./stage";
 
 const S = scene("badges");
 
@@ -27,7 +28,7 @@ const LINK = { at: 152, x: 1440 };
 const LIGHT_UP = 160;
 
 /** Your three setups as this scene leaves them at relative frame `f`. `choice` fades the job and its blue. */
-export function Trio({ f, choice = 1 }: { f: number; choice?: number }) {
+export const Trio = memo(function Trio({ f, choice = 1 }: { f: number; choice?: number }) {
   const chosen = TRIO[CHOSEN];
   const top = chosen.y + 14 * chosen.s;
   const linkFrom = JOB.y + JOB.h * JOB.s + 4;
@@ -49,7 +50,7 @@ export function Trio({ f, choice = 1 }: { f: number; choice?: number }) {
               seatDraw={c.seat < 0 ? 1 : clamp(seat * 2.5)}
               label={LINE}
               lit={Math.max(0, lit)}
-              lines={i === 1 ? SETTINGS.map((text) => ({ text })) : []}
+              lines={i === 1 ? SETTINGS_LINES : undefined}
             />
             {check > 0 && (
               <path d="M128 -18l12 12 26 -30" stroke="var(--good)" strokeWidth={6} fill="none" strokeLinecap="round" strokeLinejoin="round" {...inked(check)} />
@@ -77,7 +78,7 @@ export function Trio({ f, choice = 1 }: { f: number; choice?: number }) {
       )}
     </g>
   );
-}
+});
 
 export function Badges({ frame }: { frame: number }) {
   return (
