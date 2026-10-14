@@ -55,7 +55,8 @@ export const SCENES: readonly Scene[] = [
     length: 240,
     rows: ["Slow down.", "Say what good looks like."],
     rowAt: [30, 110],
-    still: 210,
+    // Held while the line sits written on the label, before the cartridge leaves for the slot.
+    still: 180,
   },
   {
     id: "badges",
@@ -108,7 +109,7 @@ export const REPLY_FRAMES: readonly number[] = Array.from({ length: REPLY_COUNT 
 /** Cues beyond each row's line sound and the first scene's replies. */
 const EXTRA_CUES: readonly SoundCue[] = [
   { frame: 940, kind: "pull" },
-  { frame: 520, kind: "seat" },
+  { frame: 670, kind: "seat" },
   { frame: 800, kind: "check" },
 ];
 

@@ -1,0 +1,19 @@
+/* The intro's film. Its cast pieces take their fills here, since the composition also
+   plays and renders outside the app shell, where src/cast/cast.css is not loaded. */
+
+.intro-film {
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+.intro-film .cast {
+  color: var(--ink);
+}
+
+.intro-film .cast-paper {
+  fill: var(--surface);
+}
+
+.intro-film .cast-glass {
+  fill: var(--paper);
+}
