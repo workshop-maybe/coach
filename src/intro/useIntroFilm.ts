@@ -4,7 +4,6 @@
 // or is skipped is the caller's.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { SyntheticEvent } from "react";
 import type { FilmApi, FilmProps } from "./Film";
 import type { StripProps } from "./IntroParts";
 import { readMuted, writeMuted } from "./mute";
@@ -45,8 +44,8 @@ export function useIntroFilm({ onEnd, onSkip, listening }: IntroFilmOptions) {
   const sceneNow = useRef(0);
   const mutedNow = useRef(muted);
 
-  // Under reduced motion the newcomer steps the scenes, and the Player's own events (a seek
-  // reports its frame late, and a seek to the last still reports the end) are not theirs.
+  // Under reduced motion the newcomer steps the scenes, so the film's own frame and end are not
+  // theirs (the film never plays then; this holds if the setting changes while it shows).
   const stepping = useRef(reduced);
   stepping.current = reduced;
 
@@ -60,11 +59,11 @@ export function useIntroFilm({ onEnd, onSkip, listening }: IntroFilmOptions) {
     if (!stepping.current) latest.current.onEnd();
   }, []);
 
-  function start(e: SyntheticEvent) {
+  function start() {
     if (!film.current || begun.current) return;
     begun.current = true;
-    // Called with the key's own event, before anything else, so the gesture reaches the audio.
-    if (!reduced) film.current.play(e);
+    // Before anything else, while still inside the key's gesture, so the sound may start.
+    if (!reduced) film.current.play();
     setPhase("film");
   }
 

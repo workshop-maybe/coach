@@ -5,7 +5,7 @@
 import type { Pose } from "../pieces/motion";
 import { SCENES, type Scene, type SceneId } from "../timeline";
 
-/** The composition's fixed size: 16:9, for the in-app Player and the trailer alike. */
+/** The composition's fixed size: 16:9, for the in-app player and the trailer alike. */
 export const INTRO_WIDTH = 1920;
 export const INTRO_HEIGHT = 1080;
 

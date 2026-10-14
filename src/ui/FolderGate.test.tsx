@@ -4,8 +4,8 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { FolderGate, type DataFolderStatus } from "./FolderGate";
 
-// The first run's film: the Player doesn't run under jsdom (src/intro/FirstRun.test.tsx tests it).
-vi.mock("@remotion/player", () => ({ Player: () => <div data-testid="player" /> }));
+// The first run's film runs on a clock; a stand-in keeps these tests about the gate (src/intro/FirstRun.test.tsx tests the film).
+vi.mock("../intro/FilmPlayer", () => ({ default: () => <div data-testid="player" /> }));
 vi.mock("../intro/Intro", () => ({ Intro: () => null, INTRO_WIDTH: 1920, INTRO_HEIGHT: 1080 }));
 
 afterEach(cleanup);

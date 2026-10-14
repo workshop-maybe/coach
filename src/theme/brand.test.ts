@@ -34,8 +34,8 @@ function brandViolations(css: string): string[] {
 }
 
 /**
- * Lines in a script that break the guard (KTD14). The intro's scenes are Remotion
- * compositions styled inline, which the stylesheet scan never sees: they still take
+ * Lines in a script that break the guard (KTD14). The intro's scenes are SVG and HTML
+ * styled inline, which the stylesheet scan never sees: they still take
  * colours from tokens and keep square corners.
  */
 function scriptViolations(code: string): string[] {

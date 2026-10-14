@@ -1,0 +1,24 @@
+<!doctype html>
+<!--
+  The trailer render's page (KTD15). Dev only: `vite build` builds index.html alone, so this
+  page never reaches the app bundle. scripts/intro-render.mjs serves it, steps it through
+  every frame of the intro with window.__introFrame, and captures each one.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Andamio intro render</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        overflow: hidden;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>
