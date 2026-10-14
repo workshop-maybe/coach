@@ -1482,9 +1482,11 @@ button:where(.door, .part, .agent-card, .badge-card, .earned, .detail-holder, .n
   gap: var(--space-2xl);
 }
 
+/* The column gap is the shelves' own gap, so the agents' cards line up over the badges'. */
 .home-shelves-paired {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: var(--space-lg);
   align-items: start;
 }
 
@@ -1590,39 +1592,51 @@ button:where(.door, .part, .agent-card, .badge-card, .earned, .detail-holder, .n
   font-size: 13px;
 }
 
-/* Shelves scroll sideways so home stays one screen. */
+/* Shelves are a grid of one card size, so agents and badges line up in columns. A row keeps
+   as many cards as fit and the rest wrap under it. */
 .shelf {
   list-style: none;
-  display: flex;
-  gap: var(--space-base);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: var(--space-lg);
   margin: 0;
-  padding: var(--space-xs) var(--space-xs) var(--space-md);
-  overflow-x: auto;
+  padding: 0 0 var(--space-md);
 }
 
 .shelf > li {
-  flex: none;
+  min-width: 0;
 }
 
+/* A card lies on its side: its piece on the left, its name and what follows on the right,
+   so a long name runs across the card rather than down it. */
 .agent-card,
 .badge-card {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-content: center;
   align-items: center;
-  gap: var(--space-xs);
-  width: 10rem;
-  min-height: 100%;
-  padding: var(--space-base) var(--space-md);
+  column-gap: var(--space-md);
+  row-gap: var(--space-xs);
+  width: 100%;
+  height: 100%;
+  min-height: 7.5rem;
+  padding: var(--space-md) var(--space-base);
   background: var(--surface);
   border: var(--rule-width) solid var(--rule);
   box-shadow: var(--shadow);
-  text-align: center;
+  text-align: left;
   font-weight: 400;
 }
 
-.agent-card .cast,
-.badge-card .cast {
-  margin-bottom: var(--space-xs);
+.agent-card > *,
+.badge-card > * {
+  grid-column: 2;
+}
+
+.agent-card > .cast,
+.badge-card > .cast {
+  grid-column: 1;
+  grid-row: 1 / span 3;
 }
 
 /* A cartridge nobody holds sits unslotted, a little off true (R9). */
@@ -1637,6 +1651,10 @@ button:where(.door, .part, .agent-card, .badge-card, .earned, .detail-holder, .n
   letter-spacing: var(--heading-tracking);
 }
 
+.agent-card-setup > span {
+  white-space: nowrap;
+}
+
 .agent-card-setup {
   font-family: var(--font-mono);
   font-size: 11px;
@@ -1647,9 +1665,7 @@ button:where(.door, .part, .agent-card, .badge-card, .earned, .detail-holder, .n
 .holders {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
   gap: 3px;
-  margin-top: var(--space-xs);
 }
 
 .holder {
@@ -1686,7 +1702,7 @@ button:where(.door, .part, .agent-card, .badge-card, .earned, .detail-holder, .n
   bottom: 0;
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
-  gap: var(--space-base);
+  gap: var(--space-lg);
   padding: var(--space-base) 0;
   background: var(--bg);
 }

@@ -13,7 +13,7 @@
 // group per collection under its name, in the same order as the flat list (collections plan
 // R1, KTD5). A collection just added lights its group, re-read from the folder every render.
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { goToOf, goToStanding } from "../domain/goTo";
 import { cellKey } from "../domain/matrix";
@@ -198,9 +198,19 @@ export function Home() {
                   return (
                     <li key={p.slug}>
                       <button type="button" className="agent-card" onClick={() => navigate({ view: "item", item: "agent", profileSlug: p.slug })}>
-                        <Machine mini setup={p} keys={shelf.keys.get(p.slug)} plugged={shelf.plugs.get(p.slug)} width={128} />
+                        <Machine mini setup={p} keys={shelf.keys.get(p.slug)} plugged={shelf.plugs.get(p.slug)} width={96} />
                         <span className="agent-card-name">{p.name}</span>
-                        <span className="agent-card-setup">{[p.harness, p.model, p.effort].filter(Boolean).join(" · ")}</span>
+                        {/* Each setting keeps its line whole; the line breaks only between them. */}
+                        <span className="agent-card-setup">
+                          {[p.harness, p.model, p.effort]
+                            .filter(Boolean)
+                            .map((part, i) => (
+                              <Fragment key={i}>
+                                {i > 0 && " · "}
+                                <span>{part}</span>
+                              </Fragment>
+                            ))}
+                        </span>
                         {earned.length > 0 && (
                           <span className="visually-hidden" role="list" aria-label="Earned">
                             {earned.map((c) => (
