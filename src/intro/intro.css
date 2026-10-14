@@ -1,0 +1,129 @@
+/* The intro's film. Its cast pieces take their fills here, since the composition also
+   plays and renders outside the app shell, where src/cast/cast.css is not loaded. */
+
+.intro-film {
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+.intro-film .cast {
+  color: var(--ink);
+}
+
+.intro-film .cast-paper {
+  fill: var(--surface);
+}
+
+.intro-film .cast-glass {
+  fill: var(--paper);
+}
+
+/* ---------------------------------------------------------------------------
+   The first run (src/intro/FirstRun.tsx): the title card and the film on the board below
+   the gate bar, the Skip and Mute keys in a strip at the bar's far end, and the play beat on
+   a sheet that slides up over the film's held last frame. */
+
+.intro-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  container-type: size;
+}
+
+/* The film fits inside the board without cropping (the Player letterboxes it). */
+.intro-film-layer {
+  position: absolute;
+  inset: 0 var(--gutter) var(--gutter);
+}
+
+.intro-film-layer:is(:focus, :focus-visible) {
+  outline: none;
+  box-shadow: none;
+}
+
+/* Behind the title card the film waits, loaded and paused, out of sight. */
+.intro-film-layer[data-hidden] {
+  visibility: hidden;
+}
+
+.intro-title {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--space-3xl);
+  padding: 0 var(--space-lg) var(--space-3xl);
+}
+
+.intro-title .intro-lockup {
+  display: block;
+  height: 56px;
+}
+
+.intro-title-keys {
+  display: flex;
+  gap: var(--space-md);
+}
+
+/* Opposite the window keys, which sit at the bar's start. */
+.intro-strip {
+  position: fixed;
+  top: var(--space-sm);
+  right: var(--space-xl);
+  z-index: 40;
+  display: flex;
+  gap: var(--space-sm);
+}
+
+/* The play beat's paper: the sheet, set into the board below the last scene's line. The
+   film is fitted inside the board (less its gutter), so its scale is the smaller of the two
+   fits, and the line ends --film-text-end composition pixels down the letterboxed frame. A
+   short window keeps room for the card over the line. */
+.intro-sheet {
+  --film-scale: min(
+    calc((100cqw - 2 * var(--gutter)) / var(--film-w)),
+    calc((100cqh - var(--gutter)) / var(--film-h))
+  );
+  position: absolute;
+  inset: 0;
+  top: min(
+    calc((100cqh - var(--gutter) - var(--film-h) * var(--film-scale)) / 2 + var(--film-text-end) * var(--film-scale)),
+    calc(100cqh - 18rem)
+  );
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .intro-sheet {
+    animation: intro-sheet-in 900ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* The card settles once the sheet is nearly in. */
+  .intro-sheet .deck-card {
+    animation: deck-card-in 420ms 520ms ease-out both;
+  }
+}
+
+@keyframes intro-sheet-in {
+  from {
+    transform: translateY(105%);
+  }
+}
+
+/* The replay (src/intro/Replay.tsx): the board over the whole window, with the window keys
+   kept at its start, so the intro plays above Home and closes back to it. */
+.replay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  background: var(--board);
+}
+
+.replay > .gate-bar {
+  flex: none;
+}

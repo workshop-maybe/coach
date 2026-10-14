@@ -10,7 +10,8 @@ import type { Route } from "../ui/routes";
 import { PART_IDS } from "../../site/src/parts";
 import { startShot } from "./harness";
 import { sampleFolder, sampleStorage } from "./seed";
-import { COVERAGE, NOT_PICTURED, SAMPLE_IMAGES, SHOTS, routeKind, type Shot } from "./shots";
+import { SCENES } from "../intro/timeline";
+import { COVERAGE, NOT_PICTURED, SAMPLE_IMAGES, SCENE_COUNT, SHOTS, routeKind, type Shot, type ShotStart } from "./shots";
 
 const KEBAB = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -20,8 +21,8 @@ const CREDENTIAL_PARTS = ["name", "targets", "task", "rubric", "look"];
 const AGENT_PARTS = ["name", "repo", "notes", "params"];
 
 /** Why a route is not a Route the shell can open over this folder, or [] when it is. */
-function routeProblems(route: Route | "gate", state: FolderState): string[] {
-  if (route === "gate") return [];
+function routeProblems(route: Route | ShotStart, state: FolderState): string[] {
+  if (typeof route === "string") return [];
   const r = route as unknown as Record<string, unknown>;
   const out: string[] = [];
   const keys = new Set(state.credentials.map(credentialKey));
@@ -188,9 +189,15 @@ describe("the shot manifest", () => {
   });
 });
 
+describe("the intro's stills", () => {
+  it("are as many as the film's scenes, so the first-run shots step to the play beat", () => {
+    expect(SCENE_COUNT).toBe(SCENES.length);
+  });
+});
+
 describe("the coverage map", () => {
-  it("has an entry for the gate, home and every deck and item kind", () => {
-    const kinds = ["gate", "home", ...DECK_KINDS.map((k) => `deck:${k}`), ...ITEM_KINDS.map((k) => `item:${k}`)];
+  it("has an entry for the intro, the gate, home and every deck and item kind", () => {
+    const kinds = ["intro", "gate", "home", ...DECK_KINDS.map((k) => `deck:${k}`), ...ITEM_KINDS.map((k) => `item:${k}`)];
     expect(Object.keys(COVERAGE).sort()).toEqual(kinds.sort());
   });
 
@@ -220,6 +227,7 @@ describe("the coverage map", () => {
   });
 
   it("names a route kind as the shell does", () => {
+    expect(routeKind("intro")).toBe("intro");
     expect(routeKind("gate")).toBe("gate");
     expect(routeKind({ view: "home" })).toBe("home");
     expect(routeKind({ view: "deck", deck: "jev" })).toBe("deck:jev");

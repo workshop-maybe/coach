@@ -22,6 +22,16 @@ A collection that ships inside the app, such as Cardano Dev Skills. Adding one c
 
 A copy whose add stopped partway still lists the badges it never wrote, and adding the built-in again finishes it. A badge the user trashed from a copy is never written back. A copy counts as added once every badge it still lists is on disk.
 
+## First run
+
+### Intro
+
+The short film a first launch opens on, before a data folder is chosen: a title card, five scenes, then the play beat. A remembered folder never shows it, even one that has since been moved or deleted, which shows the folder gate's error instead. Home can replay the film, watch-only.
+
+### Play beat
+
+The one card after the intro's film, asking the newcomer for one line that says what good looks like. Until a folder is chosen the line is the held line, kept across a quit; then it is saved as the newcomer's first badge, named from its first words, with the line as its one learning target and no task yet. The held line is unrelated to a held reply.
+
 ## Testing an agent
 
 ### Handoff

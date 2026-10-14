@@ -5,7 +5,7 @@ order: 30
 description: What to do when the app won't open, your folder moved, a file changed under you, or Jev can't answer.
 ---
 
-{/* Jev Mode, data and help, third page (U8, R7): the known ways things go wrong and what to do. Labels are checked against src/ui/FolderGate.tsx, src/ui/AppShell.tsx, src/ui/LoadErrors.tsx, src/ui/shared.tsx, src/ui/ReplyView.tsx, src/ui/Deck.tsx, src/ui/JevDeck.tsx, src/ui/TestDeck.tsx and src/ui/jevFailure.ts (KTD8). Where a failed ask's line shows follows src/ui/TestDeck.tsx, src/ui/CompareView.tsx and src/ui/RouterDeck.tsx. What the app does when the folder is gone follows src-tauri/src/files.rs, whose messages are not checked labels, so the page describes them. */}
+{/* Jev Mode, data and help, third page (U8, R7): the known ways things go wrong and what to do. Labels are checked against src/ui/FolderGate.tsx, src/ui/AppShell.tsx, src/ui/LoadErrors.tsx, src/ui/shared.tsx, src/ui/ReplyView.tsx, src/ui/Deck.tsx, src/ui/JevDeck.tsx, src/ui/TestDeck.tsx and src/ui/jevFailure.ts (KTD8). Where a failed ask's line shows follows src/ui/TestDeck.tsx, src/ui/CompareView.tsx and src/ui/RouterDeck.tsx. What the app does when the folder goes while it is open follows src-tauri/src/files.rs, whose messages are not checked labels, so the page describes them; the not-found line on opening comes from src/ui/FolderGate.tsx and is checked. */}
 
 The app is an early preview, and some things will break. Here's what to do about the ones we know. If yours isn't here, [tell James](/help/feedback/).
 
@@ -23,7 +23,10 @@ The first time you open it, your Mac may say it can't open the app.
 
 The app remembers where your folder was, not what it holds.
 
-- **While the app was closed:** it opens on its first screen, as if new. Click <UI>Choose folder</UI> and pick your folder where it is now.
+- **While the app was closed:** it opens on the folder screen, with no intro, and says <UI>Folder not found: \{path\}. Choose it again, or pick another.</UI> Click <UI>Choose folder</UI> and pick your folder where it is now.
+
+<Shot id="folder-missing" alt="The folder screen with the line Folder not found: /Users/you/Andamio. Choose it again, or pick another. under the Choose folder button" />
+
 - **While the app was open:** it can no longer read the folder, and a line under the top bar says the folder no longer exists. Click <UI>Change folder</UI> in the top bar and pick your folder where it is now.
 
 Everything you made is still in the folder, so nothing is lost. A test you left half done is the one exception. The app remembers it for the folder's old place, so it no longer shows under <UI>What needs you</UI>. Start that test again from the badge.

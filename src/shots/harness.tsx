@@ -20,7 +20,7 @@ import { createRoot } from "react-dom/client";
 import type { Jev } from "../jev/jev";
 import type { Storage } from "../storage/storage";
 import { AppShell } from "../ui/AppShell";
-import { FolderGate } from "../ui/FolderGate";
+import { FolderGate, type DataFolderStatus } from "../ui/FolderGate";
 import { JevProvider } from "../ui/jevContext";
 import { pendingStorageKey } from "../ui/pendingTests";
 import { FolderProvider } from "../ui/useFolderState";
@@ -100,14 +100,18 @@ export async function startShot(root: HTMLElement, search: string, shots: readon
 
 /** The app as src/App.tsx mounts it, over the shot's sample folder and Jev Mode. */
 function ShotApp({ shot, storage, jev }: { shot: Shot; storage: Storage; jev: Jev }) {
-  const gate = shot.route === "gate";
+  const route = shot.route;
+  // "intro" is a first run (no folder ever remembered); "gate" is a remembered folder gone
+  // missing, which shows the gate with its error and no intro.
+  const status: DataFolderStatus =
+    route === "intro" ? { status: "none" } : route === "gate" ? { status: "missing", remembered: SAMPLE_FOLDER } : { status: "ready", folder: SAMPLE_FOLDER };
   return (
     <WindowFrameContext.Provider value="maximized">
       <JevProvider jev={jev}>
-        <FolderGate getFolder={() => Promise.resolve(gate ? null : SAMPLE_FOLDER)} pickFolder={() => Promise.resolve(SAMPLE_FOLDER)}>
+        <FolderGate getFolder={() => Promise.resolve(status)} pickFolder={() => Promise.resolve(SAMPLE_FOLDER)}>
           {(folder, changeFolder) => (
             <FolderProvider key={folder} storage={storage} folder={folder}>
-              <AppShell onChangeFolder={() => void changeFolder()} initialRoute={shot.route === "gate" ? undefined : shot.route} />
+              <AppShell onChangeFolder={() => void changeFolder()} initialRoute={typeof route === "string" ? undefined : route} />
             </FolderProvider>
           )}
         </FolderGate>

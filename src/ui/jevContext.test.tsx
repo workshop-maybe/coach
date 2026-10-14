@@ -318,7 +318,7 @@ describe("the app's Jev provider", () => {
   }
 
   it("reads Jev status once at start, alongside the folder gate", async () => {
-    await renderApp({ get_data_folder: () => null, jev_status: () => JEV_OFF });
+    await renderApp({ get_data_folder: () => ({ status: "missing", remembered: "/gone" }), jev_status: () => JEV_OFF });
     await screen.findByRole("button", { name: "Choose folder" });
     expect(invoke.mock.calls.filter(([cmd]) => cmd === "jev_status")).toEqual([["jev_status"]]);
     expect(invoke.mock.calls.some(([cmd]) => cmd === "jev_ask")).toBe(false);
@@ -326,7 +326,7 @@ describe("the app's Jev provider", () => {
 
   it("still opens the gate when Jev status can't be read", async () => {
     await renderApp({
-      get_data_folder: () => null,
+      get_data_folder: () => ({ status: "missing", remembered: "/gone" }),
       jev_status: () => {
         throw "command jev_status not found";
       },

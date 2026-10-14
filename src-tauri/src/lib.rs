@@ -25,6 +25,8 @@ struct AppState {
     /// Paths dropped on the window, approved for `add_files` (KTD5). Written only by the
     /// window event handler in `run`, never by a listener on the event bus.
     drops: Mutex<files::DropApprovals>,
+    /// The remembered data folder that could not be used at launch, if any.
+    missing_data_folder: Option<String>,
 }
 
 /// The context a test starts with. Only the memory digest leaves `context`.
@@ -91,13 +93,12 @@ async fn pick_data_folder(
     Ok(Some(path))
 }
 
+/// The data folder, a remembered one that went missing, or none (KTD4 of the first-run
+/// intro plan): only none plays the intro.
 #[tauri::command]
-fn get_data_folder(state: State<'_, AppState>) -> Result<Option<String>, String> {
+fn get_data_folder(state: State<'_, AppState>) -> Result<files::DataFolderStatus, String> {
     let roots = state.roots.lock().map_err(|e| e.to_string())?;
-    Ok(roots
-        .get(RootKind::Data)
-        .ok()
-        .map(|p| p.to_string_lossy().into_owned()))
+    Ok(files::data_folder_status(&roots, state.missing_data_folder.as_deref()))
 }
 
 #[tauri::command]
@@ -478,7 +479,10 @@ pub fn run() {
             let mut saved = settings::load(&settings_path);
             let machine_id = settings::ensure_machine_id(&settings_path, &mut saved, context::new_machine_id);
             let mut roots = Roots::default();
-            files::register_remembered(&mut roots, saved.data_folder.as_deref());
+            let missing_data_folder = match files::register_remembered(&mut roots, saved.data_folder.as_deref()) {
+                files::Remembered::Missing(path) => Some(path),
+                files::Remembered::Registered(_) | files::Remembered::None => None,
+            };
             app.manage(AppState {
                 roots: Mutex::new(roots),
                 settings: settings::SettingsFile::new(settings_path),
@@ -489,6 +493,7 @@ pub fn run() {
                 machine_name: std::sync::OnceLock::new(),
                 home: app.path().home_dir().ok(),
                 drops: Mutex::new(files::DropApprovals::default()),
+                missing_data_folder,
             });
             Ok(())
         })

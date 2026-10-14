@@ -18,7 +18,7 @@ import { collectionPath, credentialPath, credentialsDir, loadFolder, profilePath
 import { folderOf } from "../domain/images";
 import { cellKey, type Matrix } from "../domain/matrix";
 import { collectionAsOnDisk, importBadgeArt, setCredentialBadgeOverride, updateCollection, updateCredential, updateProfile } from "../domain/operations";
-import { checkCriteriaPrompt, refinePrompt, reviewAssignmentPrompt } from "../domain/prompts";
+import { checkCriteriaPrompt, refinePrompt, reviewAssignmentPrompt, suggestAssignmentsPrompt } from "../domain/prompts";
 import { appendToRubric } from "../domain/target-check";
 import {
   credentialKey,
@@ -339,6 +339,8 @@ function EditCredential({ credentialKey: key, part, credential: atOpen, collecti
           body: (
             <>
               <RichText aria-label="Task" placeholder="What the agent is asked to do" value={task} onChange={taskDraft.setValue} onNormalized={taskDraft.onNormalized} images={taskImages.images} />
+              {/* An agent drafts the task for pasting back in here (KTD9, R9). */}
+              <CopyHelper label="Suggest a task" text={() => suggestAssignmentsPrompt({ ...c, task }, { count: "one" })} />
               <CopyHelper label="Review this assignment" text={() => reviewAssignmentPrompt({ ...c, task })} />
               <CopyHelper label="Write a refine prompt" text={() => refinePrompt({ ...c, task })} />
             </>

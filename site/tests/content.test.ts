@@ -4,7 +4,7 @@
 // src/shots/shots.ts, and the check fails on:
 //
 // - a <UI> label that no longer matches a string literal, template literal or JSX text in
-//   src/ui, src/domain or src/jev. Source is read through the TypeScript parser, so a label
+//   src/ui, src/domain, src/jev or src/intro. Source is read through the TypeScript parser, so a label
 //   that lives only in a comment never counts, and test files and test stubs are skipped.
 //   A templated label escapes its placeholder's braces (`Pull \{agent\}'s handoff`) and
 //   matches any `${…}` (or JSX `{…}`) in that place;
@@ -34,7 +34,7 @@ const SITE = join(ROOT, "site");
 const PUBLIC = join(SITE, "public");
 const SHOTS_DIR = join(PUBLIC, "shots");
 /** Where the app's labels live (KTD8). */
-const LABEL_DIRS = ["src/ui", "src/domain", "src/jev"];
+const LABEL_DIRS = ["src/ui", "src/domain", "src/jev", "src/intro"];
 
 // ---------------------------------------------------------------------------
 // Labels in the app's source
@@ -300,7 +300,7 @@ describe("the content check, on fixture pages", () => {
 
   it("fails a label the app does not show, naming the page and the label", () => {
     expect(check("Click <UI>Make the robot</UI>.\n")).toEqual([
-      "getting-started/fixture: <UI>Make the robot</UI> matches no label in src/ui, src/domain, src/jev",
+      "getting-started/fixture: <UI>Make the robot</UI> matches no label in src/ui, src/domain, src/jev, src/intro",
     ]);
   });
 
@@ -332,9 +332,9 @@ describe("the content check, on fixture pages", () => {
     const strict: Context = { ...ctx, labels: only };
     const problems = pageProblems({ id: "getting-started/fixture", text: FRONT() + "<UI>Make the robot</UI> <UI>Hand over the robot</UI> <UI>Robot card</UI> <UI>Keep me</UI>\n" }, strict);
     expect(problems).toEqual([
-      "getting-started/fixture: <UI>Make the robot</UI> matches no label in src/ui, src/domain, src/jev",
-      "getting-started/fixture: <UI>Hand over the robot</UI> matches no label in src/ui, src/domain, src/jev",
-      "getting-started/fixture: <UI>Robot card</UI> matches no label in src/ui, src/domain, src/jev",
+      "getting-started/fixture: <UI>Make the robot</UI> matches no label in src/ui, src/domain, src/jev, src/intro",
+      "getting-started/fixture: <UI>Hand over the robot</UI> matches no label in src/ui, src/domain, src/jev, src/intro",
+      "getting-started/fixture: <UI>Robot card</UI> matches no label in src/ui, src/domain, src/jev, src/intro",
     ]);
   });
 

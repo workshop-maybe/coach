@@ -8,6 +8,12 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(() => ({
   plugins: [react()],
 
+  // The intro's sounds stay files, never inlined as data URLs, so the Player streams
+  // them and the trailer render finds them (KTD8).
+  build: {
+    assetsInlineLimit: (file: string) => (/\.(m4a|mp3|ogg|wav|webm)$/.test(file) ? false : undefined),
+  },
+
   // Domain tests run in Node. UI tests opt into jsdom with a `// @vitest-environment jsdom` header,
   // which keeps Web Crypto and TextEncoder in the same realm for the version hash.
   // The user guide site's checks run here too (U2, KTD11).
