@@ -37,3 +37,6 @@ src-tauri/gen
 
 # Astro's generated types for the guide site
 .astro/
+
+# Trailer render output
+out/
