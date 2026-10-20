@@ -22,7 +22,8 @@ export interface QdlArtifact {
 export interface QdlTraceStep {
   nodeId: string;
   op: string;
-  inputs: string[];
+  /** The values of the step's inputs, in order. Their node ids are on the compiled node. */
+  inputs: unknown[];
   value: unknown;
 }
 
