@@ -1,5 +1,6 @@
 // The empty things (R12): a dashed outline of what a door makes, an empty machine, an
 // empty cartridge or an empty handoff card. Hand-inked like the rest of the cast, never with a badge.
+// A program reply with no body to draw shows the outline of a missing body (bounded programs R17).
 
 import { CARTRIDGE_H, CARTRIDGE_W, SHELL, WINDOW } from "./Cartridge";
 import { CARD, CARD_H, CARD_W } from "./HandoffBox";
@@ -7,7 +8,7 @@ import { INK, sketchRect } from "./InkDefs";
 import { MINI } from "./Machine";
 
 export interface OutlineProps {
-  kind: "machine" | "cartridge" | "handoff";
+  kind: "machine" | "cartridge" | "handoff" | "body";
   /** Rendered width in pixels. The height follows the drawing. */
   width?: number;
   className?: string;
@@ -15,7 +16,12 @@ export interface OutlineProps {
 
 const DASH = "7 6";
 
-const SIZES = { machine: [MINI.w, MINI.h], cartridge: [CARTRIDGE_W, CARTRIDGE_H], handoff: [CARD_W, CARD_H] } as const;
+const SIZES = { machine: [MINI.w, MINI.h], cartridge: [CARTRIDGE_W, CARTRIDGE_H], handoff: [CARD_W, CARD_H], body: [160, 150] } as const;
+const WIDTHS = { machine: 120, cartridge: 72, handoff: 64, body: 160 } as const;
+
+/** A soft, lopsided body: a closed outline with a fold across it, drawn once by hand. */
+const BODY = "M82 14C112 12 140 34 146 66C152 98 134 130 100 138C70 145 34 136 20 108C6 80 14 46 38 28C50 19 64 15 82 14Z";
+const FOLD = "M44 70C60 60 78 62 92 72C104 80 118 80 128 72";
 
 // Drawn from the pieces' own geometry, so an outline always matches what its door makes.
 const c = MINI.case;
@@ -25,7 +31,7 @@ const k = MINI.keys;
 
 export function Outline({ kind, width, className }: OutlineProps) {
   const [vw, vh] = SIZES[kind];
-  const w = width ?? (kind === "machine" ? 120 : kind === "cartridge" ? 72 : 64);
+  const w = width ?? WIDTHS[kind];
   return (
     <svg
       className={`cast cast-outline cast-outline-${kind}${className ? ` ${className}` : ""}`}
@@ -45,6 +51,11 @@ export function Outline({ kind, width, className }: OutlineProps) {
             <path d={sketchRect(130, 32, 18, 18, 0.8, 0.3)} strokeDasharray="4 4" />
             <path d={sketchRect(158, 32, 18, 18, 0.8, 0.3)} strokeDasharray="4 4" />
             <path d={`M${k.x} ${Math.round(k.y + k.h / 2)}H${k.x + k.span}`} strokeDasharray="8 3.2" strokeWidth={6} opacity="0.5" />
+          </>
+        ) : kind === "body" ? (
+          <>
+            <path d={BODY} />
+            <path d={FOLD} strokeDasharray="4 5" opacity="0.6" />
           </>
         ) : kind === "handoff" ? (
           <>

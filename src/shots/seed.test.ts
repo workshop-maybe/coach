@@ -4,7 +4,11 @@
 // outside the sample folder.
 import { describe, expect, it } from "vitest";
 import { calibrationOf, callOf, DEFAULT_CUT_OFFS } from "../domain/calls";
-import { loadFolder } from "../domain/folder";
+import { BUILT_INS } from "../domain/builtins";
+import { credentialPath, loadFolder } from "../domain/folder";
+import { programBadge, BOUNDED_PROGRAMS } from "../domain/programBadge";
+import { findProgram } from "../domain/programReply";
+import { replyItems, textOf } from "../domain/replyItems";
 import { assignmentVersion } from "../domain/hash";
 import { defaultHandoff, isHandoffLocked } from "../domain/handoffs";
 import { buildMatrix } from "../domain/matrix";
@@ -35,7 +39,7 @@ function storeWith(entries: Record<string, string>): globalThis.Storage {
   };
 }
 
-async function loadSample(variant: "empty" | "full" | "judged") {
+async function loadSample(variant: "empty" | "full" | "judged" | "programs") {
   const sample = await sampleFolder(variant);
   const storage = sampleStorage(sample);
   const state = await loadFolder(storage);
@@ -216,6 +220,52 @@ describe("the judged sample folder", () => {
   });
 });
 
+describe("the programs sample folder (bounded-programs U7)", () => {
+  // The seed loads the vendored Quinelings runtime for this variant: about 1 s.
+  const RUNTIME = { timeout: 30_000 };
+
+  it("holds every file of the full folder as it is, and adds the Bounded programs copy and two held replies", RUNTIME, async () => {
+    const full = await sampleFolder("full");
+    const programs = await sampleFolder("programs");
+    for (const [path, text] of Object.entries(full.files)) expect(programs.files[path], path).toBe(text);
+    const added = Object.keys(programs.files).filter((path) => !(path in full.files));
+    const builtin = BUILT_INS.find((b) => b.slug === BOUNDED_PROGRAMS)!;
+    expect(added.filter((p) => p.startsWith("collections/"))).toHaveLength(1 + builtin.collection.order.length);
+    for (const s of builtin.collection.order) expect(programs.files[credentialPath(BOUNDED_PROGRAMS, s)], s).toBe(builtin.credentials[s]);
+    expect(added.filter((p) => !p.startsWith("collections/"))).toHaveLength(2);
+    expect(programs.pending).toEqual(full.pending);
+  });
+
+  it("loads cleanly as a copy of the built-in, with both replies held on Gather readiness at its current version", RUNTIME, async () => {
+    const { state } = await loadSample("programs");
+    expect(state.errors).toEqual([]);
+    expect(state.warnings).toEqual([]);
+    const copy = state.collections.find((c) => c.slug === BOUNDED_PROGRAMS)!;
+    expect(copy.from).toBe(BOUNDED_PROGRAMS);
+    const gather = state.credentials.find((c) => credentialKey(c) === SAMPLE.badges.gather)!;
+    expect(programBadge(gather, copy)).toBe("gather-readiness");
+    const held = state.held.filter((h) => credentialKey(h) === SAMPLE.badges.gather);
+    expect(held.map((h) => [h.profileSlug, h.fileStem])).toEqual([
+      [SAMPLE.agents.claude, SAMPLE.held.claudeGather],
+      [SAMPLE.agents.codex, SAMPLE.held.codexGather],
+    ]);
+    for (const h of held) {
+      expect(h.assignmentVersion).toBe(await assignmentVersion(gather.task, gather.rubric));
+      expect(h.heldAt < "2026-10-01T09:00:00.000Z").toBe(true);
+    }
+  });
+
+  it("holds one program in Claude Code's reply, with young comparing with lt, and none in Codex's", RUNTIME, async () => {
+    const { state } = await loadSample("programs");
+    const reply = (slug: string) => textOf(replyItems(state.held.find((h) => h.profileSlug === slug && credentialKey(h) === SAMPLE.badges.gather)!));
+    const claude = findProgram(reply(SAMPLE.agents.claude));
+    if (claude.kind !== "program") throw new Error(`Claude Code's reply holds ${claude.kind}, not one program.`);
+    const steps = claude.intent.steps as { id: string; params: unknown }[];
+    expect(steps.find((s) => s.id === "young")?.params).toEqual({ operator: "lt" });
+    expect(findProgram(reply(SAMPLE.agents.codex)).kind).toBe("none");
+  });
+});
+
 describe("Jev Mode in the sample (AE4)", () => {
   it("is off with no key, or on with FakeJev's sample hint", () => {
     expect(sampleJev("off").current).toEqual(JEV_OFF);
@@ -247,7 +297,7 @@ describe("what the sample shows (R20, AE4)", () => {
   });
 
   it("holds no key-like string and no path outside the sample folder, in the seed or the manifest", async () => {
-    for (const variant of ["empty", "full", "judged"] as const) {
+    for (const variant of ["empty", "full", "judged", "programs"] as const) {
       const sample = await sampleFolder(variant);
       const texts = [...Object.entries(sample.files).flat(), JSON.stringify(sample.pending), JSON.stringify(SAMPLE_READING)];
       for (const text of texts) {

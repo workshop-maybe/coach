@@ -127,6 +127,15 @@ describe("the intro's scene code", () => {
   });
 });
 
+/** The program body's drawing code (U6): it paints a canvas, so its colours must come from tokens read at runtime. */
+const DRAWING_SCRIPTS = ["ui/QuinelingBody.tsx", "domain/stipple.ts"];
+
+describe("the program body's drawing code", () => {
+  it.each(DRAWING_SCRIPTS)("%s stays on the token layer", (file) => {
+    expect(scriptViolations(readFileSync(join(SRC, file), "utf8"))).toEqual([]);
+  });
+});
+
 describe("component stylesheets", () => {
   it.each(cssFiles(SRC, EXEMPT).map((f) => [relative(SRC, f), f]))("%s stays on the token layer", (_, file) => {
     expect(brandViolations(readFileSync(file, "utf8"))).toEqual([]);

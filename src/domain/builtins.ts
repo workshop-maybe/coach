@@ -16,7 +16,7 @@ const COLLECTIONS = import.meta.glob<string>("../collections/*/collection.json",
 const CREDENTIALS = import.meta.glob<string>("../collections/*/credentials/*.md", { query: "?raw", import: "default", eager: true });
 
 /** The order the built-ins are offered in. */
-const ORDER: readonly Slug[] = ["cardano-dev-skills", "course-authoring", "nostr-relays"];
+const ORDER: readonly Slug[] = ["cardano-dev-skills", "course-authoring", "nostr-relays", "bounded-programs"];
 
 function load(slug: Slug): BuiltIn {
   const json = COLLECTIONS[`../collections/${slug}/collection.json`];

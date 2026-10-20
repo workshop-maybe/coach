@@ -23,6 +23,7 @@
 
 import { useId, useState } from "react";
 import { handoffTextOf, isHeld, readingOfTake, takeTime } from "../domain/handoffResults";
+import { programBadge } from "../domain/programBadge";
 import { rubricParts } from "../domain/secondOpinion";
 import { replyItems } from "../domain/replyItems";
 import { credentialKey } from "../domain/types";
@@ -32,6 +33,7 @@ import { SavedReading } from "./JevReading";
 import { JudgeStep, useVerdictStep } from "./JudgeStep";
 import { useNav } from "./nav";
 import { usePane } from "./pane";
+import { QuinelingView } from "./QuinelingView";
 import { backFromReply, takeIdOf, takeOf } from "./replyRoute";
 import { ReplyStack } from "./ReplyStack";
 import type { TakeRef } from "./routes";
@@ -41,7 +43,20 @@ import { useAssignmentVersion } from "./useAssignmentVersion";
 import { useFolder } from "./useFolderState";
 import { useMatrix } from "./useMatrix";
 
-export function ReplyView({ credentialKey: key, take, picks }: { credentialKey: string; take: TakeRef; picks?: TakeRef[] }) {
+/**
+ * The reply route (bounded programs KTD4): a reply to a program badge opens straight into the
+ * Quineling view, any other into the reply view. Decided again on every render, from the
+ * badge's slug and its collection's `from`, so a rename keeps the view.
+ */
+export function ReplyView(props: { credentialKey: string; take: TakeRef; picks?: TakeRef[] }) {
+  const { state } = useFolder();
+  const credential = state?.credentials.find((c) => credentialKey(c) === props.credentialKey);
+  const collection = credential && state?.collections.find((c) => c.slug === credential.collectionSlug);
+  const jobId = credential && collection ? programBadge(credential, collection) : null;
+  return jobId ? <QuinelingView {...props} jobId={jobId} /> : <TakeReplyView {...props} />;
+}
+
+function TakeReplyView({ credentialKey: key, take, picks }: { credentialKey: string; take: TakeRef; picks?: TakeRef[] }) {
   const { state, storage } = useFolder();
   const { navigate } = useNav();
   const matrix = useMatrix(state);

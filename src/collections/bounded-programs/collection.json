@@ -1,0 +1,28 @@
+{
+  "name": "Bounded programs",
+  "description": "The ten jobs in the Quinelings QDL 1 library, each to be written as a bounded program that compiles and passes the job's fixtures.",
+  "order": [
+    "gather-readiness",
+    "craft-quote",
+    "confirmed-checkpoints",
+    "evidence-ledger",
+    "route-preview",
+    "trade-preview",
+    "needs-triage",
+    "receipt-reconciliation",
+    "water-total",
+    "work-schedule"
+  ],
+  "codes": {
+    "gather-readiness": 1,
+    "craft-quote": 2,
+    "confirmed-checkpoints": 3,
+    "evidence-ledger": 4,
+    "route-preview": 5,
+    "trade-preview": 6,
+    "needs-triage": 7,
+    "receipt-reconciliation": 8,
+    "water-total": 9,
+    "work-schedule": 10
+  }
+}

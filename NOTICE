@@ -22,3 +22,13 @@ Version 1.1 (https://openfontlicense.org):
 
 - Archivo, Copyright The Archivo Project Authors
 - Spline Sans Mono, Copyright The Spline Sans Mono Project Authors
+
+This product includes the Quinelings runtime
+(https://github.com/CharlesHoskinson/quinelings), licensed under the Apache
+License, Version 2.0. src/vendor/quinelings/quinelings-runtime.js and its source
+map are copied unchanged from the qdl-v1.0.0 release (commit
+4d63e49feaae05295a5ad8933f2cd070b9447700); the license text is
+src/vendor/quinelings/LICENSE, added upstream in the commit after the tag. The
+Bounded programs badges (src/collections/bounded-programs/) are new badges
+written on that release's QDL 1 library: each states one library job and
+restates its fixtures.

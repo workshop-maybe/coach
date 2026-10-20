@@ -13,7 +13,11 @@
 // agents' replies to Check an answer key held without a verdict. "judged" is "full" file for
 // file, plus eight older judged results on Check an answer key, each with a reading from
 // Jev's pinned model, so the badge shows Jev's track record and fitted cut-offs; it is a
-// variant of its own so no other picture changes. Values follow src/ui/testFolder.tsx,
+// variant of its own so no other picture changes. "programs" is "full" file for file, plus a
+// copy of the Bounded programs built-in as adding it writes one, and two replies held on its
+// Gather readiness badge: Claude Code's program, which compares one step with `lt` where the
+// job needs `lte`, and Codex's prose with no program, for the Quineling view's pictures
+// (bounded-programs U7). Values follow src/ui/testFolder.tsx,
 // copied rather than imported, since that file imports @testing-library/react.
 
 import {
@@ -36,11 +40,14 @@ import {
   serializeMarker,
   serializeProfile,
 } from "../domain/folder";
-import { serializeCredentialMd } from "../domain/credential-md";
+import { parseCredentialMd, serializeCredentialMd } from "../domain/credential-md";
+import { BUILT_INS } from "../domain/builtins";
 import { BUILT_IN_HANDOFF, SKELETON_ID, fillHandoff } from "../domain/handoffs";
 import { assignmentVersion } from "../domain/hash";
 import { JEV_MODEL } from "../domain/jevRequest";
 import { findPreset, presetCredential } from "../domain/presets";
+import { BOUNDED_PROGRAMS } from "../domain/programBadge";
+import { loadQuinelings } from "../domain/quinelings";
 import { rubricParts } from "../domain/secondOpinion";
 import {
   credentialKey,
@@ -80,6 +87,8 @@ export const SAMPLE = {
     howSure: "my-credentials/say-how-sure-you-are",
     answerKey: "my-credentials/check-an-answer-key",
     releaseNote: "my-credentials/write-a-release-note",
+    /** Gather readiness in the "programs" variant's copy of Bounded programs. */
+    gather: "bounded-programs/gather-readiness",
   },
   takes: {
     claudeWhatNext: "20260922T151000Z",
@@ -92,7 +101,7 @@ export const SAMPLE = {
   /** Go-to marks by their file stem: Claude Code on Say how sure you are, after its Met take. */
   marks: { howSure: "20260926T170000Z" },
   /** Held replies by their file stem: both agents' on Check an answer key's skeleton. */
-  held: { claudeAnswerKey: "20260929T101500Z", codexAnswerKey: "20260929T114000Z" },
+  held: { claudeAnswerKey: "20260929T101500Z", codexAnswerKey: "20260929T114000Z", claudeGather: "20260930T141000Z", codexGather: "20260930T153000Z" },
   /** Jev's readings of those held replies, taken in compare after they were held, by file stem. */
   readings: { claudeAnswerKey: "20260929T120500Z", codexAnswerKey: "20260929T120600Z" },
 } as const;
@@ -675,6 +684,8 @@ export async function sampleFolder(variant: SeedVariant): Promise<SampleFolder> 
     }
   }
 
+  if (variant === "programs") Object.assign(files, await boundedPrograms());
+
   // Codex holds Name what matters next's handoff, waiting on its reply.
   const copiedAt = "2026-09-30T08:15:00.000Z";
   const pending: PendingTest[] = [
@@ -690,4 +701,41 @@ export async function sampleFolder(variant: SeedVariant): Promise<SampleFolder> 
   ];
 
   return { files, pending };
+}
+
+/** Codex's held reply to Gather readiness: a plan in prose, with no program in it. */
+const GATHER_CODEX_REPLY = `The program takes the six checks, \`observedAt\`, \`now\` and \`maxAge\`. It checks that every one of the six checks is true, works out the age as \`now\` minus \`observedAt\`, and calls the observation fresh when the age is at most \`maxAge\`. When both hold, it proposes gathering 3 items; otherwise the proposal is skipped. I can write it out as a \`qdl-intent\` record next.`;
+
+/**
+ * The "programs" variant's additions: Bounded programs copied in as addBuiltinCollection
+ * copies it (its collection with `from`, each credential file as it is), and both agents'
+ * replies held on Gather readiness. Claude Code's program is the library's own with the
+ * `young` step comparing with `lt` where the job uses `lte` (AE1), so the inclusive
+ * freshness boundary fixture differs. It is derived from the vendored library, so it cannot
+ * drift from the runtime that checks it.
+ */
+async function boundedPrograms(): Promise<Record<string, string>> {
+  const builtin = BUILT_INS.find((b) => b.slug === BOUNDED_PROGRAMS);
+  if (!builtin) throw new Error("The sample folder needs the Bounded programs built-in.");
+  const slug = builtin.slug;
+  const { name, description, order, codes } = builtin.collection;
+  const files: Record<string, string> = {
+    [collectionPath(slug)]: serializeCollection({ slug, name, description, order: [...order], codes: { ...codes }, from: builtin.slug }),
+  };
+  for (const s of order) files[credentialPath(slug, s)] = builtin.credentials[s];
+
+  const gather = parseCredentialMd(builtin.credentials["gather-readiness"], { slug: "gather-readiness", collectionSlug: slug });
+  const rt = await loadQuinelings();
+  const program = structuredClone(rt.QDLV1Library.get("gather-readiness").intent) as unknown as { steps: { id: string; params: Record<string, unknown> }[] };
+  const young = program.steps.find((step) => step.id === "young");
+  if (!young) throw new Error("Gather readiness's program needs a step named young.");
+  young.params = { operator: "lt" };
+  const claudeReply = `Here is the program for Gather readiness.\n\n\`\`\`json\n${JSON.stringify(program, null, 2)}\n\`\`\`\n`;
+
+  const held = [
+    await heldTake(CLAUDE, gather, SAMPLE.held.claudeGather, { heldAt: "2026-09-30T14:10:00.000Z", copiedAt: "2026-09-30T13:48:00.000Z", handBack: claudeReply }),
+    await heldTake(CODEX, gather, SAMPLE.held.codexGather, { heldAt: "2026-09-30T15:30:00.000Z", copiedAt: "2026-09-30T15:12:00.000Z", handBack: GATHER_CODEX_REPLY }),
+  ];
+  for (const h of held) files[heldPath(h.profileSlug, h.collectionSlug, h.credentialSlug, h.fileStem)] = serializeHeld(h);
+  return files;
 }
