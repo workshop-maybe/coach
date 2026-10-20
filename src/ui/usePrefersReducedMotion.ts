@@ -1,5 +1,6 @@
-// Whether the system asks for reduced motion (KTD13). The intro's player has to hold or
-// step frames in JS, so it reads the media query here rather than only through CSS.
+// Whether the system asks for reduced motion (KTD13 of the first-run intro plan, KTD11 of the
+// bounded programs plan). The intro's player and the program body hold or step frames in JS,
+// so they read the media query here rather than only through CSS.
 
 import { useSyncExternalStore } from "react";
 

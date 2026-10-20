@@ -8,7 +8,7 @@ import type { FilmApi, FilmProps } from "./Film";
 import type { StripProps } from "./IntroParts";
 import { readMuted, writeMuted } from "./mute";
 import { sceneAt, SCENES } from "./timeline";
-import { usePrefersReducedMotion } from "./usePrefersReducedMotion";
+import { usePrefersReducedMotion } from "../ui/usePrefersReducedMotion";
 
 const ADVANCE_KEYS = new Set(["Enter", " ", "ArrowRight"]);
 
