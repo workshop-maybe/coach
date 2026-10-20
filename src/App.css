@@ -3819,3 +3819,311 @@ button:where(.door, .part, .agent-card, .badge-card, .earned, .detail-holder, .n
 .home-empty .home-replay {
   align-self: flex-end;
 }
+
+/* ---------------------------------------------------------------------------
+   A reply to a program badge (bounded programs U5, R6-R11, R17, R19). A pane like the reply
+   view: the take's record bar on top, then a desktop-first grid of three square record cards,
+   the checks over the fixtures on the left and the body on the right, then the reply, Jev's
+   reading and the handoff that ran. Pass is good green, a failure error red, the selected
+   fixture data blue. Below the stacking width the grid becomes one column, stretched
+   (docs/solutions/ui-bugs/reset-align-items-when-a-media-query-stacks-a-grid-into-flex.md). */
+.quineling-view {
+  gap: var(--space-base);
+}
+
+.quineling-view > * {
+  flex: none;
+}
+
+.quineling-view > .deck-close {
+  position: relative;
+  top: 0;
+  align-self: flex-end;
+}
+
+.quineling-head {
+  border: 1px solid var(--cell);
+  background: var(--surface);
+}
+
+.quineling-head > .reply-bar {
+  border-bottom: none;
+}
+
+.quineling-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-areas:
+    "checks body"
+    "output body";
+  grid-template-rows: auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: var(--space-base);
+}
+
+.quineling-checks {
+  grid-area: checks;
+}
+
+.quineling-output {
+  grid-area: output;
+}
+
+.quineling-body-panel {
+  grid-area: body;
+}
+
+.quineling-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--cell);
+  background: var(--surface);
+}
+
+.quineling-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  margin: 0;
+  padding: var(--space-sm) var(--space-base);
+  border-bottom: 1px solid var(--cell);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: var(--value-tracking);
+}
+
+.quineling-panel-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-base);
+}
+
+.quineling-panel-body > p {
+  margin: 0;
+}
+
+.quineling-check-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  letter-spacing: var(--value-tracking);
+}
+
+.quineling-pass {
+  color: var(--good);
+}
+
+.quineling-fail {
+  font-weight: 600;
+  color: var(--error);
+}
+
+.quineling-mono,
+.quineling-diagnostic {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: var(--value-tracking);
+  overflow-wrap: anywhere;
+}
+
+/* The verdict actions and the verdict step sit at the checks' foot, as at a reply record's. */
+.quineling-checks > :is(.take-actions, .judge-step) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  margin: 0;
+  padding: var(--space-sm) var(--space-base);
+  border-top: 1px solid var(--cell);
+}
+
+.quineling-checks > .judge-step {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+}
+
+/* The fixtures: one key each, the selected one in data blue, its result at the row's end. */
+.fixture-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin: 0;
+  padding: var(--space-md) var(--space-base);
+  list-style: none;
+}
+
+button.fixture {
+  display: flex;
+  width: 100%;
+  align-items: baseline;
+  gap: var(--space-md);
+  text-align: left;
+  font-weight: 500;
+}
+
+.fixture-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fixture-matches,
+.fixture-differs {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: var(--value-tracking);
+}
+
+.fixture-matches {
+  color: var(--good);
+}
+
+.fixture-differs {
+  color: var(--error);
+}
+
+.fixture-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-base);
+  border-top: 1px solid var(--cell);
+}
+
+.fixture-detail dl {
+  margin: 0;
+}
+
+.fixture-detail dt {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+.fixture-detail dd {
+  margin: var(--space-xs) 0 var(--space-md);
+}
+
+.fixture-detail pre {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.fixture-outputs {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: var(--value-tracking);
+  overflow-wrap: anywhere;
+}
+
+.fixture-output-name {
+  color: var(--ink-muted);
+}
+
+.fixture-wrong,
+.fixture-wrong .fixture-output-name {
+  color: var(--error);
+}
+
+/* The guess is drawn dashed, as the body draws it: a likely cause, never a certain one. */
+.fixture-guess {
+  padding: var(--space-sm) var(--space-md);
+  border: var(--rule-width) dashed var(--error);
+}
+
+.fixture-guess h4 {
+  margin: 0 0 var(--space-xs);
+  font-size: 12.5px;
+}
+
+.fixture-guess p {
+  margin: 0;
+  font-size: 13px;
+}
+
+/* The body: a square box the canvas fills, its caption in the mono under it. */
+.quineling-body {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 22rem;
+  aspect-ratio: 1;
+  padding: var(--space-base);
+}
+
+.quineling-body > .cast-outline {
+  max-width: 60%;
+  height: auto;
+}
+
+.quineling-canvas-wrap {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  gap: var(--space-sm);
+}
+
+.quineling-canvas-wrap > canvas {
+  display: block;
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.quineling-caption {
+  flex: none;
+  min-height: 1.4em;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: var(--value-tracking);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.quineling-caption[data-tone="data"] {
+  color: var(--data);
+}
+
+.quineling-caption[data-tone="error"] {
+  color: var(--error);
+}
+
+/* The reply under the grid reads at its own height; the pane is the one scroller. */
+.quineling-reply-bar > .reply-stored {
+  margin-left: auto;
+}
+
+.quineling-reply > .reply-stack {
+  flex: none;
+  overflow: visible;
+}
+
+@media (max-width: 56rem) {
+  .quineling-grid {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .quineling-body {
+    min-height: 16rem;
+  }
+}
