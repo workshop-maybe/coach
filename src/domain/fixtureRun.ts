@@ -52,6 +52,17 @@ export interface FixtureResult {
 
 type Canon = (value: unknown) => string;
 
+// Compiling a job's reference program takes about 100 ms, so each session compiles it once.
+const references = new WeakMap<QdlSession, Map<QdlJobId, QdlArtifact>>();
+
+function referenceOf(session: QdlSession, jobId: QdlJobId, intent: unknown): QdlArtifact {
+  let bySession = references.get(session);
+  if (!bySession) references.set(session, (bySession = new Map()));
+  let artifact = bySession.get(jobId);
+  if (!artifact) bySession.set(jobId, (artifact = session.compile(intent)));
+  return artifact;
+}
+
 /**
  * Runs `artifact` against every fixture of `jobId`, in the library's order. The job's reference
  * program compiles in the same session, so a guess can compare against its run.
@@ -59,7 +70,7 @@ type Canon = (value: unknown) => string;
 export function runFixtures(session: QdlSession, rt: QuinelingsRuntime, artifact: QdlArtifact, jobId: QdlJobId): FixtureResult[] {
   const job = rt.QDLV1Library.get(jobId);
   const canon: Canon = (value) => rt.Quinelings.canon(value);
-  const reference = session.compile(job.intent);
+  const reference = referenceOf(session, jobId, job.intent);
   let counterparts: Map<string, string> | undefined;
 
   return job.fixtures.map((fixture) => {

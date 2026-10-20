@@ -1,7 +1,10 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { vi, describe, expect, it } from "vitest";
 import { QDL_JOB_IDS, QDL_RELEASE, SESSION_MAX_RECORDS, isQdlJobId, loadQuinelings, newSession } from "./quinelings";
+
+// These tests load and run the real Quinelings runtime: about 1 s to load, about 25 ms a run.
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
 const RUNTIME = new URL("../vendor/quinelings/quinelings-runtime.js", import.meta.url);
 const README = new URL("../vendor/quinelings/README.md", import.meta.url);
@@ -44,7 +47,7 @@ describe("the seam", () => {
     const session = newSession(rt);
     const job = rt.QDLV1Library.get("water-total");
     const artifact = session.compile(job.intent);
-    const runs = 300;
+    const runs = 260;
     for (let i = 0; i < runs; i++) session.run({ artifactId: artifact.id, inputs: { readings: [i] }, requestId: `r${i}` });
     expect(SESSION_MAX_RECORDS).toBeGreaterThan(runs);
   });

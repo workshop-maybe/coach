@@ -1,6 +1,9 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { vi, beforeAll, describe, expect, it } from "vitest";
 import { checkProgram } from "./programChecks";
 import { loadQuinelings, newSession, type QdlSession, type QuinelingsRuntime } from "./quinelings";
+
+// These tests load and run the real Quinelings runtime: about 1 s to load, about 25 ms a run.
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
 let rt: QuinelingsRuntime;
 let session: QdlSession;

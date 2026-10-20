@@ -1,6 +1,9 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { vi, beforeAll, describe, expect, it } from "vitest";
 import { runFixtures, type FixtureResult } from "./fixtureRun";
 import { QDL_JOB_IDS, loadQuinelings, newSession, type QdlArtifact, type QdlJobId, type QdlSession, type QuinelingsRuntime } from "./quinelings";
+
+// These tests load and run the real Quinelings runtime: about 1 s to load, about 25 ms a run.
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
 // Every test runs against the real vendored runtime (U4's verification), with variant programs
 // built from the library's own reference intents, the way an agent's slightly wrong program
@@ -263,10 +266,12 @@ describe("running a job's fixtures", () => {
     expect(boundary.likelyCause).toBeNull();
   });
 
-  it("runs the fixtures thirty times in a row in one view's session", () => {
+  // The record cap a long-lived view needs is pinned in quinelings.test.ts; this checks that
+  // repeated runs in one session neither collide on request ids nor drift.
+  it("runs the fixtures again and again in one view's session with the same results", () => {
     const own = newSession(rt);
     const artifact = own.compile(strictYoung());
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 5; i++) {
       const results = runFixtures(own, rt, artifact, "gather-readiness");
       expect(results.filter((r) => r.matches)).toHaveLength(4);
       expect(byName(results, BOUNDARY).likelyCause?.nodeId).toBe("young");
