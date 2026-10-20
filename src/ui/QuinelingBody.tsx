@@ -6,6 +6,7 @@
 // src/domain/stipple.ts; this file owns the canvas, its size, the clock and the pointer.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from "react";
+import { operationCount } from "../domain/programChecks";
 import type { QdlArtifact, QdlSession, QdlTraceStep } from "../domain/quinelings";
 import {
   BREATH_CYCLE,
@@ -27,6 +28,7 @@ import {
   type BodyFrame,
   type BodyLayout,
 } from "../domain/stipple";
+import { Outline } from "../cast/Outline";
 import { usePrefersReducedMotion } from "./usePrefersReducedMotion";
 
 export interface QuinelingBodyProps {
@@ -69,12 +71,15 @@ export function QuinelingBody({ session, artifact, trace, walkKey, redNodeId, gu
     [session, artifact.id],
   );
 
-  const roles = useMemo(() => {
+  // A program that brings its own design without an assembly anatomy still compiles and runs,
+  // but the runtime cannot sample its body. It then shows as missing, as a failed program does
+  // (R17), rather than as a canvas that never paints.
+  const { roles, drawable } = useMemo(() => {
     try {
       const f = cache.at(0);
-      return new Map(f.nodeIds.map((id, i) => [id, f.nodeRoles[i]]));
+      return { roles: new Map(f.nodeIds.map((id, i) => [id, f.nodeRoles[i]])), drawable: true };
     } catch {
-      return new Map<string, string>();
+      return { roles: new Map<string, string>(), drawable: false };
     }
   }, [cache]);
 
@@ -183,14 +188,21 @@ export function QuinelingBody({ session, artifact, trace, walkKey, redNodeId, gu
     const canvas = canvasRef.current;
     if (!canvas) return;
     live.current.ctx = canvas.getContext("2d") ?? null;
+    // The observer also fires once on observe, so an unchanged size is skipped: resizing the
+    // backing store clears it.
+    let last = "";
     const measure = () => {
       const box = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const size = `${box.width}x${box.height}@${dpr}`;
+      if (size === last) return;
+      last = size;
       const s = live.current;
-      s.dpr = window.devicePixelRatio || 1;
+      s.dpr = dpr;
       s.width = box.width;
       s.height = box.height;
-      canvas.width = Math.round(box.width * s.dpr);
-      canvas.height = Math.round(box.height * s.dpr);
+      canvas.width = Math.round(box.width * dpr);
+      canvas.height = Math.round(box.height * dpr);
       paint(performance.now());
     };
     measure();
@@ -255,12 +267,23 @@ export function QuinelingBody({ session, artifact, trace, walkKey, redNodeId, gu
 
   const line = caption({ nodes, roles, trace, hover, kept, red: redNodeId, guess: guessNodeId });
 
+  if (!drawable) {
+    return (
+      <div className="quineling-canvas-wrap">
+        <Outline kind="body" />
+        <p className="quineling-caption" data-tone="ink">
+          This program's body can't be drawn
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="quineling-canvas-wrap">
       <canvas
         ref={canvasRef}
         aria-busy={painted ? undefined : "true"}
-        aria-label={`The program's body, ${nodes.length} operations`}
+        aria-label={`The program's body, ${operationCount(nodes)} operations`}
         style={{ width: "100%", height: "100%", cursor: hover ? "pointer" : "default" }}
         onMouseMove={(e) => {
           const id = ownerAt(e.clientX, e.clientY);

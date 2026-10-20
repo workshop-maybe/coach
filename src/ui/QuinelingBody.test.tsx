@@ -131,8 +131,22 @@ describe("QuinelingBody", () => {
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
     render(body());
     expect(canvas().getAttribute("aria-busy")).toBe("true");
-    expect(canvas().getAttribute("aria-label")).toMatch(/3 operations/);
-    expect(screen.getByText("3 operations").className).toBe("quineling-caption");
+    expect(canvas().getAttribute("aria-label")).toMatch(/2 operations/);
+    expect(screen.getByText("2 operations").className).toBe("quineling-caption");
+  });
+
+  it("shows the missing-body outline, not a canvas that never paints, when the runtime cannot sample the body (R17)", () => {
+    withContext();
+    session = {
+      frame: vi.fn(() => {
+        throw Object.assign(new Error("Source has no supported assembly anatomy and gesture"), { code: "unsupported-frame" });
+      }),
+    } as unknown as QdlSession;
+    render(body());
+    expect(canvas()).toBeNull();
+    expect(document.querySelector(".quineling-canvas-wrap [data-outline='body']")).not.toBeNull();
+    expect(document.querySelector("[aria-busy]")).toBeNull();
+    expect(screen.getByText("This program's body can't be drawn")).toBeTruthy();
   });
 
   it("carries aria-busy until the first frame is painted, then drops it", () => {
@@ -174,7 +188,7 @@ describe("QuinelingBody", () => {
     fireEvent.mouseMove(canvas(), at);
     fireEvent.click(canvas(), at);
     fireEvent.mouseLeave(canvas());
-    expect(screen.getByText("3 operations")).toBeTruthy();
+    expect(screen.getByText("2 operations")).toBeTruthy();
   });
 
   it("lets the red node win over a hover on it", () => {

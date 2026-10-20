@@ -52,8 +52,20 @@ export interface FixtureResult {
 
 type Canon = (value: unknown) => string;
 
-// Compiling a job's reference program takes about 100 ms, so each session compiles it once.
+// Compiling a job's reference program takes about 100 ms, so each session compiles it once. Its
+// run on a fixture never changes either, so each session runs it once per fixture, which also
+// spares the session's record store.
 const references = new WeakMap<QdlSession, Map<QdlJobId, QdlArtifact>>();
+const referenceTraces = new WeakMap<QdlSession, Map<string, QdlTraceStep[]>>();
+
+function referenceTrace(session: QdlSession, reference: QdlArtifact, jobId: QdlJobId, fixture: QdlFixture): QdlTraceStep[] {
+  let bySession = referenceTraces.get(session);
+  if (!bySession) referenceTraces.set(session, (bySession = new Map()));
+  const key = `${jobId}\u0000${fixture.name}`;
+  let trace = bySession.get(key);
+  if (!trace) bySession.set(key, (trace = runOnce(session, reference, fixture.inputs).trace));
+  return trace;
+}
 
 function referenceOf(session: QdlSession, jobId: QdlJobId, intent: unknown): QdlArtifact {
   let bySession = references.get(session);
@@ -99,7 +111,7 @@ export function runFixtures(session: QdlSession, rt: QuinelingsRuntime, artifact
     let likelyCause: LikelyCause | null = null;
     if (redNodeId) {
       counterparts ??= matchNodes(artifact.payload.task.nodes, reference.payload.task.nodes, canon);
-      likelyCause = guessCause(redNodeId, artifact, counterparts, trace, () => runOnce(session, reference, fixture.inputs).trace, canon);
+      likelyCause = guessCause(redNodeId, artifact, counterparts, trace, () => referenceTrace(session, reference, jobId, fixture), canon);
     }
 
     return { name: fixture.name, inputs: fixture.inputs, expected, actual, matches, differingOutputs, missingOutputs, trace, redNodeId, likelyCause };
@@ -107,7 +119,7 @@ export function runFixtures(session: QdlSession, rt: QuinelingsRuntime, artifact
 }
 
 /** Expected outputs are positional in the reference program's outputs; this keys them by name (KTD6). */
-function expectedOf(fixture: QdlFixture, referenceOutputs: string[]): FixtureExpected {
+export function expectedOf(fixture: Pick<QdlFixture, "expectedOutputs" | "expectedStatus" | "expectedDiagnostic">, referenceOutputs: string[]): FixtureExpected {
   if (fixture.expectedStatus) return { status: fixture.expectedStatus, code: fixture.expectedDiagnostic ?? "" };
   const values = fixture.expectedOutputs ?? [];
   return { status: "completed", outputs: Object.fromEntries(referenceOutputs.map((name, i) => [name, values[i]])) };

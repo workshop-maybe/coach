@@ -4,6 +4,7 @@
 // owns the canvas and the clock; everything it decides comes from here. Nothing here draws or
 // reads a colour: tones name tokens, and the component maps them to the values it read.
 
+import { operationCount } from "./programChecks";
 import type { QdlNode, QdlTraceStep } from "./quinelings";
 
 /** Points asked of `session.frame`. The runtime needs at least 4000; the stipple look was chosen at 9000. */
@@ -275,5 +276,5 @@ export function caption(input: CaptionInput): { text: string; tone: "ink" | "dat
     const text = name(input.red);
     if (text) return { text, tone: "error" };
   }
-  return { text: `${input.nodes.length} operations`, tone: "ink" };
+  return { text: `${operationCount(input.nodes)} operations`, tone: "ink" };
 }

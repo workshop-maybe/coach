@@ -17,9 +17,9 @@
 import { useEffect, useId, useMemo, useState, type KeyboardEvent } from "react";
 import { Outline } from "../cast/Outline";
 import { handoffTextOf, isHeld, readingOfTake, takeTime } from "../domain/handoffResults";
-import { runFixtures, type FixtureActual, type FixtureExpected, type FixtureResult } from "../domain/fixtureRun";
-import { checkProgram } from "../domain/programChecks";
-import { findProgram } from "../domain/programReply";
+import { expectedOf, runFixtures, type FixtureActual, type FixtureExpected, type FixtureResult } from "../domain/fixtureRun";
+import { checkProgram, type ProgramChecks } from "../domain/programChecks";
+import { findProgram, type ProgramFind } from "../domain/programReply";
 import { loadQuinelings, newSession, type QdlJobId, type QdlSession, type QuinelingsRuntime } from "../domain/quinelings";
 import { replyItems, textOf } from "../domain/replyItems";
 import { rubricParts } from "../domain/secondOpinion";
@@ -92,7 +92,7 @@ export function QuinelingView({ credentialKey: key, take, picks, jobId }: { cred
   const program = useMemo(() => findProgram(text), [text]);
   const session = loaded.kind === "ready" ? loaded.session : null;
   const checks = useMemo(() => (session && program.kind === "program" ? checkProgram(session, program.intent) : null), [session, program]);
-  const job = loaded.kind === "ready" ? loaded.rt.QDLV1Library.get(jobId) : null;
+  const job = useMemo(() => (loaded.kind === "ready" ? loaded.rt.QDLV1Library.get(jobId) : null), [loaded, jobId]);
 
   const [run, setRun] = useState<Run | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
@@ -260,7 +260,7 @@ export function QuinelingView({ credentialKey: key, take, picks, jobId }: { cred
 }
 
 /** What the checks found: the program's two checks, or what failed and its diagnostic (R8, R17). */
-function ChecksList({ program, checks, loaded }: { program: ReturnType<typeof findProgram>; checks: ReturnType<typeof checkProgram> | null; loaded: Loaded }) {
+function ChecksList({ program, checks, loaded }: { program: ProgramFind; checks: ProgramChecks | null; loaded: Loaded }) {
   if (program.kind === "none") return <p className="quineling-fail">No program found</p>;
   if (program.kind === "several") {
     return (
@@ -309,13 +309,6 @@ function ChecksList({ program, checks, loaded }: { program: ReturnType<typeof fi
   );
 }
 
-/** A fixture's expected outcome before any run, keyed by output name as fixtureRun keys it (KTD6). */
-function expectedOf(fixture: { expectedOutputs?: unknown[]; expectedStatus?: "refused" | "failed"; expectedDiagnostic?: string }, outputs: string[]): FixtureExpected {
-  if (fixture.expectedStatus) return { status: fixture.expectedStatus, code: fixture.expectedDiagnostic ?? "" };
-  const values = fixture.expectedOutputs ?? [];
-  return { status: "completed", outputs: Object.fromEntries(outputs.map((name, i) => [name, values[i]])) };
-}
-
 /** The selected fixture: its expected outcome, and after a run its actual one and the guess at a failure's cause (R11, R16). */
 function FixtureDetail({ expected, result }: { expected: FixtureExpected; result: FixtureResult | null }) {
   const differing = new Set(result?.differingOutputs ?? []);
@@ -333,7 +326,8 @@ function FixtureDetail({ expected, result }: { expected: FixtureExpected; result
               <Outcome
                 outcome={result.actual}
                 names={expected.status === "completed" ? Object.keys(expected.outputs) : undefined}
-                differing={result.matches ? undefined : differing}
+                wrong={!result.matches}
+                differing={differing}
               />
             </dd>
           </>
@@ -353,11 +347,11 @@ function FixtureDetail({ expected, result }: { expected: FixtureExpected; result
 }
 
 /** Outputs by name, or a refusal or failure as its status and diagnostic. Every value renders as text. */
-function Outcome({ outcome, names, differing }: { outcome: FixtureExpected | FixtureActual; names?: string[]; differing?: Set<string> }) {
+function Outcome({ outcome, names, wrong = false, differing }: { outcome: FixtureExpected | FixtureActual; names?: string[]; wrong?: boolean; differing?: Set<string> }) {
   if (outcome.status !== "completed") {
     const message = "message" in outcome && outcome.message ? `\n${outcome.message}` : "";
     return (
-      <pre className={`quineling-mono${differing ? " fixture-wrong" : ""}`}>
+      <pre className={`quineling-mono${wrong ? " fixture-wrong" : ""}`}>
         {outcome.status} · {outcome.code}
         {message}
       </pre>

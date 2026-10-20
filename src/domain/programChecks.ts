@@ -2,7 +2,7 @@
 // The program reaches the runtime only as parsed data; compiling it runs nothing (R18). The view
 // owns the session (KTD9), so the session comes in from the caller.
 
-import type { QdlArtifact, QdlSession } from "./quinelings";
+import type { QdlArtifact, QdlNode, QdlSession } from "./quinelings";
 
 export type ProgramChecks =
   | {
@@ -23,12 +23,16 @@ export function checkProgram(session: Pick<QdlSession, "compile" | "verify">, in
   } catch (error) {
     return { compiles: false, ...diagnosticOf(error) };
   }
-  const operations = artifact.payload.task.nodes.filter((node) => !AUTHORED.has(node.op)).length;
-  return { compiles: true, artifact, operations, reproducesSource: reproduces(session, artifact) };
+  return { compiles: true, artifact, operations: operationCount(artifact.payload.task.nodes), reproducesSource: reproduces(session, artifact) };
 }
 
 /** Node kinds the compiler makes from the program's declared inputs and constants. */
 const AUTHORED = new Set(["input", "literal"]);
+
+/** The program's operations: its own steps, not the nodes made for its inputs and constants. */
+export function operationCount(nodes: readonly Pick<QdlNode, "op">[]): number {
+  return nodes.filter((node) => !AUTHORED.has(node.op)).length;
+}
 
 function reproduces(session: Pick<QdlSession, "verify">, artifact: QdlArtifact): boolean {
   try {

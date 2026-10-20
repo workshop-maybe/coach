@@ -17,6 +17,7 @@ export interface OutlineProps {
 const DASH = "7 6";
 
 const SIZES = { machine: [MINI.w, MINI.h], cartridge: [CARTRIDGE_W, CARTRIDGE_H], handoff: [CARD_W, CARD_H], body: [160, 150] } as const;
+const WIDTHS = { machine: 120, cartridge: 72, handoff: 64, body: 160 } as const;
 
 /** A soft, lopsided body: a closed outline with a fold across it, drawn once by hand. */
 const BODY = "M82 14C112 12 140 34 146 66C152 98 134 130 100 138C70 145 34 136 20 108C6 80 14 46 38 28C50 19 64 15 82 14Z";
@@ -30,7 +31,7 @@ const k = MINI.keys;
 
 export function Outline({ kind, width, className }: OutlineProps) {
   const [vw, vh] = SIZES[kind];
-  const w = width ?? (kind === "machine" ? 120 : kind === "cartridge" ? 72 : kind === "body" ? 160 : 64);
+  const w = width ?? WIDTHS[kind];
   return (
     <svg
       className={`cast cast-outline cast-outline-${kind}${className ? ` ${className}` : ""}`}
