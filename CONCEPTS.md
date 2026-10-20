@@ -70,6 +70,14 @@ The agent the user chose for a badge, even when several hold it. The user marks 
 
 A later verdict on a reply that already has one, given from where the reply opens. It is saved as its own file beside the agent's results and laid over the result when the folder loads, so the reply keeps its file, its time and its place, and shows the new verdict everywhere. The earlier verdict stays in the record. A go-to stands only while its reply's verdict is Met.
 
+### Program badge
+
+A badge in the built-in Bounded programs collection, one for each job in the Quinelings QDL 1 library. Its task asks the agent for one bounded program, written in QDL 1 from the linked spec, and its rubric is the job's fixtures: named inputs and the outputs, refusal or failure each should give. A badge is a program badge while it sits in a copy of that collection under its original slug, so renaming it keeps it one; a badge the user adds to the copy is an ordinary badge.
+
+### Quineling view
+
+How a reply to a program badge opens, in place of the ordinary reply view. The left side shows the program's checks (it compiles, and reproduces its own source) and the job's fixtures, each marked matches or differs once the user runs them; the right side draws the program's body in stipple. A differing fixture lights the operation that gave the wrong output, and, when the program has the same shape as the job's reference program, marks a likely cause as a guess. The app runs the program only in Quinelings' bounded interpreter, as data. Fixture results never decide the verdict: Met and Not yet stay the user's choice.
+
 ## Jev Mode
 
 ### Jev Mode
