@@ -1,0 +1,62 @@
+---
+title: Test a bounded program
+part: how-to
+order: 53
+description: Ask an agent for a small program, run it on the job's fixtures, and judge it yourself.
+---
+
+{/* How to (bounded-programs U7, KTD12): add the Bounded programs collection, hand off a program badge, hold the reply, open it in the Quineling view, run the fixtures, read the results and judge. Labels are checked against src/ui/QuinelingView.tsx, src/ui/CollectionDeck.tsx, src/ui/TestDeck.tsx and src/ui/BadgeDetail.tsx (KTD8). */}
+
+The *Bounded programs* collection has ten badges, one for each job in the Quinelings QDL 1 library. Each asks an agent to write the job as a small program. The app can check that program and run it on the job's fixtures, the test cases that say what the right output is.
+
+## Add the collection
+
+On home, click <UI>Add a collection</UI>, then *Bounded programs*, then <UI>Add the collection</UI>. [Use collections](/how-to/use-collections/) has the details.
+
+## Hand off a badge
+
+Give one of its badges to an agent as you would any other: [Hand off a test](/how-to/hand-off-a-test/). The task links to the QDL 1 spec on GitHub, so the agent needs network access to read it.
+
+## Hold the reply
+
+1. Paste the agent's reply under <UI>What came back</UI> and click <UI>Next</UI>.
+2. At <UI>Did it meet it</UI>, click <UI>Hold to compare</UI>.
+
+Hold it rather than judging it here. The fixtures run only once you open the reply.
+
+## Open the reply
+
+Open the badge from home and click the reply under <UI>Replies</UI>. A reply to one of these badges opens with its <UI>Checks</UI>, its <UI>Fixtures</UI> and its <UI>Body</UI>, the program drawn in dots.
+
+The checks say whether the program compiles, with its number of operations, and whether it <UI>Reproduces its own source</UI>.
+
+## Run the fixtures
+
+Click <UI>Run the fixtures</UI>. Each fixture says <UI>matches</UI> or <UI>differs</UI>, and the first one that differs is selected.
+
+<Shot id="quineling-run" alt="Claude Code's held reply to Gather readiness after Run the fixtures: Compiles · 8 operations and Reproduces its own source, Met and Not yet, inclusive freshness boundary selected and marked differs, the other four fixtures marked matches, and the program's body drawn in dots with two parts in red" />
+
+Below the list, <UI>Expected</UI> and <UI>Actual</UI> show the selected fixture's outputs, with the wrong ones in red. <UI>Likely cause</UI> names a step that gives a different value from the same step in the job's own program. It is a guess, and it can be wrong. Click another fixture to read its outputs.
+
+<Shot id="quineling-cause" alt="The same reply scrolled down: Expected shows proposal simulated and ready true, Actual shows proposal skipped and ready false in red, and Likely cause says young gives false where the job's own program gives true" />
+
+## Judge it
+
+Click <UI>Met</UI> or <UI>Not yet</UI> yourself. The fixture results sit beside your verdict and never set it.
+
+## When there is no program
+
+The checks say what went wrong, and <UI>Run the fixtures</UI> stays off:
+
+- <UI>No program found</UI>: the reply has no program in it.
+- <UI>More than one program</UI>: the reply holds several. Ask the agent for one.
+- <UI>Could not read the program</UI>: the program is not valid JSON.
+- <UI>Does not compile</UI>: the line under it gives the reason.
+
+<Shot id="quineling-no-program" alt="Codex's held reply to Gather readiness: No program found under Checks, Run the fixtures turned off, the five fixtures with no results, and an empty outline where the body would be" />
+
+You can still judge the reply.
+
+## What runs
+
+The app reads the program as data and runs it in Quinelings' bounded interpreter, on your computer. Nothing an agent pastes runs as code, and nothing is sent anywhere.

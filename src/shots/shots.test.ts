@@ -110,6 +110,7 @@ const folders: Record<Shot["seed"], Promise<FolderState>> = {
   empty: sampleFolder("empty").then((s) => loadFolder(sampleStorage(s))),
   full: sampleFolder("full").then((s) => loadFolder(sampleStorage(s))),
   judged: sampleFolder("judged").then((s) => loadFolder(sampleStorage(s))),
+  programs: sampleFolder("programs").then((s) => loadFolder(sampleStorage(s))),
 };
 
 describe("the shot manifest", () => {
@@ -137,7 +138,7 @@ describe("the shot manifest", () => {
     for (const shot of SHOTS) {
       const want = "text" in shot.expect ? shot.expect.text : shot.expect.selector;
       expect(typeof want === "string" && want.trim() !== "", shot.id).toBe(true);
-      expect(["empty", "full", "judged"], shot.id).toContain(shot.seed);
+      expect(["empty", "full", "judged", "programs"], shot.id).toContain(shot.seed);
       expect(["off", "on"], shot.id).toContain(shot.jev);
     }
   });

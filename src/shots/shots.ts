@@ -16,10 +16,11 @@ import type { DeckRoute, ItemRoute, Route } from "../ui/routes";
 
 /**
  * The sample folder a shot opens over (src/shots/seed.ts): a first run's empty folder, the
- * full one, or the full one with enough judged readings on Check an answer key for Jev's
- * track record and fitted cut-offs.
+ * full one, the full one with enough judged readings on Check an answer key for Jev's
+ * track record and fitted cut-offs, or the full one with a copy of Bounded programs and two
+ * replies held on its Gather readiness badge.
  */
-export type SeedVariant = "empty" | "full" | "judged";
+export type SeedVariant = "empty" | "full" | "judged" | "programs";
 
 /**
  * Jev Mode for a shot: off with no key, or on with FakeJev's sample key hint (AE4). How to
@@ -148,6 +149,10 @@ const CODEX_HOW_SURE = { profileSlug: CODEX, fileStem: "20260925T100500Z" };
 const CLAUDE_HOW_SURE = { profileSlug: CLAUDE, fileStem: "20260926T164500Z" };
 /** Write a release note's own handoff, A, its default. */
 const RELEASE_NOTE_HANDOFF = "20260928T090000Z";
+/** The "programs" sample's Gather readiness, and the two replies held on it. */
+const GATHER = "bounded-programs/gather-readiness";
+const CLAUDE_GATHER = { profileSlug: CLAUDE, fileStem: "20260930T141000Z" };
+const CODEX_GATHER = { profileSlug: CODEX, fileStem: "20260930T153000Z" };
 
 /** The job the router's pictures and its case study paste (router KTD15), as someone would hand it to an agent. */
 export const ROUTER_JOB = `Go through the answers to this week's support quiz and say how sure you are of each one.
@@ -1225,6 +1230,37 @@ export const SHOTS: readonly Shot[] = [
     expect: { text: "Move My credentials to the trash" },
     clip: { selector: ".deck-card", pad: 16 },
   },
+
+  // Bounded programs (bounded-programs U7): Claude Code's held program on Gather readiness
+  // after Run the fixtures, with the differing boundary fixture selected and its likely
+  // cause, and Codex's held reply, which holds no program.
+  {
+    id: "quineling-run",
+    page: "how-to/test-a-bounded-program",
+    route: { view: "item", item: "reply", credentialKey: GATHER, take: CLAUDE_GATHER },
+    seed: "programs",
+    jev: "off",
+    expect: { text: "Likely cause" },
+    steps: [{ click: { button: "Run the fixtures" } }, { waitFor: { text: "differs" } }],
+  },
+  {
+    // The same run, scrolled down to the differing fixture's expected and actual outputs and its likely cause.
+    id: "quineling-cause",
+    page: "how-to/test-a-bounded-program",
+    route: { view: "item", item: "reply", credentialKey: GATHER, take: CLAUDE_GATHER },
+    seed: "programs",
+    jev: "off",
+    expect: { text: "Likely cause" },
+    steps: [{ click: { button: "Run the fixtures" } }, { waitFor: { text: "differs" } }, { scroll: { selector: ".fixture-guess" } }],
+  },
+  {
+    id: "quineling-no-program",
+    page: "how-to/test-a-bounded-program",
+    route: { view: "item", item: "reply", credentialKey: GATHER, take: CODEX_GATHER },
+    seed: "programs",
+    jev: "off",
+    expect: { text: "No program found" },
+  },
 ];
 
 /** Marks a route kind no shot pictures yet. */
@@ -1264,6 +1300,6 @@ export const COVERAGE: Record<RouteKind, readonly string[] | typeof NOT_PICTURED
   "item:agent": ["agent-page"],
   // A handoff opens as its own item only once two or more have results; the sample's has none.
   "item:handoff": NOT_PICTURED,
-  "item:reply": ["reply-view", "jev-reading"],
+  "item:reply": ["reply-view", "jev-reading", "quineling-run", "quineling-cause", "quineling-no-program"],
   "item:compare": ["compare", "compare-held", "compare-grid", "compare-against-jev", "compare-ask", "compare-rejudge", "compare-reason", "compare-changed"],
 };
