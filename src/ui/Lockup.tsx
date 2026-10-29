@@ -1,9 +1,9 @@
 // The Coach lockup: the mark, then the name lettered by hand like the cast. The mark is an
-// agent's machine in a ring, drawn in clean lines: a clipboard clip on top at the left, a prompt on the
-// screen, two encoders and a strip of keys with one lit. Orange stays in the logo, on the
-// clip, the prompt and the lit key. src-tauri/icons/icon.svg draws the same mark. Drawn
-// light only, so one variant. Needs InkDefs mounted, as the shell and the first-run gate
-// both do.
+// agent's machine in a ring, drawn in clean lines: a clipboard clip on top at the right, a
+// prompt on the screen, two encoders and a strip of keys with two lit. Orange stays in the
+// logo, on the clip, the prompt and the lit keys. src-tauri/icons/icon.svg draws the same
+// mark. Drawn light only, so one variant. Needs InkDefs mounted, as the shell and the
+// first-run gate both do.
 import { INK } from "../cast/InkDefs";
 
 /** A bowl as a pen draws it: one loop that runs a little past where it started. */
@@ -44,13 +44,13 @@ export function markPaths(w: number, d: number): { ink: [string, number][]; acce
       ["M20 38H80V68H20Z", d],
       ["M26 44H50V57H26Z", d],
       [knob(62, -40) + knob(73.5, 35), d],
-      [[0, 1, 2, 3, 5].map(key).join(""), d],
+      [[0, 2, 3, 5].map(key).join(""), d],
     ],
     accent: [
-      ["M25 38V32.5H43V38", d],
-      ["M29 32.5V29H39V32.5", d],
+      ["M57 38V32.5H75V38", d],
+      ["M61 32.5V29H71V32.5", d],
       ["M31.5 48L34.8 50.5L31.5 53M37.5 53H42.5", d],
-      [key(4), d * 1.4],
+      [key(1) + key(4), d * 1.4],
     ],
   };
 }
