@@ -2,7 +2,7 @@
 // no script, just the files `npm run site:build` writes to site/dist. The build runs on
 // Cloudflare from the repo root; site/README.md has the setup steps.
 {
-  "name": "andamio-desktop-guide",
+  "name": "coach-guide",
   "compatibility_date": "2026-10-01",
   "assets": {
     "directory": "./site/dist",
