@@ -1,4 +1,4 @@
-# The Andamio Desktop user guide
+# The Coach user guide
 
 A static Astro site in the app's world: warm paper, ink rules, Inter and Fragment Mono, square corners, and the hand-inked cast from `src/cast/`. It reads the app's own tokens and fonts, ships no JavaScript framework to readers, and fetches nothing from another host. Search is Pagefind, built from the site's own files.
 

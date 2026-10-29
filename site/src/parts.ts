@@ -3,7 +3,7 @@
 // guide's vitest checks (U3) all read the same list.
 
 /** The site's name: the home page's title, and the end of every other page's tab title. */
-export const SITE_NAME = "Andamio Desktop guide";
+export const SITE_NAME = "Coach guide";
 
 /** The parts, in the order navigation lists them. */
 export const PART_IDS = ["getting-started", "ideas", "how-to", "help", "jev"] as const;

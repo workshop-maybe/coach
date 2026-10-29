@@ -34,4 +34,4 @@ Met when every fixture matches.
 
 ## Source
 
-Written for Andamio Desktop, from the `water-total` job in the Quinelings QDL 1 library at its qdl-v1.0.0 release (github.com/CharlesHoskinson/quinelings, Apache-2.0 license). The rubric is the job's own fixtures.
+Written for Coach, from the `water-total` job in the Quinelings QDL 1 library at its qdl-v1.0.0 release (github.com/CharlesHoskinson/quinelings, Apache-2.0 license). The rubric is the job's own fixtures.

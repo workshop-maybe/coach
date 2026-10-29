@@ -32,4 +32,4 @@ Met when every point holds.
 
 ## Source
 
-Written for Andamio Desktop, on the moderation target in coach's knowledge/slt-patterns/verb-bank.yaml (github.com/Andamio-Platform/coach, MIT). The scenario is new and no text is copied.
+Written for Coach, on the moderation target in coach's knowledge/slt-patterns/verb-bank.yaml (github.com/Andamio-Platform/coach, MIT). The scenario is new and no text is copied.

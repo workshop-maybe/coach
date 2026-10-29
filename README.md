@@ -1,4 +1,4 @@
-# Andamio Desktop App
+# Coach
 
 A simple, beautiful little tool for building credentials and offering them to your agents.
 

@@ -234,7 +234,7 @@ const MAX_MODEL_CHARS: usize = 64;
 /// Shorter keys get no hint, since four characters would give away too much of them.
 const HINT_MIN_CHARS: usize = 12;
 /// The one keychain entry. Setting a new key overwrites it.
-const KEYCHAIN_SERVICE: &str = "io.andamio.desktop";
+const KEYCHAIN_SERVICE: &str = "io.andamio.coach";
 const KEYCHAIN_ACCOUNT: &str = "typesafe-api-key";
 
 /// Each failure kind gets its own line in the UI (KTD20).

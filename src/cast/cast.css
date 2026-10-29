@@ -20,10 +20,6 @@
   stroke: var(--sys-orange);
 }
 
-.lockup-dot {
-  fill: var(--ink);
-}
-
 /* Tools are drawn keys (src/cast/ToolKey.tsx). */
 .tool-key {
   display: block;

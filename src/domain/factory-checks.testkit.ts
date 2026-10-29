@@ -24,7 +24,7 @@ export function checkFactoryCredential(markdown: string, ids: { slug: Slug; coll
 
   it("names where it came from: a coach file, or written for the app", () => {
     const source = credential.extraSections.find((e) => e.heading === "Source");
-    expect(source?.body).toMatch(/^(?:Ported from coach, \S+\.(?:ya?ml|md)|Written for Andamio Desktop)/);
+    expect(source?.body).toMatch(/^(?:Ported from coach, \S+\.(?:ya?ml|md)|Written for Coach)/);
   });
 
   it("is saved exactly as written", () => {

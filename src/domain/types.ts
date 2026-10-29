@@ -1,4 +1,4 @@
-// Domain types for Andamio Desktop. Every entity's id is its filename slug (KTD3):
+// Domain types for Coach. Every entity's id is its filename slug (KTD3):
 // set once at creation and never changed, so renaming never breaks references.
 
 import type { BadgeSettings } from "../badge/settings";

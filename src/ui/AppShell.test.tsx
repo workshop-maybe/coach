@@ -65,7 +65,7 @@ function expectFolderInBar(shown: boolean) {
 }
 
 function expectWindowKeysAndBrand() {
-  for (const name of ["Close window", "Minimize window", "Enter full screen", "Andamio Desktop, go home"]) {
+  for (const name of ["Close window", "Minimize window", "Enter full screen", "Coach, go home"]) {
     expect(within(bar()).getByRole("button", { name })).toBeTruthy();
   }
 }

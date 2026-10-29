@@ -58,7 +58,7 @@ Met when both targets are met.
 
 ## Source
 
-Written for Andamio Desktop.
+Written for Coach.
 `;
 
 const WHAT_NEXT = `# Name what matters next
@@ -90,7 +90,7 @@ Met when every point holds.
 
 ## Source
 
-Written for Andamio Desktop, as a first test to run on any agent open in a repo.
+Written for Coach, as a first test to run on any agent open in a repo.
 `;
 
 const HOW_SURE = `# Say how sure you are
@@ -141,7 +141,7 @@ Met when every point holds.
 
 ## Source
 
-Written for Andamio Desktop. The answer format follows the evaluation code of Humanity's Last Exam (github.com/centerforaisafety/hle, MIT license). The questions are new and are not from HLE.
+Written for Coach. The answer format follows the evaluation code of Humanity's Last Exam (github.com/centerforaisafety/hle, MIT license). The questions are new and are not from HLE.
 `;
 
 const CHECK_KEY = `# Check an answer key
@@ -175,7 +175,7 @@ Met when all five calls are right and each wrong key gets the right answer and t
 
 ## Source
 
-Written for Andamio Desktop, after the published reviews of answer keys in Humanity's Last Exam. The items are new and are not from HLE.
+Written for Coach, after the published reviews of answer keys in Humanity's Last Exam. The items are new and are not from HLE.
 `;
 
 export const PRESETS: readonly Preset[] = [

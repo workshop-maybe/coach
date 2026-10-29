@@ -114,7 +114,7 @@ export function AppShell({ onChangeFolder, initialRoute = { view: "home" } }: Ap
             <InkDefs />
             <header className="topbar" data-tauri-drag-region={dragRegion}>
               <WindowControls />
-              <button type="button" className="brand" aria-label="Andamio Desktop, go home" onClick={() => navigate({ view: "home" })}>
+              <button type="button" className="brand" aria-label="Coach, go home" onClick={() => navigate({ view: "home" })}>
                 <Lockup />
               </button>
               {!pane && (

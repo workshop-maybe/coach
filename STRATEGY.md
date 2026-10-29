@@ -1,9 +1,9 @@
 ---
-name: Andamio Desktop
+name: Coach
 last_updated: 2026-10-06
 ---
 
-# Andamio Desktop Strategy
+# Coach Strategy
 
 ## Purpose
 
@@ -11,13 +11,13 @@ People hand work to agents before deciding what it should accomplish. The output
 
 ## Positioning
 
-Andamio Desktop is hands-on software with no AI inside, the way an Elektron box is hands-on next to a DAW. The one exception is Jev Mode, off unless you turn it on with your own TypeSafe key: it gives a second opinion on a reply, cleans up a terminal copy, and says which badge a new job is like, only when you ask. You define what the work should accomplish before you hand it to an agent, turn the dials on the setup and judge each result yourself. Taking that time gets better results. Every test runs on a full credential that an agent or a person could hold, so the record shows what succeeds at the work that matters to you.
+Coach is hands-on software with no AI inside, the way an Elektron box is hands-on next to a DAW. The one exception is Jev Mode, off unless you turn it on with your own TypeSafe key: it gives a second opinion on a reply, cleans up a terminal copy, and says which badge a new job is like, only when you ask. You define what the work should accomplish before you hand it to an agent, turn the dials on the setup and judge each result yourself. Taking that time gets better results. Every test runs on a full credential that an agent or a person could hold, so the record shows what succeeds at the work that matters to you.
 
 The app is a training coach you outgrow. It gives you the big picture of what your agents can do and helps you build a mental model of your own workflows. Once you know which setup handles a kind of work, the choice becomes habit and you stop checking. You come back when results slip, to change the test and run it again.
 
 ## Users
 
-**Primary:** Daily agent operators - They run several harnesses and models every day and pay for them. They're hiring Andamio Desktop to find out, on tests drawn from their own work, which setup is good enough for each kind of task, so they stop guessing and stop overpaying.
+**Primary:** Daily agent operators - They run several harnesses and models every day and pay for them. They're hiring Coach to find out, on tests drawn from their own work, which setup is good enough for each kind of task, so they stop guessing and stop overpaying.
 
 ## Boundaries
 

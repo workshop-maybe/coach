@@ -44,32 +44,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "andamio-desktop"
-version = "0.2.1"
-dependencies = [
- "apple-native-keyring-store",
- "arboard",
- "base64 0.22.1",
- "keyring-core",
- "percent-encoding",
- "reqwest",
- "secret-service",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tauri",
- "tauri-build",
- "tauri-plugin-clipboard-manager",
- "tauri-plugin-dialog",
- "tauri-plugin-opener",
- "tauri-plugin-window-state",
- "tempfile",
- "windows-native-keyring-store",
- "zbus-secret-service-keyring-store",
- "zeroize",
-]
-
-[[package]]
 name = "android_system_properties"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -649,6 +623,32 @@ name = "cmov"
 version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c9ea0ac24bc397ab3c98583a3c9ba74fa56b09a4449bbe172b9b1ddb016027a"
+
+[[package]]
+name = "coach"
+version = "0.2.1"
+dependencies = [
+ "apple-native-keyring-store",
+ "arboard",
+ "base64 0.22.1",
+ "keyring-core",
+ "percent-encoding",
+ "reqwest",
+ "secret-service",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-clipboard-manager",
+ "tauri-plugin-dialog",
+ "tauri-plugin-opener",
+ "tauri-plugin-window-state",
+ "tempfile",
+ "windows-native-keyring-store",
+ "zbus-secret-service-keyring-store",
+ "zeroize",
+]
 
 [[package]]
 name = "combine"

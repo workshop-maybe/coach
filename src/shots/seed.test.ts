@@ -292,7 +292,7 @@ describe("what the sample shows (R20, AE4)", () => {
   });
 
   it("finds a path outside the sample folder", () => {
-    expect(strayPaths("/Users/you/Andamio/agents/a.json and /Users/you/Andamio")).toEqual([]);
+    expect(strayPaths("/Users/you/Coach/agents/a.json and /Users/you/Coach")).toEqual([]);
     expect(strayPaths("open /Users/jane/code or ~/notes or C:\\Users\\jane")).toHaveLength(3);
   });
 

@@ -3,9 +3,9 @@ import { badgeFingerprints, collectionFingerprint, defaultPaletteIndex } from ".
 
 // Reference digests from `printf %s '<input>' | shasum -a 256`.
 const SHA: Record<string, string> = {
-  "andamio-desktop/collection:eng": "82903626c46ef58946141500df2eeacf82d46aa21f96b96574e256d123c992b3",
-  "andamio-desktop/credential:eng/review": "4dfa1a7988582b8158e3e930afc42cb9995dae94b409864a4f4a9d5eea0757bc",
-  "andamio-desktop/credential:équipe/revue": "61a3ab6e4ed3fb9dc1ad8cfab9e8fc06c867c47b7ae14970784323b5b0d78ed8",
+  "coach/collection:eng": "26300ecb6cffdafec38577fbe8e8b6f23454dcd0672338af922e3f3a867d461e",
+  "coach/credential:eng/review": "f8cdb84ad00e8612ec06461dc5b826b432f2538b46b047902c84c2bef0907a09",
+  "coach/credential:équipe/revue": "34bce34f3020eb153200b56acff42e864a6e41bd67627cd45fb7495cc5280133",
 };
 const sha = (s: string) => SHA[s];
 
@@ -14,8 +14,8 @@ describe("badge fingerprints", () => {
     const fp = await badgeFingerprints("eng", "review");
     expect(fp.outerHex).toMatch(/^[0-9a-f]{56}$/);
     expect(fp.innerHex).toMatch(/^[0-9a-f]{64}$/);
-    expect(fp.outerHex).toBe(sha("andamio-desktop/collection:eng").slice(0, 56));
-    expect(fp.innerHex).toBe(sha("andamio-desktop/credential:eng/review"));
+    expect(fp.outerHex).toBe(sha("coach/collection:eng").slice(0, 56));
+    expect(fp.innerHex).toBe(sha("coach/credential:eng/review"));
     expect(await collectionFingerprint("eng")).toBe(fp.outerHex);
   });
 
@@ -32,7 +32,7 @@ describe("badge fingerprints", () => {
 
   it("handles non-ASCII slugs as UTF-8", async () => {
     const fp = await badgeFingerprints("équipe", "revue");
-    expect(fp.innerHex).toBe(sha("andamio-desktop/credential:équipe/revue"));
+    expect(fp.innerHex).toBe(sha("coach/credential:équipe/revue"));
   });
 
   it("Covers AE1. Editing a credential's name, task or rubric leaves its fingerprints unchanged", async () => {
