@@ -35,6 +35,12 @@ src-tauri/gen
 # Compound Engineering scratch
 .context/compound-engineering/
 
+# Working notes stay on the machine that wrote them (brainstorms, plans, ideation, learnings)
+docs/brainstorms/
+docs/plans/
+docs/ideation/
+docs/solutions/
+
 # Astro's generated types for the guide site
 .astro/
 
