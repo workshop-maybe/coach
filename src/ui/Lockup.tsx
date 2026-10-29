@@ -1,5 +1,5 @@
 // The Coach lockup: the mark, then the name lettered by hand like the cast. The mark is an
-// agent's machine in a ring, drawn in clean lines: a clipboard clip on top, a prompt on the
+// agent's machine in a ring, drawn in clean lines: a clipboard clip on top at the left, a prompt on the
 // screen, two encoders and a strip of keys with one lit. Orange stays in the logo, on the
 // clip, the prompt and the lit key. src-tauri/icons/icon.svg draws the same mark. Drawn
 // light only, so one variant. Needs InkDefs mounted, as the shell and the first-run gate
@@ -30,7 +30,7 @@ const NAME = [
   "M156 7.6V40.6", arch(156, 17), // h
 ].join("");
 
-/** The mark's ink and orange, on a 100 × 100 grid. `w` and `d` are the ring's and the details' stroke. */
+/** The mark's ink and orange, on a 100 × 100 grid. `w` is the ring's stroke and `d` the machine's. */
 export function markPaths(w: number, d: number): { ink: [string, number][]; accent: [string, number][] } {
   const knob = (cx: number, deg: number) => {
     const t = (deg * Math.PI) / 180;
@@ -41,22 +41,22 @@ export function markPaths(w: number, d: number): { ink: [string, number][]; acce
   return {
     ink: [
       ["M5 50a45 45 0 1 0 90 0a45 45 0 1 0 -90 0", w],
-      ["M20 38H80V68H20Z", w],
+      ["M20 38H80V68H20Z", d],
       ["M26 44H50V57H26Z", d],
       [knob(62, -40) + knob(73.5, 35), d],
       [[0, 1, 2, 3, 5].map(key).join(""), d],
     ],
     accent: [
-      ["M41 38V32.5H59V38", w],
-      ["M45 32.5V29H55V32.5", d],
-      ["M30.5 47L35 50.5L30.5 54M38 54H45", d],
-      [key(4), w],
+      ["M25 38V32.5H43V38", d],
+      ["M29 32.5V29H39V32.5", d],
+      ["M31.5 48L34.8 50.5L31.5 53M37.5 53H42.5", d],
+      [key(4), d * 1.4],
     ],
   };
 }
 
 /** The mark at lockup weight, a little heavier than the icon's since it shows at about 22px. */
-const MARK = markPaths(4.8, 3.4);
+const MARK = markPaths(4.6, 2.6);
 
 export function Lockup({ className }: { className?: string }) {
   return (

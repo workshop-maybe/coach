@@ -1,16 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 100 100">
-  <!-- The app icon: the lockup mark from src/ui/Lockup.tsx (markPaths(4.2, 3.2)) on a white disk.
+  <!-- The app icon: the lockup mark from src/ui/Lockup.tsx (markPaths(4.2, 2.2)) on a white disk.
        Every other file in this folder comes from it: npx tauri icon src-tauri/icons/icon.svg, then delete the android, ios and 64x64 files it adds -->
   <circle cx="50" cy="50" r="45" fill="#ffffff"/>
   <g fill="none" stroke-linecap="round" stroke-linejoin="round">
     <path d="M5 50a45 45 0 1 0 90 0a45 45 0 1 0 -90 0" stroke="#121212" stroke-width="4.2"/>
-    <path d="M20 38H80V68H20Z" stroke="#121212" stroke-width="4.2"/>
-    <path d="M26 44H50V57H26Z" stroke="#121212" stroke-width="3.2"/>
-    <path d="M57.4 50.5a4.6 4.6 0 1 0 9.2 0a4.6 4.6 0 1 0 -9.2 0M62 50.5L59.81 47.90M68.9 50.5a4.6 4.6 0 1 0 9.2 0a4.6 4.6 0 1 0 -9.2 0M73.5 50.5L75.45 47.71" stroke="#121212" stroke-width="3.2"/>
-    <path d="M26 62H30.2M34.6 62H38.8M43.2 62H47.4M51.8 62H56M69 62H73.2" stroke="#121212" stroke-width="3.2"/>
-    <path d="M41 38V32.5H59V38" stroke="#ff6b35" stroke-width="4.2"/>
-    <path d="M45 32.5V29H55V32.5" stroke="#ff6b35" stroke-width="3.2"/>
-    <path d="M30.5 47L35 50.5L30.5 54M38 54H45" stroke="#ff6b35" stroke-width="3.2"/>
-    <path d="M60.4 62H64.6" stroke="#ff6b35" stroke-width="4.2"/>
+    <path d="M20 38H80V68H20Z" stroke="#121212" stroke-width="2.2"/>
+    <path d="M26 44H50V57H26Z" stroke="#121212" stroke-width="2.2"/>
+    <path d="M57.4 50.5a4.6 4.6 0 1 0 9.2 0a4.6 4.6 0 1 0 -9.2 0M62 50.5L59.81 47.90M68.9 50.5a4.6 4.6 0 1 0 9.2 0a4.6 4.6 0 1 0 -9.2 0M73.5 50.5L75.45 47.71" stroke="#121212" stroke-width="2.2"/>
+    <path d="M26 62H30.2M34.6 62H38.8M43.2 62H47.4M51.8 62H56M69 62H73.2" stroke="#121212" stroke-width="2.2"/>
+    <path d="M25 38V32.5H43V38" stroke="#ff6b35" stroke-width="2.2"/>
+    <path d="M29 32.5V29H39V32.5" stroke="#ff6b35" stroke-width="2.2"/>
+    <path d="M31.5 48L34.8 50.5L31.5 53M37.5 53H42.5" stroke="#ff6b35" stroke-width="2.2"/>
+    <path d="M60.4 62H64.6" stroke="#ff6b35" stroke-width="3.08"/>
   </g>
 </svg>
