@@ -64,7 +64,7 @@ npm run site:shots    # render the guide's screenshots from the real app
 
 ## User guide
 
-The public user guide lives in `site/` (Astro, drawn in the app's world) and redeploys from `main`. `site/README.md` says how to add a page or a screenshot and how the host is set up.
+The user guide lives in `site/` (Astro, drawn in the app's world). It isn't hosted yet, so it is read in the repo. `site/README.md` says how to add a page or a screenshot and how a host would be set up.
 
 A PR that changes what a user sees or does updates the guide in the same PR: the pages that describe it, and the screenshots of the screens it changed, reshot with `npm run site:shots -- --only <id>`. A full `npm run site:shots` is a deliberate refresh, run on one machine, since another OS or Playwright version renders text slightly differently. `npm test` and `npm run site:build` fail when a page cites a label the app no longer has, a picture is missing or unused, or a link is broken. A label renamed in only one of several places still passes, so check the guide by hand when a label changes.
 

@@ -2,7 +2,7 @@
 
 A static Astro site in the app's world: warm paper, ink rules, Inter and Fragment Mono, square corners, and the hand-inked cast from `src/cast/`. It reads the app's own tokens and fonts, ships no JavaScript framework to readers, and fetches nothing from another host. Search is Pagefind, built from the site's own files.
 
-The site redeploys from `main`, so it always describes the latest app. The plan behind it is `docs/plans/2026-10-03-2017-feat-user-guide-site-plan.md`.
+The site isn't hosted yet. Its pages describe the app on `main`. The plan behind it is `docs/plans/2026-10-03-2017-feat-user-guide-site-plan.md`.
 
 ## Commands
 
