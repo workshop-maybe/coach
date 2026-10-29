@@ -1,6 +1,6 @@
 [package]
 name = "coach"
-version = "0.2.1"
+version = "0.3.0"
 license = "Apache-2.0"
 description = "Build credentials and offer them to your agents"
 authors = ["James Dunseith"]
