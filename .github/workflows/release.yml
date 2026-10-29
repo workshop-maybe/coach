@@ -1,0 +1,86 @@
+# Builds Coach for Mac, Linux and Windows and attaches the installers to a draft GitHub
+# release. Runs when a tag like v0.3.0 is pushed. Nothing is signed yet, so macOS shows
+# Gatekeeper's warning and Windows shows SmartScreen's. A draft stays hidden until it is
+# published by hand from the repo's Releases page.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS
+            os: macos-latest
+            args: --target universal-apple-darwin
+          - name: Linux
+            os: ubuntu-22.04
+            args: ""
+          - name: Windows
+            os: windows-latest
+            args: ""
+    runs-on: ${{ matrix.os }}
+    env:
+      # The guide's screenshots need Playwright's browsers; an installer build never does.
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux build libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          # A universal Mac build needs both Apple targets.
+          targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - run: npm ci
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: Coach ${{ github.ref_name }}
+          releaseDraft: true
+          prerelease: true
+          args: ${{ matrix.args }}
+          releaseBody: |
+            An early preview of Coach, for testers.
+
+            **Which file to download**
+            - Mac: the `.dmg` (one build for Apple Silicon and Intel).
+            - Windows: the `.msi` or the `-setup.exe`.
+            - Linux: the `.AppImage`, or the `.deb` or `.rpm` for your distribution.
+
+            **Before you open it**
+            - These builds aren't signed. On a Mac, the first open is blocked until you allow it in System Settings → Privacy & Security → Open Anyway. On Windows, SmartScreen warns you; choose More info → Run anyway.
+            - The Mac build has been used. The Linux and Windows builds are new and untested, so expect rough edges.
+            - Start with a new, empty folder, not one that holds work you care about.
+
+            **When something breaks**
+            Email james@andamio.io with your OS and version, what you did, what happened, and a screenshot if you can.
