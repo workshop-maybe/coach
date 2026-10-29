@@ -29,4 +29,4 @@ Met when every point holds.
 
 ## Source
 
-Written for Andamio Desktop, on coach's skills/draft-slts/SKILL.md and docs/product-course-content-structure.md (github.com/Andamio-Platform/coach, MIT). Where draft-slts allows a "by" clause, the rubric follows knowledge/slt-patterns/successful-rewrites.yaml. The brief is new and no text is copied.
+Written for Coach, on coach's skills/draft-slts/SKILL.md and docs/product-course-content-structure.md (github.com/Andamio-Platform/coach, MIT). Where draft-slts allows a "by" clause, the rubric follows knowledge/slt-patterns/successful-rewrites.yaml. The brief is new and no text is copied.

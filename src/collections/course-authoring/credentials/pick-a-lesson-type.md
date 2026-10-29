@@ -37,4 +37,4 @@ Met when all six calls are right and target 6 names its deciding question in any
 
 ## Source
 
-Written for Andamio Desktop, on coach's skills/classify-lesson-types/SKILL.md and knowledge/lesson-types/edge-cases.yaml (github.com/Andamio-Platform/coach, MIT). The targets are new and no text is copied, except target 6, which is coach's own example.
+Written for Coach, on coach's skills/classify-lesson-types/SKILL.md and knowledge/lesson-types/edge-cases.yaml (github.com/Andamio-Platform/coach, MIT). The targets are new and no text is copied, except target 6, which is coach's own example.

@@ -58,7 +58,7 @@ When you paste your key into <UI>Your TypeSafe key</UI> and click <UI>Turn on Je
 
 <Source file="src-tauri/src/jev.rs" symbol="parse_key" />
 
-The key goes into your system's keychain, as one entry under the service `io.andamio.desktop` and the account `typesafe-api-key`. The app's settings file keeps only whether Jev Mode is on, where the key is held, and its last four characters for the card to show. A key shorter than 12 characters gets no hint at all.
+The key goes into your system's keychain, as one entry under the service `io.andamio.coach` and the account `typesafe-api-key`. The app's settings file keeps only whether Jev Mode is on, where the key is held, and its last four characters for the card to show. A key shorter than 12 characters gets no hint at all.
 
 In the Rust code the key lives in a wrapper that prints as a placeholder and wipes its memory when it is dropped:
 

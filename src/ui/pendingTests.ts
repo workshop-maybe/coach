@@ -23,7 +23,7 @@ export interface PendingTest {
 }
 
 export function pendingStorageKey(folder: string): string {
-  return `andamio-desktop:pending-tests:${folder}`;
+  return `coach:pending-tests:${folder}`;
 }
 
 function defaultStore(): globalThis.Storage | null {

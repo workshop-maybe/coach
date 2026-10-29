@@ -26,4 +26,4 @@ Met when every point holds.
 
 ## Source
 
-Written for Andamio Desktop, on a task the cardano-dev-skills `design-token` skill covers (github.com/cardano-foundation/cardano-dev-skills, Apache-2.0). The scenarios are new and no text is copied.
+Written for Coach, on a task the cardano-dev-skills `design-token` skill covers (github.com/cardano-foundation/cardano-dev-skills, Apache-2.0). The scenarios are new and no text is copied.

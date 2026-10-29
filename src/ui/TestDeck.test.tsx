@@ -855,7 +855,7 @@ describe("TestDeck's paste and judge panes", () => {
     await waitFor(() => expect(document.activeElement).toBe(replyBox()));
     expect(testDeck().classList.contains("pane")).toBe(true);
     expect(barActions()).toEqual([]);
-    expect(within(screen.getByRole("banner")).getByRole("button", { name: "Andamio Desktop, go home" })).toBeTruthy();
+    expect(within(screen.getByRole("banner")).getByRole("button", { name: "Coach, go home" })).toBeTruthy();
     expect(within(screen.getByRole("banner")).getByRole("button", { name: "Close window" })).toBeTruthy();
   });
 

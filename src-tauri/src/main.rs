@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    andamio_desktop_lib::run()
+    coach_lib::run()
 }

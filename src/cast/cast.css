@@ -16,12 +16,12 @@
   stroke: var(--ink);
 }
 
-.lockup-brace {
-  stroke: var(--sys-orange);
+.lockup-disk {
+  fill: var(--surface);
 }
 
-.lockup-dot {
-  fill: var(--ink);
+.lockup-accent {
+  stroke: var(--sys-orange);
 }
 
 /* Tools are drawn keys (src/cast/ToolKey.tsx). */

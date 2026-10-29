@@ -130,7 +130,7 @@ function fixture(): MemoryStorage {
 
 describe("paths", () => {
   it("follows the Output Structure layout", () => {
-    expect(MARKER_PATH).toBe("andamio-desktop.json");
+    expect(MARKER_PATH).toBe("coach.json");
     expect(collectionPath("eng")).toBe("collections/eng/collection.json");
     expect(credentialPath("eng", "review")).toBe("collections/eng/credentials/review.md");
     expect(profilePath("claude-high")).toBe("agents/claude-high.json");

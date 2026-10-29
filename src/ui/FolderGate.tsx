@@ -101,7 +101,7 @@ export function FolderGate({ getFolder = defaultGetFolder, pickFolder = defaultP
     <Sheet>
       <main className="gate">
         <Lockup className="lockup-wrap" />
-        <h1 className="visually-hidden">Andamio Desktop</h1>
+        <h1 className="visually-hidden">Coach</h1>
         <p>
           {held
             ? "Pick a folder for your badge. It is saved there, with your agents and results, as Markdown and JSON."

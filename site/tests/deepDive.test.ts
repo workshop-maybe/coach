@@ -248,7 +248,7 @@ async function facts(): Promise<{ page: string; says: string }[]> {
       `${request.JEV_LIMITS.whole / 1000}k tokens for the state and every question`,
       `${request.JEV_LIMITS.stateAndLongest / 1000}k tokens for the state plus the longest`,
       `larger than ${constIn(rs, "MAX_RESPONSE_BYTES") / 1024} KiB`,
-      "`io.andamio.desktop`",
+      "`io.andamio.coach`",
       "`typesafe-api-key`",
     ),
     ...say(

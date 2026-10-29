@@ -1,4 +1,4 @@
-# Andamio Desktop
+# Coach
 
 A simple, beautiful little desktop app for building credentials and offering them to your agents. Read `README.md` first: its big ideas are the product brief.
 
@@ -28,7 +28,7 @@ The question the app answers: **which of my agents can actually meet my acceptan
 
 - **Tauri 2** shell (`src-tauri/`, Rust). Keep the native side small: file read/write, clipboard (including Finder-copied file paths), copying dropped or picked files into the data folder, a confined `media://` scheme that serves videos from the data folder (`src-tauri/src/media.rs`), the window's remembered size and position, and Jev Mode's key store and its one TypeSafe request (`src-tauri/src/jev.rs`).
 - **React + TypeScript + Vite** UI (`src/`).
-- Identifier `io.andamio.desktop`.
+- Identifier `io.andamio.coach`.
 
 ## Design
 

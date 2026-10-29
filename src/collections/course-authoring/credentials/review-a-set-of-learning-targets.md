@@ -32,4 +32,4 @@ Met when every point holds.
 
 ## Source
 
-Written for Andamio Desktop, on coach's skills/assess-slts/SKILL.md and knowledge/slt-patterns/quality-issues.yaml (github.com/Andamio-Platform/coach, MIT). Where they differ on "by" clauses, the rubric follows knowledge/slt-patterns/successful-rewrites.yaml. The targets are new and no text is copied.
+Written for Coach, on coach's skills/assess-slts/SKILL.md and knowledge/slt-patterns/quality-issues.yaml (github.com/Andamio-Platform/coach, MIT). Where they differ on "by" clauses, the rubric follows knowledge/slt-patterns/successful-rewrites.yaml. The targets are new and no text is copied.

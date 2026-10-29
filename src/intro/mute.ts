@@ -4,7 +4,7 @@
 
 import { defaultStore } from "./localStore";
 
-export const MUTE_STORAGE_KEY = "andamio-desktop:intro-muted";
+export const MUTE_STORAGE_KEY = "coach:intro-muted";
 
 /** Whether the viewer muted the intro. False when nothing is stored or storage fails. */
 export function readMuted(store: globalThis.Storage | null = defaultStore()): boolean {

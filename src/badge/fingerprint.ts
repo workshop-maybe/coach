@@ -13,11 +13,11 @@ const PALETTE_COUNT = 10;
 // Slugs never change, so a collection's fingerprint can be computed once and kept.
 const collectionCache = new Map<string, Promise<string>>();
 
-/** The first 28 bytes (56 hex) of sha256("andamio-desktop/collection:" + slug). */
+/** The first 28 bytes (56 hex) of sha256("coach/collection:" + slug). */
 export function collectionFingerprint(collectionSlug: string): Promise<string> {
   let hex = collectionCache.get(collectionSlug);
   if (!hex) {
-    hex = sha256Hex(`andamio-desktop/collection:${collectionSlug}`).then((h) => h.slice(0, OUTER_BYTES * 2));
+    hex = sha256Hex(`coach/collection:${collectionSlug}`).then((h) => h.slice(0, OUTER_BYTES * 2));
     collectionCache.set(collectionSlug, hex);
   }
   return hex;
@@ -30,7 +30,7 @@ export async function badgeFingerprints(
 ): Promise<{ outerHex: string; innerHex: string }> {
   const [outerHex, innerHex] = await Promise.all([
     collectionFingerprint(collectionSlug),
-    sha256Hex(`andamio-desktop/credential:${collectionSlug}/${credentialSlug}`),
+    sha256Hex(`coach/credential:${collectionSlug}/${credentialSlug}`),
   ]);
   return { outerHex, innerHex };
 }

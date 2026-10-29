@@ -43,7 +43,7 @@ export function TitleCard({ ready, begin, onBegin, onSkip }: { ready: boolean; b
   return (
     <main className="intro-title">
       <Lockup className="intro-lockup" />
-      <h1 className="visually-hidden">Andamio Desktop</h1>
+      <h1 className="visually-hidden">Coach</h1>
       <div className="intro-title-keys">
         <button type="button" className="primary" ref={begin} disabled={!ready} onClick={onBegin}>
           Begin

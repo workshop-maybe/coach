@@ -37,7 +37,7 @@ import type {
 // ---------------------------------------------------------------------------
 // Paths (Output Structure)
 
-export const MARKER_PATH = "andamio-desktop.json";
+export const MARKER_PATH = "coach.json";
 export const FORMAT_VERSION = 1;
 
 const COLLECTIONS_DIR = "collections";

@@ -1,7 +1,7 @@
 // The screenshot harness's sample folder (U3, U6, KTD6, R20). Built in the page with the
 // domain's own serializers and version hash, so every result's assignment version always
 // matches its credential and nothing reads "task changed". Everything here is invented and
-// generic: the folder is /Users/you/Andamio, the machine is "Your Mac", agents have no repo,
+// generic: the folder is /Users/you/Coach, the machine is "Your Mac", agents have no repo,
 // and Jev Mode is FakeJev's, whose only key trace is its sample hint (AE4).
 //
 // Three variants. "empty" is a first run's folder: only the marker file. "full" holds one
@@ -70,7 +70,7 @@ import type { PendingTest } from "../ui/pendingTests";
 import type { JevState, SeedVariant } from "./shots";
 
 /** The data folder every shot shows in the top bar. */
-export const SAMPLE_FOLDER = "/Users/you/Andamio";
+export const SAMPLE_FOLDER = "/Users/you/Coach";
 
 /** What a context read returns for a Claude Code agent: the sample machine and a memory fingerprint. */
 export const SAMPLE_READING: ContextReading = { machineId: "sample-mac", machine: "Your Mac", memory: "4c1e9a7b20d3" };

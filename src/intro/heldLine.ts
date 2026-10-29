@@ -5,7 +5,7 @@
 
 import { defaultStore } from "./localStore";
 
-export const HELD_LINE_KEY = "andamio-desktop:first-run-line";
+export const HELD_LINE_KEY = "coach:first-run-line";
 
 /** The line as the badge's first learning target, and the name drawn from it. */
 export interface HeldLine {

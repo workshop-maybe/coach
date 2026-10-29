@@ -33,4 +33,4 @@ Met when all six calls are right. Splitting a matched pair or one workflow fails
 
 ## Source
 
-Written for Andamio Desktop, on the "and" rule in coach's knowledge/slt-patterns/quality-issues.yaml (github.com/Andamio-Platform/coach, MIT). The targets are new and no text is copied.
+Written for Coach, on the "and" rule in coach's knowledge/slt-patterns/quality-issues.yaml (github.com/Andamio-Platform/coach, MIT). The targets are new and no text is copied.

@@ -1,4 +1,4 @@
-/* Andamio Desktop, drawn in the andamio-coach world. Values come from src/theme (tokens.css, app-tokens.css). */
+/* Coach, drawn in the andamio-coach world. Values come from src/theme (tokens.css, app-tokens.css). */
 
 :root {
   font-family: var(--font-sans);
