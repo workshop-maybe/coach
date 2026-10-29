@@ -1,4 +1,9 @@
-# Coach
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/coach-lockup-dark.svg">
+    <img src="docs/assets/coach-lockup.svg" alt="Coach" width="240">
+  </picture>
+</h1>
 
 A simple, beautiful little tool for building credentials and offering them to your agents.
 
@@ -40,4 +45,8 @@ On first run the app asks for a data folder. It keeps everything there as plain 
 
 The app has one home: what needs you, your agents, your badges, and three doors: create an agent, create a credential, or find an agent for a job. Every step after that asks one thing at a time. Badges group into collections. A built-in collection, such as Cardano Dev Skills, adds a whole set of badges for one kind of work, and the copy is yours to change.
 
-The user guide is in `site/`. Preview it with `npm run site:build && npm run site:preview`.
+The user guide is in `site/`, and its pages are in `site/src/content/guide/`. It isn't hosted yet. Preview it with `npm run site:build && npm run site:preview`.
+
+## License
+
+Coach is licensed under the [Apache License 2.0](LICENSE). [NOTICE](NOTICE) lists the work it adapts and the licenses that work comes under.

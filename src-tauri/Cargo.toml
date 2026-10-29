@@ -1,8 +1,9 @@
 [package]
 name = "coach"
 version = "0.2.1"
+license = "Apache-2.0"
 description = "Build credentials and offer them to your agents"
-authors = ["Andamio"]
+authors = ["James Dunseith"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
