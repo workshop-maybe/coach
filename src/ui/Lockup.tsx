@@ -1,8 +1,9 @@
-// The Coach lockup, hand-inked like the cast: Andamio's scaffold drawn as an A (andamio
-// is scaffold), then the name lettered in the same line. Orange stays in the logo, on the
-// scaffold's brace. Drawn light only, so one variant. Needs InkDefs mounted, as the
-// shell and the first-run gate both do.
-
+// The Coach lockup: the mark, then the name lettered by hand like the cast. The mark is an
+// agent's machine in a ring, drawn in clean lines: a clipboard clip on top, a prompt on the
+// screen, two encoders and a strip of keys with one lit. Orange stays in the logo, on the
+// clip, the prompt and the lit key. src-tauri/icons/icon.svg draws the same mark. Drawn
+// light only, so one variant. Needs InkDefs mounted, as the shell and the first-run gate
+// both do.
 import { INK } from "../cast/InkDefs";
 
 /** A bowl as a pen draws it: one loop that runs a little past where it started. */
@@ -29,24 +30,49 @@ const NAME = [
   "M156 7.6V40.6", arch(156, 17), // h
 ].join("");
 
-// The scaffold: two standards leaning into a peak, two ledgers that run past them the
-// way scaffold tubes do, and a base plank.
-const FRAME = "M5 43.5L22.6 5.2M39.5 43.2L21.4 5.6M7.5 31.2L37 30.6M13.2 18.6L31.4 18.2M1.5 44.2L43 43.6";
-/** The brace across the lower bay, in orange. */
-const BRACE = "M10.6 41.5L29.4 31.6";
+/** The mark's ink and orange, on a 100 × 100 grid. `w` and `d` are the ring's and the details' stroke. */
+export function markPaths(w: number, d: number): { ink: [string, number][]; accent: [string, number][] } {
+  const knob = (cx: number, deg: number) => {
+    const t = (deg * Math.PI) / 180;
+    const r = 4.6;
+    return `M${cx - r} 50.5a${r} ${r} 0 1 0 ${r * 2} 0a${r} ${r} 0 1 0 ${-r * 2} 0M${cx} 50.5L${(cx + Math.sin(t) * 3.4).toFixed(2)} ${(50.5 - Math.cos(t) * 3.4).toFixed(2)}`;
+  };
+  const key = (i: number) => `M${26 + i * 8.6} 62H${30.2 + i * 8.6}`;
+  return {
+    ink: [
+      ["M5 50a45 45 0 1 0 90 0a45 45 0 1 0 -90 0", w],
+      ["M20 38H80V68H20Z", w],
+      ["M26 44H50V57H26Z", d],
+      [knob(62, -40) + knob(73.5, 35), d],
+      [[0, 1, 2, 3, 5].map(key).join(""), d],
+    ],
+    accent: [
+      ["M41 38V32.5H59V38", w],
+      ["M45 32.5V29H55V32.5", d],
+      ["M30.5 47L35 50.5L30.5 54M38 54H45", d],
+      [key(4), w],
+    ],
+  };
+}
+
+/** The mark at lockup weight, a little heavier than the icon's since it shows at about 22px. */
+const MARK = markPaths(4.8, 3.4);
 
 export function Lockup({ className }: { className?: string }) {
   return (
     <svg
       className={`lockup ${className ?? ""}`.trim()}
-      viewBox="-2 0 179 48"
+      viewBox="-1 0 178 48"
       role="img"
       aria-label="Coach"
       focusable="false"
     >
+      <g className="lockup-mark" transform="scale(0.48)" fill="none" strokeLinecap="round" strokeLinejoin="round">
+        <circle className="lockup-disk" cx={50} cy={50} r={45} />
+        {MARK.ink.map(([d, w]) => <path key={d} className="lockup-ink" d={d} strokeWidth={w} />)}
+        {MARK.accent.map(([d, w]) => <path key={d} className="lockup-accent" d={d} strokeWidth={w} />)}
+      </g>
       <g filter={INK} fill="none" strokeLinecap="round" strokeLinejoin="round">
-        <path className="lockup-ink" d={FRAME} strokeWidth={3.4} />
-        <path className="lockup-brace" d={BRACE} strokeWidth={3.4} />
         <path className="lockup-ink" d={NAME} strokeWidth={3.6} />
       </g>
     </svg>

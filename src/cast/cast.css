@@ -16,7 +16,11 @@
   stroke: var(--ink);
 }
 
-.lockup-brace {
+.lockup-disk {
+  fill: var(--surface);
+}
+
+.lockup-accent {
   stroke: var(--sys-orange);
 }
 
